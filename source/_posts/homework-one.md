@@ -52,7 +52,7 @@ Eigen::Matrix4f get_model_matrix(float rotation_angle)
 radian = degree / 180 × π
 ```
 
-旋转矩阵的推导可以参考上一篇笔记：[从齐次坐标到 MVP 变换：GAMES101 学习笔记](https://hitzby.github.io/2026/07/15/Transformation-MVP-note/)
+旋转矩阵的推导可以参考上一篇笔记：[从齐次坐标到 MVP 变换：GAMES101 学习笔记](https://noimpty-zby.github.io/2026/07/15/Transformation-MVP-note/)
 
 ## 二、构造投影矩阵
 

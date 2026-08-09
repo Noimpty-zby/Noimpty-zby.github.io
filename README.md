@@ -92,4 +92,4 @@ Ideas 使用同样的写法，将 `Life` 改为 `Ideas` 即可。受保护文章
 
 项目已包含 `.github/workflows/pages.yml`。将代码推送到 `main` 分支后，在仓库的 **Settings → Pages → Source** 中选择 **GitHub Actions**。
 
-当前按用户站点 `https://hitzby.github.io` 配置。如果仓库名称不是 `hitzby.github.io`，需要把 `_config.yml` 中的 `url` 改成 `https://hitzby.github.io/仓库名`，并把 `root` 改成 `/仓库名/`。
+当前按用户站点 `https://noimpty-zby.github.io` 配置。如果仓库名称不是 `noimpty-zby.github.io`，需要把 `_config.yml` 中的 `url` 改成 `https://noimpty-zby.github.io/仓库名`，并把 `root` 改成 `/仓库名/`。

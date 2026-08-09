@@ -50,7 +50,7 @@ code_blocks:
 # Formal:
 #   icon: link || the description || color
 social:
-  fab fa-github: https://github.com/hitzby || GitHub || '#ff6b8a'
+  fab fa-github: https://github.com/noimpty-zby || GitHub || '#ff6b8a'
 
 # --------------------------------------
 # Image Settings
@@ -208,7 +208,7 @@ toc:
 post_copyright:
   enable: true
   decode: false
-  author_href: https://github.com/hitzby
+  author_href: https://github.com/noimpty-zby
   license: CC BY-NC-SA 4.0
   license_url: https://creativecommons.org/licenses/by-nc-sa/4.0/
 
@@ -295,7 +295,7 @@ aside:
       enable: true
       icon: fab fa-github
       text: 在 GitHub 找到我
-      link: https://github.com/hitzby
+      link: https://github.com/noimpty-zby
   card_announcement:
     enable: true
     content: "记录自己的图形学GAMES101和UE5的学习过程和思考，以及自己的ideas，同时还有自己的生活琐事。博客正在建设中，后续还会添加新的内容，敬请期待……"

@@ -19,7 +19,7 @@ cover: /img/cover-blue.svg
 
 <!-- more -->
 
-上一篇笔记：[从齐次坐标到 MVP 变换：GAMES101 学习笔记](https://hitzby.github.io/2026/07/15/Transformation-MVP-note/)
+上一篇笔记：[从齐次坐标到 MVP 变换：GAMES101 学习笔记](https://noimpty-zby.github.io/2026/07/15/Transformation-MVP-note/)
 
 ## 一、视口变换
 

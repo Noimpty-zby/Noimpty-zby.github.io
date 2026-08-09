@@ -19,16 +19,8 @@ cover: /img/cover-blue.svg
 
 <!-- more -->
 
-前置知识：[从标准立方体到屏幕：光栅化、抗锯齿与 Z-Buffer](https://hitzby.github.io/2026/07/16/rasterization-antialiasing-z-buffer/)
+前置知识：[从标准立方体到屏幕：光栅化、抗锯齿与 Z-Buffer](https://noimpty-zby.github.io/2026/07/16/rasterization-antialiasing-z-buffer/)
 
-<!--
-上传代码后，可以在这里补充链接：
-
-## 作业信息
-
-- [作业要求](在这里填写课程作业链接)
-- [完整代码](在这里填写 GitHub 仓库链接)
--->
 
 ## 一、判断像素中心是否在三角形内
 

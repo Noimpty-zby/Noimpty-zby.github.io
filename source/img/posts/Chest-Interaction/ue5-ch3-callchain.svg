@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 562" width="680" role="img" aria-label="交互系统完整调用链">
+<style>
+text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+.t{font-size:14px;font-weight:600;fill:#1f1f1f}
+.s{font-size:12px;fill:#5c5c5c}
+.cap{font-size:12px;fill:#7d7d76}
+rect.b,circle.b{stroke-width:1.5}
+.teal{fill:#dff2ea;stroke:#149472}
+.purple{fill:#e6e3f8;stroke:#6259c9}
+.coral{fill:#fbe4dc;stroke:#d4593a}
+.gray{fill:#eeeeec;stroke:#8a8a82}
+.ln{stroke:#8a8a82;stroke-width:1.5;fill:none}
+.lnteal{stroke:#149472;stroke-width:2;fill:none}
+.lnpurple{stroke:#6259c9;stroke-width:2;fill:none}
+.dash{stroke:#b4b4ae;stroke-width:1;fill:none;stroke-dasharray:4 4}
+@media (prefers-color-scheme:dark){
+.t{fill:#eaeae8}
+.s{fill:#a8a8a2}
+.cap{fill:#8f8f88}
+.teal{fill:#0f2f26;stroke:#2bb98f}
+.purple{fill:#1c1938;stroke:#8b83e8}
+.coral{fill:#38180f;stroke:#e87a5c}
+.gray{fill:#26261f;stroke:#9a9a92}
+.ln{stroke:#9a9a92}
+.lnteal{stroke:#2bb98f}
+.lnpurple{stroke:#8b83e8}
+.dash{stroke:#55554e}
+}
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="ln" d="M2 1L8 5L2 9" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<text class="cap" x="150" y="36" text-anchor="middle">每帧持续进行</text>
+<text class="cap" x="515" y="36" text-anchor="middle">按下 E 时触发一次</text>
+
+<g class="teal"><rect class="b" x="30" y="60" width="240" height="56" rx="8"/></g>
+<text class="t" x="150" y="85" text-anchor="middle">TickComponent</text>
+<text class="s" x="150" y="103" text-anchor="middle">交互组件，每帧执行</text>
+
+<g class="teal"><rect class="b" x="30" y="150" width="240" height="56" rx="8"/></g>
+<text class="t" x="150" y="175" text-anchor="middle">球体重叠 + 点积打分</text>
+<text class="s" x="150" y="193" text-anchor="middle">找出最正对视线的目标</text>
+
+<g class="purple"><rect class="b" x="30" y="240" width="240" height="56" rx="8"/></g>
+<text class="t" x="150" y="265" text-anchor="middle">SelectedActor</text>
+<text class="s" x="150" y="283" text-anchor="middle">记住当前聚焦目标</text>
+
+<g class="gray"><rect class="b" x="390" y="60" width="250" height="52" rx="8"/></g>
+<text class="t" x="515" y="83" text-anchor="middle">玩家按下 E</text>
+<text class="s" x="515" y="101" text-anchor="middle">IMC 找到 IA_Interact</text>
+
+<g class="coral"><rect class="b" x="390" y="144" width="250" height="52" rx="8"/></g>
+<text class="t" x="515" y="167" text-anchor="middle">PC::StartInteract()</text>
+<text class="s" x="515" y="185" text-anchor="middle">BindAction 的回调</text>
+
+<g class="coral"><rect class="b" x="390" y="228" width="250" height="52" rx="8"/></g>
+<text class="t" x="515" y="251" text-anchor="middle">Comp::Interact()</text>
+<text class="s" x="515" y="269" text-anchor="middle">读 SelectedActor</text>
+
+<g class="coral"><rect class="b" x="390" y="312" width="250" height="52" rx="8"/></g>
+<text class="t" x="515" y="335" text-anchor="middle">Cast 到交互接口</text>
+<text class="s" x="515" y="353" text-anchor="middle">拿到 I 类指针</text>
+
+<g class="coral"><rect class="b" x="390" y="396" width="250" height="52" rx="8"/></g>
+<text class="t" x="515" y="419" text-anchor="middle">Chest::Interact()</text>
+<text class="s" x="515" y="437" text-anchor="middle">打开自己的 Tick 开关</text>
+
+<g class="coral"><rect class="b" x="390" y="480" width="250" height="52" rx="8"/></g>
+<text class="t" x="515" y="503" text-anchor="middle">Chest::Tick()</text>
+<text class="s" x="515" y="521" text-anchor="middle">转动盖子，到位后自关</text>
+
+<line class="ln" x1="150" y1="116" x2="150" y2="144" marker-end="url(#a)"/>
+<line class="ln" x1="150" y1="206" x2="150" y2="234" marker-end="url(#a)"/>
+<line class="ln" x1="515" y1="112" x2="515" y2="138" marker-end="url(#a)"/>
+<line class="ln" x1="515" y1="196" x2="515" y2="222" marker-end="url(#a)"/>
+<line class="ln" x1="515" y1="280" x2="515" y2="306" marker-end="url(#a)"/>
+<line class="ln" x1="515" y1="364" x2="515" y2="390" marker-end="url(#a)"/>
+<line class="ln" x1="515" y1="448" x2="515" y2="474" marker-end="url(#a)"/>
+<text class="s" x="300" y="258" text-anchor="middle">读取</text>
+<path class="ln" d="M270 268 L330 268 L330 254 L386 254" marker-end="url(#a)"/>
+</svg>

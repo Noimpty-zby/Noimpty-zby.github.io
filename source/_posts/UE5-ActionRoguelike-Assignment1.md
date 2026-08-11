@@ -1333,74 +1333,74 @@ if (DamageEvent.IsOfType(FPointDamageEvent::ClassID))
 
 ## 第一部分：跳跃
 
-- [ ] 读过 `ACharacter::Jump`、`CheckJumpInput`、`UCharacterMovementComponent::DoJump` 的源码
-- [ ] 创建 `IA_Jump`，值类型为 Digital (bool)
-- [ ] 在 `IMC_DefaultPlayer` 中映射到空格键
-- [ ] 头文件声明 `TObjectPtr<UInputAction> Input_Jump`，标 `EditDefaultsOnly`
-- [ ] 蓝图类默认值里给 `Input_Jump` 赋值为 `IA_Jump`
-- [ ] `ETriggerEvent::Started` 绑 `&ACharacter::Jump`
-- [ ] `ETriggerEvent::Completed` 绑 `&ACharacter::StopJumping`
-- [ ] **没有**自己重写 `Jump()` 或手动播放跳跃 Montage
-- [ ] 跳跃动画由动画蓝图自动播放
-- [ ] 调过 `JumpZVelocity` / `AirControl` 感受手感差异
+- [x] 读过 `ACharacter::Jump`、`CheckJumpInput`、`UCharacterMovementComponent::DoJump` 的源码
+- [x] 创建 `IA_Jump`，值类型为 Digital (bool)
+- [x] 在 `IMC_DefaultPlayer` 中映射到空格键
+- [x] 头文件声明 `TObjectPtr<UInputAction> Input_Jump`，标 `EditDefaultsOnly`
+- [x] 蓝图类默认值里给 `Input_Jump` 赋值为 `IA_Jump`
+- [x] `ETriggerEvent::Started` 绑 `&ACharacter::Jump`
+- [x] `ETriggerEvent::Completed` 绑 `&ACharacter::StopJumping`
+- [x] **没有**自己重写 `Jump()` 或手动播放跳跃 Montage
+- [x] 跳跃动画由动画蓝图自动播放
+- [x] 调过 `JumpZVelocity` / `AirControl` 感受手感差异
 
 ## 第二部分：类结构
 
-- [ ] 通过**编辑器**创建 C++ 类，基类为 `AActor`
-- [ ] 类名 `AExplodingBarrel`，A 前缀 + PascalCase
-- [ ] 蓝图子类的父类确认为 `ExplodingBarrel`（不是 `AActor`）
-- [ ] 蓝图保持 `Is Data Only: True`
-- [ ] 头文件用前向声明，实际 include 在 cpp
+- [x] 通过**编辑器**创建 C++ 类，基类为 `AActor`
+- [x] 类名 `AExplodingBarrel`，A 前缀 + PascalCase
+- [x] 蓝图子类的父类确认为 `ExplodingBarrel`（不是 `AActor`）
+- [x] 蓝图保持 `Is Data Only: True`
+- [x] 头文件用前向声明，实际 include 在 cpp
 
 ## 第二部分：成员声明
 
-- [ ] 四个组件用 `VisibleAnywhere`
-- [ ] 两个一次性效果资产用 `EditDefaultsOnly`
-- [ ] `FuseDelay` 用 `EditDefaultsOnly`，默认 3.0f
-- [ ] `FTimerHandle` 和 `bExploded` **不加** `UPROPERTY`
-- [ ] 所有对象引用用 `TObjectPtr<>` 而非裸指针
-- [ ] `TakeDamage` 签名完全匹配基类，带 `virtual` 和 `override`
+- [x] 四个组件用 `VisibleAnywhere`
+- [x] 两个一次性效果资产用 `EditDefaultsOnly`
+- [x] `FuseDelay` 用 `EditDefaultsOnly`，默认 3.0f
+- [x] `FTimerHandle` 和 `bExploded` **不加** `UPROPERTY`
+- [x] 所有对象引用用 `TObjectPtr<>` 而非裸指针
+- [x] `TakeDamage` 签名完全匹配基类，带 `virtual` 和 `override`
 
 ## 第二部分：构造函数
 
-- [ ] `PrimaryActorTick.bCanEverTick = false`
-- [ ] 静态网格组件设为 `RootComponent`
-- [ ] 其余三个组件 `SetupAttachment(RootComponent)`
-- [ ] 先 `SetCollisionProfileName("PhysicsActor")`，再 `SetSimulatePhysics(true)`
-- [ ] `BurningEffect`、`BurningSound`、`RadialForceComponent` 三者 `SetAutoActivate(false)`
-- [ ] `bImpulseVelChange = true`
-- [ ] `Radius` 和 `ImpulseStrength` 设了合理默认值
+- [x] `PrimaryActorTick.bCanEverTick = false`
+- [x] 静态网格组件设为 `RootComponent`
+- [x] 其余三个组件 `SetupAttachment(RootComponent)`
+- [x] 先 `SetCollisionProfileName("PhysicsActor")`，再 `SetSimulatePhysics(true)`
+- [x] `BurningEffect`、`BurningSound`、`RadialForceComponent` 三者 `SetAutoActivate(false)`
+- [x] `bImpulseVelChange = true`
+- [x] `Radius` 和 `ImpulseStrength` 设了合理默认值
 
 ## 第二部分：逻辑
 
-- [ ] `Super::TakeDamage` 在守卫判断之前调用
-- [ ] `bExploded` 守卫实现"只能炸一次"
-- [ ] `bExploded = true` 在任何表现代码之前置位
-- [ ] 燃烧特效用 `Activate()`，燃烧音效用 `Play()`
-- [ ] `SetTimer` 显式传 `bInLoop = false`
-- [ ] `Explode` 里停止两个循环组件
-- [ ] 一次性特效用 `SpawnSystemAtLocation`，一次性音效用 `PlaySoundAtLocation`
-- [ ] 两个资产引用都判空
-- [ ] `FireImpulse()` 而非 `Activate()`
+- [x] `Super::TakeDamage` 在守卫判断之前调用
+- [x] `bExploded` 守卫实现"只能炸一次"
+- [x] `bExploded = true` 在任何表现代码之前置位
+- [x] 燃烧特效用 `Activate()`，燃烧音效用 `Play()`
+- [x] `SetTimer` 显式传 `bInLoop = false`
+- [x] `Explode` 里停止两个循环组件
+- [x] 一次性特效用 `SpawnSystemAtLocation`，一次性音效用 `PlaySoundAtLocation`
+- [x] 两个资产引用都判空
+- [x] `FireImpulse()` 而非 `Activate()`
 
 ## 第二部分：资产与模块
 
-- [ ] `Build.cs` 中有 `"Niagara"` 模块依赖
-- [ ] `BarrelMeshComp` → `SM_OilBarrel`
-- [ ] `BurningEffectComp` → `NS_Flames`
-- [ ] `BurningSoundComp` → `MSS_Environmental_BarrelAftermath`（确认是 Looping）
-- [ ] `Explosion Effect` → `NS_Explosion`
-- [ ] `Explosion Sound` → `MSS_Environmental_BarrelExplode`
-- [ ] 没有在 C++ 里用 `ConstructorHelpers` 硬编码任何资产路径
+- [x] `Build.cs` 中有 `"Niagara"` 模块依赖
+- [x] `BarrelMeshComp` → `SM_OilBarrel`
+- [x] `BurningEffectComp` → `NS_Flames`
+- [x] `BurningSoundComp` → `MSS_Environmental_BarrelAftermath`（确认是 Looping）
+- [x] `Explosion Effect` → `NS_Explosion`
+- [x] `Explosion Sound` → `MSS_Environmental_BarrelExplode`
+- [x] 没有在 C++ 里用 `ConstructorHelpers` 硬编码任何资产路径
 
 ## 运行验证
 
-- [ ] 空格键跳跃，动画正常
-- [ ] 法球击中桶 → 火焰起、燃烧声起
-- [ ] 3 秒后爆炸：火焰停、燃烧声停、爆炸特效和音效播放
-- [ ] 周围物理物体被推开
-- [ ] 连续击中同一个桶，不会重复起爆
-- [ ] 桶可以被撞得滚动（物理模拟正常）
+- [x] 空格键跳跃，动画正常
+- [x] 法球击中桶 → 火焰起、燃烧声起
+- [x] 3 秒后爆炸：火焰停、燃烧声停、爆炸特效和音效播放
+- [x] 周围物理物体被推开
+- [x] 连续击中同一个桶，不会重复起爆
+- [x] 桶可以被撞得滚动（物理模拟正常）
 
 ---
 

@@ -1,0 +1,425 @@
+/* 娜娜莉 —— 博客常驻小助手
+ *
+ * 位置：左下角，音乐播放器正上方（音乐播放器 54px 高、距底 20px）。
+ * 右下角留给 Butterfly 自带的回到顶部/目录等按钮，不抢位置。
+ *
+ * 配色全部走 custom.css 里已有的 CSS 变量，明暗两套主题自动跟随。
+ */
+
+#nanaly-launcher {
+  position: fixed;
+  z-index: 9001;
+  left: 20px;
+  bottom: calc(20px + 54px + 14px);
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.25));
+  border-radius: 50%;
+  background: linear-gradient(140deg, var(--noimpty-accent, #e95978), var(--noimpty-accent-soft, #ff91a8));
+  box-shadow: var(--noimpty-shadow, 0 12px 34px rgba(75, 43, 56, 0.28));
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, opacity 0.2s ease;
+}
+
+#nanaly-launcher:hover {
+  transform: translateY(-3px) scale(1.05);
+}
+
+#nanaly-launcher[hidden] {
+  display: none;
+}
+
+/* 有未读回复时的小红点 */
+#nanaly-launcher.has-news::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffd166;
+  border: 2px solid var(--card-bg, #1c1821);
+}
+
+/* ---------- 面板 ---------- */
+
+#nanaly-panel {
+  position: fixed;
+  z-index: 9002;
+  left: 20px;
+  bottom: calc(20px + 54px + 14px);
+  width: min(384px, calc(100vw - 40px));
+  max-height: min(640px, calc(100vh - 140px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.2));
+  border-radius: 18px;
+  background: var(--card-bg, rgba(28, 24, 33, 0.96));
+  backdrop-filter: blur(14px);
+  box-shadow: var(--noimpty-shadow, 0 22px 60px rgba(0, 0, 0, 0.32));
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(14px) scale(0.98);
+  transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s ease;
+}
+
+#nanaly-panel.is-open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+}
+
+.nanaly-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.16));
+}
+
+.nanaly-head__avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  background: linear-gradient(140deg, var(--noimpty-accent, #e95978), var(--noimpty-accent-soft, #ff91a8));
+  color: #fff;
+  font-size: 16px;
+}
+
+.nanaly-head__meta {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.nanaly-head__name {
+  font-weight: 700;
+  font-size: 0.98rem;
+  color: var(--text-highlight-color, #fff7fa);
+}
+
+.nanaly-head__sub {
+  font-size: 0.72rem;
+  color: var(--card-meta, #aa9da6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nanaly-head__btn {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--card-meta, #aa9da6);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.nanaly-head__btn:hover {
+  background: rgba(233, 89, 120, 0.14);
+  color: var(--noimpty-accent, #e95978);
+}
+
+/* ---------- 消息区 ---------- */
+
+.nanaly-body {
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scrollbar-width: thin;
+}
+
+.nanaly-body::-webkit-scrollbar { width: 5px; }
+.nanaly-body::-webkit-scrollbar-thumb {
+  background: var(--noimpty-accent-soft, #ff91a8);
+  border-radius: 4px;
+}
+
+.nanaly-msg {
+  max-width: 92%;
+  padding: 9px 12px;
+  border-radius: 13px;
+  font-size: 0.875rem;
+  line-height: 1.72;
+  word-break: break-word;
+}
+
+.nanaly-msg--her {
+  align-self: flex-start;
+  background: rgba(233, 89, 120, 0.1);
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.16));
+  color: var(--font-color, rgba(247, 238, 243, 0.86));
+  border-bottom-left-radius: 5px;
+}
+
+.nanaly-msg--me {
+  align-self: flex-end;
+  background: linear-gradient(140deg, var(--noimpty-accent, #e95978), var(--noimpty-accent-soft, #ff91a8));
+  color: #fff;
+  border-bottom-right-radius: 5px;
+}
+
+.nanaly-msg--sys {
+  align-self: center;
+  max-width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  color: var(--card-meta, #aa9da6);
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+.nanaly-msg p { margin: 0 0 0.5em; }
+.nanaly-msg p:last-child { margin-bottom: 0; }
+
+.nanaly-msg code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.28);
+  font-family: var(--code-font-family, ui-monospace, monospace);
+  font-size: 0.86em;
+}
+
+.nanaly-msg pre {
+  margin: 0.55em 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.34);
+  scrollbar-width: thin;
+}
+
+.nanaly-msg pre code {
+  padding: 0;
+  background: none;
+  font-size: 0.8rem;
+  line-height: 1.62;
+}
+
+.nanaly-msg--me code,
+.nanaly-msg--me pre { background: rgba(0, 0, 0, 0.22); }
+
+/* 打字中的三个点 */
+.nanaly-typing {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  height: 1.2em;
+}
+
+.nanaly-typing i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--noimpty-accent-soft, #ff91a8);
+  animation: nanaly-blink 1.05s infinite ease-in-out;
+}
+
+.nanaly-typing i:nth-child(2) { animation-delay: 0.16s; }
+.nanaly-typing i:nth-child(3) { animation-delay: 0.32s; }
+
+@keyframes nanaly-blink {
+  0%, 80%, 100% { opacity: 0.28; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-3px); }
+}
+
+/* ---------- 快捷动作 ---------- */
+
+.nanaly-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 14px 10px;
+}
+
+.nanaly-quick button {
+  padding: 5px 11px;
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.2));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--card-meta, #aa9da6);
+  font-size: 0.76rem;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.nanaly-quick button:hover {
+  border-color: var(--noimpty-accent, #e95978);
+  color: var(--noimpty-accent, #e95978);
+  background: rgba(233, 89, 120, 0.09);
+}
+
+/* ---------- 输入区 ---------- */
+
+.nanaly-foot {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.14));
+}
+
+.nanaly-foot textarea {
+  flex: 1;
+  min-height: 38px;
+  max-height: 116px;
+  padding: 9px 12px;
+  resize: none;
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.22));
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--font-color, rgba(247, 238, 243, 0.88));
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  outline: none;
+  scrollbar-width: thin;
+}
+
+.nanaly-foot textarea:focus {
+  border-color: var(--noimpty-accent, #e95978);
+}
+
+.nanaly-foot textarea::placeholder { color: var(--card-meta, #8f8490); }
+
+.nanaly-send {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 11px;
+  background: linear-gradient(140deg, var(--noimpty-accent, #e95978), var(--noimpty-accent-soft, #ff91a8));
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.nanaly-send:hover { transform: translateY(-1px); }
+.nanaly-send:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+/* ---------- 设置 / 首次配置 ---------- */
+
+.nanaly-setup {
+  padding: 16px 15px;
+  font-size: 0.83rem;
+  line-height: 1.75;
+  color: var(--font-color, rgba(247, 238, 243, 0.82));
+  overflow-y: auto;
+}
+
+.nanaly-setup h4 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  color: var(--text-highlight-color, #fff7fa);
+}
+
+.nanaly-setup .nanaly-note {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--noimpty-accent, #e95978);
+  border-radius: 0 9px 9px 0;
+  background: rgba(233, 89, 120, 0.08);
+  font-size: 0.79rem;
+  color: var(--card-meta, #aa9da6);
+}
+
+.nanaly-setup label {
+  display: block;
+  margin: 12px 0 5px;
+  font-size: 0.78rem;
+  color: var(--card-meta, #aa9da6);
+}
+
+.nanaly-setup input {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.22));
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--font-color, rgba(247, 238, 243, 0.9));
+  font-family: var(--code-font-family, ui-monospace, monospace);
+  font-size: 0.8rem;
+  outline: none;
+}
+
+.nanaly-setup input:focus { border-color: var(--noimpty-accent, #e95978); }
+
+.nanaly-setup__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.nanaly-setup__actions button {
+  flex: 1;
+  padding: 9px;
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.22));
+  border-radius: 10px;
+  background: transparent;
+  color: var(--card-meta, #aa9da6);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.nanaly-setup__actions button.primary {
+  border-color: transparent;
+  background: linear-gradient(140deg, var(--noimpty-accent, #e95978), var(--noimpty-accent-soft, #ff91a8));
+  color: #fff;
+  font-weight: 600;
+}
+
+.nanaly-setup__actions button:hover { transform: translateY(-1px); }
+
+.nanaly-setup__advanced {
+  margin-top: 14px;
+  font-size: 0.78rem;
+}
+
+.nanaly-setup__advanced summary {
+  cursor: pointer;
+  color: var(--card-meta, #aa9da6);
+  outline: none;
+}
+
+/* ---------- 手机端 ---------- */
+
+@media screen and (max-width: 560px) {
+  #nanaly-panel {
+    left: 12px;
+    right: 12px;
+    width: auto;
+    bottom: calc(12px + 54px + 12px);
+    max-height: calc(100vh - 130px);
+  }
+
+  #nanaly-launcher {
+    left: 14px;
+    bottom: calc(14px + 54px + 12px);
+    width: 48px;
+    height: 48px;
+    font-size: 19px;
+  }
+}

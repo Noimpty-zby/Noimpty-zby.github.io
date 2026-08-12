@@ -5,12 +5,12 @@ description: 大家好，这里是 Noimpty 的个人空间，欢迎来到我的�
 categories:
   - Life
 tags:
-  - Life
   - 博客
   - 碎碎念
 privacy: protected
+sitemap: false
 private_section: Life
-cover: /img/cover-pink.svg
+cover: /img/covers/my-first-post.svg
 ---
 大家好，这里是 Noimpty 的个人空间，欢迎 😄
 

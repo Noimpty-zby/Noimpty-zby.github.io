@@ -5,12 +5,9 @@ description: 记录 GAMES101 作业三中 Blinn–Phong 光照、纹理采样和
 categories:
   - [Study, GAMES101]
 tags:
-  - Study
-  - 计算机图形学
-  - GAMES101
-  - 作业记录
-  - 纹理映射
-cover: /img/cover-blue.svg
+  - 纹理
+cover: /img/covers/homework-three.svg
+series: GAMES101
 ---
 
 这篇文章记录 GAMES101 第三次作业中我完成的两个主要部分：**Blinn–Phong 片元着色**和**纹理映射**。
@@ -19,7 +16,7 @@ cover: /img/cover-blue.svg
 
 <!-- more -->
 
-> 前置知识：[从 Blinn–Phong 到 Mipmap：着色、插值与纹理过滤](/2026/07/19/shading-1/)
+> 前置知识：{% post_link shading-1 %}
 
 ## 一、这次作业完成了什么
 
@@ -28,7 +25,7 @@ cover: /img/cover-blue.svg
 - 观察空间中的位置；
 - 插值后的法线；
 - 顶点颜色；
-- 纹理坐标 `(u, v)`；
+- 纹理坐标 $(u, v)$；
 - 可选的纹理对象。
 
 片元着色器要做的，就是根据这些数据以及场景中的光源、相机和材质参数，计算最终颜色。
@@ -42,46 +39,48 @@ cover: /img/cover-blue.svg
 
 在计算光照前，需要先确定三个单位向量：
 
-- `l`：从着色点指向光源；
-- `v`：从着色点指向相机；
-- `h`：光照方向和观察方向的半程向量。
+- $l$：从着色点指向光源；
+- $v$：从着色点指向相机；
+- $h$：光照方向和观察方向的半程向量。
 
 可以用下面的伪代码概括：
 
-```text
-l = normalize(light_position - point)
-v = normalize(eye_position - point)
-h = normalize(l + v)
-r² = squared_distance(light_position, point)
-```
+$$
+\begin{aligned}
+l &= \text{normalize}(\text{light\_position} - \text{point}) \\
+v &= \text{normalize}(\text{eye\_position} - \text{point}) \\
+h &= \text{normalize}(l + v) \\
+r^2 &= \lVert \text{light\_position} - \text{point} \rVert^2
+\end{aligned}
+$$
 
-其中 `r²` 用于点光源的距离衰减。准备好这些量后，就可以分别计算环境光、漫反射和镜面反射。
+其中 $r^2$ 用于点光源的距离衰减。准备好这些量后，就可以分别计算环境光、漫反射和镜面反射。
 
 ### 2.1 环境光
 
-```text
-ambient = ka ⊙ Ia
-```
+$$
+L_a = k_a \odot I_a
+$$
 
-`ka` 是环境光反射系数，`Ia` 是人为设定的环境光强度，符号 `⊙` 表示逐分量相乘。
+$k_a$ 是环境光反射系数，$I_a$ 是人为设定的环境光强度，符号 $\odot$ 表示逐分量相乘。
 
 环境光与某一盏具体光源无关，因此更合理的写法是**在光源循环外只添加一次**。如果把它放在循环内部，有几盏灯就会重复累加几次环境光。
 
 ### 2.2 漫反射
 
-```text
-diffuse = kd ⊙ (intensity / r²) · max(0, n·l)
-```
+$$
+L_d = k_d \odot \frac{I}{r^2} \cdot \max(0,\ n \cdot l)
+$$
 
-`n·l` 描述表面朝向光源的程度。表面越正对光源，接收到的能量越多；背向光源时通过 `max(0, ...)` 把结果截断为 0。
+$n \cdot l$ 描述表面朝向光源的程度。表面越正对光源，接收到的能量越多；背向光源时通过 $\max(0,\ \cdot)$ 把结果截断为 0。
 
 ### 2.3 镜面反射
 
-```text
-specular = ks ⊙ (intensity / r²) · max(0, n·h)^p
-```
+$$
+L_s = k_s \odot \frac{I}{r^2} \cdot \max(0,\ n \cdot h)^p
+$$
 
-`ks` 控制高光颜色，指数 `p` 控制高光范围。这里使用半程向量 `h`，就是 Blinn–Phong 与经典 Phong 镜面项的主要区别。
+$k_s$ 控制高光颜色，指数 $p$ 控制高光范围。这里使用半程向量 $h$，就是 Blinn–Phong 与经典 Phong 镜面项的主要区别。
 
 ### 2.4 多光源累加
 
@@ -99,7 +98,7 @@ for each light:
 
 ### 2.5 核心 C++ 实现
 
-为了避免 `phong_fragment_shader` 和 `texture_fragment_shader` 重复两遍相同的光照代码，我把 Blinn–Phong 计算整理成一个辅助函数。两个着色器只需要准备不同的 `kd`，再调用它即可。
+为了避免 `phong_fragment_shader` 和 `texture_fragment_shader` 重复两遍相同的光照代码，我把 Blinn–Phong 计算整理成一个辅助函数。两个着色器只需要准备不同的 $k_d$，再调用它即可。
 
 ```cpp
 Eigen::Vector3f evaluate_blinn_phong(
@@ -161,7 +160,7 @@ Eigen::Vector3f evaluate_blinn_phong(
 
 ## 三、固定材质颜色的结果
 
-不使用纹理时，漫反射系数 `kd` 直接来自片元携带的材质颜色。模型的不同区域只有几何形状和法线不同，因此整体颜色比较统一，明暗与高光主要由光照方向决定。
+不使用纹理时，漫反射系数 $k_d$ 直接来自片元携带的材质颜色。模型的不同区域只有几何形状和法线不同，因此整体颜色比较统一，明暗与高光主要由光照方向决定。
 
 ```cpp
 Eigen::Vector3f phong_fragment_shader(
@@ -182,11 +181,11 @@ Eigen::Vector3f phong_fragment_shader(
 
 ## 四、纹理着色
 
-纹理着色和前面的光照计算几乎相同，真正变化的是漫反射系数 `kd` 的来源。
+纹理着色和前面的光照计算几乎相同，真正变化的是漫反射系数 $k_d$ 的来源。
 
 ### 4.1 通过 UV 查询纹理颜色
 
-片元数据中保存了透视校正插值后的纹理坐标。纹理着色器先根据 `(u, v)` 查询颜色，再把通常位于 `[0, 255]` 的 RGB 值转换到 `[0, 1]`：
+片元数据中保存了透视校正插值后的纹理坐标。纹理着色器先根据 $(u, v)$ 查询颜色，再把通常位于 $[0, 255]$ 的 RGB 值转换到 $[0, 1]$：
 
 ```text
 texture_color = sample_texture(u, v)
@@ -224,8 +223,8 @@ Eigen::Vector3f texture_fragment_shader(
 
 与第一张结果相比，可以更直观地理解纹理和光照的分工：
 
-- 没有纹理时，`kd` 近似为统一材质颜色；
-- 使用纹理时，每个片元从纹理中获得不同的 `kd`；
+- 没有纹理时，$k_d$ 近似为统一材质颜色；
+- 使用纹理时，每个片元从纹理中获得不同的 $k_d$；
 - 两种情况使用的是同一套 Blinn–Phong 光照逻辑。
 
 ## 五、透视校正插值
@@ -247,9 +246,9 @@ const float corrected_beta  = beta_over_w  / weight_sum;
 const float corrected_gamma = gamma_over_w / weight_sum;
 ```
 
-最后再用校正后的 `a、b、c` 插值纹理坐标、观察空间位置等属性。
+最后再用校正后的 $a$、$b$、$c$ 插值纹理坐标、观察空间位置等属性。
 
-如果只做除以 `w` 而不进行归一化，三个权重之和不再等于 1，插值结果仍然会出错。透视校正尤其会影响倾斜或远近变化明显的三角形，缺少它时纹理可能出现“贴不稳”或不自然拉伸的问题。
+如果只做除以 $w$ 而不进行归一化，三个权重之和不再等于 1，插值结果仍然会出错。透视校正尤其会影响倾斜或远近变化明显的三角形，缺少它时纹理可能出现“贴不稳”或不自然拉伸的问题。
 
 ## 六、这次实现中值得注意的问题
 
@@ -259,7 +258,7 @@ const float corrected_gamma = gamma_over_w / weight_sum;
 
 ### 6.2 颜色范围要保持一致
 
-纹理读取结果可能位于 `[0, 255]`，而材质和光照公式通常按 `[0, 1]` 计算。中途要明确当前使用的范围，最后输出时再统一转换，避免画面过暗、过亮或颜色溢出。
+纹理读取结果可能位于 $[0, 255]$，而材质和光照公式通常按 $[0, 1]$ 计算。中途要明确当前使用的范围，最后输出时再统一转换，避免画面过暗、过亮或颜色溢出。
 
 ### 6.3 环境光不要随光源数量增加
 
@@ -284,3 +283,9 @@ const float corrected_gamma = gamma_over_w / weight_sum;
 ```
 
 虽然目前实现的仍然是一个比较基础的局部光照模型，但它已经包含了实时渲染中非常核心的一条路径。下一步可以继续完成双线性纹理采样、法线贴图，以及作业中的凹凸映射和位移映射部分。
+
+## 本系列的其他文章
+
+{% series %}
+
+> 本文根据 GAMES101 课程内容整理，用于记录个人学习过程。部分示意图来自课程课件。

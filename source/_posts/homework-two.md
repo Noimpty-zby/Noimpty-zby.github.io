@@ -5,12 +5,9 @@ description: 记录 GAMES101 作业 2 中三角形内部判断、包围盒遍历
 categories:
   - [Study, GAMES101]
 tags:
-  - Study
-  - 作业记录
-  - GAMES101
-  - 计算机图形学
   - 光栅化
-cover: /img/cover-blue.svg
+cover: /img/covers/homework-two.svg
+series: GAMES101
 ---
 
 今天完成了 GAMES101 作业 2。这次作业的任务，是把已经完成坐标变换的三角形真正光栅化到屏幕上，并使用 Z-Buffer 处理两个三角形之间的遮挡关系。
@@ -19,12 +16,12 @@ cover: /img/cover-blue.svg
 
 <!-- more -->
 
-前置知识：[从标准立方体到屏幕：光栅化、抗锯齿与 Z-Buffer](https://noimpty-zby.github.io/2026/07/16/rasterization-antialiasing-z-buffer/)
+前置知识：{% post_link rasterization-antialiasing-z-buffer %}
 
 
 ## 一、判断像素中心是否在三角形内
 
-光栅化需要判断屏幕上的哪些像素被三角形覆盖。这份实现对每个像素取中心点 `(x + 0.5, y + 0.5)`，然后使用二维叉积判断该点是否位于三角形内部。
+光栅化需要判断屏幕上的哪些像素被三角形覆盖。这份实现对每个像素取中心点 $(x+0.5,\ y+0.5)$，然后使用二维叉积判断该点是否位于三角形内部。
 
 ```cpp
 static bool insideTriangle(int x, int y, const Vector3f* _v)
@@ -56,12 +53,11 @@ static bool insideTriangle(int x, int y, const Vector3f* _v)
 
 参数 `x`、`y` 表示像素索引，`_v` 指向三角形三个顶点坐标组成的数组。
 
-对于三角形的一条有向边 `A → B` 和待测点 `P`，二维叉积可以写成：
+对于三角形的一条有向边 $A \to B$ 和待测点 $P$，二维叉积可以写成：
 
-```text
-(B.x - A.x) × (P.y - A.y)
-- (B.y - A.y) × (P.x - A.x)
-```
+$$
+(B_x - A_x)(P_y - A_y) - (B_y - A_y)(P_x - A_x)
+$$
 
 叉积的正负表示点位于有向边的哪一侧。如果三个结果同号，说明待测点位于三条边的同一侧，也就是位于三角形内部。
 
@@ -142,10 +138,12 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t)
 
 这种写法可能会多测试包围盒边缘的少量像素，但 `insideTriangle` 会把它们过滤掉。与此同时，还要使用 `std::max` 和 `std::min` 把范围限制在：
 
-```text
-x ∈ [0, width - 1]
-y ∈ [0, height - 1]
-```
+$$
+\begin{aligned}
+x &\in [\,0,\ \text{width}-1\,] \\
+y &\in [\,0,\ \text{height}-1\,]
+\end{aligned}
+$$
 
 否则三角形超出屏幕时，可能访问不存在的帧缓冲或深度缓冲位置。
 
@@ -153,11 +151,11 @@ y ∈ [0, height - 1]
 
 像素中心位于三角形内部后，还需要求出它在三角形中的深度。函数 `computeBarycentric2D` 返回重心坐标 `alpha`、`beta` 和 `gamma`，三者满足：
 
-```text
-alpha + beta + gamma = 1
-```
+$$
+\alpha + \beta + \gamma = 1
+$$
 
-如果三角形没有经过透视投影，可以直接用三个权重对顶点属性进行线性插值。但透视投影后，屏幕空间中的线性插值不再等价于三维空间中的线性插值，因此代码中需要结合各顶点的齐次分量 `w` 进行修正。
+如果三角形没有经过透视投影，可以直接用三个权重对顶点属性进行线性插值。但透视投影后，屏幕空间中的线性插值不再等价于三维空间中的线性插值，因此代码中需要结合各顶点的齐次分量 $w$ 进行修正。
 
 `w_reciprocal` 先计算修正后的权重归一化因子，然后使用 `z / w` 插值深度，最后再乘回这个因子。这就是透视正确插值（Perspective-Correct Interpolation）的基本形式。
 
@@ -194,7 +192,13 @@ alpha + beta + gamma = 1
 2. 叉积符号可以用于实现三角形内部测试；
 3. 包围盒负责减少候选像素数量，`insideTriangle` 负责精确过滤；
 4. 重心坐标可以用来插值深度和其他顶点属性；
-5. 透视投影后的属性插值需要结合齐次分量 `w` 进行修正；
+5. 透视投影后的属性插值需要结合齐次分量 $w$ 进行修正；
 6. Z-Buffer 在每个像素或样本上保存当前最近深度，从而解决不透明物体的遮挡关系。
 
 下一步可以在这个光栅器上继续实现 MSAA，并比较单采样和多重采样在三角形边缘处的区别。
+
+## 本系列的其他文章
+
+{% series %}
+
+> 本文根据 GAMES101 课程内容整理，用于记录个人学习过程。部分示意图来自课程课件。

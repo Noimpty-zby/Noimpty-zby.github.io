@@ -1,4 +1,4 @@
-/* Noimpty blog visual layer �? kept outside the theme package for safe upgrades. */
+/* Noimpty blog visual layer — kept outside the theme package for safe upgrades. */
 :root {
   --noimpty-accent: #e95978;
   --noimpty-accent-soft: #ff91a8;
@@ -392,8 +392,29 @@ a {
     animation-iteration-count: 1 !important;
   }
 }
-/* �������ǩͳһ�ֺ� */
+/* 侧边栏标签统一字号 */
 #aside-content .card-tag-cloud a {
   font-size: 1rem !important;
   line-height: 1.8;
+}
+/* KaTeX 公式的兜底样式
+ * 正文里的宽矩阵已全部改为纵向堆叠，414px 手机上不再需要横向滚动。
+ * 这里只做兜底：以后若写了更宽的公式仍可横向滚动，
+ * 并把滚动条收细，避免公式下方出现一条粗横杠。
+ *
+ * 注意：注释里不要写行首以 --- 开头的分隔线。
+ * Hexo 会把它当成 front-matter 起始符去解析 YAML，
+ * 解析失败会导致整个 custom.css 不被输出到 public/。
+ */
+#article-container .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.35em;
+  scrollbar-width: thin;
+}
+
+#article-container .katex-display::-webkit-scrollbar { height: 4px; }
+#article-container .katex-display::-webkit-scrollbar-thumb {
+  background: var(--noimpty-accent-soft, #ff91a8);
+  border-radius: 4px;
 }

@@ -36,7 +36,7 @@ code_blocks:
   theme: darker
   macStyle: true
   # Code block height limit (unit: px)
-  height_limit: false
+  height_limit: 420
   word_wrap: false
 
   # Toolbar
@@ -115,8 +115,8 @@ error_img:
 
 # A simple 404 page
 error_404:
-  enable: false
-  subtitle: 'Page Not Found'
+  enable: true
+  subtitle: '页面走丢了，回首页看看别的吧'
   background: /img/error-page.png
 
 post_meta:
@@ -200,7 +200,7 @@ toc:
   post: true
   page: false
   number: true
-  expand: false
+  expand: true
   # Only for post
   style_simple: false
   scroll_percent: true
@@ -227,10 +227,11 @@ reward:
 # Post edit
 # Easily browse and edit blog source code online.
 post_edit:
-  enable: false
+  enable: true
   # url: https://github.com/user-name/repo-name/edit/branch-name/subdirectory-name/
   # For example: https://github.com/jerryc127/butterfly.js.org/edit/main/source/
-  url:
+  # 分支名与 .github/workflows/pages.yml 里触发部署的 main 一致
+  url: https://github.com/noimpty-zby/noimpty-zby.github.io/edit/main/source/
 
 # Related Articles
 related_post:
@@ -244,19 +245,22 @@ related_post:
 # 1: The 'next post' will link to old post
 # 2: The 'next post' will link to new post
 # false: disable pagination
-post_pagination: 1
+# 用 2：读第一章时「下一篇」应该是第二章（更新的一篇），
+# 1 的语义对系列文章是反的。
+post_pagination: 2
 
 # Displays outdated notice for a post
 noticeOutdate:
-  enable: false
+  enable: true
   # Style: simple / flat
   style: flat
   # When will it be shown
   limit_day: 365
   # Position: top / bottom
   position: top
-  message_prev: It has been
-  message_next: days since the last update, the content of the article may be outdated.
+  # 文案改成中文（这两项是原样输出的，主题不做翻译）
+  message_prev: 本文最后更新于
+  message_next: 天前，其中的做法或结论可能已经过时。
 
 # --------------------------------------
 # Footer Settings
@@ -265,7 +269,7 @@ footer:
   nav:
   owner:
     enable: true
-    since: 2025
+    since: 2026
   # Copyright of theme and framework
   copyright:
     enable: true
@@ -298,7 +302,7 @@ aside:
       link: https://github.com/noimpty-zby
   card_announcement:
     enable: true
-    content: "记录自己的图形学GAMES101和UE5的学习过程和思考，以及自己的ideas，同时还有自己的生活琐事。博客正在建设中，后续还会添加新的内容，敬请期待……"
+    content: "以图形学为主的学习笔记，目前集中在两条线：GAMES101 的课程笔记与作业复盘，以及 UE5 C++ 的实践记录。写的时候尽量讲清楚每一步「为什么这么做」，而不只是记录做了什么。"
   card_recent_post:
     enable: true
     # If set 0 will show all
@@ -327,7 +331,8 @@ aside:
     color: false
     custom_colors:
     # Order of tags, random/name/length
-    orderby: random
+    # 改为 name：random 会让标签云每次刷新都重排，读者记不住位置
+    orderby: name
     # Sort of order. 1, asc for ascending; -1, desc for descending
     order: 1
     sort_order:
@@ -345,11 +350,12 @@ aside:
   card_post_series:
     enable: true
     # The title shows the series name
-    series_title: false
+    series_title: true
     # Order by title or date
     orderBy: 'date'
     # Sort of order. 1, asc for ascending; -1, desc for descending
-    order: -1
+    # 用升序：按发表时间排列刚好就是「笔记 → 对应作业 → 下一节笔记」的阅读顺序
+    order: 1
   card_webinfo:
     enable: true
     post_count: true
@@ -435,7 +441,7 @@ copy:
 
 # Need to install the hexo-wordcount plugin
 wordcount:
-  enable: false
+  enable: true
   # Display the word count of the article in post meta
   post_wordcount: true
   # Display the time to read the article in post meta
@@ -459,7 +465,7 @@ busuanzi:
 math:
   # Choose: mathjax, katex
   # Leave it empty if you don't need math
-  use:
+  use: katex
   per_page: true
   hide_scrollbar: false
 
@@ -471,7 +477,7 @@ math:
 
   katex:
     # Enable the copy KaTeX formula
-    copy_tex: false
+    copy_tex: true
 
 # --------------------------------------
 # Search
@@ -539,7 +545,7 @@ comments:
   # Leave it empty if you don't need comments
   # Choose: Disqus/Disqusjs/Livere/Gitalk/Valine/Waline/Utterances/Facebook Comments/Twikoo/Giscus/Remark42/Artalk
   # Format of two comments system : Disqus,Waline
-  use:
+  use: Giscus
   # Display the comment name next to the button
   text: true
   # Lazyload: The comment system will be load when comment element enters the browser's viewport.
@@ -636,13 +642,23 @@ twikoo:
 # Giscus
 # https://giscus.app/
 giscus:
-  repo:
-  repo_id:
-  category_id:
+  # 仓库全名。你的站点是用户站点，仓库名与域名同名。
+  repo: noimpty-zby/noimpty-zby.github.io
+  repo_id: R_kgDOTYYcpA
+  category_id: DIC_kwDOTYYcpM4DDOPO
   light_theme: light
-  dark_theme: dark
+  # transparent_dark 背景透明，能融进你的暗色卡片
+  dark_theme: transparent_dark
   js:
   option:
+    data-lang: zh-CN
+    # 评论框放列表上方，读者一眼看到
+    data-input-position: top
+    # 滚到评论区才加载，不拖慢首屏
+    data-loading: lazy
+    # 按文章路径关联讨论帖。注意：以后再改文件名，
+    # 旧路径下的评论不会自动迁移。
+    data-mapping: pathname
 
 # Remark42
 # https://remark42.com/docs/configuration/frontend/
@@ -703,12 +719,20 @@ cloudflare_analytics:
 microsoft_clarity:
 
 # https://umami.is/
+# Umami 统计。
+# UV_PV 全部保持 false —— 页面上不显示数字，因此不需要把 API key
+# 放进页面。数据到 https://cloud.umami.is 后台看，那里还有来源、
+# 停留时长、设备等更有用的信息。
+#
+# 不统计自己的访问：在自己浏览器的控制台执行一次
+#     localStorage.setItem('umami.disabled', 1)
+# 之后这台设备的这个浏览器就不再计入。换浏览器或清缓存后需重设。
 umami_analytics:
-  enable: false
+  enable: true
   # For self-hosted setups, configure the hostname of the Umami instance
-  serverURL:
+  serverURL: https://cloud.umami.is
   script_name: script.js
-  website_id:
+  website_id: 1e0fdcd1-e61e-47ba-9a48-8efd7ab35883
   option:
   UV_PV:
     site_uv: false
@@ -919,7 +943,7 @@ clickShowText:
 # https://github.com/francoischalifour/medium-zoom
 # https://fancyapps.com/fancybox/
 # Leave it empty if you don't need lightbox
-lightbox:
+lightbox: fancybox
 
 # --------------------------------------
 # Tag Plugins settings
@@ -927,9 +951,9 @@ lightbox:
 
 # Series
 series:
-  enable: false
+  enable: true
   # Order by title or date
-  orderBy: 'title'
+  orderBy: 'date'
   # Sort of order. 1, asc for ascending; -1, desc for descending
   order: 1
   number: true
@@ -943,9 +967,9 @@ abcjs:
 # Mermaid
 # https://github.com/mermaid-js/mermaid
 mermaid:
-  enable: false
+  enable: true
   # Write Mermaid diagrams using code blocks
-  code_write: false
+  code_write: true
   # built-in themes: default / forest / dark / neutral
   theme:
     light: default
@@ -1016,7 +1040,7 @@ snackbar:
 
 # Instant.page
 # https://instant.page/
-instantpage: false
+instantpage: true
 
 # Lazyload
 # https://github.com/verlok/vanilla-lazyload
@@ -1056,7 +1080,7 @@ Open_Graph_meta:
 # Structured Data
 # https://developers.google.com/search/docs/guides/intro-structured-data
 structured_data:
-  enable: false
+  enable: true
   # Alternate name for the site, used in structured data
   # Format: ['name1', 'name2']
   alternate_name:
@@ -1072,12 +1096,15 @@ inject:
     - <link rel="stylesheet" href="/css/sections.css">
     - <link rel="stylesheet" href="/css/related-posts.css">
     - <link rel="stylesheet" href="/css/music-player.css">
+    - <link rel="stylesheet" href="/css/noimpty-ai.css">
     - <script src="/js/protected-manifest.js"></script>
     - <script src="/js/privacy-gate.js"></script>
     - <script src="/js/section-hub.js"></script>
   bottom:
     - <script src="/js/toc-sync.js"></script>
     - <script src="/js/music-player.js"></script>
+    # 娜娜莉：API Key 不写在代码里，由使用者在面板中输入并存在本机 localStorage
+    - <script src="/js/noimpty-ai.js"></script>
 
 # CDN Settings
 # Don't modify the following settings unless you know how they work
@@ -1087,7 +1114,7 @@ CDN:
   # Note: Dev version can only use 'local' for internal scripts
   # Note: When setting third-party scripts to 'local', you need to install hexo-butterfly-extjs
   internal_provider: local
-  third_party_provider: jsdelivr
+  third_party_provider: local
 
   # Add version number to url, true or false
   version: true

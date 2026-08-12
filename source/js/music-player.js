@@ -25,7 +25,9 @@
     ? saved.index
     : randomStart
   let shuffleEnabled = saved.shuffle !== false
-  let collapsed = saved.collapsed === true
+  // 默认收起：新访客首次进入只看到一个小图标，不遮挡正文；
+  // 一旦手动展开过，localStorage 里会存下 collapsed:false，之后保持展开。
+  let collapsed = saved.collapsed !== false
   let pendingTime = Number.isFinite(saved.currentTime) ? Math.max(0, saved.currentTime) : 0
   let resumeRequested = saved.playing === true
   let shuffleBag = []

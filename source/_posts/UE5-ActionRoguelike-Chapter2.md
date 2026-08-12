@@ -4,23 +4,22 @@ date: 2026-08-07 20:00:00
 categories:
   - [Study,UE5]
 tags:
-  - UE5
   - C++
-  - Tom Looman
   - ActionRoguelike
   - Niagara
   - 碰撞系统
-  - 委托
+  - 委托与事件分发
   - 伤害系统
 description: 完整梳理 ActionRoguelike 第二章五节课：投射物 Actor 的组件构成、碰撞三层配置、动态委托与命中回调、Enhanced Input 触发器、SpawnActor 与伤害归属链、计时器与动画蒙太奇、音效与特效的三种生成方式、物理冲量的完整链路，并解释每一步为什么这么写。
-cover: /img/cover-blue.svg
+cover: /img/covers/UE5-ActionRoguelike-Chapter2.svg
+series: UE5 ActionRoguelike
 ---
 
 # 前言
 
 这是我跟随 Tom Looman 学习 UE5 C++ 时，对第二章 **Projectile & Damage** 的完整复盘，覆盖课程五节课的全部内容。
 
-上一篇见[UE5 C++ 第一章复盘：从零创建 ActionRoguelike 到可移动、可观察、带动画的第三人称角色](https://noimpty-zby.github.io/2026/07/31/UE5_Chapter01_ActionRoguelike_Project_Setup/)。第一章搭好了"能移动、能观察、有动画的第三人称角色"，本章要给这个角色装上第一个能对世界产生影响的能力。
+上一篇见{% post_link UE5-ActionRoguelike-Chapter1 %}。第一章搭好了"能移动、能观察、有动画的第三人称角色"，本章要给这个角色装上第一个能对世界产生影响的能力。
 
 本章使用的开发环境：
 
@@ -1592,3 +1591,7 @@ UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ExplosionEffect, Hit.Impact
 - [Epic Games：Overview of Niagara Effects](https://dev.epicgames.com/documentation/en-us/unreal-engine/overview-of-niagara-effects-for-unreal-engine)
 - [Epic Games：Enhanced Input](https://dev.epicgames.com/documentation/en-us/unreal-engine/enhanced-input-in-unreal-engine)
 - [Tom Looman：Unreal Engine 5 C++ Timers](https://tomlooman.com/unreal-engine-cpp-timers/)
+
+## 本系列的其他文章
+
+{% series %}

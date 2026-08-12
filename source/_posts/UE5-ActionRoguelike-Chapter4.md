@@ -4,16 +4,14 @@ date: 2026-08-12 13:00:00
 categories:
   - [Study,UE5]
 tags:
-  - UE5
   - C++
-  - Tom Looman
   - ActionRoguelike
-  - 蓝图
-  - 反射系统
-  - 事件分发器
+  - 蓝图与反射
+  - 委托与事件分发
   - 接口
 description: 第四章是从"纯 C++ 搭骨架"转向"C++ 与蓝图协作"的转折点。本篇完整梳理四节课：什么时候该在蓝图里建组件、BlueprintImplementableEvent 与 BlueprintNativeEvent 的调用方向、接口为什么必须用 Execute_ 调用、Parent 节点为什么不能省、事件分发器如何解耦拉杆与爆炸桶、以及 SpawnActor 的几个隐藏参数。重点解释每一次报错的成因与排查路径。
-cover: /img/cover-blue.svg
+cover: /img/covers/UE5-ActionRoguelike-Chapter4.svg
+series: UE5 ActionRoguelike
 ---
 
 # 前言
@@ -900,3 +898,7 @@ if (SelectedActor && SelectedActor->Implements<URogueInteractionInterface>())
 - [Epic Games：Delegates and Lambda Functions](https://dev.epicgames.com/documentation/en-us/unreal-engine/delegates-and-lamba-functions-in-unreal-engine)
 - [Tom Looman：Unreal Engine C++ Interfaces](https://tomlooman.com/unreal-engine-cpp-interfaces/)
 - [Tom Looman：ActionRoguelike on GitHub](https://github.com/tomlooman/ActionRoguelike)
+
+## 本系列的其他文章
+
+{% series %}

@@ -4,13 +4,12 @@ date: 2026-07-31 13:00:00
 categories:
   - [Study,UE5]
 tags:
-  - UE5
   - C++
-  - Tom Looman
   - Enhanced Input
   - ActionRoguelike
 description: 完整梳理 ActionRoguelike 第一章的项目创建、C++ 角色、Actor Components、第三人称相机、Enhanced Input、镜头相对移动以及动画蓝图配置，并解释每一步为什么要这样做。
-cover: /img/cover-blue.svg
+cover: /img/covers/UE5-ActionRoguelike-Chapter1.svg
+series: UE5 ActionRoguelike
 ---
 
 # 前言
@@ -2010,3 +2009,7 @@ Character Movement 改变运动状态，Animation Blueprint 读取状态并输�
 - [Epic Games：USpringArmComponent::GetTargetRotation](https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/GameFramework/USpringArmComponent/GetTargetRotation/1?application_version=5.3)
 - [Epic Games：FVector::RightVector](https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Core/Math/TVector/RightVector?application_version=5.5)
 - [Epic Games：Animation Blueprints](https://dev.epicgames.com/documentation/en-us/unreal-engine/animation-blueprints-in-unreal-engine)
+
+## 本系列的其他文章
+
+{% series %}

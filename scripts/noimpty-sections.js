@@ -48,12 +48,25 @@ hexo.extend.tag.register('section_posts', args => {
     .sort((left, right) => Number(right.date || 0) - Number(left.date || 0))
 
   if (posts.length === 0) {
+    // 空状态措辞：说清楚这个板块收什么，而不是说「还没做好」。
+    // 有意为之的留白不减分，看起来没做完的页面才减分。
     const messages = {
-      Ideas: '这里还没有文章。第一条 idea 出现时，它会被收进这里。',
-      UE5: 'UE5 的学习记录还在准备中。',
-      '竞赛': '竞赛相关的记录还在准备中。'
+      Ideas: {
+        title: '这里暂时是空的',
+        body: 'Ideas 用来存放还没成形的想法、猜想和以后想试的方向。等第一条值得写下来的出现，它会落在这里。'
+      },
+      UE5: {
+        title: '这里暂时是空的',
+        body: 'UE5 的学习过程、功能实验与项目实践会记录在这一栏。'
+      },
+      '竞赛': {
+        title: '这里暂时是空的',
+        body: '比赛过程、方案整理、问题复盘与阶段总结会记录在这一栏。'
+      }
     }
-    return `<div class="noimpty-empty-state"><span class="noimpty-empty-state__icon" aria-hidden="true">✦</span><h3>内容准备中</h3><p>${escapeHtml(messages[section] || '这个模块还没有文章。')}</p></div>`
+    const fallback = { title: '这里暂时是空的', body: '这个板块还没有收录文章。' }
+    const msg = messages[section] || fallback
+    return `<div class="noimpty-empty-state"><span class="noimpty-empty-state__icon" aria-hidden="true">✦</span><h3>${escapeHtml(msg.title)}</h3><p>${escapeHtml(msg.body)}</p></div>`
   }
 
   const cards = posts.map(post => {
@@ -83,17 +96,30 @@ hexo.extend.generator.register('noimpty-privacy-manifest', locals => {
   const entries = new Map()
   const add = (path, section) => entries.set(normalizeWebPath(path), String(section || 'ideas').toLowerCase())
 
+  // 板块落地页（/ideas/ 与 /life/）单独判断，不走下面这个通用循环。
+  const SECTION_LANDING = new Set(['/ideas/', '/life/'])
+
   toArray(locals.posts)
     .concat(toArray(locals.pages))
     .filter(item => String(item.privacy || '').toLowerCase() === 'protected')
+    .filter(item => !SECTION_LANDING.has(normalizeWebPath(item.path)))
     .forEach(item => add(item.path, sectionOf(item)))
 
-  add('ideas/', 'ideas')
-  add('life/', 'life')
-  add('categories/ideas/', 'ideas')
-  add('categories/life/', 'life')
-  add('tags/ideas/', 'ideas')
-  add('tags/life/', 'life')
+  // 只在板块「确实有文章」时才上锁。
+  // 对一个一篇都没有的板块要求暗号，等于让访客输密码去看一个空页面。
+  const countIn = name => toArray(locals.posts)
+    .filter(post => taxonomyNames(post.categories).includes(name)).length
+
+  if (countIn('Ideas') > 0) {
+    add('ideas/', 'ideas')
+    add('categories/ideas/', 'ideas')
+    add('tags/ideas/', 'ideas')
+  }
+  if (countIn('Life') > 0) {
+    add('life/', 'life')
+    add('categories/life/', 'life')
+    add('tags/life/', 'life')
+  }
 
   const payload = {
     entries: Array.from(entries, ([path, section]) => ({ path, section }))
@@ -103,6 +129,32 @@ hexo.extend.generator.register('noimpty-privacy-manifest', locals => {
     path: 'js/protected-manifest.js',
     data: `window.NOIMPTY_PRIVACY = Object.freeze(${JSON.stringify(payload)});\n`
   }
+})
+
+// 把加密文章从 RSS/Atom 里剔除，否则私密内容会经 feed 泄漏出去。
+hexo.extend.filter.register('after_generate', async () => {
+  const feedPath = hexo.config.feed && hexo.config.feed.path
+  if (!feedPath) return
+  const stream = hexo.route.get(feedPath)
+  if (!stream) return
+
+  let xml = ''
+  for await (const chunk of stream) xml += chunk.toString()
+
+  const protectedUrls = new Set(protectedPosts().map(post => encodeURI(normalizeWebPath(post.path))))
+  if (protectedUrls.size === 0) return
+
+  const root = String(hexo.config.url || '').replace(/\/$/, '')
+  const isProtected = href => {
+    try { return protectedUrls.has(new URL(href, root + '/').pathname) } catch (_) { return false }
+  }
+
+  const filtered = xml.replace(/<entry>[\s\S]*?<\/entry>/g, entry => {
+    const m = entry.match(/<id>(.*?)<\/id>/) || entry.match(/<link[^>]*href="(.*?)"/)
+    return m && isProtected(m[1]) ? '' : entry
+  })
+
+  hexo.route.set(feedPath, filtered)
 })
 
 hexo.extend.filter.register('after_generate', async () => {

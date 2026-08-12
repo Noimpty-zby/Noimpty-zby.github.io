@@ -4,23 +4,22 @@ date: 2026-08-09 13:00:00
 categories:
   - [Study,UE5]
 tags:
-  - UE5
   - C++
-  - Tom Looman
   - ActionRoguelike
   - Enhanced Input
   - 伤害系统
   - 物理冲量
   - Niagara
 description: ActionRoguelike 课程 Assignment 1 的完整复盘。第一部分用 Enhanced Input 实现角色跳跃并读通 ACharacter::Jump 的源码分层；第二部分从零设计一个爆炸桶，覆盖 TakeDamage 重写、伤害系统的双端结构、UPROPERTY 说明符的判断标准、组件与一次性效果的生命周期差异、RadialForceComponent 与冲量、以及本次实际踩过的十四个坑。
-cover: /img/cover-blue.svg
+cover: /img/covers/UE5-ActionRoguelike-Assignment1.svg
+series: UE5 ActionRoguelike
 ---
 
 # 前言
 
 这是我跟随 Tom Looman 学习 UE5 C++ 时，对 **Assignment 1** 的完整复盘。
 
-前两篇见[UE5 C++ 第一章复盘：从零创建 ActionRoguelike 到可移动、可观察、带动画的第三人称角色](https://noimpty-zby.github.io/2026/07/31/UE5_Chapter01_ActionRoguelike_Project_Setup/)和[UE5 C++ 第二章复盘：从一次点击到一发法球的完整远程攻击链路](https://noimpty-zby.github.io/2026/08/07/UE5-ActionRoguelike-Chapter2%20/)。
+前两篇见{% post_link UE5-ActionRoguelike-Chapter1 %}和{% post_link UE5-ActionRoguelike-Chapter2 %}。
 
 本次使用的开发环境：
 
@@ -1440,3 +1439,7 @@ if (DamageEvent.IsOfType(FPointDamageEvent::ClassID))
 - [Epic Games：Properties（UPROPERTY 说明符）](https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-uproperties)
 - [Tom Looman：Unreal Engine 5 C++ Timers](https://tomlooman.com/unreal-engine-cpp-timers/)
 - [Tom Looman：Unreal Engine C++ Complete Guide](https://tomlooman.com/unreal-engine-cpp-guide/)
+
+## 本系列的其他文章
+
+{% series %}

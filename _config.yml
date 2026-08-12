@@ -51,6 +51,11 @@ highlight:
   tab_replace: ''
   wrap: true
   hljs: false
+  # mermaid 代码块不要交给 highlight.js 处理，
+  # 否则会被包成 <figure class="highlight"> 表格结构，
+  # Butterfly 的 code_write 找不到 pre > code.mermaid，图就画不出来。
+  exclude_languages:
+    - mermaid
 prismjs:
   preprocess: true
   line_number: true
@@ -74,13 +79,9 @@ category_map:
   竞赛: competition
   Ideas: ideas
   Life: life
+# tag_map 已清空：Study / GAMES101 / UE5 / Life 这些标签已删除
+# （它们与分类完全重复），保留映射会指向不存在的标签。
 tag_map:
-  Study: study
-  GAMES101: games101
-  UE5: ue5
-  竞赛: competition
-  Ideas: ideas
-  Life: life
 
 # Metadata elements
 ## https://developer.mozilla.org/en-US/docs/Web/HTML/Element/meta
@@ -112,6 +113,68 @@ search:
 include:
 exclude:
 ignore:
+
+# 站点地图（hexo-generator-sitemap）
+# 搜索引擎靠它高效发现全部页面。
+# 加密文章通过在其 front-matter 里写 sitemap: false 排除
+# （见 source/_posts/my-first-post.md）。
+sitemap:
+  path: sitemap.xml
+  rel: false
+  tags: true
+  categories: true
+
+# RSS / Atom 订阅（hexo-generator-feed）
+# 注意：加密文章会由 scripts/noimpty-sections.js 里的 after_generate 过滤器
+#       从 feed 中剔除，避免私密内容经 RSS 泄漏。
+feed:
+  type: atom
+  path: atom.xml
+  limit: 20
+  hub:
+  # content: false —— 只输出 description 摘要。
+  # 开 true 会把全文塞进 feed：你的 UE5 长文单篇 1.5 万字，
+  # 全文 feed 会到 1.3MB，订阅者每次拉取都要下这么多。
+  content: false
+  content_limit: 300
+  content_limit_delim: ' '
+  order_by: -date
+  icon: /img/favicon.svg
+
+# Markdown 渲染器（hexo-renderer-markdown-it）
+# 换掉 hexo-renderer-marked 是为了支持 KaTeX 数学公式。
+# 下面的选项刻意对齐 marked 的原有行为，避免已有文章排版变化：
+#   breaks: true   —— 单换行渲染成 <br>，正文里大量依赖这个
+#   html: true     —— 允许正文内嵌 HTML（Study/Ideas/Life 板块页用到）
+markdown:
+  preset: default
+  render:
+    html: true
+    xhtmlOut: false
+    breaks: true
+    linkify: true
+    # typographer 关闭：它会把 ... 变成 …、-- 变成 –、引号变成弯引号。
+    # 技术正文里这些符号常有原意，保持原样最安全，也与源文件完全一致。
+    typographer: false
+  plugins:
+    - '@renbaoshuo/markdown-it-katex'
+    # 任务列表 - [x] / - [ ]：marked 原生支持，markdown-it 需要插件补上。
+    # UE5 系列文章末尾的「完成检查清单」依赖它，共 233 个复选框。
+    - name: 'markdown-it-task-lists'
+      options:
+        enabled: false
+        label: false
+  # 还原 marked 原本的标题锚点：<a class="headerlink" href="#xxx"></a>
+  # Butterfly 的目录跳转和 toc-sync.js 都依赖它
+  anchors:
+    level: 1
+    collisionSuffix: ''
+    permalink: true
+    permalinkClass: headerlink
+    permalinkSide: left
+    permalinkSymbol: ''
+    case: 0
+    separator: '-'
 
 # Extensions
 ## Plugins: https://hexo.io/plugins/

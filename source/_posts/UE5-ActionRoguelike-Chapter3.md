@@ -4,16 +4,15 @@ date: 2026-08-11 18:00:00
 categories:
   - [Study,UE5]
 tags:
-  - UE5
   - C++
-  - Tom Looman
   - ActionRoguelike
   - Gameplay Framework
   - 接口
   - 碰撞系统
-  - 增强输入
+  - Enhanced Input
 description: 完整梳理 ActionRoguelike 第三章六节课：GameMode/PlayerController/Pawn 的职责划分、球体重叠与点积目标筛选、Tick 驱动的程序化动画、UInterface 双类结构与依赖倒置、Enhanced Input 到接口调用的完整链路、自定义检测通道的白名单过滤、以及核心重定向背后的对象命名机制，并解释每一步为什么这么写。
-cover: /img/cover-blue.svg
+cover: /img/covers/UE5-ActionRoguelike-Chapter3.svg
+series: UE5 ActionRoguelike
 ---
 
 # 前言
@@ -1585,3 +1584,7 @@ constexpr ECollisionChannel COLLISION_INTERACTION = ECC_GameTraceChannel1;
 - [Epic Games：Core Redirects](https://dev.epicgames.com/documentation/en-us/unreal-engine/core-redirects-in-unreal-engine)
 - [Tom Looman：Unreal Engine C++ Interfaces](https://tomlooman.com/unreal-engine-cpp-interfaces/)
 - [Tom Looman：ActionRoguelike on GitHub](https://github.com/tomlooman/ActionRoguelike)
+
+## 本系列的其他文章
+
+{% series %}

@@ -1,0 +1,60 @@
+<svg width="100%" viewBox="0 0 760 440" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>UE 反射系统：蓝图如何看见 C++</title>
+<desc>UHT 在编译前扫描宏，生成 generated.h 元数据，蓝图虚拟机靠元数据查找 C++ 成员。没有宏就没有元数据，蓝图里就搜不到。</desc>
+<style>
+.t{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;font-weight:500}
+.ts{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:12px}
+.tm{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.nb{fill:#F1EFE8;stroke:#B4B2A9;stroke-width:1}
+.nt{fill:#2C2C2A}.ns{fill:#5F5E5A}
+.cb{fill:#E1F5EE;stroke:#5DCAA5;stroke-width:1}
+.ct{fill:#04342C}.cs{fill:#0F6E56}
+.pb{fill:#EEEDFE;stroke:#AFA9EC;stroke-width:1}
+.pt{fill:#26215C}.ps{fill:#534AB7}
+.rb{fill:#FCEBEB;stroke:#F09595;stroke-width:1}
+.rt{fill:#501313}
+.ln{stroke:#888780;stroke-width:1.2;fill:none}
+.dl{stroke:#888780;stroke-width:1;stroke-dasharray:4 4;fill:none}
+@media (prefers-color-scheme:dark){
+.nb{fill:#2C2C2A;stroke:#5F5E5A}.nt{fill:#D3D1C7}.ns{fill:#B4B2A9}
+.cb{fill:#085041;stroke:#1D9E75}.ct{fill:#9FE1CB}.cs{fill:#5DCAA5}
+.pb{fill:#3C3489;stroke:#7F77DD}.pt{fill:#CECBF6}.ps{fill:#AFA9EC}
+.rb{fill:#791F1F;stroke:#E24B4A}.rt{fill:#F7C1C1}
+.ln,.dl{stroke:#9c9a92}}
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
+
+<rect class="cb" x="30" y="40" width="200" height="96" rx="8"/>
+<text class="t ct" x="130" y="64" text-anchor="middle">你写的 C++</text>
+<text class="tm cs" x="130" y="88" text-anchor="middle">UCLASS()</text>
+<text class="tm cs" x="130" y="106" text-anchor="middle">UPROPERTY()</text>
+<text class="tm cs" x="130" y="124" text-anchor="middle">UFUNCTION()</text>
+
+<line class="ln" x1="230" y1="88" x2="278" y2="88" marker-end="url(#a)"/>
+
+<rect class="nb" x="282" y="40" width="196" height="96" rx="8"/>
+<text class="t nt" x="380" y="64" text-anchor="middle">UHT 扫描</text>
+<text class="ts ns" x="380" y="88" text-anchor="middle">编译前先跑一遍</text>
+<text class="ts ns" x="380" y="108" text-anchor="middle">只认这些宏</text>
+<text class="ts ns" x="380" y="126" text-anchor="middle">没有宏就当没看见</text>
+
+<line class="ln" x1="478" y1="88" x2="526" y2="88" marker-end="url(#a)"/>
+
+<rect class="nb" x="530" y="40" width="200" height="96" rx="8"/>
+<text class="t nt" x="630" y="64" text-anchor="middle">生成元数据</text>
+<text class="tm ns" x="630" y="88" text-anchor="middle">Xxx.generated.h</text>
+<text class="ts ns" x="630" y="110" text-anchor="middle">UClass / UProperty</text>
+<text class="ts ns" x="630" y="128" text-anchor="middle">UFunction</text>
+
+<path class="ln" d="M630 136 L630 176 L380 176 L380 216" marker-end="url(#a)"/>
+
+<rect class="pb" x="230" y="220" width="300" height="76" rx="8"/>
+<text class="t pt" x="380" y="246" text-anchor="middle">蓝图虚拟机</text>
+<text class="ts ps" x="380" y="268" text-anchor="middle">靠元数据查找成员、路由调用</text>
+<text class="ts ps" x="380" y="286" text-anchor="middle">这就是蓝图能"看见"C++ 的全部原因</text>
+
+<rect class="rb" x="30" y="330" width="700" height="86" rx="8"/>
+<text class="t rt" x="380" y="356" text-anchor="middle">推论：蓝图里搜不到某个成员，第一排查点永远是"元数据有没有生成"</text>
+<text class="ts rt" x="380" y="380" text-anchor="middle">① 忘了加宏  ② 改完没编译（存盘 ≠ 编译）  ③ 编译失败但没注意到  ④ private 挡住了</text>
+<text class="ts rt" x="380" y="400" text-anchor="middle">⑤ 打开的蓝图父类不对  ⑥ bool 变量的显示名被剥掉了首字母 b（见 2.6）</text>
+</svg>

@@ -1,0 +1,82 @@
+<svg width="100%" viewBox="0 0 760 520" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>第四章完整链路：从按 E 到宝箱开启与拉杆连锁反应</title>
+<desc>两条链路共用第三章的交互组件入口，之后分别走宝箱的动画事件和拉杆的事件分发器。</desc>
+<style>
+.t{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;font-weight:500}
+.ts{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:12px}
+.tm{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.nb{fill:#F1EFE8;stroke:#B4B2A9;stroke-width:1}
+.nt{fill:#2C2C2A}.ns{fill:#5F5E5A}
+.cb{fill:#E1F5EE;stroke:#5DCAA5;stroke-width:1}
+.ct{fill:#04342C}.cs{fill:#0F6E56}
+.pb{fill:#EEEDFE;stroke:#AFA9EC;stroke-width:1}
+.pt{fill:#26215C}.ps{fill:#534AB7}
+.ln{stroke:#888780;stroke-width:1.2;fill:none}
+@media (prefers-color-scheme:dark){
+.nb{fill:#2C2C2A;stroke:#5F5E5A}.nt{fill:#D3D1C7}.ns{fill:#B4B2A9}
+.cb{fill:#085041;stroke:#1D9E75}.ct{fill:#9FE1CB}.cs{fill:#5DCAA5}
+.pb{fill:#3C3489;stroke:#7F77DD}.pt{fill:#CECBF6}.ps{fill:#AFA9EC}
+.ln{stroke:#9c9a92}}
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
+
+<rect class="cb" x="24" y="34" width="150" height="16" rx="4"/>
+<text class="ts ct" x="99" y="46" text-anchor="middle">绿色 = C++    紫色 = 蓝图</text>
+<rect class="pb" x="182" y="34" width="16" height="16" rx="4"/>
+
+<rect class="cb" x="280" y="70" width="200" height="52" rx="8"/>
+<text class="t ct" x="380" y="92" text-anchor="middle">按 E → 交互组件</text>
+<text class="tm cs" x="380" y="110" text-anchor="middle">Execute_Interact</text>
+
+<path class="ln" d="M280 96 L200 96 L200 156" marker-end="url(#a)"/>
+<path class="ln" d="M480 96 L560 96 L560 156" marker-end="url(#a)"/>
+<text class="ts ns" x="196" y="140" text-anchor="end">宝箱</text>
+<text class="ts ns" x="576" y="140">拉杆</text>
+
+<rect class="cb" x="70" y="160" width="260" height="66" rx="8"/>
+<text class="t ct" x="200" y="182" text-anchor="middle">Interact_Implementation</text>
+<text class="ts cs" x="200" y="202" text-anchor="middle">bChestOpened 守卫 + 开 Tick</text>
+<text class="ts cs" x="200" y="218" text-anchor="middle">蓝图侧另有 Branch 二次拦截</text>
+
+<line class="ln" x1="200" y1="226" x2="200" y2="262" marker-end="url(#a)"/>
+
+<rect class="cb" x="70" y="266" width="260" height="66" rx="8"/>
+<text class="t ct" x="200" y="288" text-anchor="middle">Tick 逐帧插值盖子</text>
+<text class="tm cs" x="200" y="308" text-anchor="middle">FInterpConstantTo</text>
+<text class="ts cs" x="200" y="324" text-anchor="middle">到位后关 Tick</text>
+
+<line class="ln" x1="200" y1="332" x2="200" y2="368" marker-end="url(#a)"/>
+
+<rect class="pb" x="70" y="372" width="260" height="66" rx="8"/>
+<text class="t pt" x="200" y="394" text-anchor="middle">ChestAnimationComplete</text>
+<text class="ts ps" x="200" y="414" text-anchor="middle">蓝图里 Activate 粒子</text>
+<text class="ts ps" x="200" y="430" text-anchor="middle">C++ 完全不知道粒子的存在</text>
+
+<rect class="pb" x="430" y="160" width="260" height="66" rx="8"/>
+<text class="t pt" x="560" y="182" text-anchor="middle">BP_Lever 的 Event Interact</text>
+<text class="ts ps" x="560" y="202" text-anchor="middle">纯蓝图实现接口</text>
+<text class="ts ps" x="560" y="218" text-anchor="middle">没有任何 C++ 父类</text>
+
+<line class="ln" x1="560" y1="226" x2="560" y2="262" marker-end="url(#a)"/>
+
+<rect class="pb" x="430" y="266" width="260" height="52" rx="8"/>
+<text class="t pt" x="560" y="288" text-anchor="middle">Call On Handle Pulled</text>
+<text class="ts ps" x="560" y="306" text-anchor="middle">广播给订阅名单</text>
+
+<line class="ln" x1="560" y1="318" x2="560" y2="354" marker-end="url(#a)"/>
+
+<rect class="pb" x="430" y="358" width="260" height="52" rx="8"/>
+<text class="t pt" x="560" y="380" text-anchor="middle">关卡蓝图 Custom Event</text>
+<text class="ts ps" x="560" y="398" text-anchor="middle">决定这一关要发生什么</text>
+
+<path class="ln" d="M470 410 L470 442" marker-end="url(#a)"/>
+<path class="ln" d="M650 410 L650 442" marker-end="url(#a)"/>
+
+<rect class="cb" x="380" y="446" width="170" height="52" rx="8"/>
+<text class="t ct" x="465" y="468" text-anchor="middle">Explode</text>
+<text class="ts cs" x="465" y="486" text-anchor="middle">BlueprintCallable</text>
+
+<rect class="pb" x="570" y="446" width="170" height="52" rx="8"/>
+<text class="t pt" x="655" y="468" text-anchor="middle">StartSpawning</text>
+<text class="ts ps" x="655" y="486" text-anchor="middle">纯蓝图函数 → 开 Tick</text>
+</svg>

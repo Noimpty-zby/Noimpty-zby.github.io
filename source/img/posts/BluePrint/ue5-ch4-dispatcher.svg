@@ -1,0 +1,82 @@
+<svg width="100%" viewBox="0 0 760 470" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>事件分发器的登记阶段与广播阶段</title>
+<desc>BeginPlay 时把 Custom Event 登记进订阅名单；拉杆被交互时广播，名单上的函数才被调用。这两件事发生在不同时刻。</desc>
+<style>
+.t{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;font-weight:500}
+.ts{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:12px}
+.tm{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.nb{fill:#F1EFE8;stroke:#B4B2A9;stroke-width:1}
+.nt{fill:#2C2C2A}.ns{fill:#5F5E5A}
+.pb{fill:#EEEDFE;stroke:#AFA9EC;stroke-width:1}
+.pt{fill:#26215C}.ps{fill:#534AB7}
+.kb{fill:#FBEAF0;stroke:#ED93B1;stroke-width:1}
+.kt{fill:#4B1528}.ks{fill:#993556}
+.ln{stroke:#888780;stroke-width:1.2;fill:none}
+.dl{stroke:#888780;stroke-width:1.2;stroke-dasharray:5 4;fill:none}
+@media (prefers-color-scheme:dark){
+.nb{fill:#2C2C2A;stroke:#5F5E5A}.nt{fill:#D3D1C7}.ns{fill:#B4B2A9}
+.pb{fill:#3C3489;stroke:#7F77DD}.pt{fill:#CECBF6}.ps{fill:#AFA9EC}
+.kb{fill:#72243E;stroke:#D4537E}.kt{fill:#F4C0D1}.ks{fill:#ED93B1}
+.ln,.dl{stroke:#9c9a92}}
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
+
+<text class="t nt" x="30" y="30">阶段一：BeginPlay 时登记（只做一次）</text>
+
+<rect class="nb" x="30" y="46" width="170" height="52" rx="8"/>
+<text class="t nt" x="115" y="68" text-anchor="middle">Event BeginPlay</text>
+<text class="ts ns" x="115" y="88" text-anchor="middle">白线：什么时候登记</text>
+
+<line class="ln" x1="200" y1="72" x2="238" y2="72" marker-end="url(#a)"/>
+
+<rect class="pb" x="242" y="46" width="250" height="52" rx="8"/>
+<text class="t pt" x="367" y="68" text-anchor="middle">Bind Event to On Handle Pulled</text>
+<text class="ts ps" x="367" y="88" text-anchor="middle">相当于 AddDynamic</text>
+
+<rect class="nb" x="30" y="118" width="170" height="52" rx="8"/>
+<text class="t nt" x="115" y="140" text-anchor="middle">BP_Lever</text>
+<text class="ts ns" x="115" y="160" text-anchor="middle">蓝线：登记到谁名下</text>
+
+<rect class="nb" x="30" y="190" width="170" height="52" rx="8"/>
+<text class="t nt" x="115" y="212" text-anchor="middle">OnHandlePulled_事件</text>
+<text class="ts ns" x="115" y="232" text-anchor="middle">红线：交上哪个函数</text>
+
+<path class="ln" d="M200 144 L220 144 L220 82 L238 82" marker-end="url(#a)"/>
+<path class="ln" d="M200 216 L230 216 L230 92 L238 92" marker-end="url(#a)"/>
+
+<line class="ln" x1="492" y1="72" x2="530" y2="72" marker-end="url(#a)"/>
+
+<rect class="kb" x="534" y="40" width="196" height="64" rx="8"/>
+<text class="t kt" x="632" y="64" text-anchor="middle">订阅名单</text>
+<text class="ts ks" x="632" y="86" text-anchor="middle">OnHandlePulled 的委托列表</text>
+
+<rect class="nb" x="252" y="190" width="230" height="52" rx="8"/>
+<text class="ts ns" x="367" y="212" text-anchor="middle">Bind 执行完的那一刻</text>
+<text class="ts ns" x="367" y="230" text-anchor="middle">Custom Event 并不会运行</text>
+
+<line class="ln" x1="30" y1="266" x2="730" y2="266" stroke-dasharray="4 4"/>
+
+<text class="t nt" x="30" y="296">阶段二：拉杆被交互时广播（每次都做）</text>
+
+<rect class="nb" x="30" y="312" width="180" height="56" rx="8"/>
+<text class="t nt" x="120" y="336" text-anchor="middle">按 E → Event Interact</text>
+<text class="ts ns" x="120" y="356" text-anchor="middle">BP_Lever 内部</text>
+
+<line class="ln" x1="210" y1="340" x2="256" y2="340" marker-end="url(#a)"/>
+
+<rect class="pb" x="260" y="312" width="200" height="56" rx="8"/>
+<text class="t pt" x="360" y="336" text-anchor="middle">Call On Handle Pulled</text>
+<text class="ts ps" x="360" y="356" text-anchor="middle">相当于 Broadcast()</text>
+
+<path class="dl" d="M632 104 L632 250 L360 250 L360 308" marker-end="url(#a)"/>
+
+<line class="ln" x1="460" y1="340" x2="506" y2="340" marker-end="url(#a)"/>
+
+<rect class="nb" x="510" y="312" width="220" height="56" rx="8"/>
+<text class="t nt" x="620" y="336" text-anchor="middle">遍历名单逐个调用</text>
+<text class="ts ns" x="620" y="356" text-anchor="middle">桶爆炸 / Spammer 开始发射</text>
+
+<rect class="kb" x="30" y="396" width="700" height="56" rx="8"/>
+<text class="t kt" x="380" y="420" text-anchor="middle">BP_Lever 从头到尾不知道有桶存在</text>
+<text class="ts ks" x="380" y="440" text-anchor="middle">它只喊"我被拉了"，谁听、听了干什么全在别处决定 —— 这就是解耦</text>
+</svg>

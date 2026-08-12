@@ -1,0 +1,78 @@
+<svg width="100%" viewBox="0 0 760 500" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Execute_Interact 的反射路由与 Parent 节点的作用</title>
+<desc>直接 Cast 接口指针会漏掉纯蓝图实现；Execute_ 走反射能正确路由。蓝图重写会完全覆盖 C++ 实现，需要 Parent 节点补回。</desc>
+<style>
+.t{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;font-weight:500}
+.ts{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:12px}
+.tm{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.nb{fill:#F1EFE8;stroke:#B4B2A9;stroke-width:1}
+.nt{fill:#2C2C2A}.ns{fill:#5F5E5A}
+.cb{fill:#E1F5EE;stroke:#5DCAA5;stroke-width:1}
+.ct{fill:#04342C}.cs{fill:#0F6E56}
+.pb{fill:#EEEDFE;stroke:#AFA9EC;stroke-width:1}
+.pt{fill:#26215C}.ps{fill:#534AB7}
+.rb{fill:#FCEBEB;stroke:#F09595;stroke-width:1}
+.rt{fill:#501313}.rs{fill:#A32D2D}
+.ln{stroke:#888780;stroke-width:1.2;fill:none}
+.rl{stroke:#E24B4A;stroke-width:1.2;fill:none}
+@media (prefers-color-scheme:dark){
+.nb{fill:#2C2C2A;stroke:#5F5E5A}.nt{fill:#D3D1C7}.ns{fill:#B4B2A9}
+.cb{fill:#085041;stroke:#1D9E75}.ct{fill:#9FE1CB}.cs{fill:#5DCAA5}
+.pb{fill:#3C3489;stroke:#7F77DD}.pt{fill:#CECBF6}.ps{fill:#AFA9EC}
+.rb{fill:#791F1F;stroke:#E24B4A}.rt{fill:#F7C1C1}.rs{fill:#F09595}
+.ln{stroke:#9c9a92}.rl{stroke:#F09595}}
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
+
+<text class="t nt" x="30" y="30">报错一：为什么必须用 Execute_Interact</text>
+
+<rect class="rb" x="30" y="46" width="330" height="66" rx="8"/>
+<text class="tm rt" x="195" y="70" text-anchor="middle">Cast&lt;IRogueInteractionInterface&gt;</text>
+<text class="ts rs" x="195" y="92" text-anchor="middle">走 C++ 虚函数表</text>
+<text class="ts rs" x="195" y="106" text-anchor="middle">纯蓝图实现的接口不在表里 → 返回 null</text>
+
+<rect class="cb" x="400" y="46" width="330" height="66" rx="8"/>
+<text class="tm ct" x="565" y="70" text-anchor="middle">IXxx::Execute_Interact(Obj)</text>
+<text class="ts cs" x="565" y="92" text-anchor="middle">走反射：查 UClass → 找 UFunction</text>
+<text class="ts cs" x="565" y="106" text-anchor="middle">C++ 实现和蓝图实现都能正确路由</text>
+
+<line class="ln" x1="565" y1="112" x2="565" y2="146" marker-end="url(#a)"/>
+
+<rect class="nb" x="435" y="150" width="260" height="46" rx="8"/>
+<text class="t nt" x="565" y="170" text-anchor="middle">这个对象的蓝图重写了吗？</text>
+<text class="ts ns" x="565" y="188" text-anchor="middle">运行时查元数据</text>
+
+<path class="ln" d="M480 196 L480 212 L390 212 L390 226" marker-end="url(#a)"/>
+<path class="ln" d="M650 196 L650 212 L625 212 L625 226" marker-end="url(#a)"/>
+<text class="ts ns" x="435" y="208" text-anchor="middle">否</text>
+<text class="ts ns" x="676" y="208" text-anchor="middle">是</text>
+
+<rect class="cb" x="290" y="230" width="200" height="52" rx="8"/>
+<text class="tm ct" x="390" y="252" text-anchor="middle">Interact_</text>
+<text class="tm ct" x="390" y="268" text-anchor="middle">Implementation()</text>
+
+<rect class="pb" x="520" y="230" width="210" height="52" rx="8"/>
+<text class="t pt" x="625" y="252" text-anchor="middle">蓝图的 Event 图</text>
+<text class="ts ps" x="625" y="270" text-anchor="middle">覆盖，不是追加</text>
+
+<line class="ln" x1="30" y1="304" x2="730" y2="304" stroke-dasharray="4 4"/>
+
+<text class="t nt" x="30" y="334">报错二：为什么有声音却没动画</text>
+
+<rect class="pb" x="30" y="350" width="330" height="94" rx="8"/>
+<text class="t pt" x="195" y="374" text-anchor="middle">只画了 Event Interact</text>
+<text class="ts ps" x="195" y="396" text-anchor="middle">Event → Play Sound</text>
+<text class="ts ps" x="195" y="418" text-anchor="middle">C++ 的 SetActorTickEnabled(true)</text>
+<text class="ts ps" x="195" y="434" text-anchor="middle">从未执行 → 盖子不动</text>
+
+<rect class="cb" x="400" y="350" width="330" height="94" rx="8"/>
+<text class="t ct" x="565" y="374" text-anchor="middle">补上 Parent: Interact</text>
+<text class="ts cs" x="565" y="396" text-anchor="middle">Event → Parent → Play Sound</text>
+<text class="ts cs" x="565" y="418" text-anchor="middle">等价于 C++ 里的 Super::</text>
+<text class="ts cs" x="565" y="434" text-anchor="middle">忘了不会有任何警告</text>
+
+<line class="ln" x1="364" y1="397" x2="396" y2="397" marker-end="url(#a)"/>
+
+<rect class="nb" x="30" y="458" width="700" height="30" rx="8"/>
+<text class="ts ns" x="380" y="478" text-anchor="middle">习惯：在蓝图里重写 BlueprintNativeEvent，第一件事就是右键 → Add Call to Parent Function，之后再决定要不要删</text>
+</svg>

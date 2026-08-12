@@ -1,0 +1,77 @@
+<svg width="100%" viewBox="0 0 760 520" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>C++ 与蓝图的分工决策树</title>
+<desc>根据"C++ 代码是否需要引用它"与"是否需要频繁调整"来决定东西建在 C++ 还是蓝图。</desc>
+<style>
+.t{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;font-weight:500}
+.ts{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:12px}
+.tm{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.nb{fill:#F1EFE8;stroke:#B4B2A9;stroke-width:1}
+.nt{fill:#2C2C2A}
+.ns{fill:#5F5E5A}
+.cb{fill:#E1F5EE;stroke:#5DCAA5;stroke-width:1}
+.ct{fill:#04342C}
+.cs{fill:#0F6E56}
+.pb{fill:#EEEDFE;stroke:#AFA9EC;stroke-width:1}
+.pt{fill:#26215C}
+.ps{fill:#534AB7}
+.ab{fill:#FAEEDA;stroke:#EF9F27;stroke-width:1}
+.at{fill:#412402}
+.ln{stroke:#888780;stroke-width:1.2;fill:none}
+@media (prefers-color-scheme:dark){
+.nb{fill:#2C2C2A;stroke:#5F5E5A}.nt{fill:#D3D1C7}.ns{fill:#B4B2A9}
+.cb{fill:#085041;stroke:#1D9E75}.ct{fill:#9FE1CB}.cs{fill:#5DCAA5}
+.pb{fill:#3C3489;stroke:#7F77DD}.pt{fill:#CECBF6}.ps{fill:#AFA9EC}
+.ab{fill:#633806;stroke:#BA7517}.at{fill:#FAC775}
+.ln{stroke:#9c9a92}}
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
+
+<rect class="nb" x="240" y="30" width="280" height="52" rx="8"/>
+<text class="t nt" x="380" y="52" text-anchor="middle">我要新加一个东西</text>
+<text class="ts ns" x="380" y="70" text-anchor="middle">组件 / 函数 / 数值</text>
+
+<line class="ln" x1="380" y1="82" x2="380" y2="120" marker-end="url(#a)"/>
+
+<rect class="ab" x="215" y="124" width="330" height="56" rx="8"/>
+<text class="t at" x="380" y="146" text-anchor="middle">C++ 代码里需要有一个指针</text>
+<text class="t at" x="380" y="166" text-anchor="middle">或一次调用指向它吗？</text>
+
+<path class="ln" d="M215 152 L130 152 L130 220" marker-end="url(#a)"/>
+<path class="ln" d="M545 152 L630 152 L630 220" marker-end="url(#a)"/>
+<text class="ts ns" x="168" y="144" text-anchor="middle">需要</text>
+<text class="ts ns" x="592" y="144" text-anchor="middle">不需要</text>
+
+<rect class="cb" x="30" y="224" width="200" height="70" rx="8"/>
+<text class="t ct" x="130" y="248" text-anchor="middle">建在 C++</text>
+<text class="ts cs" x="130" y="268" text-anchor="middle">CreateDefaultSubobject</text>
+<text class="ts cs" x="130" y="284" text-anchor="middle">+ UPROPERTY 持有</text>
+
+<rect class="pb" x="530" y="224" width="200" height="70" rx="8"/>
+<text class="t pt" x="630" y="248" text-anchor="middle">建在蓝图</text>
+<text class="ts ps" x="630" y="268" text-anchor="middle">编辑器里点"添加"</text>
+<text class="ts ps" x="630" y="284" text-anchor="middle">C++ 完全不知道它存在</text>
+
+<line class="ln" x1="130" y1="294" x2="130" y2="336" marker-end="url(#a)"/>
+<line class="ln" x1="630" y1="294" x2="630" y2="336" marker-end="url(#a)"/>
+
+<rect class="nb" x="30" y="340" width="200" height="90" rx="8"/>
+<text class="t nt" x="130" y="364" text-anchor="middle">典型例子</text>
+<text class="ts ns" x="130" y="386" text-anchor="middle">LidMeshComp</text>
+<text class="ts ns" x="130" y="404" text-anchor="middle">Tick 里要转它</text>
+<text class="ts ns" x="130" y="422" text-anchor="middle">SphereComp（要查询）</text>
+
+<rect class="nb" x="530" y="340" width="200" height="90" rx="8"/>
+<text class="t nt" x="630" y="364" text-anchor="middle">典型例子</text>
+<text class="ts ns" x="630" y="386" text-anchor="middle">TreasurePileComp</text>
+<text class="ts ns" x="630" y="404" text-anchor="middle">TreasureBurstEffectComp</text>
+<text class="ts ns" x="630" y="422" text-anchor="middle">纯表现，美术随时改</text>
+
+<rect class="ab" x="255" y="352" width="250" height="66" rx="8"/>
+<text class="t at" x="380" y="376" text-anchor="middle">判断口诀</text>
+<text class="ts at" x="380" y="398" text-anchor="middle">C++ 定"能力和规则"</text>
+<text class="ts at" x="380" y="414" text-anchor="middle">蓝图填"数据和表现"</text>
+
+<rect class="nb" x="150" y="452" width="460" height="46" rx="8"/>
+<text class="ts ns" x="380" y="470" text-anchor="middle">蓝图里加的组件，C++ 看不见。只能靠 FindComponentByClass 运行时搜，</text>
+<text class="ts ns" x="380" y="488" text-anchor="middle">靠类型和字符串去猜，重构时编译器不会报错 —— 能用，但不该用。</text>
+</svg>

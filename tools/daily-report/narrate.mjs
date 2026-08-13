@@ -54,7 +54,7 @@ export const ask = async (system, user, maxTokens = 700) => {
 
 // ---------------- 开场小结 ----------------
 
-export const writeOpening = async ({ traffic, comments, newPosts, health }) => {
+export const writeOpening = async ({ traffic, comments, newPosts, health, schedule }) => {
   const facts = []
   if (traffic.ok) {
     facts.push(traffic.visitors != null
@@ -64,6 +64,11 @@ export const writeOpening = async ({ traffic, comments, newPosts, health }) => {
   } else facts.push(`访问数据没取到（${traffic.why}）`)
   facts.push(comments.ok ? `新评论 ${comments.items.length} 条` : '评论数据没取到')
   facts.push(newPosts.ok && newPosts.items.length ? `新发了 ${newPosts.items.length} 篇文章` : '今天没发新文章')
+  if (schedule && schedule.ok && !schedule.empty) {
+    const done = schedule.today.filter(t => t.done).length
+    if (schedule.today.length) facts.push(`今天排了 ${schedule.today.length} 件事，做完 ${done} 件`)
+    if (schedule.overdue.length) facts.push(`还有 ${schedule.overdue.length} 件过期没做`)
+  }
   const bad = health.checks.filter(c => c.level !== 'ok')
   facts.push(bad.length ? `需要留意：${bad.map(c => c.name + '（' + c.detail + '）').join('；')}` : '所有健康检查都正常')
 
@@ -71,6 +76,7 @@ export const writeOpening = async ({ traffic, comments, newPosts, health }) => {
     `下面是过去 24 小时这个博客的真实情况，用两三句话给主人做个开场小结。
 只说事实和你的判断，不要罗列数字（下面的表格会列）。如果一切平静就直说平静，别硬找话讲。
 如果有需要留意的问题，把它放在最前面。
+如果他今天的任务没做完、或者有过期的，可以催一句 —— 但只催一句，别唠叨。
 
 ${facts.join('\n')}`, 400)
 

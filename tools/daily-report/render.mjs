@@ -85,6 +85,54 @@ const postCard = (p, feedbacks) => {
   return card('新文章 · 娜娜莉读后反馈', body.replace(/border-bottom:1px solid [^;]+;?/, (m, o) => m))
 }
 
+const scheduleCard = sc => {
+  if (!sc || !sc.ok) return card('今天的安排', empty('没取到 —— ' + ((sc && sc.why) || '未知')))
+  if (sc.empty) return card('今天的安排', empty('日程表还是空的。去 /schedule/ 排一下吧。'))
+
+  const done = sc.today.filter(t => t.done).length
+  const line = t => `<div style="padding:4px 0;font-size:13px;color:${C.text}">
+      <span style="color:${t.done ? C.ok : C.soft}">${t.done ? '✓' : '○'}</span>
+      <span style="${t.done ? 'opacity:.55;text-decoration:line-through' : ''}">${esc(t.text)}</span>
+      ${t.autoWhy ? `<div style="font-size:11.5px;color:${C.dim};padding:1px 0 0 16px">窝替你勾的 —— ${esc(t.autoWhy)}</div>` : ''}
+    </div>`
+
+  const parts = []
+  parts.push(sc.today.length
+    ? `<div style="font-size:12px;color:${C.dim};margin:0 0 6px">今天 ${sc.today.length} 件，做完 ${done} 件</div>`
+      + sc.today.map(line).join('')
+    : `<div style="font-size:13px;color:${C.dim}">今天没排任务。</div>`)
+
+  if (sc.overdue.length) {
+    parts.push(`<div style="margin:12px 0 0;padding:9px 11px;background:rgba(255,107,107,.1);border-left:3px solid ${C.bad};border-radius:0 8px 8px 0">
+      <div style="font-size:12px;color:${C.bad};margin:0 0 4px">还欠着 ${sc.overdue.length} 件</div>
+      ${sc.overdue.slice(0, 6).map(t =>
+        `<div style="font-size:12.5px;color:${C.text};padding:2px 0">${esc(t.date.slice(5))} ${esc(t.text)}</div>`).join('')}
+      ${sc.overdue.length > 6 ? `<div style="font-size:12px;color:${C.dim};padding:2px 0">…另外还有 ${sc.overdue.length - 6} 件</div>` : ''}
+    </div>`)
+  }
+
+  if (sc.tomorrow.length) {
+    parts.push(`<div style="margin:12px 0 0;font-size:12px;color:${C.dim}">
+      明天有 ${sc.tomorrow.length} 件：${sc.tomorrow.slice(0, 3).map(t => esc(t.text)).join('、')}${sc.tomorrow.length > 3 ? ' 等' : ''}
+    </div>`)
+  }
+
+  const off = (sc.autoDone || []).filter(d => d.date !== sc.todayKey)
+  if (off.length) {
+    parts.push(`<div style="margin:12px 0 0;padding:9px 11px;background:rgba(127,201,154,.1);border-left:3px solid ${C.ok};border-radius:0 8px 8px 0">
+      <div style="font-size:12px;color:${C.ok};margin:0 0 4px">窝还顺手勾掉了别的日子里的 ${off.length} 件</div>
+      ${off.map(d => `<div style="font-size:12.5px;color:${C.text};padding:2px 0">
+        ${esc(d.date.slice(5))} ${esc(d.text)}
+        <span style="color:${C.dim}">—— ${esc(d.why)}</span></div>`).join('')}
+    </div>`)
+  }
+
+  const badge = sc.today.length
+    ? `<span style="color:${done === sc.today.length ? C.ok : C.dim};font-weight:400"> · ${done}/${sc.today.length}</span>`
+    : ''
+  return card('今天的安排', parts.join(''), badge)
+}
+
 const healthCard = h => {
   const rows = h.checks.map(c => `
     <tr>
@@ -102,7 +150,7 @@ const healthCard = h => {
   return card('健康检查', `<table width="100%" cellpadding="0" cellspacing="0">${rows}</table>`)
 }
 
-export const renderEmail = ({ opening, traffic, comments, screen, newPosts, feedbacks, health, windowLabel, site }) => `<!doctype html>
+export const renderEmail = ({ opening, traffic, comments, screen, newPosts, feedbacks, health, schedule, windowLabel, site }) => `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:${C.bg}">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:${C.bg};padding:22px 12px">
@@ -120,6 +168,7 @@ export const renderEmail = ({ opening, traffic, comments, screen, newPosts, feed
     </table>
   </td></tr>
 
+  <tr><td>${scheduleCard(schedule)}</td></tr>
   <tr><td>${trafficCard(traffic)}</td></tr>
   <tr><td>${commentCard(comments, screen)}</td></tr>
   <tr><td>${postCard(newPosts, feedbacks)}</td></tr>

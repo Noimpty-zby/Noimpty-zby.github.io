@@ -22,6 +22,8 @@ menu:
   Study: /study/ || fas fa-graduation-cap
   Ideas: /ideas/ || fas fa-lightbulb
   Life: /life/ || fas fa-heart
+  资讯: /news/ || fas fa-newspaper
+  日程: /schedule/ || fas fa-calendar-days
   归档: /archives/ || fas fa-box-archive
   分类: /categories/ || fas fa-folder-open
   标签: /tags/ || fas fa-tags
@@ -1098,18 +1100,20 @@ inject:
     - <link rel="stylesheet" href="/css/music-player.css">
     - <link rel="stylesheet" href="/css/noimpty-ai.css">
     - <link rel="stylesheet" href="/css/nanaly-notes.css">
+    - <link rel="stylesheet" href="/css/schedule.css">
     - <script src="/js/protected-manifest.js"></script>
     - <script src="/js/privacy-gate.js"></script>
     - <script src="/js/section-hub.js"></script>
     # ↓↓↓ GoatCounter 访问统计。把 '' 里填成你的站点代号（xxx.goatcounter.com 里的 xxx）
     # 留空则完全不加载统计脚本。这不是密钥，它本来就会出现在网页源码里。
-    - <script>window.NOIMPTY_GC_CODE = 'noimpty'</script>
+    - <script>window.NOIMPTY_GC_CODE = ''</script>
     - <script src="/js/analytics.js"></script>
   bottom:
     - <script src="/js/toc-sync.js"></script>
     - <script src="/js/music-player.js"></script>
     # 娜娜莉：API Key 不写在代码里，由使用者在面板中输入并存在本机 localStorage
     - <script src="/js/noimpty-ai.js"></script>
+    - <script src="/js/schedule.js"></script>
 
 # CDN Settings
 # Don't modify the following settings unless you know how they work

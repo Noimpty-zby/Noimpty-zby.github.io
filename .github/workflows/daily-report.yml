@@ -1,0 +1,78 @@
+name: 博客日报
+
+on:
+  schedule:
+    # 北京时间每晚 22:00 = UTC 14:00。
+    # GitHub 的定时任务有几分钟到半小时的漂移，属正常现象，不是坏了。
+    - cron: '0 14 * * *'
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: '只生成不发送（勾上就不会发邮件，报告会作为构建产物上传）'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  discussions: read
+
+concurrency:
+  group: daily-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # 需要历史记录来判断哪些文章是新增的
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: 安装发信依赖
+        run: npm install nodemailer@9 --no-save --no-audit --no-fund
+
+      - name: 生成并发送日报
+        env:
+          SITE_URL: https://noimpty-zby.github.io
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          # 访问统计：GoatCounter 与 Umami 二选一，配了哪个用哪个，都不配就跳过这一格
+          GOATCOUNTER_CODE: ${{ secrets.GOATCOUNTER_CODE }}
+          GOATCOUNTER_TOKEN: ${{ secrets.GOATCOUNTER_TOKEN }}
+          UMAMI_API_KEY: ${{ secrets.UMAMI_API_KEY }}
+          UMAMI_WEBSITE_ID: ${{ secrets.UMAMI_WEBSITE_ID }}
+
+          # 让娜娜莉写小结和读后反馈。不配就降级成模板文字，报告照发
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+
+          # 发信
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          REPORT_TO: ${{ secrets.REPORT_TO }}
+
+          # 想改成「没事就不发」，把这里改成 'true'
+          REPORT_ONLY_WHEN_NOTEWORTHY: 'false'
+        run: |
+          if [ "${{ inputs.dry }}" = "true" ]; then
+            node tools/daily-report/run.mjs --dry
+          else
+            node tools/daily-report/run.mjs
+          fi
+
+      - name: 上传报告备份
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-${{ github.run_number }}
+          path: |
+            report.html
+            report-subject.txt
+          if-no-files-found: ignore
+          retention-days: 14

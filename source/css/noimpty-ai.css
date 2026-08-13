@@ -423,3 +423,285 @@
     font-size: 19px;
   }
 }
+
+/* ============================================================
+ * 富文本渲染：公式、代码高亮、列表、思考过程、朗读、划词
+ *
+ * 注意：这个文件里千万不要写以三个减号开头的整行注释分隔线。
+ * Hexo 会把它当成 front-matter 的分隔符，导致整个 css 被静默丢弃。
+ * ============================================================ */
+
+.nanaly-msg h4 {
+  margin: 0.7em 0 0.35em;
+  font-size: 0.95em;
+  font-weight: 600;
+  color: var(--noimpty-accent-soft, #ff91a8);
+}
+
+.nanaly-msg ul,
+.nanaly-msg ol {
+  margin: 0.4em 0 0.6em;
+  padding-left: 1.35em;
+}
+
+.nanaly-msg li { margin: 0.18em 0; }
+
+.nanaly-msg a {
+  color: var(--noimpty-accent-soft, #ff91a8);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
+}
+
+/* 公式 */
+.nanaly-math.is-display {
+  display: block;
+  margin: 0.6em 0;
+  padding: 2px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+  scrollbar-width: thin;
+}
+
+.nanaly-math .katex { font-size: 1.02em; }
+.nanaly-math.is-display .katex-display { margin: 0; }
+
+/* 主题把 .katex 默认设成 display:none，靠 JS 给正文里的加 katex-show 才显示。
+ * 她的回复不在正文容器里，这里直接兜底，不依赖那段主题脚本。 */
+.nanaly-math .katex { display: inline; }
+.nanaly-math.is-display .katex-display > .katex { display: block; }
+
+/* 未渲染成功时保留原始 TeX，至少不会整段空掉 */
+.nanaly-math:not([data-done]) {
+  font-family: var(--code-font-family, ui-monospace, monospace);
+  opacity: 0.75;
+}
+
+/* 代码块的复制按钮 */
+.nanaly-msg pre { position: relative; }
+
+.nanaly-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 11px;
+  line-height: 1.6;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.18s ease, color 0.18s ease;
+}
+
+.nanaly-msg pre:hover .nanaly-copy,
+.nanaly-copy:focus-visible { opacity: 1; }
+
+.nanaly-copy:hover { color: #fff; }
+
+@media (hover: none) {
+  .nanaly-copy { opacity: 1; }
+}
+
+/* Prism 配色：压低饱和度，跟她的气泡背景配 */
+.nanaly-msg .token.comment,
+.nanaly-msg .token.prolog,
+.nanaly-msg .token.cdata { color: #7b8a99; font-style: italic; }
+
+.nanaly-msg .token.punctuation { color: #b6bfc9; }
+
+.nanaly-msg .token.property,
+.nanaly-msg .token.tag,
+.nanaly-msg .token.constant,
+.nanaly-msg .token.symbol,
+.nanaly-msg .token.deleted { color: #ff9db1; }
+
+.nanaly-msg .token.boolean,
+.nanaly-msg .token.number { color: #f7c66b; }
+
+.nanaly-msg .token.selector,
+.nanaly-msg .token.attr-name,
+.nanaly-msg .token.string,
+.nanaly-msg .token.char,
+.nanaly-msg .token.builtin,
+.nanaly-msg .token.inserted { color: #9ed9a8; }
+
+.nanaly-msg .token.operator,
+.nanaly-msg .token.entity,
+.nanaly-msg .token.url { color: #d7c6ea; }
+
+.nanaly-msg .token.atrule,
+.nanaly-msg .token.attr-value,
+.nanaly-msg .token.keyword { color: #8fc4f0; }
+
+.nanaly-msg .token.function,
+.nanaly-msg .token.class-name { color: #ffb38a; }
+
+.nanaly-msg .token.regex,
+.nanaly-msg .token.important,
+.nanaly-msg .token.variable { color: #f5a3c7; }
+
+/* 思考过程 */
+.nanaly-think {
+  margin: 0 0 0.55em;
+  border-left: 2px solid var(--noimpty-border, rgba(233, 89, 120, 0.3));
+  border-radius: 0 8px 8px 0;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.82em;
+}
+
+.nanaly-think > summary {
+  padding: 5px 10px;
+  color: var(--card-meta, #9b9098);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.nanaly-think > summary::-webkit-details-marker { display: none; }
+
+.nanaly-think > summary::before {
+  content: '▸ ';
+  display: inline-block;
+  transition: transform 0.18s ease;
+}
+
+.nanaly-think[open] > summary::before { content: '▾ '; }
+
+.nanaly-think > div {
+  max-height: 190px;
+  padding: 0 10px 8px;
+  overflow-y: auto;
+  color: var(--card-meta, #9b9098);
+  white-space: pre-wrap;
+  line-height: 1.6;
+  scrollbar-width: thin;
+}
+
+/* 朗读按钮 */
+.nanaly-speak {
+  display: block;
+  margin: 6px 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--card-meta, #9b9098);
+  font-size: 12px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.18s ease, color 0.18s ease;
+}
+
+.nanaly-msg--her:hover .nanaly-speak,
+.nanaly-speak.is-on,
+.nanaly-speak:focus-visible { opacity: 1; }
+
+.nanaly-speak.is-on { color: var(--noimpty-accent, #e95978); }
+
+@media (hover: none) {
+  .nanaly-speak { opacity: 0.75; }
+}
+
+/* 头部按钮的开启态（深度思考） */
+.nanaly-head__btn.is-on {
+  color: var(--noimpty-accent, #e95978);
+  background: rgba(233, 89, 120, 0.16);
+}
+
+/* 划词提问的浮动小按钮 */
+#nanaly-selbtn {
+  position: absolute;
+  z-index: 9002;
+  display: none;
+  padding: 6px 12px;
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.28));
+  border-radius: 999px;
+  background: linear-gradient(140deg, var(--noimpty-accent, #e95978), var(--noimpty-accent-soft, #ff91a8));
+  box-shadow: 0 8px 22px rgba(75, 43, 56, 0.3);
+  color: #fff;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: nowrap;
+  cursor: pointer;
+  animation: nanaly-pop 0.16s ease;
+}
+
+#nanaly-selbtn.is-on { display: block; }
+
+#nanaly-selbtn i { margin-right: 4px; }
+
+@keyframes nanaly-pop {
+  from { opacity: 0; transform: translateY(4px) scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+
+@media print {
+  #nanaly-selbtn, #nanaly-launcher, #nanaly-panel { display: none !important; }
+}
+
+/* 让她给出候选让你挑 */
+.nanaly-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+
+.nanaly-choices button {
+  padding: 5px 11px;
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.28));
+  border-radius: 999px;
+  background: rgba(233, 89, 120, 0.12);
+  color: var(--noimpty-accent-soft, #ff91a8);
+  font-size: 12.5px;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.nanaly-choices button:hover {
+  background: rgba(233, 89, 120, 0.24);
+  transform: translateY(-1px);
+}
+
+/* 她主动搭话时冒出来的小气泡 */
+#nanaly-poke {
+  position: fixed;
+  z-index: 9002;
+  left: 20px;
+  bottom: calc(20px + 54px + 14px + 54px + 12px);
+  max-width: min(266px, calc(100vw - 40px));
+  padding: 10px 14px;
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.28));
+  border-radius: 14px 14px 14px 4px;
+  background: var(--card-bg, #1e1826);
+  box-shadow: var(--noimpty-shadow, 0 12px 34px rgba(75, 43, 56, 0.28));
+  color: var(--font-color, #e8e2ec);
+  font-size: 13px;
+  line-height: 1.7;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(6px) scale(0.97);
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+#nanaly-poke.is-on {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+#nanaly-poke:hover {
+  border-color: var(--noimpty-accent, #e95978);
+}
+
+@media (max-width: 768px) {
+  #nanaly-poke {
+    font-size: 12.5px;
+    max-width: calc(100vw - 90px);
+  }
+}

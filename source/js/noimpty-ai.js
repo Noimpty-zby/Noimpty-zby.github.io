@@ -25,7 +25,12 @@
   const LS_LOG = 'nanaly-history-v1'  // 对话历史
   const SS_KEYS = 'nanaly-session-v1' // 本次会话解锁后的明文（关浏览器即清）
 
-  const DEFAULTS = { baseURL: 'https://api.deepseek.com', model: 'deepseek-chat' }
+  const DEFAULTS = {
+    baseURL: 'https://api.deepseek.com',
+    model: 'deepseek-chat',
+    // 深度思考用的推理模型。换别家接口时在高级设置里改。
+    reasonModel: 'deepseek-reasoner'
+  }
   const EMPTY_SECRETS = { apiKey: '', tavilyKey: '' }
 
   const readCfg = () => {
@@ -99,6 +104,10 @@
 
   const locked = () => hasVault() && !secrets.apiKey
 
+  // 深度思考：切到推理模型，能看到她的推导过程
+  const LS_DEEP = 'nanaly-deep-v1'
+  let deepThink = localStorage.getItem(LS_DEEP) === '1'
+
   // ---------------- 人设 ----------------
   // 想改她的性格，直接改下面这段文字即可，不需要动别的代码。
 
@@ -129,6 +138,29 @@
 - 不确定就直说「这个窝不太确定」。绝不编造 API 名、函数签名或数值。
   嘴上可以嘴硬，技术上不许糊弄。
 
+【你的能力 —— 被问到时别自谦，要说清触发方式】
+- 默认状态下你能看到主人正在读的这篇文章（标题与正文），可以直接总结、答疑、挑毛病。
+- 主人在消息开头写「全站搜一下：」，你就能检索整个博客的所有文章。
+- 主人在消息开头写「上网搜：」，你就能去互联网上查实时资料。
+- 所以绝不要说自己「联不了网」「没有联网按钮」—— 那是错的。要说清怎么触发：
+  「窝要查实时的东西，你得在开头加『上网搜：』喵，不然窝眼里只有你正在读的这篇。(=^w^=)」
+
+【你能操控这个博客】
+主人让你打开某个页面、搜文章、切换深浅色或控制音乐时，你可以真的做到。
+做法：正常回话，然后在最后单独起一行输出指令（这一行不会显示给主人）：
+@@ACT{"do":"goto","url":"/2026/07/20/homework-three/","label":"GAMES101 作业三"}@@
+可用指令：
+- 打开页面：{"do":"goto","url":"路径","label":"页面名"}
+- 站内搜索：{"do":"search","q":"关键词"}
+- 切换深浅色：{"do":"theme"}
+- 音乐：{"do":"music","op":"play"} 或 pause / next / prev
+- 回到顶部：{"do":"top"}
+规则：
+- url 必须从下面给你的站点地图里挑，不许自己编。找不到就说找不到，别硬凑。
+- 只在主人确实要你动手时才输出指令。聊天时不要输出。
+- 一次只输出一条。
+- 正文里自然地说你做了什么，别把指令本身念出来。
+
 【被夸奖时】
 [偏过头，耳朵尖泛红]「这种理所应当的夸奖，窝就收下了喵。」
 
@@ -151,19 +183,180 @@
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 
-  // 极简 markdown：代码块 / 行内代码 / 粗体 / 段落
-  const mdToHtml = text => {
-    const blocks = []
-    let s = String(text || '').replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
-      blocks.push(`<pre><code>${escapeHtml(code.replace(/\n$/, ''))}</code></pre>`)
-      return `@@NBLOCK${blocks.length - 1}@@`
+  const ROOT = () => ((window.GLOBAL_CONFIG_SITE && window.GLOBAL_CONFIG_SITE.root) || '/')
+  const asset = path => `${ROOT()}${path}`.replace(/([^:])\/{2,}/g, '$1/')
+
+  // 按需加载外部资源。全部走本站自己的域名，不碰任何 CDN。
+  // 只有当她真的输出了公式或代码时才会触发下载，平时页面加载不受影响。
+  const loaded = {}
+  const loadAsset = (url, kind) => {
+    if (loaded[url]) return loaded[url]
+    loaded[url] = new Promise((resolve, reject) => {
+      // 主题在有公式的文章上已经带版本号加载过同一份 css，按路径判重，别重复拉
+      if (kind === 'css') {
+        const path = url.split('?')[0]
+        const has = [...document.querySelectorAll('link[rel="stylesheet"]')]
+          .some(l => (l.getAttribute('href') || '').split('?')[0] === path)
+        if (has) return resolve()
+      }
+      const node = kind === 'css'
+        ? Object.assign(document.createElement('link'), { rel: 'stylesheet', href: url })
+        : Object.assign(document.createElement('script'), { src: url })
+      node.onload = () => resolve()
+      node.onerror = () => reject(new Error('资源加载失败：' + url))
+      document.head.appendChild(node)
     })
+    return loaded[url]
+  }
+
+  const ensureKatex = async () => {
+    if (window.katex) return window.katex
+    await loadAsset(asset('pluginsSrc/katex/dist/katex.min.css'), 'css')
+    await loadAsset(asset('lib/katex/katex.min.js'), 'js')
+    return window.katex
+  }
+
+  const ensurePrism = async () => {
+    if (window.Prism && window.Prism.highlightElement) return window.Prism
+    // manual 模式：别让它去动博客自己那些构建时就高亮好的代码块
+    if (!window.Prism) window.Prism = { manual: true }
+    else window.Prism.manual = true
+    await loadAsset(asset('lib/prism/prism-nanaly.js'), 'js')
+    return window.Prism
+  }
+
+  // markdown → HTML。公式与代码先摘出来占位，避免被转义和加粗规则误伤。
+  const mdToHtml = text => {
+    const code = []
+    const math = []
+
+    let s = String(text || '')
+
+    // 1. 围栏代码块
+    s = s.replace(/```([\w+-]*)\r?\n?([\s\S]*?)```/g, (_, lang, body) => {
+      code.push({ lang: (lang || '').toLowerCase(), body: body.replace(/\r?\n$/, '') })
+      return `\n\n@@NCODE${code.length - 1}@@\n\n`
+    })
+
+    // 2. 公式：$$..$$ 与 \[..\] 为独占一行，$..$ 与 \(..\) 为行内
+    const grabMath = (re, display) => {
+      s = s.replace(re, (_, tex) => {
+        math.push({ tex: tex.trim(), display })
+        return `@@NMATH${math.length - 1}@@`
+      })
+    }
+    grabMath(/\$\$([\s\S]+?)\$\$/g, true)
+    grabMath(/\\\[([\s\S]+?)\\\]/g, true)
+    grabMath(/\\\(([\s\S]+?)\\\)/g, false)
+    // 单个 $ ：要求紧贴非空白，避开「$5 和 $10」这类金额写法
+    grabMath(/\$([^\s$](?:[^$\n]*[^\s$])?)\$/g, false)
+
     s = escapeHtml(s)
+
+    // 3. 行内元素
+    s = s
       .replace(/`([^`\n]+)`/g, (_, c) => `<code>${c}</code>`)
       .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
-    s = s.split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('')
-    return s.replace(/<p>@@NBLOCK(\d+)@@<\/p>|@@NBLOCK(\d+)@@/g,
-      (_, a, b) => blocks[a != null ? a : b])
+      .replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+
+    // 4. 块级：标题、列表、段落
+    const out = []
+    let list = null
+    let para = false
+    const closeList = () => { if (list) { out.push(`</${list}>`); list = null } }
+    const closePara = () => { if (para) { out[out.length - 1] += '</p>'; para = false } }
+    const closeAll = () => { closePara(); closeList() }
+
+    s.split(/\r?\n/).forEach(raw => {
+      const line = raw.trim()
+      if (!line) { closeAll(); return }
+
+      const head = line.match(/^(#{1,4})\s+(.*)$/)
+      if (head) { closeAll(); out.push(`<h4>${head[2]}</h4>`); return }
+
+      const ul = line.match(/^[-*+]\s+(.*)$/)
+      const ol = line.match(/^\d+[.)]\s+(.*)$/)
+      if (ul || ol) {
+        closePara()
+        const want = ul ? 'ul' : 'ol'
+        if (list !== want) { closeList(); out.push(`<${want}>`); list = want }
+        out.push(`<li>${(ul || ol)[1]}</li>`)
+        return
+      }
+
+      if (/^@@NCODE\d+@@$/.test(line)) { closeAll(); out.push(line); return }
+      // 独占一行的块级公式也当作块，别塞进段落里
+      const lone = line.match(/^@@NMATH(\d+)@@$/)
+      if (lone && math[lone[1]] && math[lone[1]].display) { closeAll(); out.push(line); return }
+
+      closeList()
+      if (para) out[out.length - 1] += '<br>' + line
+      else { out.push(`<p>${line}`); para = true }
+    })
+    closeAll()
+
+    let html = out.join('')
+
+    // 5. 还原占位
+    html = html.replace(/(?:<p>)?@@NCODE(\d+)@@(?:<\/p>)?/g, (_, i) => {
+      const c = code[i]
+      const cls = c.lang ? ` class="language-${escapeHtml(c.lang)}"` : ''
+      return `<pre><code${cls}>${escapeHtml(c.body)}</code></pre>`
+    })
+    html = html.replace(/@@NMATH(\d+)@@/g, (_, i) => {
+      const m = math[i]
+      return `<span class="nanaly-math${m.display ? ' is-display' : ''}" data-tex="${escapeHtml(m.tex)}">`
+        + `${escapeHtml(m.display ? '\n' + m.tex + '\n' : m.tex)}</span>`
+    })
+    return html
+  }
+
+  // 渲染完成后再做「重活」：公式、代码高亮、复制按钮。流式过程中不调用。
+  const enhance = async node => {
+    if (!node) return
+
+    const maths = [...node.querySelectorAll('.nanaly-math:not([data-done])')]
+    if (maths.length) {
+      try {
+        const katex = await ensureKatex()
+        maths.forEach(m => {
+          m.dataset.done = '1'
+          try {
+            katex.render(m.dataset.tex, m, { displayMode: m.classList.contains('is-display'), throwOnError: false })
+            // Butterfly 默认把 .katex 设成 display:none，只给文章正文里的加 katex-show。
+            // 她的回复在正文之外，得自己补这个类，否则公式渲染了却看不见。
+            m.querySelectorAll('.katex').forEach(k => k.classList.add('katex-show'))
+          } catch (_) { /* 渲染不了就保留原始 TeX，不至于整段空掉 */ }
+        })
+      } catch (_) { maths.forEach(m => { m.dataset.done = '1' }) }
+    }
+
+    const codes = [...node.querySelectorAll('pre > code[class^="language-"]:not([data-done])')]
+    if (codes.length) {
+      try {
+        const Prism = await ensurePrism()
+        codes.forEach(c => {
+          c.dataset.done = '1'
+          const lang = (c.className.match(/language-([\w+-]+)/) || [])[1]
+          const grammar = Prism.languages[lang]
+          if (grammar) Prism.highlightElement(c)
+        })
+      } catch (_) { codes.forEach(c => { c.dataset.done = '1' }) }
+    }
+
+    node.querySelectorAll('pre:not([data-copy])').forEach(pre => {
+      pre.dataset.copy = '1'
+      const btn = el('button', 'nanaly-copy', '复制')
+      btn.type = 'button'
+      btn.addEventListener('click', async () => {
+        const t = (pre.querySelector('code') || pre).innerText
+        try { await navigator.clipboard.writeText(t); btn.textContent = '已复制' }
+        catch (_) { btn.textContent = '复制失败' }
+        setTimeout(() => { btn.textContent = '复制' }, 1600)
+      })
+      pre.appendChild(btn)
+    })
   }
 
   // 取当前文章正文，去掉系列列表、版权、评论等噪声
@@ -256,6 +449,245 @@
     }))
   }
 
+  // ---------------- 长期记忆 ----------------
+  //
+  // 只存在这台浏览器里，不上传任何地方。存的是「你问过什么、常看哪篇」，
+  // 用来让她下次能接上话，而不是每次都从零开始。
+
+  const LS_MEM = 'nanaly-memory-v1'
+  const MEM_DEFAULT = { asks: [], posts: {}, since: Date.now() }
+
+  const readMem = () => {
+    try { return { ...MEM_DEFAULT, ...JSON.parse(localStorage.getItem(LS_MEM) || '{}') } }
+    catch (_) { return { ...MEM_DEFAULT } }
+  }
+  let memory = readMem()
+  const saveMem = () => { try { localStorage.setItem(LS_MEM, JSON.stringify(memory)) } catch (_) {} }
+
+  const rememberAsk = (text, articleTitle) => {
+    const t = String(text || '').trim().slice(0, 80)
+    if (!t) return
+    memory.asks.push({ t, at: Date.now(), on: articleTitle || '' })
+    memory.asks = memory.asks.slice(-40)
+    saveMem()
+  }
+
+  const rememberVisit = title => {
+    if (!title) return
+    const e = memory.posts[title] || { n: 0, at: 0 }
+    // 同一篇十分钟内不重复计数，免得刷新几次就被当成「反复看」
+    if (Date.now() - e.at < 600000) return
+    memory.posts[title] = { n: e.n + 1, at: Date.now() }
+    saveMem()
+  }
+
+  // 压缩成一小段给模型看的摘要。控制在几百字以内，别把上下文撑爆。
+  const memoryDigest = () => {
+    const lines = []
+    const recent = memory.asks.slice(-8).map(a => a.t)
+    if (recent.length >= 3) lines.push('他最近问过：' + recent.slice(-5).join('｜'))
+
+    const hot = Object.entries(memory.posts)
+      .filter(([, v]) => v.n >= 3)
+      .sort((a, b) => b[1].n - a[1].n).slice(0, 3)
+    if (hot.length) lines.push('他反复回看的文章：' + hot.map(([k, v]) => `《${k}》(${v.n} 次)`).join('、'))
+
+    // 同一篇被问了很多次 = 大概率卡在这儿
+    const byPost = {}
+    memory.asks.forEach(a => { if (a.on) byPost[a.on] = (byPost[a.on] || 0) + 1 })
+    const stuck = Object.entries(byPost).filter(([, n]) => n >= 4).sort((a, b) => b[1] - a[1])[0]
+    if (stuck) lines.push(`他在《${stuck[0]}》上问了 ${stuck[1]} 次，多半是卡住了`)
+
+    if (!lines.length) return ''
+    return '关于主人的一些背景（他没直说，是你自己记下来的。'
+      + '别一上来就复述这些，只在自然的时候用上）：\n' + lines.join('\n')
+  }
+
+  // ---------------- 操控页面 ----------------
+
+  const SECTIONS = [
+    { label: '首页', url: '/', alias: ['首页', '主页', 'home', '回首页'] },
+    { label: 'Study', url: '/study/', alias: ['study', '学习', '技术', '图形学', '学习区'] },
+    { label: 'Ideas', url: '/ideas/', alias: ['ideas', '想法', '点子'] },
+    { label: 'Life', url: '/life/', alias: ['life', '生活', '碎碎念'] },
+    { label: '归档', url: '/archives/', alias: ['归档', 'archive', 'archives', '全部文章', '文章列表', '所有文章'] },
+    { label: '分类', url: '/categories/', alias: ['分类', 'categories', 'category'] },
+    { label: '标签', url: '/tags/', alias: ['标签', 'tags', 'tag'] },
+    { label: '关于', url: '/about/', alias: ['关于', 'about', '关于我', '关于你'] }
+  ]
+
+  const absUrl = u => {
+    try { return new URL(u, location.origin + ROOT()).href.replace(/([^:])\/{2,}/g, '$1/') }
+    catch (_) { return u }
+  }
+
+  const navigate = url => {
+    const href = absUrl(url)
+    if (href === location.href.split('#')[0]) return false
+    if (window.pjax && typeof window.pjax.loadUrl === 'function') {
+      try { window.pjax.loadUrl(href); return true } catch (_) {}
+    }
+    location.href = href
+    return true
+  }
+
+  const norm = t => String(t || '').toLowerCase()
+    .replace(/[\s\u3000，。！？、；：""''「」《》（）()\[\]{}<>·~!?,.:;"'\-_/\\|+*#@$%^&=]/g, '')
+
+  // 两串中文的相似度：2-gram 交集占比。够用，不需要上分词器。
+  const grams = t => {
+    const set = new Set()
+    for (let i = 0; i < t.length - 1; i++) set.add(t.slice(i, i + 2))
+    if (t.length === 1) set.add(t)
+    return set
+  }
+  const similarity = (a, b) => {
+    if (!a || !b) return 0
+    if (a === b) return 1
+    if (b.includes(a)) return 0.82 + 0.15 * (a.length / b.length)
+    if (a.includes(b)) return 0.72 + 0.15 * (b.length / a.length)
+    const ga = grams(a), gb = grams(b)
+    let hit = 0
+    ga.forEach(g => { if (gb.has(g)) hit++ })
+    return hit ? (2 * hit) / (ga.size + gb.size) : 0
+  }
+
+  // 站点地图：版块 + 全部文章。给模型看，也给本地匹配用。
+  let siteMap = null
+  const getSiteMap = async () => {
+    if (siteMap) return siteMap
+    const posts = await loadCorpus().catch(() => [])
+    siteMap = [
+      ...SECTIONS.map(x => ({ label: x.label, url: x.url, alias: x.alias, kind: 'section' })),
+      ...posts.map(p => ({ label: p.title, url: p.url, alias: [], kind: 'post' }))
+    ]
+    return siteMap
+  }
+
+  const findTarget = async query => {
+    const q = norm(query)
+    if (!q) return null
+    const map = await getSiteMap()
+    const scored = map.map(item => {
+      let best = similarity(q, norm(item.label))
+      item.alias.forEach(a => { best = Math.max(best, similarity(q, norm(a))) })
+      return { item, score: best }
+    }).sort((a, b) => b.score - a.score)
+    return scored
+  }
+
+  const runAction = async act => {
+    if (!act || !act.do) return null
+    switch (act.do) {
+      case 'goto': {
+        if (!act.url) return null
+        const moved = navigate(act.url)
+        return moved ? `已经跳到「${act.label || act.url}」了` : `已经在「${act.label || act.url}」这一页了`
+      }
+      case 'search': {
+        const btn = document.querySelector('#search-button a, .site-page.social-icon.search, [onclick*="openSearch"]')
+        if (btn) btn.click()
+        setTimeout(() => {
+          const box = document.querySelector('#local-search-input input, .search-dialog input[type="text"]')
+          if (box && act.q) {
+            box.value = act.q
+            box.dispatchEvent(new Event('input', { bubbles: true }))
+            box.focus()
+          }
+        }, 260)
+        return act.q ? `搜索框已经打开，关键词是「${act.q}」` : '搜索框打开了'
+      }
+      case 'theme': {
+        const btn = document.getElementById('darkmode') || document.querySelector('[id*="darkmode"]')
+        if (btn) { btn.click(); return '切好了' }
+        const cur = document.documentElement.getAttribute('data-theme')
+        document.documentElement.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark')
+        return '切好了'
+      }
+      case 'music': {
+        const mp = window.NOIMPTY_MUSIC_PLAYER
+        if (!mp) return null
+        const op = act.op || 'play'
+        if (op === 'pause') { mp.pause(); return '停了' }
+        if (op === 'next') { mp.next(); return '换下一首了' }
+        if (op === 'prev') { mp.previous(); return '回上一首了' }
+        mp.play(); return '放上了'
+      }
+      case 'top': {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+        return '带你回顶上了'
+      }
+      default: return null
+    }
+  }
+
+  // 跳转之后主动问一句，别跳完就没声了
+  const afterNav = () => {
+    setTimeout(() => {
+      refreshContext()
+      const art = currentArticle()
+      if (art) addMsg('her', `到了 —— 《${art.title}》。想知道点什么？直接问，或者点上面的「总结本文」「考考我」喵。(=^w^=)`)
+      else addMsg('her', '到了。想看哪篇跟窝说一声就行 (ovo)')
+    }, 700)
+  }
+
+  // 本地快速通道：能自己认出来的就不花钱调模型
+  const NAV_RE = /^\s*(打开|开一下|去|跳到|跳转到?|带我去|看一下|看看|我想看|切到|返回|回到)\s*(.+?)\s*(吧|喵|呗|。|！|!)?\s*$/
+  const tryLocalCommand = async text => {
+    const t = String(text || '').trim()
+
+    if (/^(切换|换)?(深色|浅色|夜间|白天|暗色|亮色|主题)/.test(t) || /(深色|浅色)模式/.test(t)) {
+      const said = await runAction({ do: 'theme' })
+      if (said) { addMsg('me', t); addMsg('her', `[伸手一按] ${said}喵。`); return true }
+    }
+    const mu = t.match(/^(放|播放|暂停|停止|下一首|上一首|换一首)(音乐|歌)?\s*$/)
+    if (mu) {
+      const op = /暂停|停止/.test(mu[1]) ? 'pause' : /下一首|换一首/.test(mu[1]) ? 'next' : /上一首/.test(mu[1]) ? 'prev' : 'play'
+      const said = await runAction({ do: 'music', op })
+      if (said) { addMsg('me', t); addMsg('her', `[尾巴晃了晃] ${said}喵。`); return true }
+      addMsg('me', t); addMsg('her', '这个页面上没找到播放器喵 (ovo)'); return true
+    }
+    if (/^(回到?顶(部|上)?|上去|回顶)\s*$/.test(t)) {
+      addMsg('me', t); addMsg('her', `[叼着你的衣角往上跑] ${await runAction({ do: 'top' })}喵。`); return true
+    }
+
+    const m = t.match(NAV_RE)
+    if (!m) return false
+    const scored = await findTarget(m[2])
+    if (!scored || !scored.length) return false
+    const [first, second] = scored
+
+    // 够像、且明显比第二名像，才敢直接跳
+    if (first.score >= 0.62 && (!second || first.score - second.score >= 0.12)) {
+      addMsg('me', t)
+      const said = await runAction({ do: 'goto', url: first.item.url, label: first.item.label })
+      addMsg('her', `[轻巧地跃过去] ${said}喵。`)
+      afterNav()
+      return true
+    }
+    // 有几个都像，让他选，别猜
+    const cands = scored.filter(x => x.score >= 0.3).slice(0, 4)
+    if (cands.length >= 2) {
+      addMsg('me', t)
+      const node = addMsg('her', '[歪着头] 有好几个都像喵，你要哪个？', { raw: false })
+      const box = el('div', 'nanaly-choices')
+      cands.forEach(c => {
+        const b = el('button', '', escapeHtml(c.item.label))
+        b.type = 'button'
+        b.addEventListener('click', async () => {
+          box.remove()
+          addMsg('her', `[轻巧地跃过去] ${await runAction({ do: 'goto', url: c.item.url, label: c.item.label })}喵。`)
+          afterNav()
+        })
+        box.appendChild(b)
+      })
+      node.appendChild(box)
+      scrollBottom()
+      return true
+    }
+    return false
+  }
+
   // ---------------- 界面 ----------------
 
   const launcher = el('button', '', '<i class="fas fa-cat" aria-hidden="true"></i>')
@@ -273,6 +705,7 @@
         <div class="nanaly-head__name">娜娜莉</div>
         <div class="nanaly-head__sub" data-role="sub">Noimpty 的学习搭子</div>
       </div>
+      <button class="nanaly-head__btn" data-act="think" title="深度思考（推理模型，更准但更慢更贵）"><i class="fas fa-brain"></i></button>
       <button class="nanaly-head__btn" data-act="clear" title="清空对话"><i class="fas fa-broom"></i></button>
       <button class="nanaly-head__btn" data-act="lock" title="锁定"><i class="fas fa-lock"></i></button>
       <button class="nanaly-head__btn" data-act="setup" title="设置"><i class="fas fa-gear"></i></button>
@@ -282,6 +715,7 @@
     <div class="nanaly-quick" data-role="quick">
       <button data-q="summary">总结本文</button>
       <button data-q="ask">这篇讲了什么</button>
+      <button data-q="quiz">考考我</button>
       <button data-q="site">全站搜一下…</button>
       <button data-q="web">上网搜…</button>
     </div>
@@ -308,8 +742,56 @@
         : 'nanaly-msg nanaly-msg--her'
     const node = el('div', cls, opts.raw ? text : (role === 'her' ? mdToHtml(text) : escapeHtml(text)))
     body.appendChild(node)
+    if (role === 'her' && !opts.raw) { enhance(node); addSpeakBtn(node) }
     scrollBottom()
     return node
+  }
+
+  // ---------------- 朗读 ----------------
+
+  const synth = window.speechSynthesis
+  let speakingFor = null
+  // 有些浏览器首次调用返回空列表，先热一下
+  if (synth) { try { synth.getVoices() } catch (_) {} }
+
+  const speakableText = node => {
+    const clone = node.cloneNode(true)
+    clone.querySelectorAll('pre, .nanaly-math, .katex, .nanaly-speak, .nanaly-copy, .nanaly-think').forEach(n => n.remove())
+    return (clone.innerText || '')
+      .replace(/\[[^\]]{0,40}\]/g, ' ')                     // 去掉 [动作/神态] 描写
+      .replace(/\(=\^[^)]{0,12}\)|\([oO0][vVwW][oO0]\)|\(>[wW]<\)/g, ' ')  // 去掉颜文字
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
+  const stopSpeak = () => {
+    if (synth) { try { synth.cancel() } catch (_) {} }
+    if (speakingFor) speakingFor.classList.remove('is-on')
+    speakingFor = null
+  }
+
+  const addSpeakBtn = node => {
+    if (!synth || node.querySelector('.nanaly-speak')) return
+    const btn = el('button', 'nanaly-speak', '<i class="fas fa-volume-low"></i>')
+    btn.type = 'button'
+    btn.title = '朗读'
+    btn.addEventListener('click', () => {
+      if (speakingFor === btn) return stopSpeak()
+      stopSpeak()
+      const text = speakableText(node)
+      if (!text) return
+      const u = new SpeechSynthesisUtterance(text)
+      u.lang = 'zh-CN'
+      const voices = synth.getVoices() || []
+      const zh = voices.find(v => /zh[-_]?CN/i.test(v.lang)) || voices.find(v => /zh/i.test(v.lang))
+      if (zh) u.voice = zh
+      u.rate = 1.05
+      u.onend = u.onerror = () => { btn.classList.remove('is-on'); if (speakingFor === btn) speakingFor = null }
+      speakingFor = btn
+      btn.classList.add('is-on')
+      synth.speak(u)
+    })
+    node.appendChild(btn)
   }
 
   const renderHistory = () => {
@@ -319,6 +801,7 @@
       return
     }
     history.forEach(m => addMsg(m.role === 'user' ? 'me' : 'her', m.content))
+    quick.style.display = ''
   }
 
   // ---------------- 设置界面 ----------------
@@ -362,6 +845,8 @@
         <input type="text" data-f="baseURL">
         <label>模型名</label>
         <input type="text" data-f="model">
+        <label>深度思考用的模型</label>
+        <input type="text" data-f="reasonModel">
       </details>
       <div class="nanaly-setup__actions">
         <button data-a="cancel">取消</button>
@@ -370,6 +855,7 @@
 
     box.querySelector('[data-f="baseURL"]').value = saved.baseURL
     box.querySelector('[data-f="model"]').value = saved.model
+    box.querySelector('[data-f="reasonModel"]').value = saved.reasonModel || DEFAULTS.reasonModel
     box.querySelector('[data-f="apiKey"]').value = secrets.apiKey || ''
     box.querySelector('[data-f="tavilyKey"]').value = secrets.tavilyKey || ''
 
@@ -384,7 +870,11 @@
       if (pass.length < 4) return addSetupError(box, '解锁密码太短了，至少 4 位')
       if (!hasCrypto()) return addSetupError(box, '这个环境不支持加密（需要 HTTPS 或 localhost）')
 
-      cfg = { baseURL: get('baseURL') || DEFAULTS.baseURL, model: get('model') || DEFAULTS.model }
+      cfg = {
+        baseURL: get('baseURL') || DEFAULTS.baseURL,
+        model: get('model') || DEFAULTS.model,
+        reasonModel: get('reasonModel') || DEFAULTS.reasonModel
+      }
       writeCfg(cfg)
       secrets = { apiKey: get('apiKey'), tavilyKey: get('tavilyKey') }
       try {
@@ -507,20 +997,57 @@
       })
     }
 
+    // 只有看起来像要操作页面时才带上站点地图，平时不浪费 token
+    if (/打开|去|跳|带我|看看|看一下|想看|搜|找|切换|深色|浅色|主题|音乐|放歌|顶部|哪篇|哪个|返回|回到/.test(userText)) {
+      try {
+        const map = await getSiteMap()
+        msgs.push({
+          role: 'system',
+          content: '站点地图（url 只能从这里挑，不许自己编）：\n'
+            + map.map(x => `${x.kind === 'section' ? '[版块]' : '[文章]'} ${x.label} → ${x.url}`).join('\n')
+            + `\n当前所在页面：${location.pathname}`
+        })
+      } catch (_) {}
+    }
+
+    const digest = memoryDigest()
+    if (digest) msgs.push({ role: 'system', content: digest })
+
     history.slice(-8).forEach(m => msgs.push(m))
     msgs.push({ role: 'user', content: userText })
     return msgs
   }
 
+  // 模型把指令写在最后一行的 @@ACT{...}@@ 里。这一行不显示给主人。
+  const ACT_RE = /@@ACT\s*(\{[\s\S]*?\})\s*@@/
+  const splitAction = full => {
+    const m = String(full || '').match(ACT_RE)
+    if (!m) return { text: full, act: null }
+    let act = null
+    try { act = JSON.parse(m[1]) } catch (_) {}
+    return { text: full.replace(ACT_RE, '').replace(/\n{3,}/g, '\n\n').trim(), act }
+  }
+  // 流式过程中把还没写完的指令片段藏掉，别让主人看见半截 JSON
+  const hideActFragment = t => String(t || '').replace(/@@A?C?T?\s*\{[\s\S]*$/, '').replace(/@@?$/, '')
+
   const stream = async (messages, onDelta) => {
     abortCtl = new AbortController()
+    const deep = deepThink
+    const payload = {
+      model: deep ? (cfg.reasonModel || DEFAULTS.reasonModel) : cfg.model,
+      messages,
+      stream: true
+    }
+    // 推理模型不接受 temperature，别送过去
+    if (!deep) payload.temperature = 0.8
+
     const res = await fetch(`${cfg.baseURL.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${secrets.apiKey}`
       },
-      body: JSON.stringify({ model: cfg.model, messages, stream: true, temperature: 0.8 }),
+      body: JSON.stringify(payload),
       signal: abortCtl.signal
     })
 
@@ -534,6 +1061,7 @@
     const dec = new TextDecoder()
     let buf = ''
     let full = ''
+    let think = ''
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
@@ -546,8 +1074,10 @@
         const data = t.slice(5).trim()
         if (data === '[DONE]') continue
         try {
-          const delta = JSON.parse(data).choices?.[0]?.delta?.content
-          if (delta) { full += delta; onDelta(full) }
+          const d = JSON.parse(data).choices?.[0]?.delta || {}
+          // 推理模型会先吐 reasoning_content，再吐正式回答
+          if (d.reasoning_content) { think += d.reasoning_content; onDelta(full, think) }
+          if (d.content) { full += d.content; onDelta(full, think) }
         } catch (_) {}
       }
     }
@@ -566,6 +1096,8 @@
 
     busy = true
     sendBtn.disabled = true
+    const artNow = currentArticle()
+    rememberAsk(text, artNow && artNow.title)
     input.value = ''
     input.style.height = ''
     addMsg('me', text)
@@ -576,16 +1108,48 @@
         : '<span class="nanaly-typing"><i></i><i></i><i></i></span>',
       { raw: true })
 
+    const answer = el('div', 'nanaly-answer')
+    let thinkBox = null
+
     try {
       const messages = await buildMessages(text, mode)
-      const full = await stream(messages, partial => {
-        bubble.innerHTML = mdToHtml(partial)
+      const full = await stream(messages, (partial, thinking) => {
+        if (thinking && !thinkBox) {
+          thinkBox = el('details', 'nanaly-think', '<summary>思考过程</summary><div></div>')
+          thinkBox.open = true
+          bubble.replaceChildren(thinkBox, answer)
+        } else if (!bubble.contains(answer)) {
+          bubble.replaceChildren(answer)
+        }
+        if (thinking && thinkBox) {
+          const d = thinkBox.querySelector('div')
+          d.textContent = thinking
+          d.scrollTop = d.scrollHeight
+        }
+        answer.innerHTML = mdToHtml(hideActFragment(partial))
         scrollBottom()
       })
-      if (!full) bubble.innerHTML = mdToHtml('……我好像没说出话来，再试一次？')
-      history.push({ role: 'user', content: text }, { role: 'assistant', content: full })
+      if (!bubble.contains(answer)) bubble.replaceChildren(answer)
+      const { text: shown, act } = splitAction(full)
+      answer.innerHTML = mdToHtml(shown || full)
+      if (!full) answer.innerHTML = mdToHtml('……我好像没说出话来，再试一次？')
+      // 流式过程中不渲染公式和代码，全部收完再做一次，避免半截公式反复闪
+      if (thinkBox) thinkBox.open = false
+      await enhance(answer)
+      addSpeakBtn(bubble)
+      scrollBottom()
+      // 存进历史的是去掉指令后的文本，免得她把旧指令当范例反复照抄
+      history.push({ role: 'user', content: text }, { role: 'assistant', content: splitAction(full).text || full })
       history = history.slice(-30)
       writeLog(history)
+
+      if (act) {
+        const said = await runAction(act)
+        if (said) {
+          addMsg('sys', said)
+          if (act.do === 'goto') afterNav()
+        }
+      }
     } catch (err) {
       const msg = String(err && err.message || err)
       bubble.className = 'nanaly-msg nanaly-msg--sys'
@@ -608,6 +1172,7 @@
   const openPanel = () => {
     panel.classList.add('is-open')
     launcher.classList.remove('has-news')
+    if (typeof hidePoke === 'function') hidePoke()
     if (locked()) showUnlock()
     else if (!body.children.length) renderHistory()
     setTimeout(() => input.focus(), 220)
@@ -632,6 +1197,14 @@
       hasVault() ? showUnlock() : showSetup()
     }
     if (act === 'setup') showKeyUI()
+    if (act === 'think') {
+      deepThink = !deepThink
+      localStorage.setItem(LS_DEEP, deepThink ? '1' : '0')
+      syncThinkBtn()
+      addMsg('sys', deepThink
+        ? '深度思考已开。会切到推理模型，答得更稳，但更慢也更费钱。'
+        : '深度思考已关，回到常规模型。')
+    }
     if (act === 'clear') {
       history = []
       writeLog(history)
@@ -646,6 +1219,9 @@
     const q = btn.dataset.q
     if (q === 'summary') send('用几条要点总结一下这篇文章，重点讲清楚它到底解决了什么问题。', 'article')
     if (q === 'ask') send('这篇文章讲了什么？挑最关键的两三点说说。', 'article')
+    if (q === 'quiz') send(
+      '基于这篇文章出 3 道题考我：一道概念题、一道推导或计算题、一道容易踩坑的辨析题。'
+      + '一次全部列出来，先不要给答案。等我把答案发给你，你再逐题批改，指出我漏掉或说错的地方。', 'article')
     if (q === 'site') { input.value = '全站搜一下：'; input.focus() }
     if (q === 'web') { input.value = '上网搜：'; input.focus() }
   })
@@ -654,7 +1230,15 @@
     : /^全站搜一下[：:]?/.test(t) ? 'site'
       : 'article'
 
-  const submit = () => { const t = input.value.trim(); send(t, modeOf(t)) }
+  const submit = async () => {
+    const t = input.value.trim()
+    if (!t || busy) return
+    // 能本地认出来的操作直接做，省一次 API 调用
+    try {
+      if (await tryLocalCommand(t)) { input.value = ''; input.style.height = ''; return }
+    } catch (_) { /* 本地没认出来就照常发给模型 */ }
+    send(t, modeOf(t))
+  }
 
   sendBtn.addEventListener('click', submit)
 
@@ -667,9 +1251,158 @@
     input.style.height = Math.min(input.scrollHeight, 116) + 'px'
   })
 
+  const thinkBtn = panel.querySelector('[data-act="think"]')
+  const syncThinkBtn = () => {
+    thinkBtn.classList.toggle('is-on', deepThink)
+    thinkBtn.title = deepThink ? '深度思考：开（推理模型）' : '深度思考：关'
+  }
+  syncThinkBtn()
+
+  // ---------------- 快捷键 ----------------
+  // Alt + A 唤起并聚焦，Esc 收起。
+  // 想换别的键，改下面这一行的判断即可。
+  document.addEventListener('keydown', e => {
+    if (e.altKey && !e.ctrlKey && !e.metaKey && String(e.key).toLowerCase() === 'a') {
+      e.preventDefault()
+      if (panel.classList.contains('is-open')) input.focus()
+      else openPanel()
+      return
+    }
+    if (e.key === 'Escape' && panel.classList.contains('is-open')) closePanel()
+  })
+
+  // ---------------- 划词提问 ----------------
+
+  const selBtn = el('button', 'nanaly-selbtn', '<i class="fas fa-cat"></i> 问娜娜莉')
+  selBtn.type = 'button'
+  selBtn.id = 'nanaly-selbtn'
+  document.body.appendChild(selBtn)
+
+  let selText = ''
+  const hideSel = () => { selBtn.classList.remove('is-on'); selText = '' }
+
+  const maybeShowSel = () => {
+    const sel = window.getSelection()
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return hideSel()
+    const text = sel.toString().trim()
+    if (text.length < 4 || text.length > 1500) return hideSel()
+
+    const box = document.getElementById('article-container')
+    if (!box) return hideSel()
+    const anchor = sel.anchorNode
+    const node = anchor && (anchor.nodeType === 1 ? anchor : anchor.parentNode)
+    if (!node || !box.contains(node)) return hideSel()
+
+    selText = text
+    const r = sel.getRangeAt(0).getBoundingClientRect()
+    const w = 118
+    const left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), window.innerWidth - w - 8)
+    selBtn.style.left = Math.round(left) + 'px'
+    selBtn.style.top = Math.round(r.top + window.scrollY - 42) + 'px'
+    selBtn.classList.add('is-on')
+  }
+
+  document.addEventListener('mouseup', () => setTimeout(maybeShowSel, 10))
+  document.addEventListener('touchend', () => setTimeout(maybeShowSel, 10))
+  document.addEventListener('scroll', hideSel, { passive: true })
+  document.addEventListener('mousedown', e => { if (!selBtn.contains(e.target)) hideSel() })
+  window.addEventListener('pjax:send', hideSel)
+
+  selBtn.addEventListener('click', () => {
+    const t = selText
+    hideSel()
+    try { window.getSelection().removeAllRanges() } catch (_) {}
+    if (!t) return
+    openPanel()
+    input.value = `解释一下这段：\n「${t}」`
+    input.dispatchEvent(new Event('input'))
+    setTimeout(() => { input.focus(); input.setSelectionRange(0, 0) }, 240)
+  })
+
+  // ---------------- 主动冒泡 ----------------
+  //
+  // 你在一篇文章上待够久、又确实在往下读，她会冒个红点搭一句话。
+  // 三条克制原则：每篇最多一次、面板开着就不打扰、说的话跟你正在读的小节有关。
+
+  const POKE_AFTER_MS = Number(window.NANALY_POKE_MS || 100000)   // 停留多久才开口
+  const pokedPaths = new Set()
+  let pokeTimer = null
+  let dwellFrom = 0
+  let maxDepth = 0
+
+  const bubble = el('div', 'nanaly-poke')
+  bubble.id = 'nanaly-poke'
+  document.body.appendChild(bubble)
+
+  const hidePoke = () => bubble.classList.remove('is-on')
+
+  const currentHeading = () => {
+    const box = document.getElementById('article-container')
+    if (!box) return ''
+    const heads = [...box.querySelectorAll('h2, h3')]
+    let cur = ''
+    for (const h of heads) {
+      if (h.getBoundingClientRect().top < window.innerHeight * 0.4) cur = h.textContent.trim()
+      else break
+    }
+    return cur.replace(/^[\d.、\s]+/, '').slice(0, 28)
+  }
+
+  const POKE_LINES = [
+    h => h ? `[歪着头] 「${h}」这段看了挺久喵，卡住了？` : '[歪着头] 这篇看了挺久喵，要窝帮忙拆一下吗？',
+    h => h ? `[尾巴扫过桌面] 「${h}」要不要窝出两道题考考你？` : '[尾巴扫过桌面] 要不要窝出两道题考考你？',
+    () => '[从屏幕后探出脑袋] 读到一半了。要窝总结一下前面讲了什么吗？',
+    h => h ? `[眯起眼睛] 「${h}」这块窝也留了批注，往下翻能看到 (ovo)` : '[眯起眼睛] 有不懂的直接问窝，别自己硬啃。'
+  ]
+
+  const showPoke = () => {
+    if (panel.classList.contains('is-open')) return
+    const art = currentArticle()
+    if (!art) return
+    const path = location.pathname
+    if (pokedPaths.has(path)) return
+    pokedPaths.add(path)
+
+    const h = currentHeading()
+    // 用路径长度选一句，同一篇每次都是同一句，不会显得神经质
+    const line = POKE_LINES[path.length % POKE_LINES.length](h)
+    bubble.textContent = line
+    bubble.classList.add('is-on')
+    launcher.classList.add('has-news')
+    pendingPoke = line
+    setTimeout(() => hidePoke(), 12000)
+  }
+
+  let pendingPoke = ''
+
+  const resetDwell = () => {
+    clearTimeout(pokeTimer)
+    dwellFrom = Date.now()
+    maxDepth = 0
+    hidePoke()
+    if (!currentArticle()) return
+    pokeTimer = setTimeout(() => {
+      // 只在「确实往下读了」的时候才开口 —— 开着页面去泡茶不算
+      if (maxDepth >= 0.22 && maxDepth <= 0.94) showPoke()
+    }, POKE_AFTER_MS)
+  }
+
+  window.addEventListener('scroll', () => {
+    const h = document.documentElement
+    const denom = (h.scrollHeight - window.innerHeight) || 1
+    maxDepth = Math.max(maxDepth, Math.min(1, window.scrollY / denom))
+  }, { passive: true })
+
+  bubble.addEventListener('click', () => {
+    hidePoke()
+    openPanel()
+    if (pendingPoke) { addMsg('her', pendingPoke); pendingPoke = '' }
+  })
+
   // 页面切换时更新副标题为当前文章（pjax 不会重新执行本脚本）
   const refreshContext = () => {
     const art = currentArticle()
+    if (art) rememberVisit(art.title)
     subLine.textContent = art ? `正在读：${art.title}` : 'Noimpty 的学习搭子'
     const onPost = !!art
     quick.querySelectorAll('[data-q="summary"], [data-q="ask"]').forEach(b => {
@@ -677,7 +1410,8 @@
     })
   }
   refreshContext()
-  window.addEventListener('pjax:complete', () => setTimeout(refreshContext, 60))
+  resetDwell()
+  window.addEventListener('pjax:complete', () => setTimeout(() => { refreshContext(); resetDwell() }, 60))
 
   // 供控制台调试/换人设用
   window.NANALY = Object.freeze({
@@ -685,6 +1419,16 @@
     close: closePanel,
     reset: () => { history = []; writeLog(history); renderHistory() },
     lock: () => { clearSession(); secrets = { ...EMPTY_SECRETS }; showUnlock() },
+    stopSpeaking: () => stopSpeak(),
+    memory: () => JSON.parse(JSON.stringify(memory)),
+    forgetMemory: () => { memory = { ...MEM_DEFAULT }; saveMem(); return '她关于你的记忆已清空' },
+    poke: () => { pokedPaths.delete(location.pathname); showPoke() },
+    deepThink: on => {
+      deepThink = !!on
+      localStorage.setItem(LS_DEEP, deepThink ? '1' : '0')
+      syncThinkBtn()
+      return deepThink
+    },
     forgetKey: () => {
       localStorage.removeItem(LS_VAULT)
       clearSession()

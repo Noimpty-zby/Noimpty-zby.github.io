@@ -728,7 +728,7 @@ microsoft_clarity:
 #     localStorage.setItem('umami.disabled', 1)
 # 之后这台设备的这个浏览器就不再计入。换浏览器或清缓存后需重设。
 umami_analytics:
-  enable: true
+  enable: false
   # For self-hosted setups, configure the hostname of the Umami instance
   serverURL: https://cloud.umami.is
   script_name: script.js
@@ -1097,9 +1097,14 @@ inject:
     - <link rel="stylesheet" href="/css/related-posts.css">
     - <link rel="stylesheet" href="/css/music-player.css">
     - <link rel="stylesheet" href="/css/noimpty-ai.css">
+    - <link rel="stylesheet" href="/css/nanaly-notes.css">
     - <script src="/js/protected-manifest.js"></script>
     - <script src="/js/privacy-gate.js"></script>
     - <script src="/js/section-hub.js"></script>
+    # ↓↓↓ GoatCounter 访问统计。把 '' 里填成你的站点代号（xxx.goatcounter.com 里的 xxx）
+    # 留空则完全不加载统计脚本。这不是密钥，它本来就会出现在网页源码里。
+    - <script>window.NOIMPTY_GC_CODE = 'noimpty'</script>
+    - <script src="/js/analytics.js"></script>
   bottom:
     - <script src="/js/toc-sync.js"></script>
     - <script src="/js/music-player.js"></script>

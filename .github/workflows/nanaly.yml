@@ -1,0 +1,83 @@
+name: 娜娜莉的日常
+
+on:
+  schedule:
+    # 回评：每两小时看一眼有没有挂太久没人回的评论
+    - cron: '0 */2 * * *'
+    # 巡逻：每天北京时间早上 9 点（UTC 01:00）
+    - cron: '0 1 * * *'
+    # 写随笔：每周日北京时间晚上 8 点（UTC 12:00 周日）
+    - cron: '0 12 * * 0'
+  workflow_dispatch:
+    inputs:
+      what:
+        description: '做什么'
+        type: choice
+        options: [reply, patrol, notes, react, column, all]
+        default: patrol
+      dry:
+        description: '只演练不动真格'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write        # 她要把自己的随笔提交进仓库
+  discussions: write     # 她要发评论、贴表情
+
+concurrency:
+  group: nanaly
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: 决定这次做什么
+        id: pick
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "what=${{ inputs.what }}" >> $GITHUB_OUTPUT
+            echo "dry=${{ inputs.dry && '--dry' || '' }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "0 12 * * 0" ]; then
+            echo "what=column" >> $GITHUB_OUTPUT
+            echo "dry=" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "0 1 * * *" ]; then
+            echo "what=patrol-notes" >> $GITHUB_OUTPUT
+            echo "dry=" >> $GITHUB_OUTPUT
+          else
+            echo "what=reply" >> $GITHUB_OUTPUT
+            echo "dry=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 让她去干活
+        env:
+          SITE_URL: https://noimpty-zby.github.io
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 想让她用自己的 GitHub 账号发言（而不是显示成 github-actions 机器人），
+          # 就建一个小号、拿它的 PAT 存成这个 secret。不配也能跑。
+          NANALY_GITHUB_TOKEN: ${{ secrets.NANALY_GITHUB_TOKEN }}
+          GISCUS_CATEGORY_ID: ${{ secrets.GISCUS_CATEGORY_ID }}
+          # 她的小号用户名，用来避免自己回自己
+          NANALY_LOGIN: ${{ secrets.NANALY_LOGIN }}
+          # 评论挂多少小时没人回，她才接手。想让她更快接手就调小
+          NANALY_REPLY_GRACE_HOURS: '6'
+          NANALY_REPLY_MAX: '5'
+          # 单次最多给几篇文章写批注（只处理正文变过的）
+          NANALY_NOTES_MAX: '4'
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: |
+          if [ "${{ steps.pick.outputs.what }}" = "patrol-notes" ]; then
+            node tools/nanaly/run.mjs patrol ${{ steps.pick.outputs.dry }}
+            node tools/nanaly/run.mjs notes  ${{ steps.pick.outputs.dry }}
+          else
+            node tools/nanaly/run.mjs ${{ steps.pick.outputs.what }} ${{ steps.pick.outputs.dry }}
+          fi

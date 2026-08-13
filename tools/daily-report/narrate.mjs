@@ -3,7 +3,23 @@
 
 const KEY = process.env.DEEPSEEK_API_KEY || ''
 const BASE = (process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com').replace(/\/$/, '')
-const MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-chat'
+// deepseek-chat / deepseek-reasoner 这两个老名字已于 2026-07-24 停用。
+// 现在是 deepseek-v4-flash（便宜）和 deepseek-v4-pro（贵三倍）。
+// 写日报、批注、回评这些活儿 flash 完全够用。
+const MODEL = (() => {
+  const m = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash'
+  const LEGACY = { 'deepseek-chat': 'deepseek-v4-flash', 'deepseek-reasoner': 'deepseek-v4-pro' }
+  if (LEGACY[m]) {
+    console.error(`  [narrate] ${m} 已停用，自动改用 ${LEGACY[m]}`)
+    return LEGACY[m]
+  }
+  return m
+})()
+
+// 思考模式现在是参数，而且**默认开着**。
+// 这些任务只要结果不要推导过程，显式关掉能省一大笔推理 token。
+// 想让她写得更深就把 DEEPSEEK_THINKING 设成 enabled。
+const THINKING = process.env.DEEPSEEK_THINKING === 'enabled' ? 'enabled' : 'disabled'
 
 const PERSONA = `你是娜娜莉，住在 Noimpty 个人博客里的猫娘助手。
 毒舌但清醒，极简主义，讨厌废话。自称「窝」，偶尔带「喵」和颜文字 (=^w^=) (ovo)，
@@ -20,7 +36,9 @@ export const ask = async (system, user, maxTokens = 700) => {
       body: JSON.stringify({
         model: MODEL,
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-        temperature: 0.7,
+        thinking: { type: THINKING },
+        // 开思考时不支持 temperature 这类采样参数
+        ...(THINKING === 'enabled' ? { reasoning_effort: 'high' } : { temperature: 0.7 }),
         max_tokens: maxTokens
       }),
       signal: AbortSignal.timeout(90000)

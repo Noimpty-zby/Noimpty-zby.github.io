@@ -896,7 +896,7 @@ if (SelectedActor && SelectedActor->Implements<URogueInteractionInterface>())
 - [Epic Games：Spawning Actors](https://dev.epicgames.com/documentation/en-us/unreal-engine/spawning-and-destroying-an-actor-in-unreal-engine)
 - [Epic Games：Actor Ticking](https://dev.epicgames.com/documentation/en-us/unreal-engine/actor-ticking-in-unreal-engine)
 - [Epic Games：Delegates and Lambda Functions](https://dev.epicgames.com/documentation/en-us/unreal-engine/delegates-and-lamba-functions-in-unreal-engine)
-- [Tom Looman：Unreal Engine C++ Interfaces](https://tomlooman.com/unreal-engine-cpp-interfaces/)
+- [Tom Looman：Unreal Engine UFUNCTION Specifiers Explained](https://tomlooman.com/unreal-engine-ufunction-specifiers/)
 - [Tom Looman：ActionRoguelike on GitHub](https://github.com/tomlooman/ActionRoguelike)
 
 ## 本系列的其他文章

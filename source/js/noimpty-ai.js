@@ -27,15 +27,32 @@
 
   const DEFAULTS = {
     baseURL: 'https://api.deepseek.com',
-    model: 'deepseek-chat',
-    // 深度思考用的推理模型。换别家接口时在高级设置里改。
-    reasonModel: 'deepseek-reasoner'
+    // deepseek-chat / deepseek-reasoner 这两个老名字已于 2026-07-24 停用，
+    // 现在是 deepseek-v4-flash（便宜快）和 deepseek-v4-pro（贵三倍，更强）。
+    model: 'deepseek-v4-flash',
+    reasonModel: 'deepseek-v4-pro',
+    // 思考深度：low / high / max
+    reasonEffort: 'high'
+  }
+
+  // 本机存着的旧模型名自动升级，免得改了默认值却对已配置过的人不生效
+  const MODEL_MIGRATION = {
+    'deepseek-chat': 'deepseek-v4-flash',
+    'deepseek-reasoner': 'deepseek-v4-pro'
   }
   const EMPTY_SECRETS = { apiKey: '', tavilyKey: '' }
 
   const readCfg = () => {
-    try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(LS_CFG) || '{}') } }
+    let c
+    try { c = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(LS_CFG) || '{}') } }
     catch (_) { return { ...DEFAULTS } }
+    // 只迁移这两个已知的老名字，自定义的模型名不动
+    let changed = false
+    if (MODEL_MIGRATION[c.model]) { c.model = MODEL_MIGRATION[c.model]; changed = true }
+    if (MODEL_MIGRATION[c.reasonModel]) { c.reasonModel = MODEL_MIGRATION[c.reasonModel]; changed = true }
+    if (!c.reasonEffort) c.reasonEffort = DEFAULTS.reasonEffort
+    if (changed) { try { localStorage.setItem(LS_CFG, JSON.stringify(c)) } catch (_) {} }
+    return c
   }
   const writeCfg = c => { try { localStorage.setItem(LS_CFG, JSON.stringify(c)) } catch (_) {} }
   const readLog = () => {
@@ -847,6 +864,8 @@
         <input type="text" data-f="model">
         <label>深度思考用的模型</label>
         <input type="text" data-f="reasonModel">
+        <label>思考深度（low / high / max）</label>
+        <input type="text" data-f="reasonEffort">
       </details>
       <div class="nanaly-setup__actions">
         <button data-a="cancel">取消</button>
@@ -856,6 +875,7 @@
     box.querySelector('[data-f="baseURL"]').value = saved.baseURL
     box.querySelector('[data-f="model"]').value = saved.model
     box.querySelector('[data-f="reasonModel"]').value = saved.reasonModel || DEFAULTS.reasonModel
+    box.querySelector('[data-f="reasonEffort"]').value = saved.reasonEffort || DEFAULTS.reasonEffort
     box.querySelector('[data-f="apiKey"]').value = secrets.apiKey || ''
     box.querySelector('[data-f="tavilyKey"]').value = secrets.tavilyKey || ''
 
@@ -873,7 +893,8 @@
       cfg = {
         baseURL: get('baseURL') || DEFAULTS.baseURL,
         model: get('model') || DEFAULTS.model,
-        reasonModel: get('reasonModel') || DEFAULTS.reasonModel
+        reasonModel: get('reasonModel') || DEFAULTS.reasonModel,
+        reasonEffort: get('reasonEffort') || DEFAULTS.reasonEffort
       }
       writeCfg(cfg)
       secrets = { apiKey: get('apiKey'), tavilyKey: get('tavilyKey') }
@@ -1036,10 +1057,15 @@
     const payload = {
       model: deep ? (cfg.reasonModel || DEFAULTS.reasonModel) : cfg.model,
       messages,
-      stream: true
+      stream: true,
+      // 关键：现在思考模式是**参数**，不再是换个模型名的事，而且**默认是开着的**。
+      // 不显式写 disabled 的话，你把开关关掉它照样会思考、照样按思考的量计费。
+      // 这就是「关了深度思考却还在思考」那个 bug 的根源。
+      thinking: { type: deep ? 'enabled' : 'disabled' }
     }
-    // 推理模型不接受 temperature，别送过去
-    if (!deep) payload.temperature = 0.8
+    // 思考模式不支持 temperature / top_p 这类采样参数，开着时别送
+    if (deep) payload.reasoning_effort = cfg.reasonEffort || DEFAULTS.reasonEffort
+    else payload.temperature = 0.8
 
     const res = await fetch(`${cfg.baseURL.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
@@ -1076,7 +1102,9 @@
         try {
           const d = JSON.parse(data).choices?.[0]?.delta || {}
           // 推理模型会先吐 reasoning_content，再吐正式回答
-          if (d.reasoning_content) { think += d.reasoning_content; onDelta(full, think) }
+          // 再加一道保险：即使服务端没理会 disabled，只要开关是关的就不显示思考过程，
+          // 让界面和开关永远一致
+          if (d.reasoning_content && deep) { think += d.reasoning_content; onDelta(full, think) }
           if (d.content) { full += d.content; onDelta(full, think) }
         } catch (_) {}
       }
@@ -1201,6 +1229,7 @@
       deepThink = !deepThink
       localStorage.setItem(LS_DEEP, deepThink ? '1' : '0')
       syncThinkBtn()
+      refreshContext()
       addMsg('sys', deepThink
         ? '深度思考已开。会切到推理模型，答得更稳，但更慢也更费钱。'
         : '深度思考已关，回到常规模型。')
@@ -1254,7 +1283,10 @@
   const thinkBtn = panel.querySelector('[data-act="think"]')
   const syncThinkBtn = () => {
     thinkBtn.classList.toggle('is-on', deepThink)
-    thinkBtn.title = deepThink ? '深度思考：开（推理模型）' : '深度思考：关'
+    thinkBtn.title = deepThink ? '深度思考：开（更慢更贵，点一下关掉）' : '深度思考：关'
+    // 这里不要顺手调 refreshContext —— 它是下面才声明的 const，
+    // 处在暂时性死区里，连 typeof 都会直接抛错（这一点和 var 不一样）。
+    // 副标题由调用方在合适的时机自己刷。
   }
   syncThinkBtn()
 
@@ -1403,7 +1435,10 @@
   const refreshContext = () => {
     const art = currentArticle()
     if (art) rememberVisit(art.title)
-    subLine.textContent = art ? `正在读：${art.title}` : 'Noimpty 的学习搭子'
+    const base = art ? `正在读：${art.title}` : 'Noimpty 的学习搭子'
+    // 深度思考是按 token 计费的推理模型，比常规贵不少。
+    // 它是个会记住状态的开关，所以必须让人一眼看见自己开着，别糊里糊涂烧钱。
+    subLine.textContent = deepThink ? `深度思考中 · ${base}` : base
     const onPost = !!art
     quick.querySelectorAll('[data-q="summary"], [data-q="ask"]').forEach(b => {
       b.style.display = onPost ? '' : 'none'
@@ -1427,6 +1462,7 @@
       deepThink = !!on
       localStorage.setItem(LS_DEEP, deepThink ? '1' : '0')
       syncThinkBtn()
+      refreshContext()
       return deepThink
     },
     forgetKey: () => {

@@ -27,10 +27,73 @@ const getText = async url => {
 
 // ---------------- 逐篇体检 ----------------
 
+const isInternal = u => u.startsWith(SITE)
+const sleep = ms => new Promise(r => setTimeout(r, ms))
+
+const hit = async (u, ms) => {
+  try {
+    let res = await fetch(u, { method: 'HEAD', signal: T(ms) })
+    if (res.status === 405 || res.status === 501) res = await fetch(u, { signal: T(ms) })
+    return { status: res.status, err: null }
+  } catch (e) {
+    return { status: 0, err: String(e.message || e).slice(0, 60) }
+  }
+}
+
+// 什么算「有问题」：
+//   站内：任何 4xx/5xx，或者连不上
+//   站外：只认 404 / 410。403/429/超时都是反爬和抖动，不是坏了
+const verdictOf = (r, inside) => {
+  if (r.err) return inside ? 'unreachable' : null
+  if (inside) return r.status >= 400 ? 'http' : null
+  return (r.status === 404 || r.status === 410) ? 'http' : null
+}
+
+// 两段式判定。第一遍只用来「怀疑」，定罪必须靠串行复核。
+//
+// 上一版就是死在这儿：并发扫自己的站会被 GitHub Pages 限流，
+// 一大片请求直接连接失败，代码把它当成死链报了出去 ——
+// 结果连首页 / 都被报成打不开。一次误报就够让人再也不信这个巡逻了。
+const probe = async (u, kind) => {
+  const label = kind === 'img' ? '图片' : '链接'
+  const inside = isInternal(u)
+
+  let r = await hit(u, 15000)
+  let v = verdictOf(r, inside)
+  if (!v) return null
+
+  // 复核两次：串行、加延迟、超时放宽。任何一次通过就判无罪。
+  for (let i = 0; i < 2; i++) {
+    await sleep(1500 + i * 2000)
+    r = await hit(u, 25000)
+    v = verdictOf(r, inside)
+    if (!v) return null
+  }
+
+  const shown = inside ? (u.replace(SITE, '') || '/') : u
+  if (v === 'unreachable') {
+    return { kind, what: `${label} ${shown} 连续三次都连不上`, url: u }
+  }
+  return inside
+    ? { kind, what: `${label} ${shown} 返回 ${r.status}`, url: u }
+    : { kind, what: `站外${label} ${u} 已经失效了（${r.status}）`, url: u }
+}
+
+// 并发压到很低。慢一点没关系，误报一次就没人信了。
+
 const inspect = async pageUrl => {
   const issues = []
   const r = await getText(pageUrl).catch(e => ({ ok: false, status: String(e.message).slice(0, 60) }))
-  if (!r.ok) return { pageUrl, issues: [{ kind: 'page', what: `这一页打不开（${r.status}）` }] }
+  if (!r.ok) {
+    // 复核一次再说，别把一次抖动当成页面挂了
+    await sleep(2000)
+    const again = await getText(pageUrl).catch(e => ({ ok: false, status: String(e.message).slice(0, 60) }))
+    if (!again.ok) {
+      // 注意补上 title，否则下游模板会打印出「《undefined》」
+      return { pageUrl, title: pageUrl.replace(SITE, '') || '/', issues: [{ kind: 'page', what: `这一页打不开（${again.status}）` }] }
+    }
+    Object.assign(r, again)
+  }
 
   const title = (r.body.match(/<meta property="og:title" content="([^"]*)"/) || [])[1]
     || (r.body.match(/<title>([^<]*)<\/title>/) || [])[1] || pageUrl
@@ -55,32 +118,9 @@ const inspect = async pageUrl => {
     try { imgs.add(new URL(h, pageUrl).href) } catch (_) {}
   })
 
-  // 站外链接经常对爬虫返回 403 / 429（Cloudflare、Epic 文档都这样），
-  // 那不是坏了。一个天天误报的巡逻只会被主人关掉通知，所以这里分开对待：
-  //   站内：任何 4xx/5xx 都报
-  //   站外：只报 404 和 410，其余（403/401/429/5xx/超时）一律当噪声忽略
-  const isInternal = u => u.startsWith(SITE)
-  const probe = async (u, kind) => {
-    const label = kind === 'img' ? '图片' : '链接'
-    const inside = isInternal(u)
-    try {
-      let res = await fetch(u, { method: 'HEAD', signal: T(12000) })
-      if (res.status === 405 || res.status === 501) res = await fetch(u, { signal: T(12000) })
-      if (inside) {
-        if (res.status >= 400) return { kind, what: `${label} ${u.replace(SITE, '')} 返回 ${res.status}`, url: u }
-      } else if (res.status === 404 || res.status === 410) {
-        return { kind, what: `站外${label} ${u} 已经失效了（${res.status}）`, url: u }
-      }
-    } catch (_) {
-      // 站外超时/DNS 抖动太常见，不报；站内连不上是真问题
-      if (inside) return { kind, what: `${label} ${u.replace(SITE, '')} 连不上`, url: u }
-    }
-    return null
-  }
-
   const found = [
-    ...(await mapLimit([...links], 6, u => probe(u, 'link'))),
-    ...(await mapLimit([...imgs], 6, u => probe(u, 'img')))
+    ...(await mapLimit([...links], 3, u => probe(u, 'link'))),
+    ...(await mapLimit([...imgs], 3, u => probe(u, 'img')))
   ].filter(Boolean)
 
   return { pageUrl, title, issues: issues.concat(found) }
@@ -89,6 +129,16 @@ const inspect = async pageUrl => {
 // ---------------- 主流程 ----------------
 
 export const patrol = async () => {
+  // 金丝雀：先单独、干净地测一次首页。
+  // 首页要是都取不到，那问题一定在这次运行的网络上，不在主人的站上。
+  // 这时候任何「死链」结论都不可信，直接闭嘴。
+  const canary = await hit(`${SITE}/`, 20000)
+  if (canary.err || canary.status >= 400) {
+    console.log(`  首页都取不到（${canary.err || 'HTTP ' + canary.status}）`)
+    console.log('  这说明是本次运行的网络问题，不是站点故障。本次不发言。')
+    return { checked: 0, reported: 0, aborted: true }
+  }
+
   const sm = await getText(`${SITE}/sitemap.xml`)
   if (!sm.ok) { console.log('  取不到 sitemap，巡逻取消'); return { checked: 0, reported: 0 } }
 
@@ -101,8 +151,19 @@ export const patrol = async () => {
     .slice(0, 40)
 
   console.log(`  要巡逻 ${pages.length} 篇文章`)
-  const results = await mapLimit(pages, 4, inspect)
+  const results = await mapLimit(pages, 2, inspect)
   const broken = results.filter(r => r.issues.length)
+
+  // 闸门：坏掉的比例太高，几乎肯定是我们这边被限流，而不是主人一夜之间写坏了半个站。
+  // 宁可这次什么都不说，也不要在他的博客上公开发一堆假警报。
+  const RATE_LIMIT_SUSPECT = 0.35
+  if (pages.length >= 4 && broken.length / pages.length > RATE_LIMIT_SUSPECT) {
+    console.log(`  ${pages.length} 篇里有 ${broken.length} 篇报错（${Math.round(broken.length / pages.length * 100)}%）`)
+    console.log('  比例高得不正常，判定为扫描把自己打限流了，不是真故障。本次不发言。')
+    broken.forEach(b => console.log(`     （跳过）${b.pageUrl.replace(SITE, '')}：${b.issues.map(i => i.what).join('；')}`))
+    return { checked: pages.length, reported: 0, throttled: true }
+  }
+
   console.log(`  发现有问题的：${broken.length} 篇`)
 
   const discussions = await listDiscussions().catch(e => {
@@ -126,9 +187,22 @@ export const patrol = async () => {
       + (item.issues.length > shown.length ? `\n- …另外还有 ${item.issues.length - shown.length} 处` : '')
     const said = await ask(
       '你是娜娜莉，住在这个博客里的猫娘。毒舌但可靠，自称「窝」，说话简短。禁止使用 • 和 ω。',
-      `你在博客里闲逛时，发现《${item.title}》这篇有问题：\n${list}\n\n` +
-      '写一条评论提醒主人。两三句话，先说你是怎么发现的（比如顺手点了个链接），' +
-      '再把问题列清楚。别啰嗦，别道歉，也别假装很严重。', 400)
+      `你在博客里闲逛时，发现《${item.title}》这篇有问题。
+
+问题清单（这是你**唯一**知道的事实）：
+${list}
+
+写一条评论提醒主人。两三句话，先说你是怎么发现的（比如顺手点了个链接），再把问题列清楚。
+
+**硬性约束，违反了会给主人惹麻烦：**
+1. 只能陈述上面清单里的内容。清单之外的任何问题都不许提，一个字都不行
+2. **不许推测原因。** 你只知道它打不开，不知道为什么。
+   禁止说「地址写错了」「应该是 xxx」「服务器抽风」「少了文件名」这类猜测 ——
+   你没有依据，说了就是编
+3. 不许评论文章内容本身有什么毛病，那不是这次巡逻的范围
+4. 别啰嗦，别道歉，也别假装很严重
+
+这条评论会公开发在主人的博客上，读者都看得到。说错了是他丢人。`, 400)
 
     const body = (said || `[抖了抖耳朵] 窝路过这篇，顺手点了几个链接，有东西坏了喵：\n\n${list}`)
       + `\n\n<details><summary>具体是这些</summary>\n\n${list}\n\n</details>`

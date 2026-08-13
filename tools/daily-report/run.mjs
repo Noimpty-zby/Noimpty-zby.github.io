@@ -7,10 +7,11 @@
 //   node tools/daily-report/run.mjs --dry
 
 import { writeFileSync } from 'node:fs'
-import { CFG, WINDOW_LABEL, getTraffic, getComments, getNewPosts, getOwnerHeartbeat } from './sources.mjs'
+import { CFG, WINDOW_LABEL, getTraffic, getComments, getNewPosts, getOwnerHeartbeat, getSchedule } from './sources.mjs'
 import { runHealth } from './health.mjs'
 import { writeOpening, reviewPost, screenComments, writeMissYou, draftReplies } from './narrate.mjs'
 import { renderEmail, renderSubject, renderMissYou } from './render.mjs'
+import { autoComplete, commitSchedule } from './schedule-auto.mjs'
 
 const DRY = process.argv.includes('--dry')
 const QUIET = process.env.REPORT_ONLY_WHEN_NOTEWORTHY === 'true'
@@ -31,6 +32,23 @@ const main = async () => {
     step('健康检查', runHealth, { checks: [], worst: 'warn' }),
     step('主人心跳', getOwnerHeartbeat, { ok: false, why: '采集异常' })
   ])
+
+  // 先按客观信号自动勾一遍，再读日程 —— 这样邮件里看到的是最新状态，
+  // 而不是「明明发了文章却还显示没做」
+  const auto = await step('日程自动完成', () => autoComplete({
+    newPosts: newPosts.ok ? newPosts.items : [],
+    comments,
+    windowStart: Date.now() - 24 * 3600 * 1000,
+    ownerLogin: process.env.OWNER_LOGIN || (CFG.repo.split('/')[0])
+  }), { changed: 0, done: [] })
+
+  if (auto.changed) {
+    auto.done.forEach(d => console.log(`    自动勾上「${d.text}」 —— ${d.why}`))
+    if (!DRY) await commitSchedule(auto.done)
+  }
+
+  const schedule = await step('日程', getSchedule, { ok: false, why: '读取异常' })
+  if (schedule.ok) schedule.autoDone = auto.done
 
   // 好久没来 → 改发一封短的想念邮件，别拿数据表格砸他
   const after = Number(process.env.MISS_YOU_AFTER_DAYS ?? 4)
@@ -64,7 +82,7 @@ const main = async () => {
   }
 
   const opening = await step('写小结',
-    () => writeOpening({ traffic, comments, newPosts, health }),
+    () => writeOpening({ traffic, comments, newPosts, health, schedule }),
     '（小结生成失败，下面是原始数据）')
 
   const noteworthy =
@@ -74,7 +92,7 @@ const main = async () => {
     (newPosts.ok && newPosts.items.length > 0)
 
   const html = renderEmail({
-    opening, traffic, comments, screen, newPosts, feedbacks, health,
+    opening, traffic, comments, screen, newPosts, feedbacks, health, schedule,
     windowLabel: WINDOW_LABEL, site: CFG.site
   })
   const subject = renderSubject({ traffic, comments, newPosts, health })

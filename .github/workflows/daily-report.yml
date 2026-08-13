@@ -13,8 +13,11 @@ on:
         default: false
 
 permissions:
-  contents: read
+  # 需要 write：她会按客观信号自动勾掉日程里的任务并提交
+  contents: write
   discussions: read
+  # 提交完要能叫一次部署（GITHUB_TOKEN 推的提交不会自动触发 on:push）
+  actions: write
 
 concurrency:
   group: daily-report
@@ -27,8 +30,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          # 需要历史记录来判断哪些文章是新增的
+          # 需要历史记录来判断哪些文章是新增的，也需要能推回去
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -59,6 +63,9 @@ jobs:
 
           # 想改成「没事就不发」，把这里改成 'true'
           REPORT_ONLY_WHEN_NOTEWORTHY: 'false'
+          OWNER_LOGIN: ${{ secrets.OWNER_LOGIN }}
+          NANALY_GIT_EMAIL: ${{ secrets.NANALY_GIT_EMAIL }}
+          NANALY_GIT_NAME: ${{ secrets.NANALY_GIT_NAME }}
         run: |
           if [ "${{ inputs.dry }}" = "true" ]; then
             node tools/daily-report/run.mjs --dry

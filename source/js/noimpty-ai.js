@@ -40,7 +40,7 @@
     'deepseek-chat': 'deepseek-v4-flash',
     'deepseek-reasoner': 'deepseek-v4-pro'
   }
-  const EMPTY_SECRETS = { apiKey: '', tavilyKey: '' }
+  const EMPTY_SECRETS = { apiKey: '', tavilyKey: '', ghToken: '' }
 
   const readCfg = () => {
     let c
@@ -851,6 +851,8 @@
       <input type="password" data-f="apiKey" placeholder="sk-..." autocomplete="off">
       <label>Tavily API Key（联网搜索，可留空）</label>
       <input type="password" data-f="tavilyKey" placeholder="tvly-..." autocomplete="off">
+      <label>GitHub Token（日程表保存用，可留空）</label>
+      <input type="password" data-f="ghToken" placeholder="github_pat_..." autocomplete="off">
       <label>解锁密码（每次重开浏览器输一次）</label>
       <input type="password" data-f="pass" placeholder="自己设一个" autocomplete="new-password">
       <div class="nanaly-note" style="margin-top:12px">
@@ -878,6 +880,7 @@
     box.querySelector('[data-f="reasonEffort"]').value = saved.reasonEffort || DEFAULTS.reasonEffort
     box.querySelector('[data-f="apiKey"]').value = secrets.apiKey || ''
     box.querySelector('[data-f="tavilyKey"]').value = secrets.tavilyKey || ''
+    box.querySelector('[data-f="ghToken"]').value = secrets.ghToken || ''
 
     box.addEventListener('click', async e => {
       const a = e.target.closest('[data-a]')
@@ -897,7 +900,7 @@
         reasonEffort: get('reasonEffort') || DEFAULTS.reasonEffort
       }
       writeCfg(cfg)
-      secrets = { apiKey: get('apiKey'), tavilyKey: get('tavilyKey') }
+      secrets = { apiKey: get('apiKey'), tavilyKey: get('tavilyKey'), ghToken: get('ghToken') }
       try {
         await sealSecrets(secrets, pass)
         writeSession(secrets)
@@ -1455,6 +1458,10 @@
     reset: () => { history = []; writeLog(history); renderHistory() },
     lock: () => { clearSession(); secrets = { ...EMPTY_SECRETS }; showUnlock() },
     stopSpeaking: () => stopSpeak(),
+    // 日程页要用它往仓库提交。没解锁就返回 null，调用方负责提示。
+    githubToken: () => secrets.ghToken || null,
+    isLocked: () => locked(),
+    requestUnlock: () => { openPanel(); if (locked()) showUnlock(); else showKeyUI() },
     memory: () => JSON.parse(JSON.stringify(memory)),
     forgetMemory: () => { memory = { ...MEM_DEFAULT }; saveMem(); return '她关于你的记忆已清空' },
     poke: () => { pokedPaths.delete(location.pathname); showPoke() },

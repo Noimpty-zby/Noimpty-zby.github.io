@@ -6,6 +6,9 @@ on:
     - cron: '0 */2 * * *'
     # 巡逻：每天北京时间早上 9 点（UTC 01:00）
     - cron: '0 1 * * *'
+    # 资讯：每三天一期，北京时间上午 10 点（UTC 02:00）
+    # 注：*/3 是按「几号」算的，所以跨月那次间隔会短一点，属正常
+    - cron: '0 2 */3 * *'
     # 写随笔：每周日北京时间晚上 8 点（UTC 12:00 周日）
     - cron: '0 12 * * 0'
   workflow_dispatch:
@@ -13,7 +16,7 @@ on:
       what:
         description: '做什么'
         type: choice
-        options: [reply, patrol, notes, react, column, all]
+        options: [reply, patrol, notes, news, react, column, all]
         default: patrol
       dry:
         description: '只演练不动真格'
@@ -56,6 +59,9 @@ jobs:
           elif [ "${{ github.event.schedule }}" = "0 12 * * 0" ]; then
             echo "what=column" >> $GITHUB_OUTPUT
             echo "dry=" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "0 2 */3 * *" ]; then
+            echo "what=news" >> $GITHUB_OUTPUT
+            echo "dry=" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "0 1 * * *" ]; then
             echo "what=patrol-notes" >> $GITHUB_OUTPUT
             echo "dry=" >> $GITHUB_OUTPUT
@@ -79,6 +85,8 @@ jobs:
           NANALY_REPLY_MAX: '5'
           # 单次最多给几篇文章写批注（只处理正文变过的）
           NANALY_NOTES_MAX: '4'
+          # 资讯板块用它去搜。和娜娜莉浏览器里那把是同一个 Tavily key。
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           # 她提交时用的署名。不配就用一个不会关联到任何 GitHub 账号的地址。
           # 想让她的提交显示成你小号的头像：用小号登录 github.com/settings/emails，
           # 复制那个形如 12345678+用户名@users.noreply.github.com 的地址存成这个 secret。

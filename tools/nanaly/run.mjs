@@ -4,6 +4,7 @@
 //   node tools/nanaly/run.mjs react    给文章贴表情
 //   node tools/nanaly/run.mjs reply    替主人回复挂了太久没人管的评论
 //   node tools/nanaly/run.mjs notes    给文章写段落批注并提交
+//   node tools/nanaly/run.mjs news     搜一轮资讯，整理成一期并提交
 //   node tools/nanaly/run.mjs column   写一篇她自己的随笔并提交
 //   node tools/nanaly/run.mjs all      全做一遍
 //
@@ -12,6 +13,7 @@
 import { patrol, react } from './patrol.mjs'
 import { autoReply } from './reply.mjs'
 import { buildNotes, commitNotes } from './notes.mjs'
+import { buildNews, commitNews } from './news.mjs'
 import { writeColumn, commitAndPush } from './column.mjs'
 import { getComments } from '../daily-report/sources.mjs'
 
@@ -43,6 +45,12 @@ const tasks = {
     if (r.wrote && !r.dry && !DRY) await commitNotes()
     return r
   },
+  async news () {
+    console.log('去搜资讯…')
+    const made = await buildNews()
+    if (made && !made.dry && !DRY) await commitNews(made.date)
+    return made
+  },
   async column () {
     console.log('写随笔中…')
     const cm = await getComments().catch(() => ({ ok: false }))
@@ -54,7 +62,7 @@ const tasks = {
 
 const main = async () => {
   console.log(DRY ? '【演练模式，不会真的发评论或提交】\n' : '')
-  const list = what === 'all' ? ['reply', 'patrol', 'notes', 'react', 'column'] : [what]
+  const list = what === 'all' ? ['reply', 'patrol', 'notes', 'news', 'react', 'column'] : [what]
   for (const t of list) {
     if (!tasks[t]) { console.log(`不认识的动作：${t}`); continue }
     try { await tasks[t]() } catch (e) { console.error(`  ${t} 失败：`, String(e.message || e).slice(0, 200)) }

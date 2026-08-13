@@ -269,3 +269,50 @@ export const getOwnerHeartbeat = async (lookbackDays = 90) => {
     return { ok: false, why: String(e.message || e).slice(0, 200) }
   }
 }
+
+// ---------------- 今天的日程 ----------------
+//
+// 读的是仓库里那份 source/_data/schedule.json —— 和网页上编辑的是同一份文件。
+// 网页通过 GitHub API 直接改它，所以这里读到的一定是最新提交的版本。
+
+export const getSchedule = async () => {
+  try {
+    const { readFileSync, existsSync } = await import('node:fs')
+    const F = 'source/_data/schedule.json'
+    if (!existsSync(F)) return { ok: true, today: [], tomorrow: [], overdue: [], empty: true }
+
+    const data = JSON.parse(readFileSync(F, 'utf8'))
+    const days = data.days || {}
+
+    const cnKey = offset => {
+      const d = new Date(WINDOW.end + offset * 86400000)
+      return new Intl.DateTimeFormat('sv-SE', {
+        timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit'
+      }).format(d)
+    }
+    const todayKey = cnKey(0)
+    const tomorrowKey = cnKey(1)
+
+    const list = k => Array.isArray(days[k]) ? days[k] : []
+
+    // 逾期：今天之前、还没勾完成的。只回看两周，再久的就不提了 ——
+    // 一直挂着的旧任务天天念，跟没提醒是一个效果。
+    const overdue = []
+    Object.keys(days).sort().forEach(k => {
+      if (k >= todayKey) return
+      if (k < cnKey(-14)) return
+      list(k).filter(t => !t.done).forEach(t => overdue.push({ ...t, date: k }))
+    })
+
+    return {
+      ok: true,
+      today: list(todayKey),
+      tomorrow: list(tomorrowKey),
+      overdue,
+      todayKey,
+      empty: !Object.keys(days).length
+    }
+  } catch (e) {
+    return { ok: false, why: String(e.message || e).slice(0, 160) }
+  }
+}

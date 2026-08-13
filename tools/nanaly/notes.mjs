@@ -10,6 +10,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { ask } from '../daily-report/narrate.mjs'
+import { triggerDeploy } from './github.mjs'
 
 const DATA = 'source/_data/nanaly-notes.json'
 const POSTS = 'source/_posts'
@@ -156,5 +157,7 @@ export const commitNotes = async () => {
   run('commit', '-m', '娜娜莉：更新文章批注')
   run('push')
   console.log('  批注已提交并推送')
+  // 用 GITHUB_TOKEN 推的提交不会自动触发部署，得自己叫一声
+  await triggerDeploy()
   return true
 }

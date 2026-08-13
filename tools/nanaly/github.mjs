@@ -94,3 +94,38 @@ export const hasMarker = (disc, kind, key) =>
   (disc.comments?.nodes || []).some(c => String(c.body || '').includes(`<!-- nanaly:${kind}:${key} -->`))
 
 export const SIGN = '\n\n<sub>—— 娜娜莉，住在这个博客里的猫。这条是自动发的。</sub>'
+
+// ---------------- 让她的提交能触发部署 ----------------
+//
+// GitHub 有一条防递归的规则：用默认的 GITHUB_TOKEN 推上去的提交，
+// 不会触发任何 on:push 的工作流。所以她提交了文章或批注之后，
+// 站点其实不会重新构建 —— 文件进了仓库，线上却看不见。
+//
+// 官方认可的绕法是显式派发一次 workflow_dispatch（GITHUB_TOKEN 可以做这件事）。
+// 需要 workflow 里有 permissions: actions: write。
+
+export const triggerDeploy = async (workflowFile = 'pages.yml', ref = 'main') => {
+  const token = process.env.GITHUB_TOKEN || ''
+  if (!token) { console.log('  没有 GITHUB_TOKEN，无法触发部署'); return false }
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${OWNER}/${NAME}/actions/workflows/${workflowFile}/dispatches`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          accept: 'application/vnd.github+json',
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({ ref }),
+        signal: AbortSignal.timeout(20000)
+      })
+    if (res.status === 204) { console.log('  已触发站点部署'); return true }
+    const t = await res.text()
+    console.log(`  触发部署失败：HTTP ${res.status} ${t.slice(0, 160)}`)
+    return false
+  } catch (e) {
+    console.log('  触发部署失败：' + String(e.message || e).slice(0, 140))
+    return false
+  }
+}

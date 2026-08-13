@@ -21,8 +21,14 @@ on:
         default: true
 
 permissions:
-  contents: write        # 她要把自己的随笔提交进仓库
+  contents: write        # 她要把自己的随笔和批注提交进仓库
   discussions: write     # 她要发评论、贴表情
+  actions: write         # 她提交完要能叫一次部署（见下方说明）
+
+# 为什么需要 actions: write：
+# GitHub 有一条防递归规则 —— 用默认 GITHUB_TOKEN 推上去的提交不会触发 on:push 的工作流。
+# 所以她提交了批注或文章之后，站点不会自动重新构建，文件进了仓库但线上看不见。
+# 官方认可的绕法是显式派发一次 workflow_dispatch，这需要 actions: write。
 
 concurrency:
   group: nanaly

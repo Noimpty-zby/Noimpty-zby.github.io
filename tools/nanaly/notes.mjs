@@ -148,10 +148,33 @@ ${listed}`, 900)
   return { wrote }
 }
 
+const GIT_NAME = process.env.NANALY_GIT_NAME || '娜娜莉'
+
+// 提交用的邮箱。这里有个坑，踩过一次：
+// `<用户名>@users.noreply.github.com` 是 GitHub 的旧版真实邮箱格式，
+// 随手写一个「看起来不存在」的名字，会精确指向那个用户名的真人账号，
+// 把陌生人挂到你仓库的 Contributors 里。
+//
+// 默认用你自己域名下的地址 —— GitHub 只会自动认领 @users.noreply.github.com，
+// 别的域名除非有人验证过，否则不会关联到任何账号。
+//
+// 想让她的提交显示成你小号的头像：把 NANALY_GIT_EMAIL 设成小号的 noreply 邮箱，
+// 用小号登录 https://github.com/settings/emails 就能看到，形如 12345678+用户名@users.noreply.github.com
+const GIT_EMAIL = (() => {
+  const v = process.env.NANALY_GIT_EMAIL
+  if (!v) return 'nanaly@noimpty-zby.github.io'
+  // 没有数字 ID 前缀的 noreply 地址会指向同名真人，拦下来
+  if (/@users\.noreply\.github\.com$/i.test(v) && !/^\d+\+/.test(v)) {
+    console.log(`  ⚠️ NANALY_GIT_EMAIL="${v}" 会关联到用户名为 ${v.split('@')[0]} 的真人账号，已忽略`)
+    return 'nanaly@noimpty-zby.github.io'
+  }
+  return v
+})()
+
 export const commitNotes = async () => {
   const run = (...a) => execFileSync('git', a, { encoding: 'utf8', stdio: 'pipe' })
-  run('config', 'user.name', '娜娜莉')
-  run('config', 'user.email', 'nanaly@users.noreply.github.com')
+  run('config', 'user.name', GIT_NAME)
+  run('config', 'user.email', GIT_EMAIL)
   run('add', DATA)
   if (!run('status', '--porcelain', '--', DATA).trim()) { console.log('  批注没有变化，不提交'); return false }
   run('commit', '-m', '娜娜莉：更新文章批注')

@@ -79,6 +79,12 @@ jobs:
           NANALY_REPLY_MAX: '5'
           # 单次最多给几篇文章写批注（只处理正文变过的）
           NANALY_NOTES_MAX: '4'
+          # 她提交时用的署名。不配就用一个不会关联到任何 GitHub 账号的地址。
+          # 想让她的提交显示成你小号的头像：用小号登录 github.com/settings/emails，
+          # 复制那个形如 12345678+用户名@users.noreply.github.com 的地址存成这个 secret。
+          # 注意：没有数字 ID 前缀的 noreply 地址会指向同名的真人账号，代码会拦下来。
+          NANALY_GIT_EMAIL: ${{ secrets.NANALY_GIT_EMAIL }}
+          NANALY_GIT_NAME: ${{ secrets.NANALY_GIT_NAME }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
           if [ "${{ steps.pick.outputs.what }}" = "patrol-notes" ]; then

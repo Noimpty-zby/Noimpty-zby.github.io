@@ -1021,7 +1021,7 @@ Tom 让它们同名是为了方便，但它们是两个层面的东西：
 
 ## 5.2 从黑名单到白名单
 
-![自定义检测通道的白名单过滤](/img/posts/Interaction/ue5-ch3-collision.svg)
+![自定义检测通道的白名单过滤](/img/posts/Chest-Interaction/ue5-ch3-collision.svg)
 
 因为新通道的默认响应是「忽略」，世界上所有已存在的物体——木桶、墙、地板、玩家胶囊体——自动对这个通道视而不见，**你一个都不用改**。
 

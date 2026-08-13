@@ -101,6 +101,25 @@ export const addReaction = async (subjectId, content) => {
   }
 }
 
+// 讨论标题的匹配：giscus 建出来的标题长这样 —— 2026/08/12/xxx/ ，**开头没有斜杠**。
+// 而 location.pathname 是 /2026/08/12/xxx/ ，带斜杠。
+// 一开始我按带斜杠的形式去找，每次都找不到，于是每次都新建一个重复的讨论，
+// giscus 随后指向了新的那个，主人原来的评论就"消失"了。
+// 所以比较前一律把两端的斜杠剥掉。
+export const titleKey = t => String(t || '').replace(/^\/+|\/+$/g, '').toLowerCase()
+
+// 找已有讨论时用这个，别用 ===
+export const findDiscussion = (discussions, path) => {
+  const k = titleKey(path)
+  return (discussions || []).find(d => titleKey(d.title) === k) || null
+}
+
+// 新建时用 giscus 的写法：开头不带斜杠、结尾带斜杠。
+// 注意这里**不能转小写** —— giscus 用的是原样的 location.pathname，
+// 而路径里有 UE5-ActionRoguelike 这种大小写，转了它就认不出来了。
+// （titleKey 转小写只是为了比较时宽松一点，两者用途不同。）
+export const giscusTitle = path => String(path || '').replace(/^\/+|\/+$/g, '') + '/'
+
 // 她留下的每条评论都带一个隐藏标记，用来判重，免得每天重复念叨同一件事
 export const marker = (kind, key) => `\n\n<!-- nanaly:${kind}:${key} -->`
 export const hasMarker = (disc, kind, key) =>

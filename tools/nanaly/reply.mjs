@@ -60,7 +60,7 @@ export const collect = discussions => {
   const now = Date.now()
   const out = []
   for (const d of discussions) {
-    if (!/^\/\d{4}\//.test(d.title)) continue          // 只管文章下面的讨论
+    if (!/^\/?\d{4}\//.test(d.title)) continue         // 只管文章下面的讨论（标题可能带也可能不带开头的斜杠）
     for (const c of d.comments?.nodes || []) {
       const who = String(c.author?.login || '').toLowerCase()
       if (!who) continue

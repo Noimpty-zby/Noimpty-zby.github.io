@@ -105,21 +105,20 @@ hexo.extend.generator.register('noimpty-privacy-manifest', locals => {
     .filter(item => !SECTION_LANDING.has(normalizeWebPath(item.path)))
     .forEach(item => add(item.path, sectionOf(item)))
 
-  // 只在板块「确实有文章」时才上锁。
-  // 对一个一篇都没有的板块要求暗号，等于让访客输密码去看一个空页面。
-  const countIn = name => toArray(locals.posts)
-    .filter(post => taxonomyNames(post.categories).includes(name)).length
+  // 这两个板块无条件上锁。
+  //
+  // 早先的写法是「有文章才锁」，理由是别让访客输密码去看一个空页面。
+  // 但主人的意思很明确：Ideas 就是不想开放，哪怕现在是空的 —— 空着也不该被人翻。
+  // 而且「空的时候不锁、写了第一篇才突然上锁」这个行为本身就很怪。
+  //
+  // 想让某个板块重新公开，把对应那几行注释掉即可。
+  const LOCKED_SECTIONS = ['ideas', 'life']
 
-  if (countIn('Ideas') > 0) {
-    add('ideas/', 'ideas')
-    add('categories/ideas/', 'ideas')
-    add('tags/ideas/', 'ideas')
-  }
-  if (countIn('Life') > 0) {
-    add('life/', 'life')
-    add('categories/life/', 'life')
-    add('tags/life/', 'life')
-  }
+  LOCKED_SECTIONS.forEach(name => {
+    add(`${name}/`, name)
+    add(`categories/${name}/`, name)
+    add(`tags/${name}/`, name)
+  })
 
   const payload = {
     entries: Array.from(entries, ([path, section]) => ({ path, section }))

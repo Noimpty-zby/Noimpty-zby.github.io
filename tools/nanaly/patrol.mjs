@@ -4,7 +4,7 @@
 // 她只在「确实发现问题」时说话，而且同一个问题只说一次（靠评论里的隐藏标记判重）。
 // 一个每天重复念叨的机器人只会让人把通知关掉。
 
-import { listDiscussions, createDiscussion, addComment, addReaction, marker, hasMarker, SIGN } from './github.mjs'
+import { listDiscussions, createDiscussion, addComment, addReaction, marker, hasMarker, SIGN, findDiscussion, giscusTitle } from './github.mjs'
 import { ask } from '../daily-report/narrate.mjs'
 
 const SITE = (process.env.SITE_URL || 'https://noimpty-zby.github.io').replace(/\/$/, '')
@@ -118,7 +118,7 @@ export const patrol = async () => {
     // 同一篇文章的同一组问题只提醒一次
     const key = Buffer.from(item.issues.map(i => i.what).join('|')).toString('base64url').slice(0, 24)
 
-    let disc = discussions.find(d => d.title === path)
+    let disc = findDiscussion(discussions, path)
     if (disc && hasMarker(disc, 'patrol', key)) { continue }
 
     const shown = item.issues.slice(0, 8)
@@ -142,7 +142,7 @@ export const patrol = async () => {
     try {
       if (!disc) {
         try {
-          disc = await createDiscussion(path, `这条讨论对应文章 ${SITE}${path}`)
+          disc = await createDiscussion(giscusTitle(path), `这条讨论对应文章 ${SITE}${path}`)
         } catch (e) {
           // 这篇还没人评论过，所以还没有对应的讨论；建不出来就只能跳过。
           // 不当成致命错误 —— 同样的问题每晚的日报「死链与坏图」那一格照样会报给你。
@@ -172,7 +172,7 @@ export const react = async (limit = 3) => {
   const discussions = await listDiscussions().catch(() => null)
   if (!discussions) return 0
   const mine = d => (d.reactions?.nodes || []).length > 0
-  const targets = discussions.filter(d => /^\/\d{4}\//.test(d.title) && !mine(d)).slice(0, limit)
+  const targets = discussions.filter(d => /^\/?\d{4}\//.test(d.title) && !mine(d)).slice(0, limit)
   let n = 0
   for (const d of targets) {
     // 用标题算出固定的表情，避免每次跑结果都不一样

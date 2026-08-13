@@ -11,6 +11,7 @@ import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { ask } from '../daily-report/narrate.mjs'
 import { triggerDeploy } from './github.mjs'
+import { pushWithRetry } from './git.mjs'
 
 const DATA = 'source/_data/nanaly-notes.json'
 const POSTS = 'source/_posts'
@@ -178,7 +179,7 @@ export const commitNotes = async () => {
   run('add', DATA)
   if (!run('status', '--porcelain', '--', DATA).trim()) { console.log('  批注没有变化，不提交'); return false }
   run('commit', '-m', '娜娜莉：更新文章批注')
-  run('push')
+  pushWithRetry(run, '批注')
   console.log('  批注已提交并推送')
   // 用 GITHUB_TOKEN 推的提交不会自动触发部署，得自己叫一声
   await triggerDeploy()

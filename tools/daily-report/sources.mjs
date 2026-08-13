@@ -263,8 +263,12 @@ export const getOwnerHeartbeat = async (lookbackDays = 90) => {
     if (!days.length) return { ok: true, lastSeen: null, days: null, note: '窗口内没有心跳' }
 
     const last = days[days.length - 1]
-    const gap = Math.floor((Date.parse(`${last}T23:59:59Z`) - 0) ? (WINDOW.end - Date.parse(`${last}T12:00:00Z`)) / 86400000 : 0)
-    return { ok: true, lastSeen: last, days: Math.max(0, Math.round(gap)), total: row.count || 0 }
+    // 以「那天北京时间的结束」为锚点算间隔。
+    // 以前锚在 12:00 UTC（= 北京 20:00），早上跑的时候锚点在未来，天数会少一天，
+    // 想念邮件的节奏整体被推后。北京时间 = UTC+8，所以当天末尾是 UTC 的 15:59:59。
+    const anchor = Date.parse(`${last}T15:59:59Z`)
+    const gap = Number.isFinite(anchor) ? Math.floor((WINDOW.end - anchor) / 86400000) : 0
+    return { ok: true, lastSeen: last, days: Math.max(0, gap), total: row.count || 0 }
   } catch (e) {
     return { ok: false, why: String(e.message || e).slice(0, 200) }
   }

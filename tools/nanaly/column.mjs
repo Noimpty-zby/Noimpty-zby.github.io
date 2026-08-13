@@ -10,6 +10,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 
 import { execFileSync } from 'node:child_process'
 import { ask } from '../daily-report/narrate.mjs'
 import { triggerDeploy } from './github.mjs'
+import { pushWithRetry, safeGitEmail, sanitizeMd, yamlString } from './git.mjs'
 
 // 注意：不要放进 source/_posts 的子目录。
 // Hexo 的 :title 会把子目录名带进永久链接，变成 /2026/08/13/nanaly/xxx/ 这种怪样子。
@@ -95,7 +96,7 @@ ${ctx || '（这段时间站上很安静，没什么事发生。那就写「安�
   const content = lines.slice(1).join('\n').trim()
 
   const md = `---
-title: ${title}
+title: ${yamlString(title)}
 date: ${stampFull(now)}
 description: 娜娜莉自己写的随笔。
 categories:
@@ -109,7 +110,7 @@ ${PRIVACY}author: 娜娜莉
 
 > [趴在你键盘上] 这篇是窝自己写的，不是主人写的喵。
 
-${content}
+${sanitizeMd(content)}
 `
 
   if (DRY) {
@@ -154,7 +155,7 @@ export const commitAndPush = async ({ file, title }) => {
   const status = run('status', '--porcelain', '--', file).trim()
   if (!status) { console.log('  没有实际改动，不提交'); return false }
   run('commit', '-m', `娜娜莉：${title}`)
-  run('push')
+  pushWithRetry(run, '专栏')
   console.log('  已提交并推送')
   // 用 GITHUB_TOKEN 推的提交不会自动触发部署，得自己叫一声
   await triggerDeploy()

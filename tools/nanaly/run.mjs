@@ -65,7 +65,15 @@ const main = async () => {
   const list = what === 'all' ? ['reply', 'patrol', 'notes', 'news', 'react', 'column'] : [what]
   for (const t of list) {
     if (!tasks[t]) { console.log(`不认识的动作：${t}`); continue }
-    try { await tasks[t]() } catch (e) { console.error(`  ${t} 失败：`, String(e.message || e).slice(0, 200)) }
+    try {
+      await tasks[t]()
+    } catch (e) {
+      // 这里必须把工作流染红。以前只打一行日志就过去了，
+      // 结果是「资讯生成好了但推送失败」这种事全绿通过，你完全不会发现，
+      // 而那一期的内容随着 runner 一起消失，下次跑日期变了也不会补。
+      console.error(`  ${t} 失败：`, String(e.message || e).slice(0, 300))
+      process.exitCode = 1
+    }
   }
 }
 

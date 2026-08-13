@@ -78,5 +78,77 @@
         "text": "这里容易手滑删掉原依赖，窝就干过一次，编译直接崩，记得用 diff 对比。"
       }
     ]
+  },
+  "/2026/08/07/UE5-ActionRoguelike-Chapter2/": {
+    "hash": "90fad79d4de1cae8",
+    "title": "UE5 C++ 第二章复盘：从一次点击到一发法球的完整远程攻击链路",
+    "notes": [
+      {
+        "anchor": "ACTIONROGUELIKEAPI 是 UBT（Unrea",
+        "text": "窝补充：这宏只在模块间引用时需要，同模块内裸奔也能过编译，但养成习惯全带最省心。"
+      },
+      {
+        "anchor": "如果根是空 SceneComponent，投射物移动时扫掠的",
+        "text": "这个坑窝踩过，症状是投射物穿墙但偶尔又撞到，排查半天才想起根组件没碰撞，血泪教训。"
+      },
+      {
+        "anchor": "因为要按名字查找，函数必须被注册进反射系统，这就是 UFUN",
+        "text": "漏 UFUNCTION 的典型表现是编辑器里蓝图节点搜不到，运行时绑定失败还不报错，最阴间。"
+      }
+    ]
+  },
+  "/2026/08/11/UE5-ActionRoguelike-Chapter3/": {
+    "hash": "5f956760e485cf14",
+    "title": "UE5 C++ 第三章复盘：从每帧筛选目标到接口解耦的完整交互系统",
+    "notes": [
+      {
+        "anchor": "然后是关键：APlayerController 不能被拖进关",
+        "text": "这里其实还有个坑：EditDefaultsOnly 在蓝图中改的是 CDO，运行时所有实例共享，想改单个实例得用实例覆盖，容易踩。"
+      },
+      {
+        "anchor": "GetSafeNormal() 而不是 GetNormal(",
+        "text": "GetSafeNormal 的零向量分支其实是返回 FVector::ZeroVector，但后续点积会得负分，刚好被 -1 初始化兜住，设计得挺巧。"
+      },
+      {
+        "anchor": "如果换成 FInterpTo，IsNearlyEqual 的",
+        "text": "FInterpTo 的指数衰减在接近目标时步长指数级缩小，IsNearlyEqual 容差又小，实测可能要多跑几十帧才停，调参时容易忽略。"
+      }
+    ]
+  },
+  "/2026/08/12/UE5-ActionRoguelike-Chapter4/": {
+    "hash": "f92d10b95aec7b60",
+    "title": "UE5 C++ 第四章复盘：第一次用蓝图，以及 C++ 与蓝图的分工边界",
+    "notes": [
+      {
+        "anchor": "这一节课程里没有，是我自己整理的。因为学完第一节我脑子是乱的",
+        "text": "这个疑问其实是老生常谈：蓝图是给非程序员用的，C++ 是给引擎和性能敏感的代码用的，分工看的是「谁需要改」和「谁需要快」。"
+      },
+      {
+        "anchor": "问题在于：SetActorTickEnabled(false",
+        "text": "把状态编码进性能开关，等你需要「关 Tick 但动画还没播完」时就炸了，这是典型的语义混淆坑。"
+      },
+      {
+        "anchor": "所以 bChestOpened 在蓝图里显示成 Chest ",
+        "text": "显示名和变量名脱钩是 UE 的常规操作，搜不到别怀疑自己，先去细节面板看显示名。"
+      }
+    ]
+  },
+  "/2026/07/22/homework-four/": {
+    "hash": "13cfbb8698f6d0d3",
+    "title": "GAMES101 作业四：de Casteljau 算法与 Bézier 曲线",
+    "notes": [
+      {
+        "anchor": "cv::Scalar(0,255,0) 对应绿色，因为 Op",
+        "text": "窝第一次写也是被 BGR 坑过，画出来颜色全反了喵 (ovo)"
+      },
+      {
+        "anchor": "固定采样 1000 次实现简单，但无论曲线平直还是弯曲都使用",
+        "text": "固定采样数在曲线接近直线时纯属浪费，递归细分才是正道，但记得设个深度上限。"
+      },
+      {
+        "anchor": "实际建模通常不会用一个非常高次的 Bézier 曲线，而是拼",
+        "text": "高次 Bézier 调一个点动全身，拼接三次曲线才是现实，C¹ 连续性记得让相邻控制点共线。"
+      }
+    ]
   }
 }

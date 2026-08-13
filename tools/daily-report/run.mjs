@@ -7,7 +7,7 @@
 //   node tools/daily-report/run.mjs --dry
 
 import { writeFileSync } from 'node:fs'
-import { CFG, WINDOW_LABEL, getTraffic, getComments, getNewPosts, getOwnerHeartbeat, getSchedule } from './sources.mjs'
+import { CFG, WINDOW, WINDOW_LABEL, getTraffic, getComments, getNewPosts, getOwnerHeartbeat, getSchedule } from './sources.mjs'
 import { runHealth } from './health.mjs'
 import { writeOpening, reviewPost, screenComments, writeMissYou, draftReplies } from './narrate.mjs'
 import { renderEmail, renderSubject, renderMissYou } from './render.mjs'
@@ -38,13 +38,22 @@ const main = async () => {
   const auto = await step('日程自动完成', () => autoComplete({
     newPosts: newPosts.ok ? newPosts.items : [],
     comments,
-    windowStart: Date.now() - 24 * 3600 * 1000,
-    ownerLogin: process.env.OWNER_LOGIN || (CFG.repo.split('/')[0])
+    windowStart: WINDOW.start,
+    ownerLogin: process.env.OWNER_LOGIN || (CFG.repo.split('/')[0]),
+    dry: DRY
   }), { changed: 0, done: [] })
 
   if (auto.changed) {
-    auto.done.forEach(d => console.log(`    自动勾上「${d.text}」 —— ${d.why}`))
-    if (!DRY) await commitSchedule(auto.done)
+    auto.done.forEach(d => console.log(`    ${DRY ? '[演练] 会勾上' : '自动勾上'}「${d.text}」 —— ${d.why}`))
+    if (!DRY) {
+      const ok = await commitSchedule(auto.done)
+      if (!ok) {
+        // 勾了但没提交上去 = 这几个勾只活在这台马上就要销毁的 runner 上，
+        // 而当天的信号窗口已经过去，明天再跑也判不出来。必须变红。
+        console.error('    ⚠️ 自动勾的结果没能提交到仓库，这几项会丢失')
+        process.exitCode = 1
+      }
+    } else console.log('    演练模式：不改数据、不提交')
   }
 
   const schedule = await step('日程', getSchedule, { ok: false, why: '读取异常' })

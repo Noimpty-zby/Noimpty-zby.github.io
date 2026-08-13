@@ -12,6 +12,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 
 import { execFileSync } from 'node:child_process'
 import { ask } from '../daily-report/narrate.mjs'
 import { triggerDeploy } from './github.mjs'
+import { pushWithRetry, safeGitEmail, sanitizeMd, stripAngles } from './git.mjs'
 
 const DIR = 'source/news'
 const DRY = process.argv.includes('--dry')
@@ -76,10 +77,10 @@ const searchWeb = async (query, maxResults = 8) => {
   if (!res.ok) throw new Error(`Tavily ${res.status} ${(await res.text()).slice(0, 140)}`)
   const data = await res.json()
   return (data.results || []).map(r => ({
-    title: String(r.title || '').trim(),
+    title: stripAngles(String(r.title || '')).trim(),
     url: String(r.url || '').trim(),
     date: String(r.published_date || '').slice(0, 10),
-    excerpt: String(r.content || '').replace(/\s+/g, ' ').slice(0, 700)
+    excerpt: stripAngles(String(r.content || '')).replace(/\s+/g, ' ').slice(0, 700)
   })).filter(r => r.url && r.title)
 }
 
@@ -121,6 +122,8 @@ export const buildNews = async () => {
   const dir = `${DIR}/${date}`
   if (existsSync(`${dir}/index.md`)) {
     console.log(`  ${date} 这期已经写过了`)
+    // 列表页每次都重建一遍：万一某期被手工删了，列表不该继续指着一个 404
+    if (!DRY) writeIndexPage()
     return null
   }
 
@@ -160,13 +163,17 @@ export const buildNews = async () => {
 ${listed}`, 1200)
 
     if (out && !/^（?这几天没什么/.test(out.trim())) {
-      sections.push({ title: t.title, body: out.trim() })
+      sections.push({ title: t.title, body: sanitizeMd(out.trim()) })
     } else {
       console.log(`  ${t.title}：她觉得没什么值得写的，跳过`)
     }
   }
 
-  if (!sections.length) { console.log('  这一期没有值得写的内容，不生成'); return null }
+  if (!sections.length) {
+    console.log('  这一期没有值得写的内容，不生成')
+    if (!DRY) writeIndexPage()
+    return null
+  }
 
   const intro = await ask(
     '你是娜娜莉，猫娘助手。自称「窝」，简短，禁止使用 • 和 ω。',
@@ -181,7 +188,7 @@ comments: true
 description: 娜娜莉整理的三日资讯：${sections.map(s => s.title).join('、')}。
 ---
 
-> ${(intro || '窝把这三天值得看的都捞过来了喵。').trim()}
+> ${sanitizeMd((intro || '窝把这三天值得看的都捞过来了喵。').trim())}
 >
 > **这一期由娜娜莉自动搜集整理，不是主人写的。** 每条都挂了来源，看到感兴趣的请点进原文核对 —— 转述难免有偏差。
 
@@ -241,11 +248,11 @@ ${rows || '（还没有内容，等第一期生成）'}
 export const commitNews = async (label) => {
   const run = (...a) => execFileSync('git', a, { encoding: 'utf8', stdio: 'pipe' })
   run('config', 'user.name', process.env.NANALY_GIT_NAME || '娜娜莉')
-  run('config', 'user.email', process.env.NANALY_GIT_EMAIL || 'nanaly@noimpty-zby.github.io')
+  run('config', 'user.email', safeGitEmail())
   run('add', DIR)
   if (!run('status', '--porcelain', '--', DIR).trim()) { console.log('  没有变化，不提交'); return false }
   run('commit', '-m', `娜娜莉：资讯速览 ${label}`)
-  run('push')
+  pushWithRetry(run, '资讯')
   console.log('  已提交并推送')
   await triggerDeploy()
   return true

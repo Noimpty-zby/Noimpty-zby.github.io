@@ -140,7 +140,18 @@ export const patrol = async () => {
       continue
     }
     try {
-      if (!disc) disc = await createDiscussion(path, `这条讨论对应文章 ${SITE}${path}`)
+      if (!disc) {
+        try {
+          disc = await createDiscussion(path, `这条讨论对应文章 ${SITE}${path}`)
+        } catch (e) {
+          // 这篇还没人评论过，所以还没有对应的讨论；建不出来就只能跳过。
+          // 不当成致命错误 —— 同样的问题每晚的日报「死链与坏图」那一格照样会报给你。
+          console.log(`  ${path} 还没有讨论区，且建不出来（${String(e.message).slice(0, 80)}）`)
+          console.log('     这篇的问题会出现在每晚日报的健康检查里，不会漏掉：')
+          shown.forEach(i => console.log(`       - ${i.what}`))
+          continue
+        }
+      }
       await addComment(disc.id, body)
       reported++
       console.log(`  已在 ${path} 留言`)

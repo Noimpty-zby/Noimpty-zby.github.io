@@ -4,16 +4,27 @@
 // 只要标题对得上，我们建的 Discussion 就会被 giscus 认领，
 // 评论会直接出现在那篇文章的评论区里。
 
-const TOKEN = process.env.NANALY_GITHUB_TOKEN || process.env.GITHUB_TOKEN || ''
+// 两把 token，各干各的：
+//
+//   REPO_TOKEN —— 仓库自己的 GITHUB_TOKEN。workflow 里给了 discussions: write，
+//                 用来做「新建讨论」这类需要仓库写权限的事。
+//   HER_TOKEN  —— 她小号的 PAT。用来发评论、贴表情，好让读者看到的是她的头像和名字。
+//
+// 为什么要分开：小号不是仓库协作者，没有写权限，新建讨论会被拒
+// （报错就是 `xxx does not have the correct permissions to execute CreateDiscussion`）。
+// 但发评论只需要读权限，所以说话仍然是她本人。
+// 分开之后既不用把小号加成协作者，她的发言也还是她自己的身份。
+const REPO_TOKEN = process.env.GITHUB_TOKEN || ''
+const HER_TOKEN = process.env.NANALY_GITHUB_TOKEN || REPO_TOKEN
 const REPO = process.env.GITHUB_REPOSITORY || 'Noimpty-zby/Noimpty-zby.github.io'
 const CATEGORY_ID = process.env.GISCUS_CATEGORY_ID || 'DIC_kwDOTYYcpM4DDOPO'
 export const [OWNER, NAME] = REPO.split('/')
 
-export const gql = async (query, variables = {}) => {
-  if (!TOKEN) throw new Error('没有 GitHub token')
+export const gql = async (query, variables = {}, token = HER_TOKEN) => {
+  if (!token) throw new Error('没有 GitHub token')
   const res = await fetch('https://api.github.com/graphql', {
     method: 'POST',
-    headers: { Authorization: `bearer ${TOKEN}`, 'content-type': 'application/json' },
+    headers: { Authorization: `bearer ${token}`, 'content-type': 'application/json' },
     body: JSON.stringify({ query, variables }),
     signal: AbortSignal.timeout(30000)
   })
@@ -27,7 +38,7 @@ let repoCache = null
 export const getRepo = async () => {
   if (repoCache) return repoCache
   const d = await gql(`query($o:String!,$n:String!){ repository(owner:$o,name:$n){ id } }`,
-    { o: OWNER, n: NAME })
+    { o: OWNER, n: NAME }, REPO_TOKEN)
   repoCache = d.repository
   return repoCache
 }
@@ -50,10 +61,12 @@ export const listDiscussions = async () => {
           }
         }
       }
-    }`, { o: OWNER, n: NAME })
+    }`, { o: OWNER, n: NAME }, REPO_TOKEN)
   return d.repository?.discussions?.nodes || []
 }
 
+// 新建讨论需要仓库写权限，所以这里用仓库自己的 token（她的小号没这个权限）。
+// 讨论主体是 giscus 不显示的，读者只会看到下面的评论，所以由谁建无所谓。
 export const createDiscussion = async (title, body) => {
   const repo = await getRepo()
   const d = await gql(`
@@ -61,7 +74,7 @@ export const createDiscussion = async (title, body) => {
       createDiscussion(input:{repositoryId:$r, categoryId:$c, title:$t, body:$b}){
         discussion{ id title url }
       }
-    }`, { r: repo.id, c: CATEGORY_ID, t: title, b: body })
+    }`, { r: repo.id, c: CATEGORY_ID, t: title, b: body }, REPO_TOKEN)
   return d.createDiscussion.discussion
 }
 

@@ -204,8 +204,11 @@
     persist()
   }
 
-  const nextTrack = () => {
-    const autoplay = !audio.paused
+  const nextTrack = (opts = {}) => {
+    // 注意：一曲自然播完时，audio.paused 已经变成 true 了。
+    // 所以不能只靠它判断「刚才是不是在放」—— 那样自动续播永远是 false，
+    // 表现就是「切到了下一首但不响」。ended 触发时必须显式要求继续播。
+    const autoplay = opts.forcePlay === true || !audio.paused
     if (historyCursor < history.length - 1) {
       historyCursor += 1
       loadTrack(history[historyCursor], { autoplay, recordHistory: false })
@@ -216,8 +219,8 @@
     loadTrack(nextIndex, { autoplay })
   }
 
-  const previousTrack = () => {
-    const autoplay = !audio.paused
+  const previousTrack = (opts = {}) => {
+    const autoplay = opts.forcePlay === true || !audio.paused
     if (historyCursor > 0) {
       historyCursor -= 1
       loadTrack(history[historyCursor], { autoplay, recordHistory: false })
@@ -302,7 +305,8 @@
 
   audio.addEventListener('play', updatePlayState)
   audio.addEventListener('pause', () => { updatePlayState(); persist() })
-  audio.addEventListener('ended', nextTrack)
+  // 包一层，别把 Event 对象当成 opts 传进去
+  audio.addEventListener('ended', () => nextTrack({ forcePlay: true }))
   audio.addEventListener('error', () => {
     resumeRequested = false
     setStatus('当前音频加载失败，请切换下一首')
@@ -315,8 +319,8 @@
     const handlers = {
       play: tryPlay,
       pause: () => audio.pause(),
-      previoustrack: previousTrack,
-      nexttrack: nextTrack
+      previoustrack: () => previousTrack(),
+      nexttrack: () => nextTrack()
     }
     Object.entries(handlers).forEach(([action, handler]) => {
       try { navigator.mediaSession.setActionHandler(action, handler) } catch (_) {}
@@ -332,7 +336,7 @@
     audio,
     play: tryPlay,
     pause: () => audio.pause(),
-    previous: previousTrack,
-    next: nextTrack
+    previous: () => previousTrack(),
+    next: () => nextTrack()
   })
 })()

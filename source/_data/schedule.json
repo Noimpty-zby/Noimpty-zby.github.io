@@ -1,1 +1,19 @@
-{"updatedAt":"","days":{}}
+{
+  "updatedAt": "2026-08-13T15:33:32.408Z",
+  "days": {
+    "2026-08-13": [
+      {
+        "id": "tmsroejathzzf",
+        "text": "测试一下日程",
+        "done": false
+      }
+    ],
+    "2026-08-14": [
+      {
+        "id": "tmsrofz4n5obo",
+        "text": "作业二完成",
+        "done": false
+      }
+    ]
+  }
+}

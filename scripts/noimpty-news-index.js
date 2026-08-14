@@ -71,3 +71,20 @@ hexo.extend.filter.register('before_exit', () => {
     hexo.log.info(`资讯列表：${n} 期`)
   }
 })
+
+/* 保险：page 上不该出现 layout: post。
+ *
+ * Butterfly 的文章头部模板会读 page.categories.data —— Hexo 的 page 上没有这个字段，
+ * 直接抛 TypeError。而 hexo generate 照常退出 0，只是把那个页面写成 0 字节的
+ * index.html：工作流全绿、文件也在仓库里，点进去一片空白。
+ *
+ * 生成器那边已经不写这一行了，但仓库里可能还留着旧的（我就漏改过一次）。
+ * 与其指望每个文件都记得改，不如在构建时兜住：page 的 layout 一律拨回 page。
+ */
+hexo.extend.filter.register('before_post_render', data => {
+  if (data.layout === 'post' && !data.published && data.source && !data.source.startsWith('_posts/')) {
+    hexo.log.warn(`${data.source} 是 page 却写了 layout: post，已自动改回 page（否则会渲染成 0 字节）`)
+    data.layout = 'page'
+  }
+  return data
+})

@@ -76,6 +76,9 @@
   let picked = today.key
   let pickedByHand = false
   let condFor = null         // 正在编辑完成条件的任务 id
+  let editFor = null         // 正在行内改文字的任务 id
+  let changeCount = 0        // 这次打开页面之后改了几处（保存条上显示）
+  let focusInput = false     // 下次 render 之后要不要把光标放进输入框
   let loaded = false
 
   const cloneDays = d => JSON.parse(JSON.stringify(d || {}))
@@ -124,6 +127,12 @@
     return 'remote'
   }
 
+  const nextDay = k => {
+    const [y, m, d] = k.split('-').map(Number)
+    const t = new Date(Date.UTC(y, m - 1, d + 1))
+    return keyOf(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate())
+  }
+
   const tasksOf = k => (data.days && Array.isArray(data.days[k])) ? data.days[k] : []
   const setTasks = (k, list) => {
     if (!data.days) data.days = {}
@@ -131,6 +140,25 @@
     else delete data.days[k]
     data.updatedAt = new Date().toISOString()
     dirty = true
+    changeCount++
+    writeCache()
+    render()
+  }
+
+  // 把一条任务从一天挪到另一天。合并那边是按任务 id 认的，
+  // 所以「换一天」会被正确识别成一次改动，不会变成删一条又加一条。
+  const moveTask = (fromKey, toKey, id) => {
+    const src = tasksOf(fromKey)
+    const one = src.find(t => t.id === id)
+    if (!one || fromKey === toKey) return
+    if (!data.days) data.days = {}
+    const rest = src.filter(t => t.id !== id)
+    if (rest.length) data.days[fromKey] = rest
+    else delete data.days[fromKey]
+    data.days[toKey] = tasksOf(toKey).concat([one])
+    data.updatedAt = new Date().toISOString()
+    dirty = true
+    changeCount++
     writeCache()
     render()
   }
@@ -293,6 +321,7 @@
       data = JSON.parse(payload)
       baseline = cloneDays(merged)
       dirty = false
+      changeCount = 0
       writeCache()
       status(theyMoved
         ? '已保存。你打开这页之后仓库里也有改动（多半是娜娜莉自动勾的），窝把两边合起来了，都在。'
@@ -381,12 +410,38 @@
     if (wasOnToday) { picked = now.key; viewY = now.y; viewM = now.m }
   }
 
+  // 「8-15」这种日期本身没什么意义，加一句「明天 / 周三 / 3 天前」才好读
+  const WD = ['日', '一', '二', '三', '四', '五', '六']
+  const dayLabel = k => {
+    if (k === today.key) return '今天'
+    const [y, m, d] = k.split('-').map(Number)
+    const diff = Math.round((Date.UTC(y, m - 1, d) - Date.UTC(today.y, today.m - 1, today.d)) / 86400000)
+    const wd = '周' + WD[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]
+    if (diff === 1) return '明天 · ' + wd
+    if (diff === -1) return '昨天 · ' + wd
+    if (diff > 1 && diff <= 7) return `${diff} 天后 · ${wd}`
+    if (diff < -1) return `${-diff} 天前 · ${wd}`
+    return wd
+  }
+
+  // 过期未完成的，单独拎出来。否则它们躺在上个月的格子里，你永远不会翻回去看。
+  const overdueList = () => {
+    const out = []
+    Object.keys(data.days || {}).sort().forEach(k => {
+      if (k >= today.key) return
+      const list = Array.isArray(data.days[k]) ? data.days[k] : []
+      list.forEach(t => { if (t && !t.done) out.push({ day: k, id: t.id, text: t.text }) })
+    })
+    return out
+  }
+
   const render = () => {
     if (!root) return
     refreshToday()
     const cells = monthGrid(viewY, viewM)
     const totalOpen = Object.values(data.days || {})
       .reduce((n, l) => n + (Array.isArray(l) ? l.filter(t => !t.done).length : 0), 0)
+    const overdue = overdueList()
 
     const saveText = saving ? '保存中…' : (dirty ? '保存到仓库' : '已同步')
 
@@ -419,10 +474,10 @@
             if (list.length) cls.push('has-task')
             if (k < today.key && open) cls.push('is-overdue')
             return `<div class="${cls.join(' ')}" data-day="${esc(k)}">
-              <div class="sch-d">${d}</div>
-              ${list.slice(0, 2).map(t =>
+              <div class="sch-d">${d}${open ? `<i class="sch-dot" title="${open} 件没做"></i>` : ''}</div>
+              ${list.slice(0, 3).map(t =>
                 `<div class="sch-chip${t.done ? ' is-done' : ''}">${esc(t.text)}</div>`).join('')}
-              ${list.length > 2 ? `<div class="sch-more">还有 ${list.length - 2} 条</div>` : ''}
+              ${list.length > 3 ? `<div class="sch-more">还有 ${list.length - 3} 条</div>` : ''}
             </div>`
           }).join('')}
         </div>
@@ -430,8 +485,16 @@
         <div class="sch-panel">
           <div class="sch-panel__head">
             <b>${esc(picked)}</b>
-            <span>${picked === today.key ? '今天' : ''}</span>
+            <span>${esc(dayLabel(picked))}</span>
+            ${picked !== today.key ? '<button class="sch-mini" data-act="today">回到今天</button>' : ''}
           </div>
+
+          <form class="sch-add" data-role="add">
+            <input type="text" data-role="new" placeholder="${picked === today.key ? '今天要做什么？回车添加' : '这天要做什么？回车添加'}"
+                   maxlength="120" autocomplete="off">
+            <button type="submit">添加</button>
+          </form>
+
           <div class="sch-list">
             ${tasksOf(picked).length
               ? tasksOf(picked).map(t => `
@@ -440,7 +503,11 @@
                     <button class="sch-tick" data-act="toggle" data-id="${esc(t.id)}" aria-label="切换完成">
                       ${t.done ? '✓' : ''}
                     </button>
-                    <span class="sch-text" data-act="edit" data-id="${esc(t.id)}" title="点一下改">${esc(t.text)}</span>
+                    ${editFor === t.id
+                      ? `<input class="sch-edit" data-role="editbox" data-id="${esc(t.id)}"
+                                value="${esc(t.text)}" maxlength="120" autocomplete="off">`
+                      : `<span class="sch-text" data-act="edit" data-id="${esc(t.id)}" title="点一下改">${esc(t.text)}</span>`}
+                    ${t.done ? '' : `<button class="sch-push" data-act="push" data-id="${esc(t.id)}" title="推到明天">→</button>`}
                     <button class="sch-del" data-act="del" data-id="${esc(t.id)}" aria-label="删除">×</button>
                   </div>
                   ${t.autoWhy
@@ -454,13 +521,28 @@
                 </div>`).join('')
               : '<div class="sch-empty">这天还什么都没安排。</div>'}
           </div>
-          <form class="sch-add" data-role="add">
-            <input type="text" data-role="new" placeholder="写点什么，回车添加" maxlength="120" autocomplete="off">
-            <button type="submit">添加</button>
-          </form>
         </div>
 
+        ${overdue.length ? `
+          <div class="sch-overdue">
+            <div class="sch-overdue__head">之前没做完的（${overdue.length} 件）</div>
+            ${overdue.slice(0, 6).map(o => `
+              <div class="sch-overdue__row">
+                <button class="sch-overdue__jump" data-act="jump" data-day="${esc(o.day)}">${esc(o.day.slice(5))}</button>
+                <span>${esc(o.text)}</span>
+                <button class="sch-mini" data-act="pulltoday" data-day="${esc(o.day)}" data-id="${esc(o.id)}">挪到今天</button>
+              </div>`).join('')}
+            ${overdue.length > 6 ? `<div class="sch-overdue__more">还有 ${overdue.length - 6} 件…</div>` : ''}
+          </div>` : ''}
+
         <div class="sch-status" data-role="status"></div>
+
+        ${dirty || saving ? `
+          <div class="sch-savebar">
+            <span>有 ${changeCount} 处改动还没保存到仓库</span>
+            <button data-act="save" ${saving ? 'disabled' : ''}>${saving ? '保存中…' : '保存到仓库'}</button>
+          </div>` : ''}
+
         <div class="sch-tip">
           安排改完要点「保存到仓库」才会生效。保存后站点约 1–2 分钟更新，
           当晚娜娜莉的邮件里就会带上当天的任务提醒。
@@ -475,6 +557,27 @@
         bar.className = 'sch-status' + (pendingStatus.kind ? ' is-' + pendingStatus.kind : '')
       }
     }
+
+    // 行内编辑框：出现就把光标放进去并全选，直接打字就能覆盖
+    const editBox = root.querySelector('[data-role="editbox"]')
+    if (editBox) { editBox.focus(); editBox.select() }
+    else if (focusInput) {
+      const box = root.querySelector('[data-role="new"]')
+      if (box) box.focus()
+    }
+    focusInput = false
+  }
+
+  // 提交行内编辑。文字清空 = 删掉这条（和以前 prompt 的行为一致）
+  const commitEdit = (id, value) => {
+    const text = String(value || '').trim()
+    editFor = null
+    const cur = tasksOf(picked).find(t => t.id === id)
+    if (!cur) { render(); return }
+    if (text === cur.text) { render(); return }
+    setTasks(picked, text
+      ? tasksOf(picked).map(t => (t.id === id ? { ...t, text: text.slice(0, 120) } : t))
+      : tasksOf(picked).filter(t => t.id !== id))
   }
 
   // ---------------- 交互 ----------------
@@ -486,8 +589,13 @@
     node.addEventListener('click', e => {
       const cell = e.target.closest('[data-day]')
       if (cell && !e.target.closest('[data-act]')) {
+        // 点完一天光标就该在输入框里。以前要再点一次输入框才能打字，
+        // 「点一下、移到下面、再点一下」这三步是这个页面最别扭的地方。
         picked = cell.dataset.day
         pickedByHand = true
+        editFor = null
+        condFor = null
+        focusInput = true
         render()
         return
       }
@@ -516,16 +624,49 @@
       if (act === 'cond') { condFor = btn.dataset.id; render(); return }
       if (act === 'condcancel') { condFor = null; render(); return }
 
-      if (act === 'edit') {
+      // 就地改，不弹 prompt()。浏览器的原生弹窗又丑又打断节奏，
+      // 手机上还会把整个页面顶掉。
+      if (act === 'edit') { editFor = btn.dataset.id; condFor = null; render(); return }
+
+      // 今天没做完 → 推到明天。以前只能删了到明天重新打一遍。
+      if (act === 'push') {
         const cur = tasksOf(picked).find(t => t.id === btn.dataset.id)
         if (!cur) return
-        const next = prompt('改成：', cur.text)
-        if (next == null) return
-        const text = next.trim()
-        setTasks(picked, text
-          ? tasksOf(picked).map(t => t.id === cur.id ? { ...t, text: text.slice(0, 120) } : t)
-          : tasksOf(picked).filter(t => t.id !== cur.id))
+        moveTask(picked, nextDay(picked), cur.id)
+        status(`「${cur.text}」推到 ${nextDay(picked).slice(5)} 了`, 'ok')
+        return
       }
+
+      // 过期清单里的两个动作
+      if (act === 'jump') {
+        picked = btn.dataset.day
+        pickedByHand = true
+        const [y, m] = picked.split('-').map(Number)
+        viewY = y; viewM = m
+        render(); return
+      }
+      if (act === 'pulltoday') {
+        moveTask(btn.dataset.day, today.key, btn.dataset.id)
+        return
+      }
+    })
+
+    node.addEventListener('keydown', e => {
+      if (e.target.matches('[data-role="editbox"]')) {
+        if (e.key === 'Enter') { e.preventDefault(); commitEdit(e.target.dataset.id, e.target.value) }
+        else if (e.key === 'Escape') { e.preventDefault(); editFor = null; render() }
+        return
+      }
+      // 条件表单开着的时候按 Esc 收起来。没有这个的话只能去点「取消」。
+      if (e.key === 'Escape' && condFor) { condFor = null; render() }
+    })
+
+    // 点到别处就当确认。半开的编辑框留在那儿是这个页面第二别扭的地方。
+    node.addEventListener('focusout', e => {
+      if (!e.target.matches('[data-role="editbox"]')) return
+      const id = e.target.dataset.id
+      const val = e.target.value
+      setTimeout(() => { if (editFor === id) commitEdit(id, val) }, 120)
     })
 
     // 换条件类型时，关键词框跟着启用/禁用
@@ -565,10 +706,8 @@
       const input = e.target.querySelector('[data-role="new"]')
       const text = input.value.trim()
       if (!text) return
+      focusInput = true
       setTasks(picked, tasksOf(picked).concat([{ id: uid(), text: text.slice(0, 120), done: false }]))
-      // render 会重建 DOM，得重新拿一次输入框
-      const again = root.querySelector('[data-role="new"]')
-      if (again) again.focus()
     })
   }
 

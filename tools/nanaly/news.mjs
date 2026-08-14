@@ -95,6 +95,48 @@ const dedupe = items => {
   })
 }
 
+/* 把「[3]」换成真正的来源链接。
+ *
+ * 以前是让模型自己写 `[来源](URL)`。上线之后链接点不开 —— 因为中文模型写
+ * markdown 时经常用全角括号 `（）`、把 URL 后面的句号吞进去、或者干脆把网址
+ * 记岔了。链接是这个板块唯一的价值（「转述难免有偏差，请点原文核对」），
+ * 一条点不开的链接比没有还糟。
+ *
+ * 所以现在只让她挑编号，链接由这边照着检索结果原样拼。她编不出来，也写不坏。
+ */
+const attachSources = (md, hits) => {
+  const lines = String(md || '').split('\n')
+  const out = []
+  let kept = 0
+  for (const raw of lines) {
+    const line = raw.trimEnd()
+    // 条目行：允许 - * + 开头，编号允许半角/全角方括号
+    const m = line.match(/^(\s*[-*+]\s*)[[［【]\s*(\d+)\s*[\]］】]\s*(.*)$/)
+    if (!m) {
+      // 非条目行（空行、她多写的一句话）保留，但不允许出现裸网址
+      out.push(line.replace(/https?:\/\/\S+/g, '').replace(/[（(]\s*来源\s*[）)]/g, ''))
+      continue
+    }
+    const hit = hits[Number(m[2])]
+    if (!hit || !/^https?:\/\//i.test(hit.url)) continue   // 编号对不上就丢掉这条，不留半截
+    // 她正文里若还是自己写了链接或网址，一律清掉，只留窝拼的这一个
+    const text = sanitizeMd(m[3])
+      .replace(/\[([^\]\n]*)\]\([^)\s]*\)/g, '$1')
+      // 连着包住网址的括号一起清 —— URL 不能吃掉右括号，否则会剩一个孤零零的「（」
+      .replace(/[[［【(（]?\s*https?:\/\/[^\s)）\]］】]*\s*[)）\]］】]?/g, '')
+      // 她写的「来源 / 原文 / 链接」标签，各种括号形态一并清掉，只留窝拼的那个
+      .replace(/[[［【(（]?\s*(来源|原文|链接|source)\s*[\]］】)）]?/gi, '')
+      .replace(/[[［【(（]\s*[\]］】)）]/g, '')
+      .replace(/[\s，、]+$/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+    if (!text) continue
+    out.push(`${m[1]}${text} [来源](${encodeURI(hit.url)})`)
+    kept++
+  }
+  return kept ? out.join('\n').replace(/\n{3,}/g, '\n\n').trim() : ''
+}
+
 // 最近几期写过什么，避免连着三期都在说同一件事
 const recentUrls = () => {
   const urls = new Set()
@@ -122,8 +164,9 @@ export const buildNews = async () => {
   const dir = `${DIR}/${date}`
   if (existsSync(`${dir}/index.md`)) {
     console.log(`  ${date} 这期已经写过了`)
-    // 列表页每次都重建一遍：万一某期被手工删了，列表不该继续指着一个 404
-    if (!DRY) writeIndexPage()
+    // 列表页每次都重建一遍：万一某期被手工删了，列表不该继续指着一个 404。
+    // 注意要把结果交回去，让 run.mjs 提交 —— 只写不提交等于没写。
+    if (!DRY) { writeIndexPage(); return { dir, date, indexOnly: true } }
     return null
   }
 
@@ -148,12 +191,16 @@ export const buildNews = async () => {
 毒舌但清醒，极简，讨厌废话。自称「窝」，偶尔带「喵」和颜文字 (=^w^=) (ovo)，别每句都塞。
 禁止使用 • 和 ω 这类会破坏颜文字的符号。
 你在给主人整理一份「${t.title}」的简报。他是在学图形学和 UE5、准备将来找游戏行业工作的学生。`,
-      `下面是刚搜到的素材。挑出**最多 ${t.want} 条**真正值得他知道的，写成简报。
+      `下面是刚搜到的素材，每条前面有个编号。挑出**最多 ${t.want} 条**真正值得他知道的，写成简报。
 
 **硬性要求：**
 1. **宁缺毋滥。** 没信息量的（纯宣传稿、标题党、蹭热点、和他没关系的）一条都别留。
    实在没有值得写的就输出「（这几天没什么值得说的）」，那也是合格的输出
-2. **每条必须挂来源链接**，格式：\`- **一句话标题** —— 你的两三句转述与判断。[来源](URL)\`
+2. **每条必须以编号开头**，格式严格照抄这一行：
+   \`- [编号] **一句话标题** —— 你的两三句转述与判断。\`
+   例如：\`- [3] **某公司裁了整个引擎组** —— 转述……窝觉得……\`
+   **不要自己写网址，不要写「来源」两个字**，链接窝这边会自动挂上去。
+   编号必须是素材里真实存在的那个数字，不许编。
 3. **只写素材里有的事实。** 不许补充你自己知道的背景，不许推测后续发展
 4. 转述之后可以加一句你的判断，但要标清楚那是你的看法
 5. 别写导语和总结，直接列条目
@@ -162,8 +209,11 @@ export const buildNews = async () => {
 素材：
 ${listed}`, 1200)
 
-    if (out && !/^（?这几天没什么/.test(out.trim())) {
-      sections.push({ title: t.title, body: sanitizeMd(out.trim()) })
+    const body = out ? attachSources(out.trim(), hits.slice(0, 14)) : ''
+    if (body && !/^（?这几天没什么/.test(out.trim())) {
+      sections.push({ title: t.title, body })
+    } else if (out && !/^（?这几天没什么/.test(out.trim())) {
+      console.log(`  ${t.title}：她写的条目一条都没挂上来源，整段丢弃`)
     } else {
       console.log(`  ${t.title}：她觉得没什么值得写的，跳过`)
     }
@@ -171,7 +221,7 @@ ${listed}`, 1200)
 
   if (!sections.length) {
     console.log('  这一期没有值得写的内容，不生成')
-    if (!DRY) writeIndexPage()
+    if (!DRY) { writeIndexPage(); return { dir, date, indexOnly: true } }
     return null
   }
 

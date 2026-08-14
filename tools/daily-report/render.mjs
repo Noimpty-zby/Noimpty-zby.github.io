@@ -32,7 +32,14 @@ const empty = t => `<div style="font-size:13px;color:${C.dim}">${esc(t)}</div>`
 
 const trafficCard = t => {
   if (!t.ok) return card('访问情况', empty('没取到 —— ' + t.why))
-  if (!t.pageviews) return card('访问情况', empty('过去 24 小时没有访问记录。（你自己的浏览已被排除，所以这代表确实没有别人来）'))
+  // 0 次浏览有两种可能：真的没人来，或者前端埋点根本没生效
+  // （_config.butterfly.yml 里的 NOIMPTY_GC_CODE 留空的话整个脚本直接返回）。
+  // 把这两件事说成同一件，就是在拿一句自信的假话糊弄自己。
+  if (!t.pageviews) {
+    return card('访问情况', empty(t.everRecorded
+      ? '过去 24 小时没有访问记录。（你自己的浏览已被排除，所以这代表确实没有别人来）'
+      : '一条访问记录都没有 —— 连历史数据也没有，多半是前端埋点没装上：检查 _config.butterfly.yml 里的 NOIMPTY_GC_CODE 是不是还空着。'))
+  }
   const avg = t.visits ? Math.round(t.totaltime / t.visits) : 0
   const rows = []
   if (t.visitors != null) {
@@ -185,7 +192,10 @@ export const renderEmail = ({ opening, traffic, comments, screen, newPosts, feed
 export const renderSubject = ({ traffic, comments, newPosts, health }) => {
   const bits = []
   if (health.worst === 'bad') bits.push('⚠️ 有问题要处理')
+  // GoatCounter 不提供访客数（visitors 恒为 null），只判 visitors 的话
+  // 一个 500 次浏览的日子标题也会写「一切平静」。
   if (traffic.ok && traffic.visitors) bits.push(`${traffic.visitors} 人来看`)
+  else if (traffic.ok && traffic.pageviews) bits.push(`${traffic.pageviews} 次浏览`)
   if (comments.ok && comments.items.length) bits.push(`${comments.items.length} 条新评论`)
   if (newPosts.ok && newPosts.items.length) bits.push(`${newPosts.items.length} 篇新文章`)
   const d = new Date().toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric' })

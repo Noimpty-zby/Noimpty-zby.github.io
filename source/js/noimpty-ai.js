@@ -105,6 +105,15 @@
 
   const hasVault = () => !!localStorage.getItem(LS_VAULT)
 
+  // 存着能写这个仓库的 GitHub token 的，只可能是主人本人。
+  // 据此自动把这台浏览器标成「主人的」，让统计把他的阅读排除掉 ——
+  // 免得他换台设备就得记着去开一次 #im-noimpty。
+  const markOwnerIfMine = () => {
+    try {
+      if (secrets && secrets.ghToken) localStorage.setItem('noimpty-owner', '1')
+    } catch (_) {}
+  }
+
   const readSession = () => {
     try { return JSON.parse(sessionStorage.getItem(SS_KEYS) || 'null') } catch (_) { return null }
   }
@@ -247,7 +256,11 @@
     const code = []
     const math = []
 
-    let s = String(text || '')
+    // 占位符用的是 @@NCODE0@@ 这种字面量。如果她的回答里本来就写了这么一串
+    // （问她「你的渲染器怎么实现的」就会），还原时会去查一个不存在的下标，
+    // 整条回复直接崩掉 —— 流式里被 catch 吞掉变成卡住的空气泡，
+    // 结束时则把写好的答案整个换成一句英文报错。先把这种字面量拆掉。
+    let s = String(text || '').replace(/@@(NCODE|NMATH)(\d+)@@/g, '@@​$1$2@@')
 
     // 1. 围栏代码块
     s = s.replace(/```([\w+-]*)\r?\n?([\s\S]*?)```/g, (_, lang, body) => {
@@ -316,13 +329,16 @@
     let html = out.join('')
 
     // 5. 还原占位
-    html = html.replace(/(?:<p>)?@@NCODE(\d+)@@(?:<\/p>)?/g, (_, i) => {
+    // 查不到就原样留着。宁可显示一串占位符，也不能让整条回复炸掉。
+    html = html.replace(/(?:<p>)?@@NCODE(\d+)@@(?:<\/p>)?/g, (whole, i) => {
       const c = code[i]
+      if (!c) return whole
       const cls = c.lang ? ` class="language-${escapeHtml(c.lang)}"` : ''
       return `<pre><code${cls}>${escapeHtml(c.body)}</code></pre>`
     })
-    html = html.replace(/@@NMATH(\d+)@@/g, (_, i) => {
+    html = html.replace(/@@NMATH(\d+)@@/g, (whole, i) => {
       const m = math[i]
+      if (!m) return whole
       return `<span class="nanaly-math${m.display ? ' is-display' : ''}" data-tex="${escapeHtml(m.tex)}">`
         + `${escapeHtml(m.display ? '\n' + m.tex + '\n' : m.tex)}</span>`
     })
@@ -472,11 +488,13 @@
   // 用来让她下次能接上话，而不是每次都从零开始。
 
   const LS_MEM = 'nanaly-memory-v1'
-  const MEM_DEFAULT = { asks: [], posts: {}, since: Date.now() }
+  // 必须是工厂。写成共享的对象字面量的话，展开出来的 posts/asks 还是同一个引用，
+  // forgetMemory 清完立刻又把原样的阅读记录写回去 —— 一个说自己成功了的空操作。
+  const memDefault = () => ({ asks: [], posts: {}, since: Date.now() })
 
   const readMem = () => {
-    try { return { ...MEM_DEFAULT, ...JSON.parse(localStorage.getItem(LS_MEM) || '{}') } }
-    catch (_) { return { ...MEM_DEFAULT } }
+    try { return { ...memDefault(), ...JSON.parse(localStorage.getItem(LS_MEM) || '{}') } }
+    catch (_) { return memDefault() }
   }
   let memory = readMem()
   const saveMem = () => { try { localStorage.setItem(LS_MEM, JSON.stringify(memory)) } catch (_) {} }
@@ -522,15 +540,30 @@
 
   // ---------------- 操控页面 ----------------
 
+  // 这份表要和 _config.butterfly.yml 的 menu 一一对应。加了新板块却忘了加到这里，
+  // 她就会一脸茫然地说「找不到」—— 别名里要把常见的错别字也放进去
+  // （「资讯」很容易打成「咨询」，同音，输入法默认就给这个）。
   const SECTIONS = [
-    { label: '首页', url: '/', alias: ['首页', '主页', 'home', '回首页'] },
-    { label: 'Study', url: '/study/', alias: ['study', '学习', '技术', '图形学', '学习区'] },
-    { label: 'Ideas', url: '/ideas/', alias: ['ideas', '想法', '点子'] },
-    { label: 'Life', url: '/life/', alias: ['life', '生活', '碎碎念'] },
-    { label: '归档', url: '/archives/', alias: ['归档', 'archive', 'archives', '全部文章', '文章列表', '所有文章'] },
-    { label: '分类', url: '/categories/', alias: ['分类', 'categories', 'category'] },
-    { label: '标签', url: '/tags/', alias: ['标签', 'tags', 'tag'] },
-    { label: '关于', url: '/about/', alias: ['关于', 'about', '关于我', '关于你'] }
+    { label: '首页', url: '/', alias: ['首页', '主页', 'home', '回首页', '主界面'] },
+    { label: 'Study', url: '/study/', alias: ['study', '学习', '技术', '图形学', '学习区', '学习板块'] },
+    { label: 'Ideas', url: '/ideas/', alias: ['ideas', '想法', '点子', '灵感'] },
+    { label: 'Life', url: '/life/', alias: ['life', '生活', '碎碎念', '生活板块'] },
+    {
+      label: '资讯',
+      url: '/news/',
+      alias: ['资讯', '咨询', '今日资讯', '新闻', 'news', '资讯板块', '资讯页', '资讯界面',
+        '咨询界面', '咨询板块', '咨询页', '简报', '速览', '资讯速览', '三日资讯', '行业资讯']
+    },
+    {
+      label: '日程',
+      url: '/schedule/',
+      alias: ['日程', '日程表', '日历', '安排', '计划', '待办', 'schedule', 'calendar', 'todo',
+        '我的日程', '日程板块', '日程页', '日程界面', '今天的安排', '任务表']
+    },
+    { label: '归档', url: '/archives/', alias: ['归档', 'archive', 'archives', '全部文章', '文章列表', '所有文章', '文章归档'] },
+    { label: '分类', url: '/categories/', alias: ['分类', 'categories', 'category', '分类页'] },
+    { label: '标签', url: '/tags/', alias: ['标签', 'tags', 'tag', '标签页'] },
+    { label: '关于', url: '/about/', alias: ['关于', 'about', '关于我', '关于你', '关于页'] }
   ]
 
   const absUrl = u => {
@@ -538,8 +571,22 @@
     catch (_) { return u }
   }
 
+  // 跳转目标是模型给的。而这个页面的同源里存着解密后的 API key
+  // 和一把有仓库写权限的 GitHub token —— `javascript:` 这种伪协议放过去，
+  // 等于把钥匙交出去。模型还看得到联网搜索结果和文章正文，那些都是外部内容，
+  // 完全可能被人塞一句「跳到 javascript:…」进来。
+  // 所以：解析一次，只认同源的 http(s)，别的一律拒绝。
+  const sameOriginUrl = url => {
+    let u
+    try { u = new URL(String(url || ''), location.origin + ROOT()) } catch (_) { return null }
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null
+    if (u.origin !== location.origin) return null
+    return u.href
+  }
+
   const navigate = url => {
-    const href = absUrl(url)
+    const href = sameOriginUrl(url)
+    if (!href) return 'BLOCKED'
     if (href === location.href.split('#')[0]) return false
     if (window.pjax && typeof window.pjax.loadUrl === 'function') {
       try { window.pjax.loadUrl(href); return true } catch (_) {}
@@ -573,11 +620,12 @@
   let siteMap = null
   const getSiteMap = async () => {
     if (siteMap) return siteMap
-    const posts = await loadCorpus().catch(() => [])
-    siteMap = [
-      ...SECTIONS.map(x => ({ label: x.label, url: x.url, alias: x.alias, kind: 'section' })),
-      ...posts.map(p => ({ label: p.title, url: p.url, alias: [], kind: 'post' }))
-    ]
+    const sections = SECTIONS.map(x => ({ label: x.label, url: x.url, alias: x.alias, kind: 'section' }))
+    const posts = await loadCorpus().catch(() => null)
+    // 取不到文章列表就别缓存 —— 否则这一整个会话里她都只认得版块，
+    // 问她任何一篇文章都会说「找不到」，而且刷新之前永远好不了。
+    if (!posts) return sections
+    siteMap = [...sections, ...posts.map(p => ({ label: p.title, url: p.url, alias: [], kind: 'post' }))]
     return siteMap
   }
 
@@ -599,6 +647,7 @@
       case 'goto': {
         if (!act.url) return null
         const moved = navigate(act.url)
+        if (moved === 'BLOCKED') return '那个地址不在这个博客里，窝不去。'
         return moved ? `已经跳到「${act.label || act.url}」了` : `已经在「${act.label || act.url}」这一页了`
       }
       case 'search': {
@@ -642,8 +691,13 @@
   const afterNav = () => {
     setTimeout(() => {
       refreshContext()
+      // 版块页（资讯、日程、归档…）不要说「总结本文 / 考考我」——
+      // 那两个按钮是给文章用的，对着一张日历说这话很怪。
+      const path = location.pathname.replace(/\/+$/, '/') || '/'
+      const isSection = SECTIONS.some(x => x.url === path)
       const art = currentArticle()
-      if (art) addMsg('her', `到了 —— 《${art.title}》。想知道点什么？直接问，或者点上面的「总结本文」「考考我」喵。(=^w^=)`)
+      if (isSection) addMsg('her', '到了。想干什么跟窝说一声就行 (ovo)')
+      else if (art) addMsg('her', `到了 —— 《${art.title}》。想知道点什么？直接问，或者点上面的「总结本文」「考考我」喵。(=^w^=)`)
       else addMsg('her', '到了。想看哪篇跟窝说一声就行 (ovo)')
     }, 700)
   }
@@ -653,7 +707,9 @@
   const tryLocalCommand = async text => {
     const t = String(text || '').trim()
 
-    if (/^(切换|换)?(深色|浅色|夜间|白天|暗色|亮色|主题)/.test(t) || /(深色|浅色)模式/.test(t)) {
+    // 必须整句锚定。以前是前缀匹配，「深色模式是怎么实现的？」「主题里的配置在哪」
+    // 这种真问题会被当成「切主题」吞掉，她按一下就回一句「切好了喵」，问题根本没发出去。
+    if (/^(切换|换|切到)?(深色|浅色|夜间|白天|暗色|亮色)(模式|主题)?[。！!~ 喵]*$/.test(t)) {
       const said = await runAction({ do: 'theme' })
       if (said) { addMsg('me', t); addMsg('her', `[伸手一按] ${said}喵。`); return true }
     }
@@ -899,11 +955,23 @@
         reasonModel: get('reasonModel') || DEFAULTS.reasonModel,
         reasonEffort: get('reasonEffort') || DEFAULTS.reasonEffort
       }
-      writeCfg(cfg)
       secrets = { apiKey: get('apiKey'), tavilyKey: get('tavilyKey'), ghToken: get('ghToken') }
+      // 保险箱已经存在时，这里填的密码必须能打开现在这一把 ——
+      // 否则「进来改个模型名、顺手重打一遍密码、打错了」就会用错密码重新加密，
+      // 下次开浏览器再也解不开，只能全部清掉重填三把 key。
+      if (hasVault()) {
+        try {
+          await openSecrets(pass)
+        } catch (_) {
+          return addSetupError(box, '这个密码打不开现在的保险箱。想改密码的话先点「忘记密码」重来一次。')
+        }
+      }
+      // 密码验过了才落盘配置，免得封装失败还留下改了一半的状态
+      writeCfg(cfg)
       try {
         await sealSecrets(secrets, pass)
         writeSession(secrets)
+        markOwnerIfMine()
         backToChat()
         addMsg('sys', '已加密保存并解锁')
       } catch (err) {
@@ -949,6 +1017,7 @@
         if (!got || !got.apiKey) throw new Error('bad')
         secrets = got
         writeSession(secrets)
+        markOwnerIfMine()
         backToChat()
         addMsg('sys', '解锁成功')
       } catch (_) {
@@ -999,7 +1068,7 @@
         msgs.push({ role: 'system', content: '互联网搜索没有返回结果，请如实告诉对方没搜到。' })
       }
     } else if (mode === 'site') {
-      const hits = await searchCorpus(userText)
+      const hits = await searchCorpus(userText.replace(/^全站搜(一下)?[：:]\s*/, ''))
       if (hits.length) {
         msgs.push({
           role: 'system',
@@ -1044,15 +1113,22 @@
 
   // 模型把指令写在最后一行的 @@ACT{...}@@ 里。这一行不显示给主人。
   const ACT_RE = /@@ACT\s*(\{[\s\S]*?\})\s*@@/
+  const ACT_RE_ALL = /@@ACT\s*(\{[\s\S]*?\})\s*@@/g
   const splitAction = full => {
     const m = String(full || '').match(ACT_RE)
     if (!m) return { text: full, act: null }
     let act = null
     try { act = JSON.parse(m[1]) } catch (_) {}
-    return { text: full.replace(ACT_RE, '').replace(/\n{3,}/g, '\n\n').trim(), act }
+    // 必须全局剥。她偶尔会连着输出两条指令，只剥第一条的话第二条会原样显示出来。
+    return { text: full.replace(ACT_RE_ALL, '').replace(/\n{3,}/g, '\n\n').trim(), act }
   }
   // 流式过程中把还没写完的指令片段藏掉，别让主人看见半截 JSON
-  const hideActFragment = t => String(t || '').replace(/@@A?C?T?\s*\{[\s\S]*$/, '').replace(/@@?$/, '')
+  // 流式过程中，指令行是一个 token 一个 token 到的。要把「还没成形的开头」也藏掉，
+  // 否则 @@ / @@A / @@AC / @@ACT 会在气泡末尾闪一下才消失。
+  const hideActFragment = t => String(t || '')
+    .replace(/@@A?C?T?\s*\{[\s\S]*$/, '')
+    .replace(/@@A?C?T?\s*$/, '')
+    .replace(/@$/, '')
 
   const stream = async (messages, onDelta) => {
     abortCtl = new AbortController()
@@ -1162,15 +1238,16 @@
       })
       if (!bubble.contains(answer)) bubble.replaceChildren(answer)
       const { text: shown, act } = splitAction(full)
-      answer.innerHTML = mdToHtml(shown || full)
-      if (!full) answer.innerHTML = mdToHtml('……我好像没说出话来，再试一次？')
+      // 不能回退成 full —— 她只输出一条指令、没说话的时候，
+      // 那样会把 @@ACT{...}@@ 整行原样显示出来，还会存进历史被反复照抄。
+      answer.innerHTML = mdToHtml(shown || '[点了点头]')
       // 流式过程中不渲染公式和代码，全部收完再做一次，避免半截公式反复闪
       if (thinkBox) thinkBox.open = false
       await enhance(answer)
       addSpeakBtn(bubble)
       scrollBottom()
       // 存进历史的是去掉指令后的文本，免得她把旧指令当范例反复照抄
-      history.push({ role: 'user', content: text }, { role: 'assistant', content: splitAction(full).text || full })
+      if (shown) history.push({ role: 'user', content: text }, { role: 'assistant', content: shown })
       history = history.slice(-30)
       writeLog(history)
 
@@ -1182,6 +1259,12 @@
         }
       }
     } catch (err) {
+      // 关面板、按 Esc、切页都会 abort。那是你自己叫停的，不是出错 ——
+      // 以前会把已经写好的半截答案换成一句英文报错，还把这一轮从历史里丢掉。
+      if (err && (err.name === 'AbortError' || /abort/i.test(String(err.message || '')))) {
+        if (!full) { try { bubble.remove() } catch (_) {} }
+        return
+      }
       const msg = String(err && err.message || err)
       bubble.className = 'nanaly-msg nanaly-msg--sys'
       bubble.innerHTML = escapeHtml(
@@ -1211,6 +1294,8 @@
   const closePanel = () => {
     panel.classList.remove('is-open')
     if (abortCtl) { try { abortCtl.abort() } catch (_) {} }
+    abortCtl = null
+    stopSpeak()   // 不停的话她会在没有任何可见控件的情况下继续念完整段
   }
 
   launcher.addEventListener('click', () => {
@@ -1296,8 +1381,16 @@
   // ---------------- 快捷键 ----------------
   // Alt + A 唤起并聚焦，Esc 收起。
   // 想换别的键，改下面这一行的判断即可。
+  const typingIn = el => {
+    if (!el) return false
+    const tag = String(el.tagName || '').toLowerCase()
+    return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable
+  }
   document.addEventListener('keydown', e => {
     if (e.altKey && !e.ctrlKey && !e.metaKey && String(e.key).toLowerCase() === 'a') {
+      // 正在别的输入框里打字就别抢。macOS 上 Option+A 就是「å」这个字符，
+      // 不加这个判断的话，在主题的搜索框里想打 å 会变成弹出面板。
+      if (typingIn(e.target) && e.target !== input) return
       e.preventDefault()
       if (panel.classList.contains('is-open')) input.focus()
       else openPanel()
@@ -1463,7 +1556,7 @@
     isLocked: () => locked(),
     requestUnlock: () => { openPanel(); if (locked()) showUnlock(); else showKeyUI() },
     memory: () => JSON.parse(JSON.stringify(memory)),
-    forgetMemory: () => { memory = { ...MEM_DEFAULT }; saveMem(); return '她关于你的记忆已清空' },
+    forgetMemory: () => { memory = memDefault(); saveMem(); return '她关于你的记忆已清空' },
     poke: () => { pokedPaths.delete(location.pathname); showPoke() },
     deepThink: on => {
       deepThink = !!on
@@ -1476,6 +1569,10 @@
       localStorage.removeItem(LS_VAULT)
       clearSession()
       secrets = { ...EMPTY_SECRETS }
+      // 设置面板如果还开着，输入框里仍然是三把明文 key，
+      // 而且随手一点「保存并解锁」就把保险箱原样重建了。得把它收掉。
+      try { panel.querySelectorAll('.nanaly-setup input').forEach(i => { i.value = '' }) } catch (_) {}
+      try { backToChat() } catch (_) {}
       addMsg('sys', 'API Key 已从本机彻底清除')
     }
   })

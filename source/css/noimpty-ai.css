@@ -8,7 +8,9 @@
 
 #nanaly-launcher {
   position: fixed;
-  z-index: 9001;
+  /* 必须比面板（9002）高。低了的话面板会盖住猫爪，
+     「再点一下猫爪收起面板」这个最自然的操作就点不到了，只能去按 ✕。 */
+  z-index: 9003;
   left: 20px;
   bottom: calc(20px + 54px + 14px);
   width: 54px;

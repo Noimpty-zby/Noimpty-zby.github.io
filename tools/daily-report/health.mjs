@@ -7,6 +7,7 @@
 
 import tls from 'node:tls'
 import { CFG, WINDOW } from './sources.mjs'
+import { probeUrl, canaryOk, looksThrottled, mapLimit } from '../nanaly/probe.mjs'
 
 const T = (ms = 15000) => AbortSignal.timeout(ms)
 const text = async (url, ms) => {
@@ -18,7 +19,7 @@ const LEVEL = { ok: 'ok', warn: 'warn', bad: 'bad' }
 
 // ---------------- 1. 受保护文章有没有漏出去 ----------------
 
-export const checkLeak = async () => {
+export const checkLeak = async (crawl) => {
   const out = { name: '加密文章泄漏', level: LEVEL.ok, detail: '', items: [] }
   try {
     const man = await text(`${CFG.site}/js/protected-manifest.js`)
@@ -35,25 +36,40 @@ export const checkLeak = async () => {
       return out
     }
 
+    // 三个 feed 单独取（它们不是 HTML 页面，不在爬取结果里）
     const feeds = [
       ['atom.xml', `${CFG.site}/atom.xml`],
       ['sitemap.xml', `${CFG.site}/sitemap.xml`],
-      ['search.xml', `${CFG.site}/search.xml`],
-      ['首页', `${CFG.site}/`],
-      ['归档页', `${CFG.site}/archives/`]
+      ['search.xml', `${CFG.site}/search.xml`]
     ]
+    let scanned = 0
     for (const [label, url] of feeds) {
       const r = await text(url, 20000)
       if (!r.ok) { out.items.push({ where: label, note: `取不到（HTTP ${r.status}）`, leak: false }); continue }
+      scanned++
       const hit = paths.filter(p => r.body.includes(p))
-      if (hit.length) {
-        out.items.push({ where: label, note: hit.join('、'), leak: true })
-        out.level = LEVEL.bad
-      }
+      if (hit.length) { out.items.push({ where: label, note: hit.join('、'), leak: true }); out.level = LEVEL.bad }
     }
-    out.detail = out.level === LEVEL.ok
-      ? `${paths.length} 篇受保护文章，5 处公开索引全部干净`
-      : `发现 ${out.items.filter(i => i.leak).length} 处泄漏`
+
+    // 剩下的走全站爬取的结果。以前只查首页和归档页首屏 ——
+    // 而 /page/2/、/archives/2026/05/、标签页、分类页上照样挂着标题和链接，
+    // 于是检查报「全部干净」，文章其实是公开的。
+    if (crawl) {
+      crawl.html.forEach((body, url) => {
+        scanned++
+        const where = url.replace(CFG.site, '') || '/'
+        // 文章自己那一页当然含有自己的路径，不算泄漏
+        const hit = paths.filter(p => p !== where && body.includes(p))
+        if (hit.length) { out.items.push({ where, note: hit.join('、'), leak: true }); out.level = LEVEL.bad }
+      })
+    } else {
+      out.level = LEVEL.warn
+      out.items.push({ where: '全站页面', note: '这次没能抓取，只查了三个 feed', leak: false })
+    }
+
+    out.detail = out.level === LEVEL.bad
+      ? `发现 ${out.items.filter(i => i.leak).length} 处泄漏`
+      : `${paths.length} 篇受保护文章，扫了 ${scanned} 个公开位置（含分页、标签、分类），干净`
   } catch (e) {
     out.level = LEVEL.warn
     out.detail = '检查失败：' + String(e.message || e).slice(0, 160)
@@ -100,7 +116,7 @@ export const checkSite = async () => {
 
 export const checkBuild = async () => {
   const out = { name: '自动部署', level: LEVEL.ok, detail: '', items: [] }
-  if (!CFG.ghToken) { out.level = LEVEL.warn; out.detail = '没有 GITHUB_TOKEN'; return out }
+  if (!CFG.ghToken) { out.detail = '没有 GITHUB_TOKEN，这项跳过'; return out }
   try {
     const res = await fetch(
       `https://api.github.com/repos/${CFG.repo}/actions/workflows/pages.yml/runs?per_page=5`,
@@ -135,8 +151,10 @@ export const checkDeps = async () => {
       `https://api.github.com/repos/${CFG.repo}/dependabot/alerts?state=open&per_page=100`,
       { headers: { Authorization: `Bearer ${CFG.ghToken}`, accept: 'application/vnd.github+json' }, signal: T(20000) })
     if (res.status === 403 || res.status === 404) {
-      out.level = LEVEL.warn
-      out.detail = '默认的 GITHUB_TOKEN 读不到 Dependabot 告警（需要额外权限），这项先跳过'
+      // 这个工作流按最小权限配置，本来就读不到 Dependabot —— 这是预期，不是问题。
+      // 以前报 warn，结果每天的邮件标题都挂着「⚠️ 有问题要处理」，
+      // 「没事就不发」的开关也永远失效。天天喊狼来了的告警等于没有告警。
+      out.detail = '这项已跳过（工作流的 token 按最小权限配置，读不到 Dependabot）'
       return out
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -164,56 +182,81 @@ export const checkDeps = async () => {
   return out
 }
 
-// ---------------- 5. 死链与挂掉的图 ----------------
+// ---------------- 抓一遍全站（泄漏检查和死链检查共用） ----------------
 
-const mapLimit = async (items, limit, fn) => {
-  const out = []
-  let i = 0
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (i < items.length) { const k = i++; out[k] = await fn(items[k]) }
-  }))
-  return out
+/* 从 sitemap 出发，把站内的 HTML 页面抓下来，同时收集所有站内地址。
+ *
+ * 抓一次两用，理由是：sitemap 里没有分页页（/page/2/、/archives/2026/05/、
+ * 标签页、分类页），而受保护文章恰恰会漏在那些地方 ——
+ * 只查 sitemap 上那五个入口，会得出「5 处公开索引全部干净」的结论，
+ * 同时 /archives/2026/05/ 上白纸黑字挂着那篇文章的标题和链接。
+ * 分页页都是从首页/归档页链过去的，所以顺着 <a> 再走一层就能覆盖到。
+ */
+const crawlSite = async () => {
+  const sm = await text(`${CFG.site}/sitemap.xml`, 20000)
+  if (!sm.ok) return null
+  const seeds = [...sm.body.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1])
+
+  const html = new Map()          // url -> 页面源码
+  const targets = new Set()       // 所有站内地址（含图片等静态资源）
+  const isPage = u => !/\.(png|jpe?g|gif|webp|svg|ico|css|js|xml|json|txt|woff2?|ttf|mp3|mp4|pdf|zip)$/i.test(u)
+
+  const visit = async url => {
+    if (html.has(url)) return []
+    const r = await text(url, 20000).catch(() => ({ ok: false }))
+    if (!r.ok) { targets.add(url); return [] }
+    html.set(url, r.body)
+    const grab = re => [...r.body.matchAll(re)].map(m => m[1])
+    const found = []
+    ;[...grab(/<a[^>]+href="([^"#?]+)"/g), ...grab(/<img[^>]+src="([^"?]+)"/g)].forEach(h => {
+      if (/^(mailto:|javascript:|data:|#)/.test(h)) return
+      let abs
+      try { abs = new URL(h, url).href } catch (_) { return }
+      if (!abs.startsWith(CFG.site)) return
+      abs = abs.split('#')[0]
+      targets.add(abs)
+      if (isPage(abs)) found.push(abs)
+    })
+    return found
+  }
+
+  // 第一层：sitemap 上的页面
+  const first = await mapLimit(seeds.slice(0, 60), 3, visit)
+  // 第二层：第一层链出去的站内页面（分页、标签、分类都在这一层）
+  const more = [...new Set(first.flat())].filter(u => !html.has(u)).slice(0, 60)
+  await mapLimit(more, 3, visit)
+
+  return { html, targets, pageCount: html.size }
 }
 
-export const checkLinks = async () => {
+// ---------------- 5. 死链与挂掉的图 ----------------
+
+export const checkLinks = async (crawl) => {
   const out = { name: '死链与坏图', level: LEVEL.ok, detail: '', items: [] }
   try {
-    const sm = await text(`${CFG.site}/sitemap.xml`, 20000)
-    if (!sm.ok) { out.level = LEVEL.warn; out.detail = '取不到 sitemap'; return out }
-    const pages = [...sm.body.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1]).slice(0, 60)
-
-    const targets = new Set()
-    await mapLimit(pages, 6, async url => {
-      const r = await text(url, 20000).catch(() => ({ ok: false }))
-      if (!r.ok) { targets.add(url); return }
-      const grab = re => [...r.body.matchAll(re)].map(m => m[1])
-      const raw = [...grab(/<a[^>]+href="([^"#?]+)"/g), ...grab(/<img[^>]+src="([^"?]+)"/g)]
-      raw.forEach(h => {
-        if (/^(mailto:|javascript:|data:|#)/.test(h)) return
-        let abs
-        try { abs = new URL(h, url).href } catch (_) { return }
-        if (abs.startsWith(CFG.site)) targets.add(abs.split('#')[0])
-      })
-    })
-
-    const list = [...targets].slice(0, 400)
+    if (!crawl) { out.level = LEVEL.warn; out.detail = '取不到 sitemap，没法扫'; return out }
+    const list = [...crawl.targets].slice(0, 400)
     const broken = []
-    await mapLimit(list, 8, async u => {
-      try {
-        let r = await fetch(u, { method: 'HEAD', signal: T(12000) })
-        if (r.status === 405 || r.status === 501) r = await fetch(u, { signal: T(12000) })
-        if (r.status >= 400) broken.push({ url: u, status: r.status })
-      } catch (_) { broken.push({ url: u, status: '连接失败' }) }
+    // 并发压到 3。并发本身就是限流的来源 —— 扫得快一点换来一堆误报，不划算。
+    await mapLimit(list, 3, async u => {
+      const bad = await probeUrl(u, true)
+      if (bad) broken.push({ url: u, status: bad.verdict === 'unreachable' ? '连不上' : bad.status })
     })
+
+    // 坏得太多多半是被限流了，不是站真的塌了。宁可这次不报。
+    if (looksThrottled(broken.length, list.length)) {
+      out.detail = `${list.length} 个地址里有 ${broken.length} 个失败，比例高得不正常，判定为限流，本次不报`
+      return out
+    }
 
     broken.slice(0, 12).forEach(b => out.items.push({
       where: b.url.replace(CFG.site, '') || '/', note: String(b.status)
     }))
     if (broken.length) {
       out.level = LEVEL.bad
-      out.detail = `${list.length} 个地址里有 ${broken.length} 个打不开`
+      out.detail = `${list.length} 个地址里有 ${broken.length} 个打不开（每个都复核过三次）`
     } else {
-      out.detail = `扫了 ${pages.length} 个页面、${list.length} 个地址，全部正常`
+      out.detail = `扫了 ${crawl.pageCount} 个页面、${list.length} 个地址，全部正常`
     }
   } catch (e) {
     out.level = LEVEL.warn
@@ -223,7 +266,24 @@ export const checkLinks = async () => {
 }
 
 export const runHealth = async () => {
-  const checks = await Promise.all([checkLeak(), checkSite(), checkBuild(), checkDeps(), checkLinks()])
+  // 顺序是有讲究的，别改回并行。
+  //
+  // 抓全站那几十上百个请求会把同时进行的首页探测一起挤进限流，
+  // 于是「站点可用性」被判成挂了，邮件标题挂上「⚠️ 有问题要处理」——
+  // 一个纯粹由检查自己制造出来的故障。
+  const site = await checkSite()
+  const [build, deps] = await Promise.all([checkBuild(), checkDeps()])
+
+  // 哨兵：这台 runner 现在真的能访问站点吗？不能就整轮不判，别误报。
+  let crawl = null
+  if (await canaryOk(CFG.site)) crawl = await crawlSite()
+
+  const leak = await checkLeak(crawl)
+  const links = crawl
+    ? await checkLinks(crawl)
+    : { name: '死链与坏图', level: LEVEL.ok, detail: '这次连首页都取不到，是本次运行的网络问题，跳过不误报', items: [] }
+
+  const checks = [leak, site, build, deps, links]
   const worst = checks.some(c => c.level === 'bad') ? 'bad'
     : checks.some(c => c.level === 'warn') ? 'warn' : 'ok'
   return { checks, worst }

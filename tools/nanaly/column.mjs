@@ -10,7 +10,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 
 import { execFileSync } from 'node:child_process'
 import { ask } from '../daily-report/narrate.mjs'
 import { triggerDeploy } from './github.mjs'
-import { pushWithRetry, safeGitEmail, sanitizeMd, yamlString } from './git.mjs'
+import { pushWithRetry, safeGitEmail, sanitizeMd, yamlString, stripAngles, stripOutboundLinks } from './git.mjs'
 
 // 注意：不要放进 source/_posts 的子目录。
 // Hexo 的 :title 会把子目录名带进永久链接，变成 /2026/08/13/nanaly/xxx/ 这种怪样子。
@@ -66,7 +66,13 @@ export const writeColumn = async ({ comments = [], patrolNote = '' } = {}) => {
 
   const ctx = [
     recentContext(),
-    comments.length ? '这段时间读者说了什么：\n' + comments.map(c => `- ${c.who}：${c.body.slice(0, 120)}`).join('\n') : '',
+    // 读者评论是完全的外部输入，而这篇随笔会自动发布、无人复核。
+    // 所以：限量（别让人用 50 条评论把提示词淹掉）、去尖括号、去链接。
+    comments.length
+      ? '这段时间读者说了什么：\n' + comments.slice(0, 10)
+        .map(c => `- ${stripAngles(c.who)}：${stripAngles(String(c.body || '')).replace(/https?:\/\/\S+/g, '[链接]').slice(0, 120)}`)
+        .join('\n')
+      : '',
     patrolNote ? '你巡逻时看到的：\n' + patrolNote : ''
   ].filter(Boolean).join('\n\n')
 
@@ -110,7 +116,7 @@ ${PRIVACY}author: 娜娜莉
 
 > [趴在你键盘上] 这篇是窝自己写的，不是主人写的喵。
 
-${sanitizeMd(content)}
+${stripOutboundLinks(sanitizeMd(content))}
 `
 
   if (DRY) {

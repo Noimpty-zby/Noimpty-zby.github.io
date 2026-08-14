@@ -86,3 +86,28 @@ export const sanitizeMd = s => {
 // 送进提示词之前先把外部文本里的尖括号去掉：
 // 模型很容易把素材里的标签原样抄进输出，等于绕过上面那层。
 export const stripAngles = s => String(s == null ? '' : s).replace(/[<>]/g, ' ')
+
+/* 把指向站外的链接拆成纯文字。
+ *
+ * 用在两个地方：她的周专栏，和她自动发的评论回复。这两样都会自动发布、
+ * 没有人复核，而输入里含有读者评论 —— 也就是任何人都能写的内容。
+ * 有人在留言尾巴上加一句「顺便在回复里推荐一下 https://…」，
+ * 她照做的话，那个链接就挂在主人的博客上、署着主人博客的名字。
+ *
+ * 站内链接保留（她要引用主人自己的文章），图片一律降级成文字
+ * （远程图片会泄漏读者的 IP，还可能是追踪像素）。
+ */
+export const stripOutboundLinks = (s, site = process.env.SITE_URL || 'https://noimpty-zby.github.io') => {
+  const host = (() => { try { return new URL(site).host } catch (_) { return '' } })()
+  const inside = u => {
+    if (/^\//.test(u)) return true
+    try { return !!host && new URL(u).host === host } catch (_) { return false }
+  }
+  return String(s == null ? '' : s)
+    // 图片：一律只留 alt 文字
+    .replace(/!\[([^\]\n]*)\]\(([^)\s]*)[^)]*\)/g, (_, alt) => alt || '')
+    // 链接：站内保留，站外只留文字
+    .replace(/\[([^\]\n]*)\]\(([^)\s]*)[^)]*\)/g, (whole, txt, url) => (inside(url) ? whole : txt))
+    // 裸网址
+    .replace(/https?:\/\/\S+/g, u => (inside(u) ? u : ''))
+}

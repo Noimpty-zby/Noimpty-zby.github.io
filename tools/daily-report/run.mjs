@@ -63,7 +63,11 @@ const main = async () => {
   const after = Number(process.env.MISS_YOU_AFTER_DAYS ?? 4)
   const gap = beat.ok ? beat.days : null
   const shouldMiss = after > 0 && gap != null && gap >= after && (gap - after) % 3 === 0
-  if (shouldMiss) {
+  // 站点真出事的时候不能只发一封「4 天没见了」——
+  // 证书快过期、构建挂了、首页 404，这些必须照常送到。
+  if (shouldMiss && health.worst === 'bad') {
+    console.log(`  主人 ${gap} 天没来了，但站点有问题，照常发日报`)
+  } else if (shouldMiss) {
     console.log(`  主人 ${gap} 天没来了，改发想念邮件`)
     return sendMissYou({ days: gap, traffic, comments, newPosts })
   }

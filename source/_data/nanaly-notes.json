@@ -98,38 +98,38 @@
     ]
   },
   "/2026/08/11/UE5-ActionRoguelike-Chapter3/": {
-    "hash": "5f956760e485cf14",
+    "hash": "8d938ee7c1b4e5b8",
     "title": "UE5 C++ 第三章复盘：从每帧筛选目标到接口解耦的完整交互系统",
     "notes": [
       {
-        "anchor": "然后是关键：APlayerController 不能被拖进关",
-        "text": "这里其实还有个坑：EditDefaultsOnly 在蓝图中改的是 CDO，运行时所有实例共享，想改单个实例得用实例覆盖，容易踩。"
+        "anchor": "继承链是 UObject → UActorComponent",
+        "text": "继承链漏了 UObject 到 UActorComponent 之间还有 UObjectBaseUtility 和 UObjectBase，不过对初学者这条链够用了。"
       },
       {
-        "anchor": "GetSafeNormal() 而不是 GetNormal(",
-        "text": "GetSafeNormal 的零向量分支其实是返回 FVector::ZeroVector，但后续点积会得负分，刚好被 -1 初始化兜住，设计得挺巧。"
+        "anchor": "点积的完整形式是 |A||B|cos θ。如果不归一化，Ov",
+        "text": "窝提醒一句：点积归一化后范围是 [-1,1]，但这里只用正值筛选，负值代表物体在视野后方，实际会被排除掉。"
       },
       {
         "anchor": "如果换成 FInterpTo，IsNearlyEqual 的",
-        "text": "FInterpTo 的指数衰减在接近目标时步长指数级缩小，IsNearlyEqual 容差又小，实测可能要多跑几十帧才停，调参时容易忽略。"
+        "text": "FInterpTo 指数逼近的尾巴确实磨人，窝见过有人用 IsNearlyEqual 配大容差糊弄，不如直接上常量插值干净。"
       }
     ]
   },
   "/2026/08/12/UE5-ActionRoguelike-Chapter4/": {
-    "hash": "f92d10b95aec7b60",
+    "hash": "0d7127eab5f434e3",
     "title": "UE5 C++ 第四章复盘：第一次用蓝图，以及 C++ 与蓝图的分工边界",
     "notes": [
       {
         "anchor": "这一节课程里没有，是我自己整理的。因为学完第一节我脑子是乱的",
-        "text": "这个疑问其实是老生常谈：蓝图是给非程序员用的，C++ 是给引擎和性能敏感的代码用的，分工看的是「谁需要改」和「谁需要快」。"
+        "text": "这节其实是全书最该先读的，作者把动机补在复盘里，比原教程讲得清楚。"
       },
       {
-        "anchor": "问题在于：SetActorTickEnabled(false",
-        "text": "把状态编码进性能开关，等你需要「关 Tick 但动画还没播完」时就炸了，这是典型的语义混淆坑。"
+        "anchor": "宝箱刚放进关卡、还没被交互时，CurrentAnimatio",
+        "text": "这个坑在教程里几乎必踩，因为老师默认你会在构造函数里关 Tick，但没人明说。"
       },
       {
-        "anchor": "所以 bChestOpened 在蓝图里显示成 Chest ",
-        "text": "显示名和变量名脱钩是 UE 的常规操作，搜不到别怀疑自己，先去细节面板看显示名。"
+        "anchor": "如果某个类是纯蓝图实现的接口（在 Class Setting",
+        "text": "纯蓝图接口的 Cast 盲区，官方文档也没强调，遇到静默失败先查这里。"
       }
     ]
   },

@@ -18,30 +18,56 @@ const DIR = 'source/news'
 const DRY = process.argv.includes('--dry')
 const TAVILY_KEY = process.env.TAVILY_API_KEY || ''
 
-// 四个主题。后两个是主人明确说「最想知道」的，所以给的名额更多。
+// 四个主题。
+//
+// 前两个是主人明确说「最想知道」的，而且他是**真的会拿去做决定**的 ——
+// 所以这两块走深度思考（pro 模型），每条要写得足够长、必须落到
+// 「这对一个想进游戏客户端岗的学生意味着什么」。
+// 后两个是了解性质的，flash 够用，短一点也没关系。
 const TOPICS = [
   {
     key: 'jobs',
     title: '行业职场动态',
     want: 3,
+    deep: true,
+    minWords: 120,
+    // 他要的是客户端/引擎/Gameplay 岗位的动向，不是泛泛的行业新闻
+    angle: `他的目标是**游戏客户端开发**（Gameplay / 引擎方向）的实习和校招。
+所以「和他有关」的判据是：这条消息能不能改变他投哪家、准备什么、或者对行业的判断。
+一条裁员新闻，如果裁的是发行和市场，对他几乎没意义；如果裁的是客户端/引擎组，
+或者反过来某家在扩招客户端，那才值得写 —— 而且要写清楚是哪条线。`,
     queries: [
-      '游戏行业 裁员 招聘 校招 动态',
-      'game industry layoffs hiring studio news'
+      '游戏 客户端 开发 招聘 校招 实习 岗位',
+      '游戏公司 裁员 引擎组 技术中台 组织调整',
+      'game client programmer hiring layoffs engine team',
+      '游戏行业 校招 技术岗 趋势 2026'
     ]
   },
   {
     key: 'interview',
     title: '面试与求职干货',
     want: 3,
+    deep: true,
+    minWords: 140,
+    angle: `他要面的是**游戏客户端 / Gameplay 岗**，技术栈是 UE5 + C++，
+图形学在学 GAMES101 那条线，手上有一个 ActionRoguelike 的完整项目。
+所以有用的是：真题和考点、项目怎么讲、简历怎么写、别人踩过的坑。
+「保持自信、好好准备」这种正确的废话一个字都别写。
+如果素材里有具体的题目或考点，**必须把题目本身摘出来**，
+并且用一两句说清楚考的是什么、他现在的水平大概能不能答上。`,
     queries: [
-      '游戏客户端 引擎 图形学 面试 经验 八股',
-      'game engine programmer interview questions graphics'
+      '游戏客户端 面试 真题 UE C++ 八股 面经',
+      '游戏 引擎 开发 面试 经验 分享 校招',
+      'game client programmer interview questions unreal c++',
+      '图形学 面试 渲染管线 问题 校招'
     ]
   },
   {
     key: 'ue5',
     title: 'UE5 与引擎学习',
     want: 2,
+    minWords: 60,
+    angle: '偏向能直接写进项目、或者能在面试里说出来的东西。纯营销通稿跳过。',
     queries: [
       'Unreal Engine 5 教程 更新 新特性',
       'Unreal Engine 5 tutorial release notes rendering'
@@ -51,12 +77,20 @@ const TOPICS = [
     key: 'games',
     title: '游戏与实况',
     want: 2,
+    minWords: 50,
+    angle: '轻松向。但如果某个新作的机制设计有值得拆解的地方，优先写那个。',
     queries: [
       '游戏 新作 实况 评测 值得关注',
       'new game release gameplay notable'
     ]
   }
 ]
+
+// 主人自己维护的方向说明。她搜之前先读一遍，按上面写的标准筛。
+const PROFILE_FILE = 'source/_data/noimpty-profile.md'
+export const readProfile = () => {
+  try { return readFileSync(PROFILE_FILE, 'utf8').slice(0, 6000) } catch (_) { return '' }
+}
 
 const searchWeb = async (query, maxResults = 8) => {
   if (!TAVILY_KEY) throw new Error('没有 TAVILY_API_KEY')
@@ -164,12 +198,11 @@ export const buildNews = async () => {
   const dir = `${DIR}/${date}`
   if (existsSync(`${dir}/index.md`)) {
     console.log(`  ${date} 这期已经写过了`)
-    // 列表页每次都重建一遍：万一某期被手工删了，列表不该继续指着一个 404。
-    // 注意要把结果交回去，让 run.mjs 提交 —— 只写不提交等于没写。
-    if (!DRY) { writeIndexPage(); return { dir, date, indexOnly: true } }
     return null
   }
 
+  const profile = readProfile()
+  if (!profile) console.log('  （没找到 source/_data/noimpty-profile.md，这次只能按默认方向筛）')
   const old = recentUrls()
   const sections = []
 
@@ -183,33 +216,50 @@ export const buildNews = async () => {
     console.log(`  ${t.title}：搜到 ${hits.length} 条可用`)
     if (!hits.length) continue
 
-    const listed = hits.slice(0, 14).map((h, i) =>
+    const POOL = t.deep ? 20 : 14
+    const listed = hits.slice(0, POOL).map((h, i) =>
       `[${i}] ${h.title}\n    来源：${h.url}\n    ${h.date ? '日期：' + h.date + '\n    ' : ''}${h.excerpt}`).join('\n\n')
 
     const out = await ask(
       `你是娜娜莉，住在 Noimpty 个人博客里的猫娘。
 毒舌但清醒，极简，讨厌废话。自称「窝」，偶尔带「喵」和颜文字 (=^w^=) (ovo)，别每句都塞。
 禁止使用 • 和 ω 这类会破坏颜文字的符号。
-你在给主人整理一份「${t.title}」的简报。他是在学图形学和 UE5、准备将来找游戏行业工作的学生。`,
+你在给主人整理一份「${t.title}」的简报。
+
+【主人的情况】
+${profile || '（他是在学图形学和 UE5、准备找游戏客户端岗位的学生。）'}
+
+【这一栏的角度】
+${t.angle || ''}`,
       `下面是刚搜到的素材，每条前面有个编号。挑出**最多 ${t.want} 条**真正值得他知道的，写成简报。
 
-**硬性要求：**
-1. **宁缺毋滥。** 没信息量的（纯宣传稿、标题党、蹭热点、和他没关系的）一条都别留。
-   实在没有值得写的就输出「（这几天没什么值得说的）」，那也是合格的输出
-2. **每条必须以编号开头**，格式严格照抄这一行：
-   \`- [编号] **一句话标题** —— 你的两三句转述与判断。\`
-   例如：\`- [3] **某公司裁了整个引擎组** —— 转述……窝觉得……\`
-   **不要自己写网址，不要写「来源」两个字**，链接窝这边会自动挂上去。
-   编号必须是素材里真实存在的那个数字，不许编。
-3. **只写素材里有的事实。** 不许补充你自己知道的背景，不许推测后续发展
-4. 转述之后可以加一句你的判断，但要标清楚那是你的看法
-5. 别写导语和总结，直接列条目
-6. 只输出 markdown 列表本身，不要标题、不要任何解释
+**格式（严格照抄）：**
+\`- [编号] **一句话标题** —— 正文\`
+例如：\`- [3] **某公司裁了整个引擎组** —— ……\`
+**不要自己写网址，不要写「来源」两个字**，链接窝这边会自动挂上去。
+编号必须是素材里真实存在的那个数字，不许编。
+
+**每一条的正文要包含这三层，缺一层都算不合格：**
+1. **发生了什么** —— 具体的事实：谁、什么时候、多少人、什么版本、什么数字。
+   只写素材里有的，素材没写的就说「没说」，不许补你自己知道的背景，不许推测后续
+2. **对他意味着什么** —— 这是最重要的一层。结合上面【主人的情况】，
+   说清楚这条消息改变了什么：该投哪家、该准备什么、该怎么调整判断。
+   如果诚实地说「这条对他其实没什么直接影响」，那就别选这一条
+3. **窝的看法** —— 一句你自己的判断，要说得具体，并且**明确标出这是你的看法**
+   （用「窝觉得」开头）。不许写「值得关注」「值得学习」这种谁都能说的话
+
+**篇幅：每条正文至少 ${t.minWords} 字。** 写不到这个长度，说明你没想清楚，
+那就别选这一条 —— 少写一条永远好过写一条废话。
+
+**宁缺毋滥。** 纯宣传稿、标题党、蹭热点、和他方向不沾边的，一条都别留。
+实在没有值得写的就只输出「（这几天没什么值得说的）」，那也是合格的输出。
+
+别写导语和总结，直接列条目。只输出 markdown 列表本身。
 
 素材：
-${listed}`, 1200)
+${listed}`, t.deep ? 3000 : 1600, { deep: !!t.deep })
 
-    const body = out ? attachSources(out.trim(), hits.slice(0, 14)) : ''
+    const body = out ? attachSources(out.trim(), hits.slice(0, t.deep ? 20 : 14)) : ''
     if (body && !/^（?这几天没什么/.test(out.trim())) {
       sections.push({ title: t.title, body })
     } else if (out && !/^（?这几天没什么/.test(out.trim())) {
@@ -221,7 +271,6 @@ ${listed}`, 1200)
 
   if (!sections.length) {
     console.log('  这一期没有值得写的内容，不生成')
-    if (!DRY) { writeIndexPage(); return { dir, date, indexOnly: true } }
     return null
   }
 
@@ -229,10 +278,14 @@ ${listed}`, 1200)
     '你是娜娜莉，猫娘助手。自称「窝」，简短，禁止使用 • 和 ω。',
     `给这期资讯写一句开场白，一句话就够，别超过 40 字。这期包含这些板块：${sections.map(s => s.title).join('、')}。`, 200)
 
+  // 注意：**绝对不要给这里加 layout: post**。
+  // 这是 Hexo 的 page 不是 post，而 Butterfly 的 post 头部模板会去读
+  // page.categories.data —— page 上没有这个字段，直接抛 TypeError。
+  // 后果特别隐蔽：hexo generate 照常「成功」，只是把这个页面渲染成一个
+  // 0 字节的 index.html。工作流全绿、文件也在仓库里，点进去却是一片空白。
   const md = `---
 title: 资讯速览 · ${date}
 date: ${stamp}
-layout: post
 type: news
 comments: true
 description: 娜娜莉整理的三日资讯：${sections.map(s => s.title).join('、')}。
@@ -258,43 +311,17 @@ ${sections.map(s => `## ${s.title}\n\n${s.body}`).join('\n\n')}
   mkdirSync(dir, { recursive: true })
   writeFileSync(`${dir}/index.md`, md)
   console.log(`  已写入 ${dir}/index.md（${sections.length} 个板块）`)
-  writeIndexPage()
+  console.log('  /news/ 列表页会在构建时自动带上这一期，不需要额外提交')
   return { dir, date }
 }
 
-// 重写 /news/ 列表页。用 markdown 直接列，不额外做模板。
-export const writeIndexPage = () => {
-  const issues = readdirSync(DIR)
-    .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && existsSync(`${DIR}/${d}/index.md`))
-    .sort().reverse()
-
-  const rows = issues.map(d => {
-    const raw = readFileSync(`${DIR}/${d}/index.md`, 'utf8')
-    const desc = (raw.match(/^description:\s*(.+)$/m) || [])[1] || ''
-    return `- [**资讯速览 · ${d}**](/news/${d}/)\n  ${desc.trim()}`
-  }).join('\n')
-
-  writeFileSync(`${DIR}/index.md`, `---
-title: 资讯
-date: 2026-08-13 00:00:00
-type: news-index
-comments: false
-description: 娜娜莉三天一更的行业资讯速览。
----
-
-娜娜莉每三天去搜一轮，挑出值得看的整理在这儿：**游戏行业职场动态**、**面试与求职干货**、**UE5 与引擎学习**、**游戏与实况**。
-
-> 这个板块的内容是**自动搜集整理的二手信息**，不是主人的原创。所以它不出现在首页和 RSS 里，也不进归档 —— 免得稀释掉那些几万字的复盘。
->
-> 每条都挂了来源链接，感兴趣请点原文核对。
-
-## 全部期数
-
-${rows || '（还没有内容，等第一期生成）'}
-`)
-  console.log(`  已更新 /news/ 列表页（${issues.length} 期）`)
-}
-
+/* 列表页不再由她维护 —— 交给 scripts/noimpty-news-index.js 在构建时现扫现生成。
+ *
+ * 以前这里会重写 source/news/index.md 再一起提交。只要那一步没走到
+ * （她挂了 / 推送被拒 / 你本地覆盖回旧版 / 你手工删了一期），
+ * 就会出现「内容页在线上、列表页却写着『还没有内容』」这种自相矛盾的状态。
+ * 现在列表页里只有一个占位符，构建时按目录真实情况填 —— 不可能对不上。
+ */
 export const commitNews = async (label) => {
   const run = (...a) => execFileSync('git', a, { encoding: 'utf8', stdio: 'pipe' })
   run('config', 'user.name', process.env.NANALY_GIT_NAME || '娜娜莉')

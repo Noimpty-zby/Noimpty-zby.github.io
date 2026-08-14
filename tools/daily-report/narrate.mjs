@@ -27,27 +27,46 @@ const PERSONA = `你是娜娜莉，住在 Noimpty 个人博客里的猫娘助手
 禁止使用 • 和 ω 这类会破坏颜文字的符号。
 这是写给主人 Noimpty 看的每日站点简报，说人话，别客套，别写小作文。`
 
-export const ask = async (system, user, maxTokens = 700) => {
+// 贵的那一档。资讯的分析和点子的挖掘用它 —— 那两块主人是真的会照着做决定的，
+// 含糊、想当然、拿废话凑数在那里的代价比多花的钱高得多。
+// 日报、批注、回评这些照旧走便宜的 flash。
+const PRO_MODEL = process.env.DEEPSEEK_PRO_MODEL || 'deepseek-v4-pro'
+
+/**
+ * @param {string} system 人设 / 角色
+ * @param {string} user   正文提示
+ * @param {number} maxTokens
+ * @param {{deep?: boolean, effort?: string, timeout?: number}} opts
+ *        deep=true → 换 pro 模型并打开思考。慢很多，也贵很多。
+ */
+export const ask = async (system, user, maxTokens = 700, opts = {}) => {
   if (!KEY) return null
+  const deep = !!opts.deep
+  const thinking = deep ? 'enabled' : THINKING
+  const model = deep ? PRO_MODEL : MODEL
+  // 深度思考要留出推理的 token，也要给更长的超时 —— 不然刚想到一半就被掐了
+  const timeout = opts.timeout || (deep ? 300000 : 90000)
   try {
     const res = await fetch(`${BASE}/chat/completions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', Authorization: `Bearer ${KEY}` },
       body: JSON.stringify({
-        model: MODEL,
+        model,
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-        thinking: { type: THINKING },
+        thinking: { type: thinking },
         // 开思考时不支持 temperature 这类采样参数
-        ...(THINKING === 'enabled' ? { reasoning_effort: 'high' } : { temperature: 0.7 }),
+        ...(thinking === 'enabled'
+          ? { reasoning_effort: opts.effort || 'high' }
+          : { temperature: 0.7 }),
         max_tokens: maxTokens
       }),
-      signal: AbortSignal.timeout(90000)
+      signal: AbortSignal.timeout(timeout)
     })
     if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 160)}`)
     const data = await res.json()
     return String(data.choices?.[0]?.message?.content || '').trim() || null
   } catch (e) {
-    console.error('  [narrate] 调用失败：', String(e.message || e).slice(0, 160))
+    console.error(`  [narrate${deep ? '/pro' : ''}] 调用失败：`, String(e.message || e).slice(0, 160))
     return null
   }
 }

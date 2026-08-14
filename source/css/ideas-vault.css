@@ -1,0 +1,158 @@
+/* 点子保险库。配色沿用站点已有的变量，明暗主题自动跟随。 */
+
+.iv-wrap { margin: 4px 0 8px; }
+
+.iv-note {
+  font-size: 0.86em;
+  line-height: 1.75;
+  padding: 10px 14px;
+  margin: 0 0 14px;
+  border-left: 3px solid var(--noimpty-border, rgba(233, 89, 120, 0.35));
+  border-radius: 0 8px 8px 0;
+  background: rgba(233, 89, 120, 0.06);
+  color: var(--card-meta, #9b9098);
+}
+.iv-note.is-info { border-left-color: var(--noimpty-accent, #e95978); }
+.iv-note.is-warn {
+  border-left-color: #e6913f;
+  background: rgba(255, 160, 90, 0.09);
+  color: #e6913f;
+}
+
+.iv-dim { font-size: 0.88em; color: var(--card-meta, #9b9098); line-height: 1.8; }
+
+.iv-btn {
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.35));
+  background: var(--noimpty-accent, #e95978);
+  color: #fff;
+  border-radius: 999px;
+  font-size: 0.86em;
+  padding: 6px 18px;
+  cursor: pointer;
+  margin-top: 6px;
+}
+.iv-btn:hover { filter: brightness(1.08); }
+.iv-btn--ghost {
+  background: transparent;
+  color: var(--noimpty-accent, #e95978);
+}
+.iv-btn--ghost:hover { background: rgba(233, 89, 120, 0.1); filter: none; }
+
+/* ---- 列表 ---- */
+
+.iv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 14px;
+  margin: 4px 0 14px;
+}
+
+.iv-card {
+  display: block;
+  text-align: left;
+  padding: 0;
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.16));
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--card-bg, rgba(255, 255, 255, 0.03));
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+}
+.iv-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--noimpty-accent, #e95978);
+}
+
+.iv-card__cover { display: block; width: 100%; height: auto; }
+
+.iv-card__body { padding: 10px 13px 13px; }
+
+.iv-card__stars {
+  font-size: 0.9em;
+  color: var(--noimpty-accent, #e95978);
+  letter-spacing: 2px;
+}
+.iv-card__stars span {
+  font-size: 0.75em;
+  color: var(--card-meta, #9b9098);
+  margin-left: 6px;
+  letter-spacing: 0;
+}
+
+.iv-card__title {
+  font-size: 0.94em;
+  font-weight: 600;
+  line-height: 1.5;
+  margin: 5px 0 4px;
+  color: inherit;
+  word-break: break-word;
+}
+
+.iv-card__date { font-size: 0.75em; color: var(--card-meta, #9b9098); }
+
+/* ---- 单篇 ---- */
+
+.iv-head {
+  margin: 12px 0 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--noimpty-border, rgba(233, 89, 120, 0.2));
+}
+.iv-head__stars {
+  font-size: 1.1em;
+  color: var(--noimpty-accent, #e95978);
+  letter-spacing: 3px;
+}
+.iv-head__stars span {
+  font-size: 0.62em;
+  color: var(--card-meta, #9b9098);
+  margin-left: 8px;
+  letter-spacing: 0;
+}
+.iv-head__title { font-size: 1.35em; line-height: 1.45; margin: 8px 0 6px; }
+.iv-head__date { font-size: 0.78em; color: var(--card-meta, #9b9098); }
+
+.iv-head__probs {
+  margin-top: 12px;
+  font-size: 0.85em;
+  color: var(--card-meta, #9b9098);
+}
+.iv-head__probs b { color: var(--noimpty-accent-soft, #ff91a8); }
+.iv-head__probs ul { margin: 6px 0 0; padding-left: 20px; }
+.iv-head__probs li { margin: 3px 0; line-height: 1.7; }
+
+.iv-body { line-height: 1.85; }
+/* 渲染时整体降一级（页面本身已经有 h1），所以正文里的 ## 出来是 h3 */
+.iv-body h2, .iv-body h3 {
+  font-size: 1.1em;
+  margin: 26px 0 10px;
+  padding-left: 10px;
+  border-left: 3px solid var(--noimpty-accent, #e95978);
+}
+.iv-body h4 { font-size: 1em; margin: 20px 0 8px; }
+.iv-body p { margin: 10px 0; }
+.iv-body ul, .iv-body ol { margin: 10px 0; padding-left: 22px; }
+.iv-body li { margin: 5px 0; }
+.iv-body blockquote {
+  margin: 12px 0;
+  padding: 8px 14px;
+  border-left: 3px solid var(--noimpty-border, rgba(233, 89, 120, 0.3));
+  background: rgba(233, 89, 120, 0.05);
+  color: var(--card-meta, #9b9098);
+}
+.iv-body pre {
+  overflow: auto;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+  font-size: 0.86em;
+}
+.iv-body code { font-size: 0.9em; }
+.iv-body hr {
+  border: 0;
+  border-top: 1px dashed var(--noimpty-border, rgba(233, 89, 120, 0.2));
+  margin: 22px 0;
+}
+
+@media (max-width: 768px) {
+  .iv-grid { grid-template-columns: 1fr; }
+}

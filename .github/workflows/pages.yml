@@ -43,6 +43,20 @@ jobs:
       - name: Build site
         run: npm run clean && npm run build
 
+      # 构建「成功」但页面是空的，这种事真发生过：
+      # 给 Hexo 的 page 加了 layout: post，Butterfly 的模板去读 page.categories.data
+      # 抛了 TypeError，hexo generate 照常退出 0，只是把那个页面写成了 0 字节。
+      # 工作流全绿、文件在仓库里、点进去一片空白。所以这里直接把空页面判成失败。
+      - name: 检查有没有空页面
+        run: |
+          empty=$(find public -name '*.html' -size 0 -print)
+          if [ -n "$empty" ]; then
+            echo "::error::这些页面渲染成了 0 字节："
+            echo "$empty"
+            exit 1
+          fi
+          echo "没有空页面，共 $(find public -name '*.html' | wc -l) 个 HTML"
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:

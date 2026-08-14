@@ -560,6 +560,12 @@
       alias: ['日程', '日程表', '日历', '安排', '计划', '待办', 'schedule', 'calendar', 'todo',
         '我的日程', '日程板块', '日程页', '日程界面', '今天的安排', '任务表']
     },
+    {
+      label: '点子',
+      url: '/ideas-vault/',
+      alias: ['点子', '点子库', '点子保险库', 'ideas', '玩法参考', '参考', '比赛', '创作大赛',
+        '腾讯游戏创作大赛', '比赛点子', '游戏点子', '玩法点子', '灵感库']
+    },
     { label: '归档', url: '/archives/', alias: ['归档', 'archive', 'archives', '全部文章', '文章列表', '所有文章', '文章归档'] },
     { label: '分类', url: '/categories/', alias: ['分类', 'categories', 'category', '分类页'] },
     { label: '标签', url: '/tags/', alias: ['标签', 'tags', 'tag', '标签页'] },

@@ -77,6 +77,13 @@ const dedupe = items => {
  * 有用的检索词长这样：「音游 判定窗口 手感 设计 容错」「rhythm game input latency forgiveness」。
  * 差别在于前者搜的是「品类」，后者搜的是**一个具体的设计问题**。
  * 所以先让她从方案里把待解问题抽出来，再按问题去搜。 */
+/* 小标题的写法千奇百怪，模型爱加粗、加井号、加书名号、加冒号、加编号。
+ * 上线第一次就栽在这儿：她其实好好回答了，只因为写成 `**待解问题**`
+ * 就被判成「方案太空」。所以匹配之前先把这些装饰全剥掉。 */
+const bareHead = l => String(l)
+  .replace(/[*_`#【】〔〕[\]（）()《》「」:：、.。\s]/g, '')
+  .replace(/^\d+/, '')
+
 export const parsePlan = raw => {
   const text = String(raw || '').trim()
   if (!text) return null
@@ -85,22 +92,46 @@ export const parsePlan = raw => {
   let mode = null
   for (const line of text.split('\n')) {
     const l = line.trim()
-    if (/^#*\s*(待解问题|问题)/.test(l)) { mode = 'p'; continue }
-    if (/^#*\s*(检索词|查询)/.test(l)) { mode = 'q'; continue }
     if (!l) continue
-    const v = l.replace(/^[-*\d.、）)\s]+/, '').trim()
+    const head = bareHead(l)
+    // 小标题本身通常很短；正文里出现「待解问题」三个字不该被当成小标题
+    if (head.length <= 12) {
+      if (/^(待解问题|待决问题|问题清单|问题)$/.test(head)) { mode = 'p'; continue }
+      if (/^(检索词|搜索词|查询词|查询|关键词)$/.test(head)) { mode = 'q'; continue }
+    }
+    // 碰到别的小标题、分隔线或表格就收工。
+    // 少了这一条，直接从方案里兜底时会一路吃到下一节去 ——
+    // 「## 已经试过并且已经否决的」会被当成一条检索词拿去搜。
+    if (/^#{1,6}\s/.test(l) || /^(-{3,}|\*{3,}|={3,})$/.test(l) || /^\|/.test(l)) { mode = null; continue }
+    if (!mode) continue
+
+    const v = l.replace(/^[-*+\d.、）)\s]+/, '').replace(/^\*\*|\*\*$/g, '').trim()
     if (!v || v.length < 4) continue
-    if (mode === 'p' && probs.length < 6) probs.push(v.slice(0, 120))
-    else if (mode === 'q' && queries.length < 8) queries.push(v.slice(0, 70))
+    if (mode === 'p' && probs.length < 6) probs.push(v.slice(0, 160))
+    // 检索词就该短。一整句话不是检索词，多半是正文串进来了
+    else if (mode === 'q' && queries.length < 8 && v.length <= 70) queries.push(v)
   }
   if (!probs.length || queries.length < 3) return null
   return { problems: probs, queries }
 }
 
+/* 兜底：直接从方案里读。
+ *
+ * 方案里本来就写着「待解问题」和「检索词」两节（我让你在 brief.md 里明确列出来，
+ * 就是为了这个）。模型的格式再怎么飘，这两节是你自己写的、稳定的。
+ * 所以模型那边解析失败时，不该判「方案太空」—— 该回来读方案本身。
+ * 何况提示词里本来就要求她「直接用那里面的，一条都别改写」。 */
+export const parseBriefSections = brief => {
+  const r = parsePlan(brief)
+  if (!r) return null
+  return { ...r, fromBrief: true }
+}
+
 const makePlan = async (profile, brief) => {
   const out = await ask(
     `你在帮一个学生为游戏创作比赛找玩法参考。你的任务不是给答案，是**想清楚该去找什么**。
-只输出下面要求的两段，不要任何解释、不要开场白。`,
+只输出下面要求的两段，不要任何解释、不要开场白。
+小标题就写「待解问题」和「检索词」，**前后不要加星号、井号或任何符号**。`,
     `下面是他的技术背景，和他这个比赛项目的方案。
 
 【技术背景】
@@ -144,8 +175,23 @@ ${brief}
 - 不要引号、不要编号、一行一条`,
     1500, { deep: true, effort: 'high', timeout: 300000 })
 
-  if (!out || /方案太空/.test(out)) return null
-  return parsePlan(out)
+  if (!out) {
+    console.log('  模型没返回（检查 DEEPSEEK_API_KEY 配了没有）')
+    return null
+  }
+  if (/方案太空/.test(out)) {
+    console.log('  她判断方案太空，抽不出问题')
+    return null
+  }
+  const parsed = parsePlan(out)
+  if (!parsed) {
+    // 解析失败时必须把她真正说了什么打出来。以前这里静默返回 null，
+    // 结果日志上只有一句「方案太空」—— 而方案其实一点都不空，
+    // 只是她把小标题写成了 **待解问题**。那次谁都不知道发生了什么。
+    console.log('  她的回答解析不出来。原样贴在下面，方便对照：')
+    console.log(String(out).split('\n').slice(0, 40).map(l => '    | ' + l).join('\n'))
+  }
+  return parsed
 }
 
 // ---------------- 第二步：解析成文 ----------------
@@ -225,10 +271,17 @@ export const buildIdea = async () => {
 
   // —— 第一步：想清楚找什么
   console.log('  先想清楚要找什么…（深度思考）')
-  const plan = await makePlan(profile, briefText)
+  let plan = await makePlan(profile, briefText)
+  if (!plan) {
+    // 模型的格式没对上。方案里本来就写着这两节，直接读它 ——
+    // 这比「判定方案太空然后什么都不做」诚实得多。
+    plan = parseBriefSections(briefText)
+    if (plan) console.log('  （她给的格式没对上，改成直接读方案里写好的那两节）')
+  }
   if (!plan) {
     console.log('  从方案里抽不出具体的待解问题 —— 说明方案还太空。')
     console.log('  这时候去搜只会搜回一堆「十大好玩的游戏」，所以这次不找。')
+    console.log('  在 brief.md 里加两节就行，标题分别写「待解问题」和「检索词」，各列几条。')
     return null
   }
   console.log('  待解问题：')

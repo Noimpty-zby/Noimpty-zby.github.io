@@ -6,6 +6,7 @@
 
 import { listDiscussions, createDiscussion, addComment, addReaction, marker, hasMarker, SIGN, findDiscussion, giscusTitle } from './github.mjs'
 import { ask } from '../daily-report/narrate.mjs'
+import { createHash } from 'node:crypto'
 
 const SITE = (process.env.SITE_URL || 'https://noimpty-zby.github.io').replace(/\/$/, '')
 const T = (ms = 15000) => AbortSignal.timeout(ms)
@@ -118,9 +119,17 @@ const inspect = async pageUrl => {
     try { imgs.add(new URL(h, pageUrl).href) } catch (_) {}
   })
 
+  // 每页设上限。一条失败的探测最坏要花 15+25+25 秒超时再加 5 秒等待，
+  // 不封顶的话「40 篇文章 × 每篇 30 个链接」在被限流时能跑几个小时。
+  const PER_PAGE = 25
+  const linkList = [...links].slice(0, PER_PAGE)
+  const imgList = [...imgs].slice(0, PER_PAGE)
+  const skipped = (links.size - linkList.length) + (imgs.size - imgList.length)
+  if (skipped) console.log(`  ${title}：链接太多，本次只查前 ${PER_PAGE} 个，跳过 ${skipped} 个`)
+
   const found = [
-    ...(await mapLimit([...links], 3, u => probe(u, 'link'))),
-    ...(await mapLimit([...imgs], 3, u => probe(u, 'img')))
+    ...(await mapLimit(linkList, 3, u => probe(u, 'link'))),
+    ...(await mapLimit(imgList, 3, u => probe(u, 'img')))
   ].filter(Boolean)
 
   return { pageUrl, title, issues: issues.concat(found) }
@@ -177,7 +186,10 @@ export const patrol = async () => {
   for (const item of broken) {
     const path = new URL(item.pageUrl).pathname
     // 同一篇文章的同一组问题只提醒一次
-    const key = Buffer.from(item.issues.map(i => i.what).join('|')).toString('base64url').slice(0, 24)
+    // 必须是摘要，不能是截断的原文。原文都以「链接 /2026/07/20/」开头，
+    // 截到 18 字节后不同文章的不同问题会算出同一个键 ——
+    // 第二个问题会被当成「已经报过了」永远沉掉。
+    const key = createHash('sha256').update(item.issues.map(i => i.what).join('|')).digest('base64url').slice(0, 24)
 
     let disc = findDiscussion(discussions, path)
     if (disc && hasMarker(disc, 'patrol', key)) { continue }

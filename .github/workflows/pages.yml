@@ -6,11 +6,10 @@ on:
       - main
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
+# 权限写在各个 job 上，不写在这里。
+# 写在这里的话 build 也会拿到 pages:write 和 id-token:write ——
+# 而 build 要跑 npm ci（五百多个包的安装脚本）和 hexo generate，
+# 一个被投毒的传递依赖就能直接签发部署，绕开 deploy。
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -18,6 +17,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -34,6 +35,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # 构建之前先跑测试。红了就别部署 ——
+      # 这里面守的是「保存日程不会抹掉娜娜莉自动勾的结果」这类不可逆的事。
+      - name: 跑测试
+        run: npm test
+
       - name: Build site
         run: npm run clean && npm run build
 
@@ -47,6 +53,10 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     needs: build
     steps:
       - name: Deploy to GitHub Pages

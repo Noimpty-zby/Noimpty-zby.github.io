@@ -68,9 +68,12 @@ export const getTrafficGoatCounter = async () => {
   }
   const range = { start: new Date(WINDOW.start).toISOString(), end: new Date(WINDOW.end).toISOString() }
   try {
-    const [total, hits] = await Promise.all([
+    // 顺便查一次「有史以来」的总量：用来区分「今天没人来」和「统计根本没装上」
+    const everRange = { start: '2020-01-01T00:00:00Z', end: range.end }
+    const [total, hits, ever] = await Promise.all([
       gcGet('/stats/total', range),
-      gcGet('/stats/hits', { ...range, limit: 10 }).catch(() => ({ hits: [] }))
+      gcGet('/stats/hits', { ...range, limit: 10 }).catch(() => ({ hits: [] })),
+      gcGet('/stats/total', everRange).catch(() => null)
     ])
     // 来源接口在不同版本里路径不一样，取不到就算了，不影响主体
     let referrers = []
@@ -86,6 +89,8 @@ export const getTrafficGoatCounter = async () => {
       ok: true,
       source: 'GoatCounter',
       pageviews: Number(total.total || 0),
+      // null = 查不到，别据此下任何结论
+      everRecorded: ever ? Number(ever.total || 0) > 0 : null,
       // GoatCounter 不提供和 Umami 同口径的「访客数」，不编造，留空由渲染层处理
       visitors: null,
       visits: null,
@@ -216,6 +221,7 @@ export const getNewPosts = async () => {
         file: f,
         title: field('title') || f.split('/').pop().replace(/\.md$/, ''),
         privacy: field('privacy'),
+        author: field('author'),
         series: field('series'),
         date: Date.parse(field('date')) || 0,
         words: body.replace(/\s/g, '').length,
@@ -223,6 +229,10 @@ export const getNewPosts = async () => {
       }
     })
       .filter(p => p.privacy.toLowerCase() !== 'protected')
+      // 她自己写的专栏不算「主人发了新文章」。否则每个周日：
+      // 标题栏写「1 篇新文章」、烧一次模型让她给自己的随笔写读后感、
+      // 日程里关键词恰好命中的任务还会被自动勾上。
+      .filter(p => !/(^|\/)nanaly-/.test(p.file) && p.author !== '娜娜莉')
       .filter(p => !p.date || p.date >= WINDOW.start - DATE_GRACE)
       .sort((a, b) => b.date - a.date)
 
@@ -251,7 +261,12 @@ export const getOwnerHeartbeat = async (lookbackDays = 90) => {
     url.searchParams.set('start', start)
     url.searchParams.set('end', end)
     url.searchParams.set('daily', 'true')
+    // /owner-heartbeat 每小时最多一条，是站上访问量最低的路径之一，
+    // 而这个接口按访问量排序 —— 站点路径一多它就被挤出前 100，
+    // 于是「查不到心跳」和「他真的没来过」变得无法区分，想念邮件从此永远不发。
+    // 直接按路径过滤，不再靠排名。
     url.searchParams.set('limit', '100')
+    url.searchParams.set('filter', OWNER_PATH)
     const data = await jget(url.href, {
       Authorization: `Bearer ${CFG.gcToken}`, 'Content-Type': 'application/json'
     }, 25000)

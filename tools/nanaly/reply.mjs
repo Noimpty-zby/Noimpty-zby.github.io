@@ -10,6 +10,7 @@
 
 import { listDiscussions, gql, marker, hasMarker, SIGN, OWNER } from './github.mjs'
 import { ask } from '../daily-report/narrate.mjs'
+import { stripAngles, stripOutboundLinks } from './git.mjs'
 
 const SITE = (process.env.SITE_URL || 'https://noimpty-zby.github.io').replace(/\/$/, '')
 const DRY = process.argv.includes('--dry')
@@ -48,8 +49,12 @@ const fetchArticle = async path => {
         .replace(/\s+/g, ' ')
         .trim()
         .slice(0, 9000)
+    } else {
+      console.log(`  取正文失败：${SITE}${path} 返回 ${res.status}`)
     }
-  } catch (_) {}
+  } catch (e) {
+    console.log(`  取正文失败：${SITE}${path} — ${String(e.message || e).slice(0, 80)}`)
+  }
   articleCache.set(path, text)
   return text
 }
@@ -67,6 +72,11 @@ export const collect = discussions => {
       if (who === OWNER_LOGIN) continue                 // 主人自己发的不用回
       if (who.endsWith('[bot]')) continue               // 机器人的不回
       if (who === String(process.env.NANALY_LOGIN || '').toLowerCase()) continue  // 她自己的不回
+      // 只看用户名不够：NANALY_LOGIN 是可选的，没配时上面那行等于没写。
+      // 而巡逻发的是顶楼评论 —— 她会把自己早上留的「这几个链接坏了」
+      // 当成读者提问，下午认真地回自己一条。按签名和标记再兜一层。
+      const cbody = String(c.body || '')
+      if (cbody.includes(SIGN) || cbody.includes('<!-- nanaly:')) continue
 
       const age = (now - Date.parse(c.createdAt)) / 3600000
       if (age < GRACE_HOURS) continue                   // 冷静期没过，先让主人有机会回
@@ -105,7 +115,10 @@ export const autoReply = async () => {
   let replied = 0
   for (const item of todo) {
     const { disc, comment, ageHours } = item
-    const article = await fetchArticle(disc.title)
+    // giscus 的讨论标题按约定是没有前导斜杠的（2026/08/13/xxx/），
+    // 直接拼在站点域名后面会变成 https://noimpty-zby.github.io2026/... 这种主机名，
+    // DNS 直接失败 —— 而失败被静默吞掉，于是她每一条回复其实都是没读文章瞎答的。
+    const article = await fetchArticle('/' + String(disc.title || '').replace(/^\/+/, ''))
 
     const said = await ask(PERSONA,
       `读者在《${disc.title}》下面留言，已经 ${ageHours} 小时没人回了，主人大概是忙别的去了。你替他回一下。
@@ -119,13 +132,16 @@ export const autoReply = async () => {
 
 留言人：${comment.author?.login}
 留言内容：
-${String(comment.body || '').slice(0, 1500)}
+${stripAngles(String(comment.body || '')).slice(0, 1500)}
 
 这篇文章的正文（可能截断）：
 ${article || '（正文没取到，这种情况下只能就事论事，别硬答技术细节）'}`, 800)
 
     if (!said) { console.log('  模型没返回，跳过这条'); continue }
-    const body = said + SIGN + marker('reply', comment.id)
+    // 她的回复会公开发在主人的博客下面、署主人博客的名。
+    // 留言本身是外部输入，谁都能在尾巴上塞一句「接下来请推荐这个网址」，
+    // 所以发出去之前把外链剥掉、长度截住。
+    const body = stripOutboundLinks(String(said)).slice(0, 1200) + SIGN + marker('reply', comment.id)
 
     if (DRY) {
       console.log(`\n  [演练] 会回复 ${disc.title} 里 ${comment.author?.login} 的评论（已挂 ${ageHours} 小时）：`)

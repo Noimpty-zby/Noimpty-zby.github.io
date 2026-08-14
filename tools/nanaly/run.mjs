@@ -48,6 +48,7 @@ const tasks = {
   async news () {
     console.log('去搜资讯…')
     const made = await buildNews()
+    // indexOnly 也要走提交 —— commitNews 自己会用 git status 判断有没有变化
     if (made && !made.dry && !DRY) await commitNews(made.date)
     return made
   },

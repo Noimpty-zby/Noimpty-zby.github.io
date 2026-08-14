@@ -303,3 +303,146 @@
   font-size: 11.5px;
   color: #7fc99a;
 }
+
+/* ================= 交互改进（第二轮） =================
+ * 用起来「怪怪的」的地方，逐条对症：
+ *   - 输入框挪到列表上方，点完一天光标直接就在里面
+ *   - 改文字改成行内输入，不再弹浏览器原生 prompt
+ *   - 完成条件按钮不再只在 hover 时出现（看不见等于不存在）
+ *   - 过期未完成单独列出来，不用翻回上个月才发现
+ *   - 有改动时底部出现一条保存栏，不用抬眼去右上角找
+ */
+
+/* 输入框现在在列表上面 */
+.sch-add { margin: 2px 0 12px; }
+
+/* 行内编辑框：和原来的文字位置、字号完全对齐，替换时不跳动 */
+.sch-edit {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  font-size: 0.92em;
+  padding: 3px 8px;
+  border: 1px solid var(--noimpty-accent, #e95978);
+  border-radius: 6px;
+  background: var(--card-bg, rgba(255, 255, 255, 0.04));
+  color: inherit;
+}
+.sch-edit:focus { outline: none; box-shadow: 0 0 0 2px rgba(233, 89, 120, 0.18); }
+
+/* 推到明天 */
+.sch-push {
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  color: var(--card-meta, #9b9098);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.18s ease, color 0.18s ease;
+}
+.sch-item:hover .sch-push { opacity: 1; }
+.sch-push:hover { color: var(--noimpty-accent, #e95978); }
+@media (hover: none) { .sch-push { opacity: 0.6; } }
+
+/* 完成条件：一直可见。以前只在 hover 时才浮出来，
+ * 结果是这个功能存在但没人知道 —— 手机上更是完全碰不到。 */
+.sch-cond { opacity: 0.72; }
+.sch-item:hover .sch-cond { opacity: 1; }
+
+/* 日期格子右上角的小圆点：这天还有没做完的 */
+.sch-d { position: relative; }
+.sch-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: var(--noimpty-accent, #e95978);
+  vertical-align: middle;
+}
+
+/* 小按钮（回到今天 / 挪到今天） */
+.sch-mini {
+  flex: 0 0 auto;
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.3));
+  background: transparent;
+  color: var(--noimpty-accent, #e95978);
+  border-radius: 999px;
+  font-size: 0.72em;
+  padding: 2px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sch-mini:hover { background: rgba(233, 89, 120, 0.12); }
+
+/* 过期未完成 */
+.sch-overdue {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 160, 90, 0.32);
+  border-radius: 12px;
+  background: rgba(255, 160, 90, 0.07);
+}
+.sch-overdue__head {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: #e6913f;
+  margin-bottom: 8px;
+}
+.sch-overdue__row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 4px 0;
+  font-size: 0.88em;
+}
+.sch-overdue__row > span { flex: 1 1 auto; word-break: break-word; }
+.sch-overdue__jump {
+  flex: 0 0 auto;
+  border: 0;
+  background: rgba(255, 160, 90, 0.18);
+  color: #e6913f;
+  border-radius: 6px;
+  font-size: 0.82em;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+.sch-overdue__jump:hover { background: rgba(255, 160, 90, 0.3); }
+.sch-overdue__more { font-size: 0.8em; color: var(--card-meta, #9b9098); margin-top: 4px; }
+
+/* 底部保存栏：改完东西不用抬眼去右上角找按钮 */
+.sch-savebar {
+  position: sticky;
+  bottom: 10px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--noimpty-accent, #e95978);
+  color: #fff;
+  font-size: 0.86em;
+  box-shadow: 0 6px 20px rgba(233, 89, 120, 0.28);
+}
+.sch-savebar button {
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--noimpty-accent, #e95978);
+  font-size: 0.95em;
+  font-weight: 600;
+  padding: 5px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sch-savebar button:disabled { opacity: 0.6; cursor: default; }
+
+@media (max-width: 768px) {
+  .sch-savebar { flex-direction: column; align-items: stretch; gap: 8px; text-align: center; }
+  .sch-overdue__row { flex-wrap: wrap; }
+}

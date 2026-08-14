@@ -55,7 +55,9 @@ export const listDiscussions = async () => {
             comments(first:50){
               nodes{
                 id body createdAt url author{ login }
-                replies(first:20){ nodes{ id body createdAt author{ login } } }
+                # 必须是 last。去重靠的是找她自己留的标记，取最旧的 20 条时
+                # 楼层一多标记就被挤出视野，她会一遍遍重复回同一条评论。
+                replies(last:20){ nodes{ id body createdAt author{ login } } }
               }
             }
           }

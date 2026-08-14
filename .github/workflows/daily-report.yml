@@ -73,8 +73,10 @@ jobs:
             node tools/daily-report/run.mjs
           fi
 
-      - name: 上传报告备份
-        if: always()
+      # 只在失败时上传。这个仓库是公开的 —— Actions 的产物任何人都能下载，
+      # 而 report.html 里有访问量、来源、每一条日程，这些都不该公开。
+      - name: 上传报告备份（仅失败时，便于排查）
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: report-${{ github.run_number }}

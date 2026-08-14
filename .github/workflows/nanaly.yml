@@ -2,8 +2,12 @@ name: 娜娜莉的日常
 
 on:
   schedule:
-    # 回评：每两小时看一眼有没有挂太久没人回的评论
-    - cron: '0 */2 * * *'
+    # 回评：每 6 小时看一眼有没有挂太久没人回的评论。
+    #
+    # 以前是每 2 小时，一天跑 12 次 —— 而她的冷静期本来就是 6 小时
+    # （要先给主人自己回的机会），所以两小时一趟里有五趟必然是空跑，
+    # 只是在 Actions 列表上刷屏。改成和冷静期同步，一天 4 次。
+    - cron: '0 */6 * * *'
     # 巡逻：每天北京时间早上 9 点（UTC 01:00）
     - cron: '0 1 * * *'
     # 资讯：每三天一期，北京时间上午 10 点（UTC 02:00）
@@ -11,12 +15,15 @@ on:
     - cron: '0 2 */3 * *'
     # 写随笔：每周日北京时间晚上 8 点（UTC 12:00 周日）
     - cron: '0 12 * * 0'
+    # 找点子：每周三北京时间晚上 9 点（UTC 13:00 周三）。
+    # 走深度思考，慢且贵，一周一次足够。
+    - cron: '0 13 * * 3'
   workflow_dispatch:
     inputs:
       what:
         description: '做什么'
         type: choice
-        options: [reply, patrol, notes, news, react, column, all]
+        options: [reply, patrol, notes, news, ideas, react, column, all]
         default: patrol
       dry:
         description: '只演练不动真格'
@@ -56,6 +63,9 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "what=${{ inputs.what }}" >> $GITHUB_OUTPUT
             echo "dry=${{ inputs.dry && '--dry' || '' }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.schedule }}" = "0 13 * * 3" ]; then
+            echo "what=ideas" >> $GITHUB_OUTPUT
+            echo "dry=" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "0 12 * * 0" ]; then
             echo "what=column" >> $GITHUB_OUTPUT
             echo "dry=" >> $GITHUB_OUTPUT
@@ -87,6 +97,12 @@ jobs:
           NANALY_NOTES_MAX: '4'
           # 资讯板块用它去搜。和娜娜莉浏览器里那把是同一个 Tavily key。
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          # 点子和比赛方案存在一个**私有**仓库里，不进这个公开仓库。
+          # IDEAS_REPO 例：Noimpty-zby/noimpty-ideas
+          # IDEAS_TOKEN 是一把细粒度 PAT，只勾那个私有仓库、只给 Contents 读写。
+          # 两个都没配的话，ideas 这一步会直接跳过 —— 绝不会退回到往公开仓库里写。
+          IDEAS_REPO: ${{ secrets.IDEAS_REPO }}
+          IDEAS_TOKEN: ${{ secrets.IDEAS_TOKEN }}
           # 她提交时用的署名。不配就用一个不会关联到任何 GitHub 账号的地址。
           # 想让她的提交显示成你小号的头像：用小号登录 github.com/settings/emails，
           # 复制那个形如 12345678+用户名@users.noreply.github.com 的地址存成这个 secret。

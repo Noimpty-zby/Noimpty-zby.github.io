@@ -1,8 +1,9 @@
-.DS_Store
-Thumbs.db
-db.json
-*.log
 node_modules/
 public/
+db.json
 .deploy*/
-_multiconfig.yml
+
+# 本地跑日报时生成的临时产物，不要提交
+report.html
+report-subject.txt
+report-skip.txt

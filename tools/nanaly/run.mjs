@@ -6,6 +6,7 @@
 //   node tools/nanaly/run.mjs notes    给文章写段落批注并提交
 //   node tools/nanaly/run.mjs news     搜一轮资讯，整理成一期并提交
 //   node tools/nanaly/run.mjs column   写一篇她自己的随笔并提交
+//   node tools/nanaly/run.mjs ideas    为腾讯游戏创作大赛找玩法参考，写进 Ideas 板块
 //   node tools/nanaly/run.mjs all      全做一遍
 //
 // 加 --dry 只演练不动真格（不发评论、不提交），把会做的事打印出来。
@@ -15,6 +16,7 @@ import { autoReply } from './reply.mjs'
 import { buildNotes, commitNotes } from './notes.mjs'
 import { buildNews, commitNews } from './news.mjs'
 import { writeColumn, commitAndPush } from './column.mjs'
+import { buildIdea } from './ideas.mjs'
 import { getComments } from '../daily-report/sources.mjs'
 
 const DRY = process.argv.includes('--dry')
@@ -52,6 +54,11 @@ const tasks = {
     if (made && !made.dry && !DRY) await commitNews(made.date)
     return made
   },
+  async ideas () {
+    console.log('找点子中…（深度思考，这一步会比较慢）')
+    // 不需要 commit：点子直接写进私有仓库，博客仓库一个字节都不动
+    return await buildIdea()
+  },
   async column () {
     console.log('写随笔中…')
     const cm = await getComments().catch(() => ({ ok: false }))
@@ -63,7 +70,7 @@ const tasks = {
 
 const main = async () => {
   console.log(DRY ? '【演练模式，不会真的发评论或提交】\n' : '')
-  const list = what === 'all' ? ['reply', 'patrol', 'notes', 'news', 'react', 'column'] : [what]
+  const list = what === 'all' ? ['reply', 'patrol', 'notes', 'news', 'react', 'column', 'ideas'] : [what]
   for (const t of list) {
     if (!tasks[t]) { console.log(`不认识的动作：${t}`); continue }
     try {

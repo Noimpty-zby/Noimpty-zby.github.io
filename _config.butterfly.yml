@@ -24,6 +24,7 @@ menu:
   Life: /life/ || fas fa-heart
   资讯: /news/ || fas fa-newspaper
   日程: /schedule/ || fas fa-calendar-days
+  点子: /ideas-vault/ || fas fa-lightbulb
   归档: /archives/ || fas fa-box-archive
   分类: /categories/ || fas fa-folder-open
   标签: /tags/ || fas fa-tags
@@ -1101,12 +1102,17 @@ inject:
     - <link rel="stylesheet" href="/css/noimpty-ai.css">
     - <link rel="stylesheet" href="/css/nanaly-notes.css">
     - <link rel="stylesheet" href="/css/schedule.css">
+    - <link rel="stylesheet" href="/css/ideas-vault.css">
     - <script src="/js/protected-manifest.js"></script>
     - <script src="/js/privacy-gate.js"></script>
     - <script src="/js/section-hub.js"></script>
     # ↓↓↓ GoatCounter 访问统计。把 '' 里填成你的站点代号（xxx.goatcounter.com 里的 xxx）
     # 留空则完全不加载统计脚本。这不是密钥，它本来就会出现在网页源码里。
-    - <script>window.NOIMPTY_GC_CODE = ''</script>
+    - <script>window.NOIMPTY_GC_CODE = 'noimpty'</script>
+    # 比赛方案和点子存在这个**私有**仓库里，不进博客仓库、不进构建产物。
+    # 填成「你的用户名/私有仓库名」，例如 Noimpty-zby/noimpty-ideas。
+    # 这一行会出现在网页源码里，但仓库是私有的 —— 没有 token 谁都读不到，所以不算泄漏。
+    - <script>window.NOIMPTY_IDEAS_REPO = 'Noimpty-zby/noimpty-ideas'</script>
     - <script src="/js/analytics.js"></script>
   bottom:
     - <script src="/js/toc-sync.js"></script>
@@ -1114,6 +1120,7 @@ inject:
     # 娜娜莉：API Key 不写在代码里，由使用者在面板中输入并存在本机 localStorage
     - <script src="/js/noimpty-ai.js"></script>
     - <script src="/js/schedule.js"></script>
+    - <script src="/js/ideas-vault.js"></script>
 
 # CDN Settings
 # Don't modify the following settings unless you know how they work

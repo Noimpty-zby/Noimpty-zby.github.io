@@ -1,11 +1,15 @@
 {
-  "updatedAt": "2026-08-15T10:04:05.543Z",
+  "updatedAt": "2026-08-15T13:50:18.829Z",
   "days": {
     "2026-08-15": [
       {
         "id": "tmsu7j5k562mb",
         "text": "提交作业二博客",
-        "done": false
+        "done": false,
+        "when": {
+          "type": "post",
+          "match": "作业二"
+        }
       }
     ],
     "2026-08-16": [

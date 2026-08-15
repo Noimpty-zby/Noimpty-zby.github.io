@@ -19,8 +19,6 @@ series: UE5 ActionRoguelike
 
 这是我跟随 Tom Looman 学习 UE5 C++ 时，对 **Assignment 1** 的完整复盘。
 
-前两篇见{% post_link UE5-ActionRoguelike-Chapter1 %}和{% post_link UE5-ActionRoguelike-Chapter2 %}。
-
 本次使用的开发环境：
 
 - Unreal Engine `5.6.1`

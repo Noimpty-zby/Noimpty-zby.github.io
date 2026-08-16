@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-08-15T14:16:09.193Z",
+  "updatedAt": "2026-08-16T03:34:09.486Z",
   "days": {
     "2026-08-15": [
       {
@@ -16,8 +16,13 @@
     ],
     "2026-08-16": [
       {
-        "id": "tmsror2zm8s7d",
-        "text": "完成作业二",
+        "id": "tmsv90xfdk9wm",
+        "text": "学完Tom Looman第五章：属性",
+        "done": false
+      },
+      {
+        "id": "tmsv92r2pbpig",
+        "text": "提交第五章属性博客",
         "done": false
       }
     ]

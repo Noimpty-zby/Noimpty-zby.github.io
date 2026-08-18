@@ -62,7 +62,19 @@ export const writeColumn = async ({ comments = [], patrolNote = '' } = {}) => {
   // 一周一篇，已经写过就不写了
   const week = `${now.getFullYear()}-w${String(Math.ceil((((now - new Date(now.getFullYear(), 0, 1)) / 86400000) + 1) / 7)).padStart(2, '0')}`
   const file = `${DIR}/${PREFIX}${week}.md`
-  if (existsSync(file)) { console.log(`  ${file} 已经存在，这周写过了`); return null }
+  // 同 news / ideas：演练和强制重写不该被「这周写过了」挡住
+  const already = existsSync(file)
+  const force = process.env.NANALY_FORCE === '1'
+  if (already && !DRY && !force) {
+    console.log(`  ${file} 已经存在，这周写过了`)
+    console.log('  想重写：把工作流的「强制重写」勾上')
+    return null
+  }
+  if (already) {
+    console.log(force
+      ? `  ${file} 已经存在，但你要求强制重写 —— 会覆盖`
+      : `  ${file} 已经存在 —— 正式跑会跳过，但演练照常给你看`)
+  }
 
   const ctx = [
     recentContext(),

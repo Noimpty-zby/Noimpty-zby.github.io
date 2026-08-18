@@ -1108,11 +1108,11 @@ inject:
     - <script src="/js/section-hub.js"></script>
     # ↓↓↓ GoatCounter 访问统计。把 '' 里填成你的站点代号（xxx.goatcounter.com 里的 xxx）
     # 留空则完全不加载统计脚本。这不是密钥，它本来就会出现在网页源码里。
-    - <script>window.NOIMPTY_GC_CODE = 'noimpty'</script>
+    - <script>window.NOIMPTY_GC_CODE = ''</script>
     # 比赛方案和点子存在这个**私有**仓库里，不进博客仓库、不进构建产物。
     # 填成「你的用户名/私有仓库名」，例如 Noimpty-zby/noimpty-ideas。
     # 这一行会出现在网页源码里，但仓库是私有的 —— 没有 token 谁都读不到，所以不算泄漏。
-    - <script>window.NOIMPTY_IDEAS_REPO = 'Noimpty-zby/noimpty-ideas'</script>
+    - <script>window.NOIMPTY_IDEAS_REPO = ''</script>
     - <script src="/js/analytics.js"></script>
   bottom:
     - <script src="/js/toc-sync.js"></script>

@@ -1,17 +1,28 @@
 {
-  "updatedAt": "2026-08-15T10:04:05.543Z",
+  "updatedAt": "2026-08-18T04:46:07.521Z",
   "days": {
     "2026-08-15": [
       {
         "id": "tmsu7j5k562mb",
         "text": "提交作业二博客",
-        "done": false
+        "done": true,
+        "when": {
+          "type": "post",
+          "match": "作业二"
+        },
+        "autoAt": "2026-08-15T14:16:09.193Z",
+        "autoWhy": "你发了《UE5 C++ 作业二复盘：黑洞引力与传送接力，深度理解时序控制与物理逻辑》"
       }
     ],
-    "2026-08-16": [
+    "2026-08-18": [
       {
-        "id": "tmsror2zm8s7d",
-        "text": "完成作业二",
+        "id": "tmsv90xfdk9wm",
+        "text": "学完Tom Looman第五章：属性",
+        "done": false
+      },
+      {
+        "id": "tmsv92r2pbpig",
+        "text": "提交第五章属性博客",
         "done": false
       }
     ]

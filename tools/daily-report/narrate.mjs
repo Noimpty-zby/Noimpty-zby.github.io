@@ -36,8 +36,14 @@ const PRO_MODEL = process.env.DEEPSEEK_PRO_MODEL || 'deepseek-v4-pro'
  * @param {string} system 人设 / 角色
  * @param {string} user   正文提示
  * @param {number} maxTokens
- * @param {{deep?: boolean, effort?: string, timeout?: number}} opts
- *        deep=true → 换 pro 模型并打开思考。慢很多，也贵很多。
+ * @param {{deep?: boolean, effort?: string, timeout?: number, retries?: number, label?: string}} opts
+ *        deep=true  → 换 pro 模型并打开思考。慢很多，也贵很多。
+ *        retries=N  → 失败后再试 N 次（默认 0）。
+ *
+ * 为什么要有 retries：点子那一步一晚上只跑一次，一次 pro + 深度思考。
+ * 主人跑了两次只成功一次，失败那次日志上只有「模型没返回」——
+ * 这种一次性的活儿，一个超时或者一个 502 就等于这一天白跑了。
+ * 所以那一步显式要重试，而且失败原因要写清楚，不能只留一句「没返回」。
  */
 export const ask = async (system, user, maxTokens = 700, opts = {}) => {
   if (!KEY) return null
@@ -46,29 +52,57 @@ export const ask = async (system, user, maxTokens = 700, opts = {}) => {
   const model = deep ? PRO_MODEL : MODEL
   // 深度思考要留出推理的 token，也要给更长的超时 —— 不然刚想到一半就被掐了
   const timeout = opts.timeout || (deep ? 300000 : 90000)
-  try {
-    const res = await fetch(`${BASE}/chat/completions`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', Authorization: `Bearer ${KEY}` },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-        thinking: { type: thinking },
-        // 开思考时不支持 temperature 这类采样参数
-        ...(thinking === 'enabled'
-          ? { reasoning_effort: opts.effort || 'high' }
-          : { temperature: 0.7 }),
-        max_tokens: maxTokens
-      }),
-      signal: AbortSignal.timeout(timeout)
-    })
-    if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 160)}`)
-    const data = await res.json()
-    return String(data.choices?.[0]?.message?.content || '').trim() || null
-  } catch (e) {
-    console.error(`  [narrate${deep ? '/pro' : ''}] 调用失败：`, String(e.message || e).slice(0, 160))
-    return null
+  const tries = Math.max(1, 1 + (Number(opts.retries) || 0))
+  const tag = `narrate${deep ? '/pro' : ''}${opts.label ? '/' + opts.label : ''}`
+
+  let lastWhy = '未知原因'
+  for (let attempt = 1; attempt <= tries; attempt++) {
+    let retryable = true
+    try {
+      const res = await fetch(`${BASE}/chat/completions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', Authorization: `Bearer ${KEY}` },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+          thinking: { type: thinking },
+          // 开思考时不支持 temperature 这类采样参数
+          ...(thinking === 'enabled'
+            ? { reasoning_effort: opts.effort || 'high' }
+            : { temperature: 0.7 }),
+          max_tokens: maxTokens
+        }),
+        signal: AbortSignal.timeout(timeout)
+      })
+      if (!res.ok) {
+        const body = (await res.text()).slice(0, 160)
+        // 4xx 是我们自己请求写错了（除了 429 限流），重试多少次都一样
+        retryable = res.status === 429 || res.status >= 500
+        throw new Error(`${res.status} ${body}`)
+      }
+      const data = await res.json()
+      const choice = data.choices?.[0] || {}
+      const out = String(choice.message?.content || '').trim()
+      if (out) return out
+
+      // 有响应但正文是空的。这是最容易被误读成「模型没返回」的一种，
+      // 实际上多半是 max_tokens 被推理过程吃光了（finish_reason=length）。
+      const why = choice.finish_reason === 'length'
+        ? `正文是空的（finish_reason=length，max_tokens=${maxTokens} 被推理过程吃光了，调大一点）`
+        : `正文是空的（finish_reason=${choice.finish_reason || '未知'}）`
+      throw new Error(why)
+    } catch (e) {
+      lastWhy = String(e.message || e).slice(0, 200)
+      const more = retryable && attempt < tries
+      console.error(`  [${tag}] 第 ${attempt}/${tries} 次失败：${lastWhy}${more ? '，等一下再试' : ''}`)
+      if (!more) break
+      // 退避 5s / 10s / 20s —— 限流和服务端抽风都需要一点时间缓过来
+      await new Promise(r => setTimeout(r, 5000 * 2 ** (attempt - 1)))
+    }
   }
+  // 让调用方能把真实原因写进日志，而不是只报一句「没返回」
+  ask.lastError = lastWhy
+  return null
 }
 
 // ---------------- 开场小结 ----------------

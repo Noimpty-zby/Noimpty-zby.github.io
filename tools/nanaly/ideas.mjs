@@ -127,7 +127,7 @@ export const parseBriefSections = brief => {
   return { ...r, fromBrief: true }
 }
 
-const makePlan = async (profile, brief) => {
+const makePlan = async (profile, brief, covered = []) => {
   const out = await ask(
     `你在帮一个学生为游戏创作比赛找玩法参考。你的任务不是给答案，是**想清楚该去找什么**。
 只输出下面要求的两段，不要任何解释、不要开场白。
@@ -172,8 +172,11 @@ ${brief}
   ✓「音游 判定窗口 容错 设计」✓「rhythm game difficulty curve design breakdown」
 - 至少 3 条英文（英文的机制拆解资料多得多）
 - 每条对应上面某一个待解问题
-- 不要引号、不要编号、一行一条`,
-    1500, { deep: true, effort: 'high', timeout: 300000 })
+- 不要引号、不要编号、一行一条
+${covered.length ? `
+**这几个角度最近已经写过了，这次换一批检索词，别再绕回同样的资料：**
+${covered.map(t => '- ' + t).join('\n')}` : ''}`,
+    1500, { deep: true, effort: 'high', timeout: 300000, retries: 1, label: '想清楚要找什么' })
 
   if (!out) {
     console.log('  模型没返回（检查 DEEPSEEK_API_KEY 配了没有）')
@@ -266,12 +269,31 @@ export const buildIdea = async () => {
   const stamp = beijingNow()
   const date = stamp.slice(0, 10)
 
+  // 同 news：演练和强制重写都不该被「今天已经写过」挡住。
+  // 演练本来就不落盘，挡住它等于让演练一天只能用一次。
   const existing = await listPrivate(IDEAS_DIR).catch(() => [])
-  if (existing.includes(`${date}.md`)) { console.log(`  ${date} 今天已经写过了`); return null }
+  const already = existing.includes(`${date}.md`)
+  const force = process.env.NANALY_FORCE === '1'
+  if (already && !DRY && !force) {
+    console.log(`  ${date} 今天已经写过了`)
+    console.log('  想重写：把工作流的「强制重写」勾上')
+    return null
+  }
+  if (already) {
+    console.log(force
+      ? `  ${date} 今天已经写过，但你要求强制重写 —— 会覆盖`
+      : `  ${date} 今天已经写过 —— 正式跑会跳过，但演练照常给你看`)
+  }
 
   // —— 第一步：想清楚找什么
+  //
+  // 一周三次之后有个新问题：方案是固定的，她每次抽出来的检索词也就大同小异，
+  // 搜回来的还是那批资料，被 usedUrls 一滤就「素材太少」。
+  // 所以把最近写过的标题也告诉她，让她换个角度。
+  const covered = await recentTitles()
+  if (covered.length) console.log(`  最近写过：${covered.join('、')}`)
   console.log('  先想清楚要找什么…（深度思考）')
-  let plan = await makePlan(profile, briefText)
+  let plan = await makePlan(profile, briefText, covered)
   if (!plan) {
     // 模型的格式没对上。方案里本来就写着这两节，直接读它 ——
     // 这比「判定方案太空然后什么都不做」诚实得多。
@@ -390,8 +412,19 @@ ${BODY_MARK}
 ━━━ 别的规矩 ━━━
 
 - 引用素材里的事实时，在句子后面写编号，比如 \`[3]\`。**不要自己写网址**，链接窝会挂
+- **编号只写在正文的句子里，不许写进小标题** —— 标题里挂角标很难看
 - 素材里没写的东西不许编。你自己的判断用「窝觉得」标出来
 - 不许出现「值得关注」「值得学习」「可以参考一下」这类谁都能说的话
+
+━━━ 排版（主人说上一篇「纯是文字的堆砌，没有阅读的欲望」）━━━
+
+- 小标题一律用井号写：机制那一层用 \`##\`，机制里面再分小节用 \`###\`。
+  **不许用「**加粗**单独占一行」来当小标题**
+- 一段最多 4 行。写到第 5 行就换段，长段是最劝退的东西
+- 要对比几个方案的取舍时，**用 markdown 表格**，别写成一长串顿号
+- 「怎么运作 / 为什么解决 / 搬过来什么样 / UE5 怎么做 / 代价 / 和已否决的区别」
+  这六条用有序列表，每条开头是加粗的小标签加破折号，就照上面给的格式
+- 最后不要写 \`===结束===\` 之类的收尾标记，正文写完就停
 
 ━━━ 参考指数怎么给（老实给，别给人情分）━━━
 
@@ -402,9 +435,14 @@ ${BODY_MARK}
 - **1 星**：基本没关系 —— 给得出 1 星就说明这篇不该存在，那就交白卷
 
 素材：
-${listed}`, 8000, { deep: true, effort: 'max', timeout: 600000 })
+${listed}`, 16000, { deep: true, effort: 'max', timeout: 600000, retries: 2, label: '深度分析' })
 
-  if (!raw) { console.log('  模型没返回，这次跳过'); return null }
+  if (!raw) {
+    // 以前这里只写一句「模型没返回」，主人看日志根本不知道是超时、限流还是
+    // 推理把 token 吃光了。现在 ask 会把真实原因挂在 ask.lastError 上。
+    console.log(`  三次都没拿到分析结果，这次跳过。最后一次的原因：${ask.lastError || '未知'}`)
+    return null
+  }
 
   const parsed = parseIdea(raw)
   if (!parsed) {
@@ -461,6 +499,16 @@ ${body}
 }
 
 // 之前几篇引用过什么，别来回炒同一个游戏
+/** 最近几篇写的是什么。用来提醒她换角度，别一周三次都绕回同一批资料。 */
+const recentTitles = async () => {
+  try {
+    const raw = await readPrivate(INDEX)
+    if (!raw) return []
+    const arr = JSON.parse(raw.text)
+    return Array.isArray(arr) ? arr.slice(0, 5).map(x => String(x.title || '')).filter(Boolean) : []
+  } catch (_) { return [] }
+}
+
 const usedUrls = async existing => {
   const urls = new Set()
   const recent = (existing || []).filter(f => f.endsWith('.md')).sort().slice(-6)

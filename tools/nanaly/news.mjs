@@ -172,10 +172,10 @@ const attachSources = (md, hits) => {
 }
 
 // 最近几期写过什么，避免连着三期都在说同一件事
-const recentUrls = () => {
+const recentUrls = (skipDate = null) => {
   const urls = new Set()
   try {
-    readdirSync(DIR).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().slice(-4).forEach(d => {
+    readdirSync(DIR).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && d !== skipDate).sort().slice(-4).forEach(d => {
       const f = `${DIR}/${d}/index.md`
       if (!existsSync(f)) return
       ;[...readFileSync(f, 'utf8').matchAll(/\((https?:\/\/[^)]+)\)/g)]
@@ -196,14 +196,29 @@ export const buildNews = async () => {
   const stamp = beijingNow()
   const date = stamp.slice(0, 10)
   const dir = `${DIR}/${date}`
-  if (existsSync(`${dir}/index.md`)) {
+  // 「今天已经写过」这道防重复有两个例外，都是被实际用起来之后才发现的：
+  //
+  //   演练     —— 演练一个字都不写盘，它唯一的用途就是先看看会写成什么样。
+  //               被这道判断挡住的话，一天只能看一次，那还叫什么演练。
+  //   FORCE=1  —— 改了提示词想立刻看新效果时，不该逼你先去仓库里手动删文件夹。
+  const already = existsSync(`${dir}/index.md`)
+  const force = process.env.NANALY_FORCE === '1'
+  if (already && !DRY && !force) {
     console.log(`  ${date} 这期已经写过了`)
+    console.log('  想重写这一期：把工作流的「强制重写」勾上，或者删掉 source/news/' + date + '/')
     return null
+  }
+  if (already) {
+    console.log(force
+      ? `  ${date} 这期已经存在，但你要求强制重写 —— 会覆盖掉旧的那一期`
+      : `  ${date} 这期已经存在 —— 正式跑会跳过，但演练照常给你看会写成什么样`)
   }
 
   const profile = readProfile()
   if (!profile) console.log('  （没找到 source/_data/noimpty-profile.md，这次只能按默认方向筛）')
-  const old = recentUrls()
+  // 重写这一期时，要把这一期自己从去重里排除掉，
+  // 否则她今天写过的链接全被滤掉，重写出来是空的
+  const old = recentUrls(already ? date : null)
   const sections = []
 
   for (const t of TOPICS) {
@@ -257,7 +272,7 @@ ${t.angle || ''}`,
 别写导语和总结，直接列条目。只输出 markdown 列表本身。
 
 素材：
-${listed}`, t.deep ? 3000 : 1600, { deep: !!t.deep })
+${listed}`, t.deep ? 5000 : 1600, { deep: !!t.deep, retries: 1, label: t.key })
 
     const body = out ? attachSources(out.trim(), hits.slice(0, t.deep ? 20 : 14)) : ''
     if (body && !/^（?这几天没什么/.test(out.trim())) {

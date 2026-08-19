@@ -65,6 +65,17 @@ const MIN_EXPLORE_ROUNDS = Number(process.env.STUDIO_MIN_EXPLORES || 3)
 export const exploreRounds = state =>
   new Set((state.candidates || []).map(c => c.from).filter(Boolean)).size
 
+/* 一轮探索记录的文件名。**必须带轮次号，不能只带日期。**
+ *
+ * 只带日期的话，同一天跑两次探索会有两个后果，都不轻：
+ *   1. 第二次把第一次的记录**覆盖掉**，那一轮白跑
+ *   2. 两批候选的 from 一样 → exploreRounds 只数出 1 轮 → 立项门槛永远卡着
+ *
+ * 定时任务落在一周三个不同日子上，撞不到；
+ * 但手动连点几次就会撞上，而这套东西本来就是给人随手触发的。 */
+export const exploreFile = (dateStr, cycle) =>
+  `${S.EXPLORE_DIR}/${dateStr}-${cycle || 0}.md`
+
 const beijing = () => new Intl.DateTimeFormat('sv-SE', {
   timeZone: 'Asia/Shanghai',
   year: 'numeric', month: '2-digit', day: '2-digit',
@@ -137,6 +148,8 @@ const doExplore = async ({ charter, state }) => {
     ...state.projects.map(p => p.name)
   ].slice(0, 12)
 
+  const file = exploreFile(today(), state.cycle)
+
   // 先搜再判断。直接问模型「什么玩法有创新点」，它给的是所有人都会说的那几个。
   const { listed, hits, queries } = await gather(charter, covered)
 
@@ -153,13 +166,13 @@ const doExplore = async ({ charter, state }) => {
 
   if (/（这一轮没有值得立项的方向）/.test(out)) {
     log('  她判断这一轮没有值得立项的方向 —— 交白卷，这是允许的')
-    await put(`${S.EXPLORE_DIR}/${today()}.md`,
+    await put(file,
       `${meta}result: blank\n---\n\n${body}\n`,
       '策划室：探索（这一轮交白卷）')
     return { action: 'explore', blank: true }
   }
 
-  await put(`${S.EXPLORE_DIR}/${today()}.md`, `${meta}---\n\n${body}\n`, '策划室：探索记录')
+  await put(file, `${meta}---\n\n${body}\n`, '策划室：探索记录')
 
   // 把方向抽成候选，进状态机。抽不出来不影响文档已经写下去。
   const found = [...out.matchAll(/^##\s*方向\s*\d+\s*[:：]?\s*(.+)$/gm)].map(m => m[1].trim())
@@ -167,7 +180,7 @@ const doExplore = async ({ charter, state }) => {
   const fresh = found.map((title, i) => ({
     title: title.slice(0, 80),
     stars: stars[i] || 3,
-    from: `${S.EXPLORE_DIR}/${today()}.md`,
+    from: file,
     at: beijing()
   }))
   log(`  抽出 ${fresh.length} 个候选：${fresh.map(f => `${f.title}(${f.stars}星)`).join('、') || '（没抽出来，去看原文）'}`)
@@ -371,19 +384,31 @@ const doRevise = async ({ charter, state, project, items }) => {
 }
 
 const doPostmortem = async ({ charter, state, project, items }) => {
-  log(`  停更评估：《${project.name}》（负面连击 ${project.negativeStreak} 次）`)
+  /* 主人有没有明确点过「停掉」。这个区别上一版没有，代价不小：
+   *
+   *   「负面连击到阈值」是**代码推断**他可能不想要了 —— 该不该停由模型判断。
+   *   「他点了停掉」   是**他直接说的**       —— 那就不是判断题。
+   *
+   * 上一版把两种混成一种，于是出现了：他点停掉 → 模型回「结论：继续做」→
+   * 这条反馈还被标成已处理。他的话被投票投掉了，而且投完就没了。 */
+  const forced = items.some(x => x.verdict === '停掉')
+
+  log(`  停更评估：《${project.name}》（负面连击 ${project.negativeStreak} 次${forced ? '，主人已明确说停掉' : ''}）`)
+  if (forced) log('  这是他直接下的决定，不是判断题 —— 只写为什么走不通，不投票')
+
   const [existingDocs, changelog] = await Promise.all([
     S.projectFullText(project.id),
     S.readText(`${S.projectDir(project.id)}/CHANGELOG.md`)
   ])
   const feedbacks = items.map(x => `- ${x.at || ''} ${x.verdict || ''}：${x.note || ''}`).join('\n') || '（没有文字反馈，只是长期没有进展）'
 
-  const p = postmortemPrompt({ charter, project, existingDocs, feedbacks, changelog })
+  const p = postmortemPrompt({ charter, project, existingDocs, feedbacks, changelog, forced })
   const out = await ask(p.system, p.user, p.opts)
   if (!out) { log(`  没拿到结果，这次跳过。原因：${ask.lastError}`); return null }
 
   const { head, body } = splitBody(out)
-  const stop = /停更/.test(head)
+  // 他说停就是停。模型的结论只在他没明说的时候才算数。
+  const stop = forced || /停更/.test(head)
 
   if (!stop) {
     log('  结论：继续做。负面连击清零，接下来按她给的三步走')

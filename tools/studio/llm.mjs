@@ -37,11 +37,17 @@ const DEEPSEEK_MODEL = process.env.DEEPSEEK_PRO_MODEL || 'deepseek-v4-pro'
  * 一周只跑三次，多想那点钱不值一提，所以默认 max。 */
 const DEEPSEEK_EFFORT = process.env.DEEPSEEK_EFFORT || 'max'
 
+/* 深度步骤给推理留的余量倍数。
+ * 因为推理和正文共用 max_tokens（详见 askDeepSeek 里的注释），
+ * 档位 max 时推理动辄上万 token，不留余量就会出现「正文是空的」。
+ * 3 倍是经验值：12000 的文档预算 → 实发 36000，推理再长也压不掉正文。 */
+const DEEPSEEK_HEADROOM = Number(process.env.DEEPSEEK_HEADROOM || 3)
+
 export const backend = () => (ANTHROPIC_KEY ? 'claude' : (DEEPSEEK_KEY ? 'deepseek' : 'none'))
 
 export const describeBackend = () => ({
   claude: `Claude（${MODEL} / 深度步骤用 ${DEEP_MODEL}，扩展思考开）`,
-  deepseek: `DeepSeek（${DEEPSEEK_MODEL}，思考档位 ${DEEPSEEK_EFFORT}）—— 降级模式，没配 ANTHROPIC_API_KEY`,
+  deepseek: `DeepSeek（${DEEPSEEK_MODEL}，思考档位 ${DEEPSEEK_EFFORT}，推理余量 ${DEEPSEEK_HEADROOM}×）—— 降级模式，没配 ANTHROPIC_API_KEY`,
   none: '没有可用的模型 —— ANTHROPIC_API_KEY 和 DEEPSEEK_API_KEY 都没配'
 }[backend()])
 
@@ -100,6 +106,19 @@ const askClaude = async ({ system, user, maxTokens, deep, timeout, thinkingBudge
 // ---------------- DeepSeek 兜底 ----------------
 
 const askDeepSeek = async ({ system, user, maxTokens, deep, timeout }) => {
+  /* ⚠️ 思考模式下推理和正文**共用** max_tokens
+   *（官方：reasoning_tokens 计在 completion_tokens 里面）。
+   *
+   * 所以档位一提到 max，推理链就可能把整个预算吃光，正文一个字都不剩 ——
+   * 表现是 finish_reason=length 而 content 是空的。
+   * 第一次把档位从 high 提到 max 时就撞上了这个，因为当时只改了档位没加预算。
+   *
+   * prompts.mjs 里那些 maxTokens 定的是「这份文档该写多长」，
+   * 不含推理的份额。推理要多少是这一层的事，所以余量在这里加。 */
+  const sendMax = deep
+    ? Math.min(120000, Math.round(maxTokens * DEEPSEEK_HEADROOM))
+    : maxTokens
+
   const res = await fetch(`${DEEPSEEK_BASE}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', Authorization: `Bearer ${DEEPSEEK_KEY}` },
@@ -110,7 +129,7 @@ const askDeepSeek = async ({ system, user, maxTokens, deep, timeout }) => {
       /* 思考模式下 temperature / top_p / penalty 全部无效（官方明说不报错但也不生效），
        * 所以这两条是互斥的，别同时发。 */
       ...(deep ? { reasoning_effort: DEEPSEEK_EFFORT } : { temperature: 0.6 }),
-      max_tokens: maxTokens
+      max_tokens: sendMax
     }),
     signal: AbortSignal.timeout(timeout)
   })
@@ -123,7 +142,14 @@ const askDeepSeek = async ({ system, user, maxTokens, deep, timeout }) => {
   const data = await res.json()
   const choice = data.choices?.[0] || {}
   const out = String(choice.message?.content || '').trim()
-  if (!out) throw new Error(`正文是空的（finish_reason=${choice.finish_reason || '未知'}）`)
+  if (!out) {
+    // 说人话。上一版只打 finish_reason=length，看的人根本不知道该动哪个旋钮。
+    const spent = data.usage?.completion_tokens_details?.reasoning_tokens
+    throw new Error(choice.finish_reason === 'length'
+      ? `正文是空的：推理把 max_tokens（${sendMax}）吃光了${spent ? `，光推理就用了 ${spent}` : ''}。`
+        + ` 把 DEEPSEEK_HEADROOM 调大，或者把 DEEPSEEK_EFFORT 降到 high。`
+      : `正文是空的（finish_reason=${choice.finish_reason || '未知'}）`)
+  }
   return out
 }
 

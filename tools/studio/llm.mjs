@@ -143,17 +143,44 @@ const askDeepSeek = async ({ system, user, maxTokens, deep, timeout }) => {
   const choice = data.choices?.[0] || {}
   const out = String(choice.message?.content || '').trim()
   if (!out) {
-    // 说人话。上一版只打 finish_reason=length，看的人根本不知道该动哪个旋钮。
+    /* 正文空有两种，原因和对策完全不同，所以要分开说 ——
+     * 上一版只打一句 finish_reason=xxx，看的人根本不知道该动哪个旋钮。
+     *
+     *   length：推理把预算吃光了，正文来不及写。→ 加预算 / 降档位。
+     *   stop  ：它自己认为写完了，但**东西全留在思考里**，正式回答是空的。
+     *           这是推理模型的常见毛病，加预算没用，得在提示词里把
+     *           「正文要写在正式回答里」说死，并且重试时补一句提醒。 */
     const spent = data.usage?.completion_tokens_details?.reasoning_tokens
-    throw new Error(choice.finish_reason === 'length'
+    const thought = String(choice.message?.reasoning_content || '').trim().length
+    const err = new Error(choice.finish_reason === 'length'
       ? `正文是空的：推理把 max_tokens（${sendMax}）吃光了${spent ? `，光推理就用了 ${spent}` : ''}。`
         + ` 把 DEEPSEEK_HEADROOM 调大，或者把 DEEPSEEK_EFFORT 降到 high。`
-      : `正文是空的（finish_reason=${choice.finish_reason || '未知'}）`)
+      : `正文是空的：它自己认为写完了（finish_reason=${choice.finish_reason || '未知'}），`
+        + `但内容全留在思考里${thought ? `（思考 ${thought} 字）` : ''}，正式回答一个字没有。重试时会提醒它。`)
+    err.retryable = true
+    err.empty = true   // 重试时给它补一句「别把答案只写在思考里」
+    throw err
   }
   return out
 }
 
 // ---------------- 对外 ----------------
+
+/* 上一次「正文是空的（finish_reason=stop）」之后，重试时补在用户消息末尾。
+ *
+ * 推理模型有个常见毛病：把整份答案在思考里写完，然后觉得任务完成了，
+ * 正式回答就出来一个空字符串。它不是偷懒，是**分不清思考和回答的边界**。
+ * 所以要明说这件事，而不是原样再问一遍。 */
+const EMPTY_RETRY_NUDGE = `
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ 上一次你的正式回答是**空的** —— 内容全留在思考过程里了。
+
+思考是给你自己用的，我看不到。**我只能看到正式回答。**
+
+这一次：想清楚之后，把完整的成品**完整地写进正式回答里**。
+在思考里写过不算写过，必须重新完整地写一遍。
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
 
 /**
  * @param {string} system
@@ -177,12 +204,19 @@ export const ask = async (system, user, opts = {}) => {
   const tag = `studio/${which}${deep ? '+deep' : ''}${opts.label ? '/' + opts.label : ''}`
 
   let lastWhy = '未知原因'
+  let emptyLast = false   // 上一次是「东西全写在思考里」那种空
   for (let attempt = 1; attempt <= tries; attempt++) {
     try {
-      const args = { system, user, maxTokens, deep, timeout, thinkingBudget: opts.thinkingBudget }
+      /* 盲目重试对「答案留在思考里」这种空是没用的 —— 同样的输入大概率同样的结果。
+       * 所以这一次要在用户消息后面补一句，明确告诉它上次哪里错了。 */
+      const args = {
+        system, user: emptyLast ? user + EMPTY_RETRY_NUDGE : user,
+        maxTokens, deep, timeout, thinkingBudget: opts.thinkingBudget
+      }
       return which === 'claude' ? await askClaude(args) : await askDeepSeek(args)
     } catch (e) {
       lastWhy = String(e.message || e).slice(0, 240)
+      emptyLast = !!e.empty
       const more = e.retryable !== false && attempt < tries
       console.error(`  [${tag}] 第 ${attempt}/${tries} 次失败：${lastWhy}${more ? '，等一下再试' : ''}`)
       if (!more) break

@@ -274,6 +274,21 @@ check('★ 只是负面连击（他没明说）→ 仍然是判断题', () => {
   assert.match(p.user, /结论：继续 \/ 停更/, '这种情况该由模型判断，不该一律停')
 })
 
+check('★★ 强制停更也要明说「写完整的正文」，不能只给个填好的模板', () => {
+  const p = postmortemPrompt({
+    charter: 'C', project: { name: 'X' }, existingDocs: 'D', feedbacks: 'F', changelog: '', forced: true
+  })
+  // 上一版把结论直接填好、底下贴个模板，模型读成了「没什么要做的」，
+  // 于是东西全写在思考里，正式回答是空的（finish_reason=stop）
+  assert.match(p.user, /写一份完整的停更说明/)
+  assert.match(p.user, /不许敷衍|不许只留标题/)
+  assert.match(p.user, /正式回答/, '要说死：写在正式回答里，不是写在思考里')
+})
+
+check('★ 人设里就交代了「想完要写出来」，所有步骤都受用', () => {
+  assert.match(SYSTEM, /思考过程是给你自己用的/)
+})
+
 check('两条路共用同一份停更说明规格', () => {
   const spec = /## 为什么停[\s\S]*## 什么时候这个想法会重新成立/
   const forced = postmortemPrompt({ charter: 'C', project: { name: 'X' }, existingDocs: '', feedbacks: '', changelog: '', forced: true })

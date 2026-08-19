@@ -18,7 +18,9 @@ on:
       what:
         description: '做什么（auto = 按优先级自己决定）'
         type: choice
-        options: [auto, explore, charter, expand, revise, postmortem]
+        # audit = 拿硬约束把某个已经立了的项目重审一遍。
+        # 立项前的校验是后来才加的，在那之前立的项目没被查过，用这个补一次。
+        options: [auto, explore, charter, expand, revise, postmortem, audit]
         default: auto
       dry:
         description: '只演练不动真格（产出会打印在日志里，不写进仓库）'
@@ -81,6 +83,10 @@ jobs:
           STUDIO_MAX_ACTIVE: '2'
           # 连续几条负面反馈触发停更评估
           STUDIO_POSTMORTEM_AT: '2'
+          # 立项前至少要扫过几轮方向。一周跑三次，3 轮 ≈ 先探索一周再定。
+          # 这道门是有代价的（第一个项目会晚一周），但它换掉的是
+          # 「第一个想法直接变成最终答案」—— 上一版就是这么把振刀立成项的。
+          STUDIO_MIN_EXPLORES: '3'
 
           # 提交署名
           NANALY_GIT_NAME: ${{ secrets.NANALY_GIT_NAME }}

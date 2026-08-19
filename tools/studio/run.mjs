@@ -10,12 +10,21 @@
  *   1. 有主人的反馈没处理  → 修订。人的输入永远排第一。
  *   2. 某个项目该停了      → 停更评估。及时止损比继续产出重要。
  *   3. 有立项、文档没写完  → 深化。把手上的做完，别开新坑。
- *   4. 有够格的候选方向    → 立项。
+ *   4. 有够格的候选方向    → 立项（要先扫够轮数，且过硬约束校验）。
  *   5. 什么都没有          → 探索。
+ *
+ * 立项前的两道门（第一版没有，代价是它第三次跑就把第一个想法立成了项）：
+ *
+ *   a) 候选必须来自至少 STUDIO_MIN_EXPLORES 轮不同的探索。
+ *      一轮里的几个方向常常是同一个念头的几种说法，没得挑。
+ *   b) 立项前跑一次**独立的**硬约束校验，换审查员人设、默认否决、
+ *      不告诉它探索时给了几星。探索时那个「参考指数」是模型给自己打的，
+ *      当门槛用等于没有门槛。
  *
  * 用法：
  *   node tools/studio/run.mjs            按上面的优先级自动决定
  *   node tools/studio/run.mjs explore    强制探索
+ *   node tools/studio/run.mjs audit      重审已经立了的项目（补查老项目用）
  *   node tools/studio/run.mjs --dry      只演练，不往仓库写任何东西
  */
 
@@ -24,7 +33,8 @@ import { ask, backend, describeBackend } from './llm.mjs'
 import { gather, attachRefs, hasSearch } from './search.mjs'
 import {
   DOC_PLAN, docByFile, nextDoc,
-  explorePrompt, charterPrompt, expandPrompt, revisePrompt, postmortemPrompt
+  explorePrompt, charterPrompt, expandPrompt, revisePrompt, postmortemPrompt,
+  auditPrompt, parseAudit
 } from './prompts.mjs'
 
 const ARGS = process.argv.slice(2)
@@ -37,6 +47,23 @@ const FORCE = ARGS.find(a => !a.startsWith('--')) || ''
 const MAX_ACTIVE = Number(process.env.STUDIO_MAX_ACTIVE || 2)
 /* 一个项目连续多少条负面反馈触发停更评估。 */
 const POSTMORTEM_THRESHOLD = Number(process.env.STUDIO_POSTMORTEM_AT || 2)
+
+/* 立项之前至少要扫过几轮方向。
+ *
+ * 上一版没有这道门，结果是：第一轮探索给出四个方向，
+ * 模型给自己最喜欢的那个打了 4 星，第二轮就立项了 ——
+ * **第一个想法直接变成最终答案**，中间没有任何比较。
+ *
+ * 一轮里的几个方向往往是同一个念头的几种说法（同一次思考的产物）。
+ * 要真的有得挑，候选池里必须有来自不同轮次的东西。
+ * 一周跑三次，3 轮 = 立项前先探索一周。这个代价换掉「一拍脑袋定终身」，划算。 */
+const MIN_EXPLORE_ROUNDS = Number(process.env.STUDIO_MIN_EXPLORES || 3)
+
+/* 候选池里代表了几个不同的探索轮次。
+ * 用 from（那一轮的记录文件名）去重，不用计数器 —— 老的 state.json 里没有计数器，
+ * 而 from 是一开始就在写的，不需要迁移。 */
+export const exploreRounds = state =>
+  new Set((state.candidates || []).map(c => c.from).filter(Boolean)).size
 
 const beijing = () => new Intl.DateTimeFormat('sv-SE', {
   timeZone: 'Asia/Shanghai',
@@ -86,9 +113,15 @@ const summarize = state => {
   lines.push(`已立项：${state.projects.length} 个（进行中 ${active.length}，已停更 ${stopped.length}）`)
   active.forEach(p => lines.push(`  · 进行中《${p.name}》，已写 ${(p.docs || []).length}/${DOC_PLAN.length} 份文档`))
   stopped.forEach(p => lines.push(`  · 已停更《${p.name}》 —— ${p.stoppedWhy || '原因见 POSTMORTEM'}`))
+  const flagged = state.projects.filter(p => p.status === 'flagged')
+  flagged.forEach(p => lines.push(`  · 已标记待定《${p.name}》 —— 校验没过：${p.flaggedWhy || '见 AUDIT.md'}`))
   if (state.candidates.length) {
-    lines.push(`候选方向 ${state.candidates.length} 个：`)
+    lines.push(`候选方向 ${state.candidates.length} 个（来自 ${exploreRounds(state)} 轮探索）：`)
     state.candidates.forEach(c => lines.push(`  · ${c.title}（${c.stars} 星）`))
+  }
+  if ((state.rejected || []).length) {
+    lines.push(`已被硬约束校验否掉 ${state.rejected.length} 个：`)
+    state.rejected.slice(0, 8).forEach(r => lines.push(`  · ${r.title} —— ${r.why || '撞了硬约束'}`))
   }
   if (state.recentActions.length) {
     lines.push(`最近做过：${state.recentActions.slice(-5).map(a => `${a.at.slice(5, 10)} ${a.action}`).join('、')}`)
@@ -109,7 +142,8 @@ const doExplore = async ({ charter, state }) => {
 
   log('  在扫方向…（深度思考，这一步慢，几分钟很正常）')
   const p = explorePrompt({
-    charter, stateSummary: summarize(state), coveredTitles: covered, material: listed
+    charter, stateSummary: summarize(state), coveredTitles: covered,
+    rejected: state.rejected || [], material: listed
   })
   const out = await ask(p.system, p.user, p.opts)
   if (!out) { log(`  没拿到结果，这次跳过。原因：${ask.lastError}`); return null }
@@ -141,9 +175,53 @@ const doExplore = async ({ charter, state }) => {
   return { action: 'explore', added: fresh.length }
 }
 
+/* 硬约束校验。立项前跑一次，也可以手动拿来重审已经立了的项目。
+ *
+ * 刻意做成独立的一次调用，而且换了审查员人设、不告诉它探索时给了几星 ——
+ * 同一次生成里的自查等于没查，模型会检查出「没问题」。
+ *
+ * 返回 { verdict, why, text }。verdict 拿不到时返回 null，调用方按拦下处理
+ * （解析不出来是工具的问题，但代价是让一个没校验过的方向进去，所以宁可拦）。 */
+const runAudit = async ({ charter, subject, kind }) => {
+  const p = auditPrompt({ charter, subject, kind })
+  const out = await ask(p.system, p.user, p.opts)
+  if (!out) { log(`  校验没拿到结果。原因：${ask.lastError}`); return null }
+  const parsed = parseAudit(out)
+  if (!parsed) { log('  校验输出里找不到「判定：」那一行，按拦下处理'); return { verdict: '存疑', why: '校验输出格式不对，没能读出判定', text: out, passed: false } }
+  return { ...parsed, text: out }
+}
+
 const doCharter = async ({ charter, state, candidate }) => {
-  log(`  立项：《${candidate.title}》`)
-  const p = charterPrompt({ charter, candidate: `${candidate.title}（探索时给了 ${candidate.stars} 星）` })
+  log(`  立项候选：《${candidate.title}》`)
+  log('  先过硬约束校验 —— 独立判断，不告诉它探索时给了几星')
+
+  const audit = await runAudit({ charter, subject: candidate.title, kind: '候选方向' })
+  if (!audit) { log('  校验跑不起来，这轮不立项（宁可不立，也不能立一个没校验过的）'); return null }
+
+  /* 文件名带上轮次号：中文标题过 slugify 之后全被剥成 'project'，
+   * 同一天否掉两个方向就会互相覆盖。 */
+  await put(`${S.EXPLORE_DIR}/审查-${today()}-${state.cycle || 0}-${slugify(candidate.title)}.md`,
+    `---\ndate: ${beijing()}\nsubject: ${JSON.stringify(candidate.title)}\nverdict: ${audit.verdict}\n---\n\n${audit.text}\n`,
+    `策划室：校验「${candidate.title.slice(0, 20)}」→ ${audit.verdict}`)
+
+  if (!audit.passed) {
+    log(`\n  ✗ 校验${audit.verdict}：${audit.why || '（原因见审查记录）'}`)
+    log('  这个方向不立项。它会从候选池里移除，并写进已否决清单 ——')
+    log('  下次探索会带上它，换个名字端上来一样会被否。')
+    // 从候选池移除，否则下一轮还会挑中它，无限循环
+    state.candidates = state.candidates.filter(c => c.title !== candidate.title)
+    state.rejected = [
+      { title: candidate.title, at: beijing(), verdict: audit.verdict, why: audit.why },
+      ...(state.rejected || [])
+    ].slice(0, 30)
+    return { action: 'charter-rejected', title: candidate.title }
+  }
+
+  log(`  ✓ 校验通过。开始写立项书。`)
+  const p = charterPrompt({
+    charter,
+    candidate: `${candidate.title}\n\n（已通过硬约束校验。审查员的结论摘要：${audit.why || '未发现致命冲突'}）`
+  })
   const out = await ask(p.system, p.user, p.opts)
   if (!out) { log(`  没拿到结果，这次跳过。原因：${ask.lastError}`); return null }
 
@@ -177,6 +255,43 @@ const doCharter = async ({ charter, state, candidate }) => {
   })
   state.candidates = state.candidates.filter(c => c.title !== candidate.title)
   return { action: 'charter', id, name: name.trim() }
+}
+
+/* 重审一个已经立了的项目。
+ *
+ * 存在的理由：立项前的校验是后来才加的，在那之前立的项目没被查过。
+ * 手动触发 audit 就能补一次。
+ *
+ * 判否决时**不自动停更** —— 停不停是主人的决定，不是审查员的。
+ * 但会把状态标成 flagged，这样 decide() 不会再往里投入深化的成本，
+ * 相当于先按下暂停。 */
+const doAudit = async ({ charter, state, project }) => {
+  log(`  重审《${project.name}》`)
+  const full = await S.projectFullText(project.id, { limit: 40000 })
+  if (!full || full.length < 200) { log('  读不到这个项目的文档，没法审'); return null }
+
+  const audit = await runAudit({ charter, subject: full, kind: '已立项的项目' })
+  if (!audit) return null
+
+  await put(`${S.projectDir(project.id)}/AUDIT.md`,
+    `---\ndate: ${beijing()}\nverdict: ${audit.verdict}\n---\n\n# 硬约束校验 · ${today()}\n\n${audit.text}\n`,
+    `策划室：${project.id} 硬约束校验 → ${audit.verdict}`)
+
+  if (audit.passed) {
+    log(`\n  ✓ 校验通过 —— 这个项目在硬约束内成立，继续。`)
+    return { action: 'audit', verdict: audit.verdict, id: project.id }
+  }
+
+  log(`\n  ✗ 校验${audit.verdict}：${audit.why || '（原因见 AUDIT.md）'}`)
+  log('  已把它标成 flagged —— 不会再自动深化，省得继续往里砸文档。')
+  log('  接下来是你的决定：')
+  log(`    想停 → 手动跑一次 postmortem，会写一份停更说明`)
+  log(`    想继续 → 把 projects/${project.id}/meta.json 里的 status 改回 active`)
+
+  project.status = 'flagged'
+  project.flaggedWhy = audit.why
+  await syncMeta(project)
+  return { action: 'audit', verdict: audit.verdict, id: project.id, flagged: true }
 }
 
 const doExpand = async ({ charter, state, project }) => {
@@ -348,9 +463,19 @@ export const decide = ({ state, pending }) => {
     .sort((a, b) => (a.docs || []).length - (b.docs || []).length)
   if (unfinished.length) return { kind: 'expand', project: unfinished[0] }
 
-  // 4. 有够格的候选、活跃项目还没满 → 立项
+  /* 4. 立项。
+   *
+   * 星级是**模型探索时给自己打的**，所以它不是门槛，只是排序依据 ——
+   * 它想立哪个就给哪个打 4 星，拦不住任何东西。
+   * 真正的两道门是：这里的「扫够了没有」，和 doCharter 里那次独立的硬约束校验。 */
   const worthy = state.candidates.filter(c => c.stars >= 4).sort((a, b) => b.stars - a.stars)
-  if (worthy.length && active.length < MAX_ACTIVE) return { kind: 'charter', candidate: worthy[0] }
+  if (worthy.length && active.length < MAX_ACTIVE) {
+    const rounds = exploreRounds(state)
+    if (rounds < MIN_EXPLORE_ROUNDS) {
+      return { kind: 'explore', why: `候选只来自 ${rounds} 轮探索，不足 ${MIN_EXPLORE_ROUNDS} 轮，先接着扫` }
+    }
+    return { kind: 'charter', candidate: worthy[0] }
+  }
 
   // 5. 兜底 → 探索
   return { kind: 'explore' }
@@ -394,14 +519,23 @@ const main = async () => {
   log(`\n  当前状态：\n${summarize(state).split('\n').map(l => '    ' + l).join('\n')}`)
   if (pending.length) log(`  待处理反馈：${pending.length} 条`)
 
+  /* 强制指定时，「拿哪个项目」也得跟着变。
+   *
+   * audit 是用来补查老项目的，postmortem 是用来给审查没过的项目收尾的 ——
+   * 而校验没过的项目状态是 flagged。这两个只找 active 的话就永远够不着它，
+   * 那 doAudit 里印的那句「想停就手动跑 postmortem」就成了句空话。 */
+  const pickProject = () => (['audit', 'postmortem'].includes(FORCE)
+    ? state.projects.find(p => p.status === 'active' || p.status === 'flagged')
+    : state.projects.find(p => p.status === 'active'))
+
   const plan = FORCE
-    ? { kind: FORCE, project: state.projects.find(p => p.status === 'active'), items: pending, candidate: state.candidates[0] }
+    ? { kind: FORCE, project: pickProject(), items: pending, candidate: state.candidates[0] }
     : decide({ state, pending })
 
   log(`\n  这次做：${{
     explore: '探索新方向', charter: '立项', expand: '深化文档',
-    revise: '处理反馈并修订', postmortem: '停更评估'
-  }[plan.kind] || plan.kind}\n`)
+    revise: '处理反馈并修订', postmortem: '停更评估', audit: '硬约束校验'
+  }[plan.kind] || plan.kind}${plan.why ? `\n  （${plan.why}）` : ''}\n`)
 
   let result = null
   if (plan.kind === 'explore') result = await doExplore({ charter, state })
@@ -409,6 +543,7 @@ const main = async () => {
   else if (plan.kind === 'expand' && plan.project) result = await doExpand({ charter, state, project: plan.project })
   else if (plan.kind === 'revise' && plan.project) result = await doRevise({ charter, state, project: plan.project, items: plan.items })
   else if (plan.kind === 'postmortem' && plan.project) result = await doPostmortem({ charter, state, project: plan.project, items: plan.items })
+  else if (plan.kind === 'audit' && plan.project) result = await doAudit({ charter, state, project: plan.project })
   else { log('  没有可执行的动作（多半是强制了一个当前没条件跑的模式）'); return }
 
   if (!result) { log('\n  这一轮没有产出。状态不变，下次再来。'); return }

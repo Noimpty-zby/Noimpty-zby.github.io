@@ -74,11 +74,23 @@ ${charter}
 - 搜的是**具体的设计问题或机制拆解**，不是品类。
   ✗「好玩的独立游戏推荐」✗「2026 值得期待的游戏」
   ✓「single developer game scope management core mechanic depth」
-  ✓「combat feel design hitstop animation cancel breakdown」
   ✓「procedural generation replace art content indie」
+  ✓「physics simulation as core mechanic design breakdown」
 - **至少 4 条英文** —— 机制拆解类的资料英文世界多得多
-- 每条对应一个不同的角度，别六条都在问同一件事
 - 不要引号、不要编号、一行一条
+
+━━━ 覆盖面（这一条是硬的）━━━
+
+**这几条检索词必须打在互不相干的角度上。**
+
+他的总纲第四节里举了一个他欣赏的游戏例子。那一节是**用来排除的，
+不是用来指路的** —— 他在第二节写明了「还没想好，需要你帮我找」。所以：
+
+- **至多 1 条**检索词可以和第四节那个例子直接相关。
+- 其余每一条打在一个完全不同的地方。这几类角度挑不同的用，别全挤在一类：
+  程序化生成 / 物理模拟 / 视觉风格化与后处理 / 极小规模高完成度 /
+  在成熟品类里换掉一个核心假设 / 系统涌现 / 单人开发的范围控制
+- 自检：**把第四节整节遮住，这批检索词还成立吗？** 不成立就重出一批。
 ${covered.length ? `
 ━━━ 这些方向最近已经扫过了，换一批角度 ━━━
 ${covered.map(t => '- ' + t).join('\n')}` : ''}`,

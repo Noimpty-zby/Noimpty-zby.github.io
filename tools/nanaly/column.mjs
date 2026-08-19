@@ -24,7 +24,26 @@ const PRIVACY = ''
 // const PRIVACY = 'privacy: protected\nsitemap: false\nprivate_section: Life\n'
 
 const pad = n => String(n).padStart(2, '0')
-const stamp = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+
+/* 北京时间的 YYYY-MM-DD。
+ *
+ * 跑在 GitHub Actions 上，机器时区是 UTC，而她的班表是按北京时间排的
+ * （周日晚上 8 点 = UTC 周日 12 点）。凡是拿日期做判断的地方都必须走这一层，
+ * 否则跨零点那几个小时会把「这周」算成上一周。 */
+const bjDate = (d = new Date()) => new Intl.DateTimeFormat('sv-SE', {
+  timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit'
+}).format(d)
+
+/** 北京时间的 YYYY-Www 周编号。用来判断「这周写过没有」。 */
+export const bjWeek = (d = new Date()) => {
+  const [y, m, day] = bjDate(d).split('-').map(Number)
+  // 用 UTC 构造是为了避开本机时区 —— 这里的 y/m/day 已经是北京时间的挂钟值了
+  const t = Date.UTC(y, m - 1, day)
+  const start = Date.UTC(y, 0, 1)
+  const week = Math.ceil(((t - start) / 86400000 + 1) / 7)
+  return `${y}-w${pad(week)}`
+}
+
 // GitHub 的机器跑在 UTC。不写时区的话，Hexo 会按机器时区解析，
 // 链接里的日期可能比北京时间少一天。这里直接输出带 +08:00 的北京时间。
 const stampFull = d => {
@@ -55,13 +74,55 @@ const recentContext = () => {
   return bits.join('\n\n')
 }
 
+/* 从她的输出里拆出标题和正文。
+ *
+ * 以前这里是「第一行当标题，slice(0,60)」。它坏得很难看：
+ * 她没按格式写、直接从正文开始的时候，正文第一段被当成标题，
+ * 而且被砍在第 60 个字上 —— 线上真的出现过一篇标题叫
+ * 《窝在服务器角落看了三天提交记录，主人像只被 UE5 追着跑的仓鼠。日程更新从 8 月 13 日一路滚到 16 日，中间还》
+ * 的文章。更糟的是那一段同时也从正文里消失了：标题吃掉了它。
+ *
+ * 现在改成显式分隔符 + 校验（和 news / ideas 那两条链路一致），
+ * 拆不出来就整篇丢掉。宁可这周不发，也不发一篇标题坏掉的。
+ */
+export const parseColumn = raw => {
+  const text = String(raw || '').trim()
+  if (!text) return null
+
+  const MARK = '===正文==='
+  const i = text.indexOf(MARK)
+  if (i < 0) return null
+
+  const head = text.slice(0, i)
+  const content = text.slice(i + MARK.length).trim()
+  if (content.length < 150) return null      // 太短说明她没好好写
+
+  let title = (head.match(/^\s*标题\s*[:：]\s*(.+)$/m) || [])[1]
+  if (!title) return null
+
+  title = title.trim()
+    .replace(/^#+\s*/, '')
+    .replace(/^["'「《]|["'」》]$/g, '')
+    .trim()
+
+  /* 标题的合法性校验。这几条各自对应一种真实出现过的走样：
+   *   太长      → 她把正文第一段当标题写了
+   *   带句号    → 同上，那是一句话不是标题
+   *   带换行    → 她把整段贴进了「标题：」后面
+   * 任何一条不过，就是格式没对上，整篇丢掉。 */
+  if (!title || title.length > 30) return null
+  if (/[。！？\n]/.test(title)) return null
+
+  return { title, content }
+}
+
 export const writeColumn = async ({ comments = [], patrolNote = '' } = {}) => {
   const now = new Date()
   if (!existsSync(DIR)) mkdirSync(DIR, { recursive: true })
 
-  // 一周一篇，已经写过就不写了
-  const week = `${now.getFullYear()}-w${String(Math.ceil((((now - new Date(now.getFullYear(), 0, 1)) / 86400000) + 1) / 7)).padStart(2, '0')}`
-  const file = `${DIR}/${PREFIX}${week}.md`
+  // 一周一篇，已经写过就不写了。周编号按**北京时间**算 ——
+  // 机器跑在 UTC，用本机时区会在跨年跨周那几天把「这周」算错一周。
+  const file = `${DIR}/${PREFIX}${bjWeek(now)}.md`
   // 同 news / ideas：演练和强制重写不该被「这周写过了」挡住
   const already = existsSync(file)
   const force = process.env.NANALY_FORCE === '1'
@@ -88,30 +149,40 @@ export const writeColumn = async ({ comments = [], patrolNote = '' } = {}) => {
     patrolNote ? '你巡逻时看到的：\n' + patrolNote : ''
   ].filter(Boolean).join('\n\n')
 
-  const body = await ask(
+  const raw = await ask(
     `你是娜娜莉，一只住在 Noimpty 个人博客里的猫娘。
 毒舌但清醒，极简主义，讨厌废话。自称「窝」，偶尔带「喵」和颜文字 (=^w^=) (ovo)，别每句都塞。
 可以插入 [动作/神态] 描写。禁止使用 • 和 ω 这类会破坏颜文字的符号。
 你现在要在博客上写一篇属于你自己的随笔。`,
-    `根据下面这段时间站上真实发生的事，写一篇你自己的短随笔。要求：
+    `根据下面这段时间站上真实发生的事，写一篇你自己的短随笔。
+
+━━━ 输出格式（严格照抄，第一行必须是「标题：」）━━━
+
+标题：（一个短标题，**不超过 20 个字**，不要句号，不要井号，不要引号）
+===正文===
+（正文，markdown）
+
+━━━ 内容要求 ━━━
 
 1. **不许编造**。只写下面材料里真实出现过的事，没发生的别写
-2. 400 到 700 字，分三到五段
-3. 第一行必须是一个短标题，格式就是一行纯文字，不要加 # 号
-4. 之后空一行，再写正文
-5. 写你自己的观察和想法 —— 你看着主人在学什么、卡在哪、读者在问什么。
+2. 正文 400 到 700 字，分三到五段
+3. 写你自己的观察和想法 —— 你看着主人在学什么、卡在哪、读者在问什么。
    可以吐槽，可以有情绪，但要具体，别写「今天也是充实的一天」这种空话
-6. 正文用 markdown。可以有小标题、列表。别放代码块和公式
-7. 不要在文章里自我介绍，读者知道你是谁
+4. 正文可以有小标题、列表。别放代码块和公式
+5. 不要在文章里自我介绍，读者知道你是谁
 
 材料：
 ${ctx || '（这段时间站上很安静，没什么事发生。那就写「安静」本身。）'}`, 1600)
 
-  if (!body) { console.log('  没能调用模型，这周跳过'); return null }
+  if (!raw) { console.log('  没能调用模型，这周跳过'); return null }
 
-  const lines = body.trim().split('\n')
-  const title = lines[0].replace(/^#+\s*/, '').replace(/^["'「]|["'」]$/g, '').trim().slice(0, 60)
-  const content = lines.slice(1).join('\n').trim()
+  const parsed = parseColumn(raw)
+  if (!parsed) {
+    console.log('  她输出的格式不对，这周跳过（宁可不发，也不发一篇标题坏掉的）')
+    console.log('  开头 200 字：' + String(raw).slice(0, 200).replace(/\n/g, ' '))
+    return null
+  }
+  const { title, content } = parsed
 
   const md = `---
 title: ${yamlString(title)}

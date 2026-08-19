@@ -17,59 +17,111 @@ const text = async (url, ms) => {
 
 const LEVEL = { ok: 'ok', warn: 'warn', bad: 'bad' }
 
-// ---------------- 1. 受保护文章有没有漏出去 ----------------
+// ---------------- 1. 上锁有没有漏 ----------------
 
+/* 这一项跟着「全站上锁」重写过一次，因为原来那个问法已经不成立了。
+ *
+ * 以前的问法是「受保护的那几篇，有没有漏进公开的索引页」——
+ * 那时候大部分内容是公开的，protected 是少数派。
+ *
+ * 现在反过来了：**除了首页和关于页，全站都在锁后面。**
+ * 拿旧问法去查，它会把 /archives/ 里有文章链接报成泄漏 ——
+ * 可是 /archives/ 自己也在锁后面，那不是泄漏。上一版日报天天报 5 处泄漏，
+ * 全是这么来的：检查本身过时了，不是站点真的漏了。
+ *
+ * 新的问法是四条，每一条对应一个「不用打开任何上锁页面就能拿到内容」的口子：
+ *
+ *   1. 真正公开的那两个页面上，有没有出现文章标题或链接
+ *   2. atom.xml / sitemap.xml 还在不在（它们应该已经被 lockdown 移除）
+ *   3. search.xml 有没有加密（它是全站正文，一个 GET 就下完）
+ *   4. robots.txt 有没有拒绝爬虫
+ *
+ * 这四条都干净，才叫「软锁做到位了」。
+ * 至于「打开上锁页面看源代码」——那是软锁的固有边界，不在这里查，
+ * 见 scripts/noimpty-lockdown.js 顶部的说明。
+ */
 export const checkLeak = async (crawl) => {
-  const out = { name: '加密文章泄漏', level: LEVEL.ok, detail: '', items: [] }
+  const out = { name: '上锁检查', level: LEVEL.ok, detail: '', items: [] }
   try {
     const man = await text(`${CFG.site}/js/protected-manifest.js`)
     if (!man.ok) {
       out.level = LEVEL.warn
-      out.detail = `取不到 protected-manifest.js（HTTP ${man.status}）`
+      out.detail = `取不到 protected-manifest.js（HTTP ${man.status}）—— 锁清单没生成，全站可能都是公开的`
       return out
     }
     const m = man.body.match(/Object\.freeze\((\{[\s\S]*\})\)/)
-    const entries = m ? (JSON.parse(m[1]).entries || []) : []
-    const paths = entries.map(e => e.path).filter(p => /^\/\d{4}\//.test(p))
-    if (!paths.length) {
-      out.detail = '没有标记为 protected 的文章，无需检查'
+    const manifest = m ? JSON.parse(m[1]) : {}
+    const locked = (manifest.entries || []).map(e => e.path)
+    const publicPaths = new Set(manifest.publicPaths || ['/'])
+    const postPaths = locked.filter(p => /^\/\d{4}\//.test(p))
+
+    if (!locked.length) {
+      out.level = LEVEL.bad
+      out.detail = '锁清单是空的 —— 全站都是公开的'
       return out
     }
 
-    // 三个 feed 单独取（它们不是 HTML 页面，不在爬取结果里）
-    const feeds = [
-      ['atom.xml', `${CFG.site}/atom.xml`],
-      ['sitemap.xml', `${CFG.site}/sitemap.xml`],
-      ['search.xml', `${CFG.site}/search.xml`]
-    ]
-    let scanned = 0
-    for (const [label, url] of feeds) {
-      const r = await text(url, 20000)
-      if (!r.ok) { out.items.push({ where: label, note: `取不到（HTTP ${r.status}）`, leak: false }); continue }
-      scanned++
-      const hit = paths.filter(p => r.body.includes(p))
-      if (hit.length) { out.items.push({ where: label, note: hit.join('、'), leak: true }); out.level = LEVEL.bad }
-    }
+    let bad = 0
 
-    // 剩下的走全站爬取的结果。以前只查首页和归档页首屏 ——
-    // 而 /page/2/、/archives/2026/05/、标签页、分类页上照样挂着标题和链接，
-    // 于是检查报「全部干净」，文章其实是公开的。
+    // ① 真正公开的页面上不该出现任何上锁路径
     if (crawl) {
       crawl.html.forEach((body, url) => {
-        scanned++
         const where = url.replace(CFG.site, '') || '/'
-        // 文章自己那一页当然含有自己的路径，不算泄漏
-        const hit = paths.filter(p => p !== where && body.includes(p))
-        if (hit.length) { out.items.push({ where, note: hit.join('、'), leak: true }); out.level = LEVEL.bad }
+        if (!publicPaths.has(where)) return          // 上锁页面里有链接是正常的
+        const hit = locked.filter(p => body.includes(`href="${p}"`) || body.includes(`href='${p}'`))
+        if (hit.length) {
+          out.items.push({ where: `公开页 ${where}`, note: `挂着 ${hit.length} 个内部链接：${hit.slice(0, 3).join('、')}`, leak: true })
+          out.level = LEVEL.bad
+          bad++
+        }
       })
     } else {
       out.level = LEVEL.warn
-      out.items.push({ where: '全站页面', note: '这次没能抓取，只查了三个 feed', leak: false })
+      out.items.push({ where: '公开页面', note: '这次没能抓取，只查了 feed 和索引', leak: false })
     }
 
-    out.detail = out.level === LEVEL.bad
-      ? `发现 ${out.items.filter(i => i.leak).length} 处泄漏`
-      : `${paths.length} 篇受保护文章，扫了 ${scanned} 个公开位置（含分页、标签、分类），干净`
+    // ② feed 和 sitemap 应该已经不存在
+    for (const [label, path] of [['RSS/Atom', '/atom.xml'], ['站点地图', '/sitemap.xml']]) {
+      const r = await text(`${CFG.site}${path}`, 15000)
+      if (r.ok) {
+        out.items.push({ where: label, note: `${path} 还能访问 —— 它会把文章清单直接推出去，应该关掉`, leak: true })
+        out.level = LEVEL.bad
+        bad++
+      } else {
+        out.items.push({ where: label, note: `已关闭（HTTP ${r.status}）`, leak: false })
+      }
+    }
+
+    // ③ search.xml 必须是密文。它是这套软锁里唯一一个「一个 URL 拿走全站正文」的口子
+    const s = await text(`${CFG.site}/search.xml`, 25000)
+    if (!s.ok) {
+      out.items.push({ where: '搜索索引', note: `取不到（HTTP ${s.status}）`, leak: false })
+    } else {
+      const head = s.body.trim().slice(0, 200)
+      if (head.startsWith('{') && /"alg"\s*:\s*"AES-GCM"/.test(s.body.slice(0, 400))) {
+        out.items.push({ where: '搜索索引', note: `已加密（${(s.body.length / 1024).toFixed(0)} KB 密文）`, leak: false })
+      } else if (/<entry>/.test(s.body)) {
+        const n = (s.body.match(/<entry>/g) || []).length
+        out.items.push({ where: '搜索索引', note: `search.xml 是明文，里面有 ${n} 篇文章的完整正文 —— 构建时没有 NOIMPTY_PASSPHRASE`, leak: true })
+        out.level = LEVEL.bad
+        bad++
+      } else {
+        out.items.push({ where: '搜索索引', note: '是空的（没配暗号，站内搜索用不了，但也没漏）', leak: false })
+      }
+    }
+
+    // ④ robots.txt
+    const rb = await text(`${CFG.site}/robots.txt`, 15000)
+    if (!rb.ok || !/Disallow:\s*\/\s*$/m.test(rb.body)) {
+      out.items.push({ where: '爬虫', note: 'robots.txt 没有拒绝全站抓取 —— 内容会被搜索引擎收录', leak: true })
+      if (out.level === LEVEL.ok) out.level = LEVEL.warn
+    } else {
+      out.items.push({ where: '爬虫', note: 'robots.txt 已拒绝全站抓取', leak: false })
+    }
+
+    out.detail = bad
+      ? `发现 ${bad} 处漏洞`
+      : `${locked.length} 个路径上锁（含 ${postPaths.length} 篇文章），公开面干净`
   } catch (e) {
     out.level = LEVEL.warn
     out.detail = '检查失败：' + String(e.message || e).slice(0, 160)

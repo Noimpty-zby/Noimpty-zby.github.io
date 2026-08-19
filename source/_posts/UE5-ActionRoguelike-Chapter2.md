@@ -2,7 +2,7 @@
 title: UE5 C++ 第二章复盘：从一次点击到一发法球的完整远程攻击链路
 date: 2026-08-07 20:00:00
 categories:
-  - [Study,UE5]
+  - [课外, UE5-Looman]
 tags:
   - C++
   - ActionRoguelike
@@ -13,6 +13,9 @@ tags:
 description: 完整梳理 ActionRoguelike 第二章五节课：投射物 Actor 的组件构成、碰撞三层配置、动态委托与命中回调、Enhanced Input 触发器、SpawnActor 与伤害归属链、计时器与动画蒙太奇、音效与特效的三种生成方式、物理冲量的完整链路，并解释每一步为什么这么写。
 cover: /img/covers/UE5-ActionRoguelike-Chapter2.svg
 series: UE5 ActionRoguelike
+privacy: protected
+sitemap: false
+private_section: 课外
 ---
 
 # 前言

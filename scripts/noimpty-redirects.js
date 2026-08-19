@@ -10,10 +10,48 @@
  * 以后再改文件名，往下面这张表里加一行即可。
  */
 const REDIRECTS = {
+  // ── 改过文件名的文章 ──────────────────────────────────
   // 旧路径（不含站点 root）                                  新路径
-  '2026/08/07/UE5-ActionRoguelike-Chapter2 /':               '2026/08/07/UE5-ActionRoguelike-Chapter2/',
   '2026/07/31/UE5_Chapter01_ActionRoguelike_Project_Setup/': '2026/07/31/UE5-ActionRoguelike-Chapter1/',
-  '2026/07/20/homework-third/':                              '2026/07/20/homework-three/'
+  '2026/07/20/homework-third/':                              '2026/07/20/homework-three/',
+
+  /* ⚠️ 这里原来还有一条：
+   *
+   *     '2026/08/07/UE5-ActionRoguelike-Chapter2 /'   ← 注意 Chapter2 后面那个空格
+   *
+   * 那是当年文章文件名手滑多打了一个空格留下的旧地址。已经删掉，原因是它的代价
+   * 远大于收益：
+   *
+   *   生成它就要在 public 下建一个**名字结尾带空格**的目录。
+   *   Windows 在解析路径时会把结尾的空格吃掉，于是这个目录建得出来、删不掉 ——
+   *   `Remove-Item -Recurse public` 和 `hexo clean` 都会报
+   *   「系统找不到指定的文件」，而且每次本地构建都会再造一个。
+   *
+   * 而它服务的是一个手滑产生的、只存活过几天的地址；现在全站又已经上锁 +
+   * robots 拒绝收录，那个地址实际上不会有人来。
+   *
+   * 真要留的话，得同时接受「本地 public 目录删不掉」这个后遗症；
+   * 删的时候得用 [System.IO.Directory]::Delete("\\?\完整路径", $true) 绕过路径规范化。
+   */
+
+  // ── 板块重构（Study/Ideas → 课内/课外/策划室）──────────
+  //
+  // 文章本身的永久链接没变（它是 :year/:month/:day/:title，只改了分类），
+  // 所以旧的文章链接照样能打开。变的是**板块页**和**分类页**的地址，
+  // 下面这些是外链、收藏和搜索收录里可能存在的老地址。
+  'study/':                                                  'extra/',
+  'study/games101/':                                         'extra/games101/',
+  'study/ue5/':                                              'extra/ue5-looman/',
+  // 竞赛那一栏没有对应的新板块（比赛的事现在归策划室管）
+  'study/competition/':                                      'studio/',
+  'ideas/':                                                  'studio/',
+  'ideas-vault/':                                            'studio/',
+
+  // 分类页的地址跟着 category_map 变了
+  'categories/study/':                                       'categories/extra/',
+  'categories/study/games101/':                              'categories/extra/games101/',
+  'categories/study/ue5/':                                   'categories/extra/ue5-looman/',
+  'categories/ideas/':                                       'studio/'
 }
 
 const withRoot = value => {

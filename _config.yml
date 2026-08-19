@@ -62,23 +62,31 @@ prismjs:
   tab_replace: ''
 
 # Home page setting
-# path: Root path for your blogs index page. (default = '')
-# per_page: Posts displayed per page. (0 = disable pagination)
-# order_by: Posts order. (Order by date descending by default)
+#
+# per_page: 0 —— 首页不再列文章。
+# 全站上锁之后，首页只留 hero + 三个板块入口（见 source/js/section-hub.js）。
+# 列文章等于把标题、摘要、封面直接摆在未解锁的页面上，
+# 那正是「从哪里也不能访问内部文章」要堵的口子。
 index_generator:
   path: ''
-  per_page: 8
+  per_page: 0
   order_by: -date
 
 # Category & Tag
 default_category: uncategorized
+# 分类的 slug。中文分类名不映射的话，URL 会变成一长串百分号编码。
 category_map:
-  Study: study
+  课外: extra
+  课内: in-class
   GAMES101: games101
-  UE5: ue5
-  竞赛: competition
-  Ideas: ideas
+  UE5-Looman: ue5-looman
+  UE5-Ulibarri: ue5-ulibarri
+  DSA: dsa
+  CSAPP: csapp
+  NJU-OS: nju-os
+  CS144: cs144
   Life: life
+  娜娜莉: nanaly
 # tag_map 已清空：Study / GAMES101 / UE5 / Life 这些标签已删除
 # （它们与分类完全重复），保留映射会指向不存在的标签。
 tag_map:
@@ -101,7 +109,15 @@ updated_option: 'date'
 per_page: 8
 pagination_dir: page
 
-# Local search index (used by Butterfly)
+# 本地搜索索引。
+#
+# ⚠️ 这个文件是全站上锁里唯一一个「一个 URL 就能把全部正文拿走」的口子：
+#    它按设计就是全站所有文章的完整正文，纯文本，一个 GET 就下完。
+#    所以 scripts/noimpty-search-lock.js 会在构建的最后一步把它整体加密，
+#    产物 search.xml 里是密文，解密密钥由暗号派生。
+#    娜娜莉解锁之后照常能全站搜（source/js/noimpty-ai.js 里会先解密再用）。
+#
+# 改了暗号就必须重新构建一次，否则旧密文解不开。
 search:
   path: search.xml
   field: post
@@ -115,30 +131,31 @@ exclude:
 ignore:
 
 # 站点地图（hexo-generator-sitemap）
-# 搜索引擎靠它高效发现全部页面。
-# 加密文章通过在其 front-matter 里写 sitemap: false 排除
-# （见 source/_posts/my-first-post.md）。
-sitemap:
-  path: sitemap.xml
-  rel: false
-  tags: true
-  categories: true
+#
+# 全站上锁之后这个东西没有存在意义了 —— 它的唯一用途是帮搜索引擎发现页面，
+# 而现在我们恰恰不想被发现。所有文章都带 sitemap: false，
+# 但 tags/categories 那两项仍会把分类页列出来，所以一并关掉。
+#
+# 想重新开放某个板块时：把下面三行的注释去掉，
+# 并把对应文章 front-matter 里的 sitemap: false 删掉。
+# sitemap:
+#   path: sitemap.xml
+#   rel: false
+#   tags: false
+#   categories: false
 
 # RSS / Atom 订阅（hexo-generator-feed）
-# 注意：加密文章会由 scripts/noimpty-sections.js 里的 after_generate 过滤器
-#       从 feed 中剔除，避免私密内容经 RSS 泄漏。
-feed:
-  type: atom
-  path: atom.xml
-  limit: 20
-  hub:
-  # content: false —— 只输出 description 摘要。
-  # 开 true 会把全文塞进 feed：你的 UE5 长文单篇 1.5 万字，
-  # 全文 feed 会到 1.3MB，订阅者每次拉取都要下这么多。
-  content: false
-  content_limit: 300
-  content_limit_delim: ' '
-  order_by: -date
+#
+# 同样关掉。feed 是「把内容主动推出去」，和上锁是相反的方向；
+# 就算按 privacy 过滤，只要有一篇漏标就是全文外泄。
+# scripts/noimpty-lockdown.js 里还有一道兜底：即使有人把这里打开，
+# 只要 lockdown 开着，构建出来的 feed 也会被清空。
+# feed:
+#   type: atom
+#   path: atom.xml
+#   limit: 20
+#   content: false
+#   order_by: -date
   icon: /img/favicon.svg
 
 # Markdown 渲染器（hexo-renderer-markdown-it）

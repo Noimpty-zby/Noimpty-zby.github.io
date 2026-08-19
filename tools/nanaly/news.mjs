@@ -138,10 +138,61 @@ const dedupe = items => {
  *
  * 所以现在只让她挑编号，链接由这边照着检索结果原样拼。她编不出来，也写不坏。
  */
+/* ⚠️ 上面那一层挡住了「编造网址」，但挡不住另一种错，而它在线上真的发生了：
+ *
+ *   **编号张冠李戴。** 她写「A 公司裁了引擎组」，标的却是 [3]，
+ *   而 [3] 是一条讲面试的。链接能点开、域名也真、看起来一切正常 ——
+ *   点进去才发现文不对题。主人的原话：「来源链接根本无法指引到真正的出处」。
+ *
+ * 根源是模型在长素材列表里数错行，靠改提示词压不住。所以加一道内容校验：
+ *
+ *   条目文字和它标的那条素材对得上        → 照常挂
+ *   对不上，但另一条明显更像              → 改挂那一条，日志里说明改过
+ *   对不上，也没有更像的                  → 整条丢掉
+ *
+ * 顺带把域名写进链接文字（`[来源 · gamedeveloper.com]`）——
+ * 万一还有漏网的，在页面上一眼就能看出不对劲，不用点进去才发现。
+ */
 const attachSources = (md, hits) => {
+  // 中文没有空格分词，用 2-gram 粗略比。够用，不值得为这个上分词器。
+  const bigrams = s => {
+    const t = String(s || '').toLowerCase()
+      .replace(/[\s　，。！？、；：""''「」《》（）()[\]{}<>·~!?,.:;"'\-_/\\|+*#@$%^&=]/g, '')
+    const set = new Set()
+    for (let i = 0; i < t.length - 1; i++) set.add(t.slice(i, i + 2))
+    return set
+  }
+
+  // 条目文字有多少落在这条素材里。0 = 完全不沾边，1 = 全都对得上。
+  const overlap = (text, hit) => {
+    const a = bigrams(text)
+    if (!a.size) return 0
+    const b = bigrams(`${hit.title || ''} ${hit.excerpt || ''}`)
+    if (!b.size) return 0
+    let n = 0
+    a.forEach(g => { if (b.has(g)) n++ })
+    return n / a.size
+  }
+
+  /* 太短的条目没法判断 —— 三五个字的重合度纯属噪声，
+   * 真按阈值一刀切会把正常条目误杀。真实条目都在一百字以上，
+   * 所以短于这个长度的一律放行，交给编号本身兜着。 */
+  const JUDGEABLE = 12
+  const judgeable = text => bigrams(text).size >= JUDGEABLE
+
+  /* 阈值 0.18。她是**转述**不是摘抄，重合度本来就不会高 ——
+   * 正常条目大致落在 0.3 以上，标错的在 0.05 以下，中间是一片空白。
+   * 0.18 落在那片空白里：往上抬会误伤转述得比较自由的条目，往下压则拦不住真错的。 */
+  const MIN = 0.18
+  // 改挂的门槛更高：必须明显更像，否则宁可丢掉也不猜
+  const REMAP_MIN = 0.32
+
   const lines = String(md || '').split('\n')
   const out = []
   let kept = 0
+  let remapped = 0
+  let dropped = 0
+
   for (const raw of lines) {
     const line = raw.trimEnd()
     // 条目行：允许 - * + 开头，编号允许半角/全角方括号
@@ -151,8 +202,6 @@ const attachSources = (md, hits) => {
       out.push(line.replace(/https?:\/\/\S+/g, '').replace(/[（(]\s*来源\s*[）)]/g, ''))
       continue
     }
-    const hit = hits[Number(m[2])]
-    if (!hit || !/^https?:\/\//i.test(hit.url)) continue   // 编号对不上就丢掉这条，不留半截
     // 她正文里若还是自己写了链接或网址，一律清掉，只留窝拼的这一个
     const text = sanitizeMd(m[3])
       .replace(/\[([^\]\n]*)\]\([^)\s]*\)/g, '$1')
@@ -165,8 +214,49 @@ const attachSources = (md, hits) => {
       .replace(/\s{2,}/g, ' ')
       .trim()
     if (!text) continue
-    out.push(`${m[1]}${text} [来源](${encodeURI(hit.url)})`)
+
+    const usable = h => h && /^https?:\/\//i.test(h.url)
+    let hit = usable(hits[Number(m[2])]) ? hits[Number(m[2])] : null
+
+    // 编号本身就对不上（她编了一个超出范围的号）→ 直接丢，不留半截无源条目
+    if (!hit) {
+      console.log(`  [来源丢弃]「${text.replace(/\*/g, '').slice(0, 22)}…」标的 [${m[2]}] 根本不存在，整条丢掉`)
+      dropped++
+      continue
+    }
+
+    const score = judgeable(text) ? overlap(text, hit) : 1
+
+    if (score < MIN) {
+      // 有没有哪条素材明显更像？有就改挂它 —— 她想写的多半就是那条，只是数错了行
+      let best = null
+      let bestScore = 0
+      for (const h of hits) {
+        if (!usable(h)) continue
+        const s = overlap(text, h)
+        if (s > bestScore) { bestScore = s; best = h }
+      }
+      const label = text.replace(/\*/g, '').slice(0, 22)
+      if (best && bestScore >= REMAP_MIN) {
+        console.log(`  [来源校正]「${label}…」标的是 [${m[2]}]，内容其实对应《${String(best.title).slice(0, 24)}》，已改挂`)
+        hit = best
+        remapped++
+      } else {
+        console.log(`  [来源丢弃]「${label}…」标的 [${m[2]}] 和内容对不上（重合度 ${score.toFixed(2)}），也没有更像的，整条丢掉`)
+        dropped++
+        continue
+      }
+    }
+
+    // 域名写进链接文字：万一还有漏网的，一眼能看出不对劲
+    let host = ''
+    try { host = new URL(hit.url).hostname.replace(/^www\./, '') } catch (_) {}
+    out.push(`${m[1]}${text} [来源${host ? ' · ' + host : ''}](${encodeURI(hit.url)})`)
     kept++
+  }
+
+  if (remapped || dropped) {
+    console.log(`  来源校验：保留 ${kept} 条，改挂 ${remapped} 条，丢弃 ${dropped} 条`)
   }
   return kept ? out.join('\n').replace(/\n{3,}/g, '\n\n').trim() : ''
 }

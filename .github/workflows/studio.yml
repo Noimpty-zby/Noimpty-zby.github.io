@@ -1,0 +1,88 @@
+name: 策划室
+
+# 游戏策划的自动推进。一周三次，每次只做一件事 ——
+# 做哪件由 tools/studio/run.mjs 里的优先级决定（反馈 > 停更 > 深化 > 立项 > 探索）。
+#
+# 所有产出都写进**私有仓库**，这个公开仓库一个字节都不动。
+# 所以这个工作流不需要 contents: write，也不会触发部署。
+
+on:
+  schedule:
+    # 周一 / 周四 / 周六，北京时间晚上 9 点（UTC 13:00）。
+    #
+    # 为什么是这三天：间隔 3-2-2 天最匀；周六那次你第二天有整块时间能真动手；
+    # 而且避开周日晚上 8 点娜娜莉写随笔，不跟它挤在同一晚。
+    - cron: '0 13 * * 1,4,6'
+  workflow_dispatch:
+    inputs:
+      what:
+        description: '做什么（auto = 按优先级自己决定）'
+        type: choice
+        options: [auto, explore, charter, expand, revise, postmortem]
+        default: auto
+      dry:
+        description: '只演练不动真格（产出会打印在日志里，不写进仓库）'
+        type: boolean
+        default: true
+
+permissions:
+  # 只读。产出全部走 IDEAS_TOKEN 写进私有仓库，不碰这个仓库。
+  contents: read
+
+concurrency:
+  group: studio
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    # 深度思考一次可能跑十几分钟，默认的 6 小时用不着，但也别卡在 10 分钟上
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: 跑一轮
+        env:
+          # ── 模型 ────────────────────────────────────────────────
+          # 策划书要读进上一版全文、对照硬约束、找出自己写错的地方再改写，
+          # 这是长上下文 + 自我批判，模型能力差距最大的地方。所以默认走 Claude。
+          # 没配的话会降级到 DeepSeek 并在日志里明说降级了。
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          # 模型名会变。想换的时候在这里改，不用动代码。
+          STUDIO_MODEL: ${{ vars.STUDIO_MODEL }}
+          STUDIO_DEEP_MODEL: ${{ vars.STUDIO_DEEP_MODEL }}
+
+          # ── 检索 ────────────────────────────────────────────────
+          # 探索阶段先搜再判断。不配的话探索照常跑，但她只能凭自己脑子里的知识，
+          # 给出来的方向会明显更「平均」—— 所有人都会说的那几个。
+          # 和娜娜莉资讯板块用的是同一把 key。
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+
+          # ── 私有仓库 ────────────────────────────────────────────
+          # IDEAS_REPO 例：Noimpty-zby/noimpty-ideas
+          # IDEAS_TOKEN 是一把细粒度 PAT，只勾那个私有仓库，Contents: Read and write。
+          # 两个都没配的话这一步直接跳过 —— 绝不会退回到往公开仓库里写。
+          IDEAS_REPO: ${{ secrets.IDEAS_REPO }}
+          IDEAS_TOKEN: ${{ secrets.IDEAS_TOKEN }}
+
+          # ── 调参 ────────────────────────────────────────────────
+          # 同时最多几个活跃项目。2 是有理由的：一个人的注意力就这么多，
+          # 三个并行等于三个都停在半路；但只有 1 的话，卡住时没地方去。
+          STUDIO_MAX_ACTIVE: '2'
+          # 连续几条负面反馈触发停更评估
+          STUDIO_POSTMORTEM_AT: '2'
+
+          # 提交署名
+          NANALY_GIT_NAME: ${{ secrets.NANALY_GIT_NAME }}
+          NANALY_GIT_EMAIL: ${{ secrets.NANALY_GIT_EMAIL }}
+        run: |
+          WHAT="${{ inputs.what }}"
+          [ "$WHAT" = "auto" ] && WHAT=""
+          DRY=""
+          [ "${{ inputs.dry }}" = "true" ] && DRY="--dry"
+          node tools/studio/run.mjs $WHAT $DRY

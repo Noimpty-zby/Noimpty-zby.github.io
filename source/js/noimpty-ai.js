@@ -411,20 +411,85 @@
     return text.length > 40 ? { title: title.trim(), text } : null
   }
 
-  // 跨文章检索：用站点已有的 search.xml，本地关键词初筛，只把相关片段发给模型
-  let corpus = null
+  /* ---------------- 「现在」是什么时候、博客里有什么 ----------------
+   *
+   * 这两件事以前一件都没告诉她，于是：
+   *
+   *   问「今天周几」→ 她说「周四喵，8月13号」，实际是 8 月 15 号周六。
+   *   问「现在有几篇文章」→ 她说「一共 6 篇」，实际 16 篇。
+   *
+   * 两次都不是她在敷衍 —— 是她手上真的没有这些信息，只能从训练数据里
+   * 和日程页的内容里凑一个出来。模型没有时钟，也数不了它看不见的东西。
+   *
+   * 所以每一轮对话都把这两样塞进去。加起来几百 token，
+   * 换掉的是「她一本正经地说错日期」这种最伤信任的错误。
+   */
+
+  const WEEKDAY = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+
+  const beijingNow = () => {
+    const parts = new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+      weekday: 'short'
+    }).formatToParts(new Date())
+    const get = t => (parts.find(p => p.type === t) || {}).value || ''
+    // weekday 用自己的表，不用 Intl 的输出 —— 各浏览器给的写法不统一
+    const dow = new Date().toLocaleDateString('en-US', { timeZone: 'Asia/Shanghai', weekday: 'short' })
+    const idx = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(dow)
+    return {
+      date: `${get('year')}-${get('month')}-${get('day')}`,
+      time: `${get('hour')}:${get('minute')}`,
+      weekday: WEEKDAY[idx] || ''
+    }
+  }
+
+  const SECTION_OF_URL = url =>
+    /\/in-class\/|\/extra\//.test(url) ? (url.includes('/in-class/') ? '课内' : '课外')
+      : url.includes('/life/') ? 'Life'
+      : url.includes('/news/') ? '资讯'
+      : ''
+
+  let postDigestCache = null
+  const postDigest = async () => {
+    if (postDigestCache) return postDigestCache
+    let posts
+    try { posts = await loadCorpus() }
+    catch (e) {
+      // 说清楚为什么数不出来，别让她瞎猜一个数字
+      const why = window.NOIMPTY_SEARCH ? window.NOIMPTY_SEARCH.explain(String(e.message)) : ''
+      return `【博客里有多少文章】现在读不到文章索引（${why}）。\n`
+        + '被问到篇数或有哪些文章时，如实说「窝现在读不到索引」并说明上面这个原因。**绝对不许猜一个数字**。'
+    }
+    const lines = posts.map(p => {
+      const sec = SECTION_OF_URL(p.url)
+      const date = (p.url.match(/\/(\d{4})\/(\d{2})\/(\d{2})\//) || []).slice(1).join('-')
+      return `- ${p.title}${sec ? `（${sec}）` : ''}${date ? ` ${date}` : ''}`
+    })
+    postDigestCache = `【博客里现有的全部文章：共 ${posts.length} 篇】\n${lines.join('\n')}\n`
+      + '被问到「有几篇文章」时，报上面这个数字，不要自己数、不要凭印象。'
+    return postDigestCache
+  }
+
+  const nowContext = async () => {
+    const t = beijingNow()
+    return `【现在】北京时间 ${t.date} ${t.weekday} ${t.time}。\n`
+      + '这是真实的当前时间，以它为准。你没有时钟，除了这一行你无从知道今天是几号 ——\n'
+      + '所以**任何**涉及日期、星期、「今天/明天/后天」「还剩几天」的回答，都必须从这一行算起。\n'
+      + '算之前先在心里把日期减一遍，别凭感觉说「就是后天」。\n\n'
+      + await postDigest()
+  }
+
+  /* 跨文章检索。
+   *
+   * search.xml 现在是加密的（全站上锁，见 scripts/noimpty-lockdown.js），
+   * 解密那一步统一放在 noimpty-search.js 里，这边只管拿结果。
+   * 未解锁时它会抛 SEARCH_LOCKED —— 调用方负责把原因说给主人听，
+   * 别再像以前那样静默 catch 掉，然后她一脸茫然地说「没搜到」。 */
   const loadCorpus = async () => {
-    if (corpus) return corpus
-    const root = (window.GLOBAL_CONFIG_SITE && window.GLOBAL_CONFIG_SITE.root) || '/'
-    const res = await fetch(`${root}search.xml`.replace(/\/{2,}/g, '/'))
-    const xml = new DOMParser().parseFromString(await res.text(), 'text/xml')
-    corpus = [...xml.querySelectorAll('entry')].map(e => ({
-      title: (e.querySelector('title') || {}).textContent || '',
-      url: (e.querySelector('url') || {}).textContent || '',
-      text: ((e.querySelector('content') || {}).textContent || '')
-        .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
-    })).filter(p => p.text)
-    return corpus
+    if (!window.NOIMPTY_SEARCH) throw new Error('SEARCH_UNAVAILABLE')
+    return window.NOIMPTY_SEARCH.loadCorpus()
   }
 
   const searchCorpus = async (query, topN = 3) => {
@@ -545,8 +610,31 @@
   // （「资讯」很容易打成「咨询」，同音，输入法默认就给这个）。
   const SECTIONS = [
     { label: '首页', url: '/', alias: ['首页', '主页', 'home', '回首页', '主界面'] },
-    { label: 'Study', url: '/study/', alias: ['study', '学习', '技术', '图形学', '学习区', '学习板块'] },
-    { label: 'Ideas', url: '/ideas/', alias: ['ideas', '想法', '点子', '灵感'] },
+    {
+      label: '自学课内',
+      url: '/in-class/',
+      alias: ['课内', '自学课内', '专业课', '课内板块', '课内页', 'in-class', '学校的课']
+    },
+    { label: '数据结构与算法', url: '/in-class/dsa/', alias: ['数据结构', '算法', 'dsa', '数据结构与算法', 'abdul bari'] },
+    { label: 'CSAPP', url: '/in-class/csapp/', alias: ['csapp', '15213', '计算机系统', '深入理解计算机系统', 'cmu'] },
+    { label: '操作系统', url: '/in-class/nju-os/', alias: ['操作系统', 'os', 'nju os', '南大操作系统', '蒋炎岩', 'jyy'] },
+    { label: '计算机网络', url: '/in-class/cs144/', alias: ['计算机网络', '网络', 'cs144', 'tcp', '网络课'] },
+    {
+      label: '自学课外',
+      url: '/extra/',
+      alias: ['课外', '自学课外', '课外板块', '课外页', 'extra', '自己挑的课']
+    },
+    { label: 'GAMES101', url: '/extra/games101/', alias: ['games101', '图形学', '闫令琪', '现代计算机图形学'] },
+    {
+      label: 'UE5 · Tom Looman',
+      url: '/extra/ue5-looman/',
+      alias: ['ue5', 'unreal', '虚幻', 'looman', 'tom looman', 'actionroguelike', 'ue5 c++', '虚幻引擎']
+    },
+    {
+      label: 'UE5 · Stephen Ulibarri',
+      url: '/extra/ue5-ulibarri/',
+      alias: ['ulibarri', 'stephen ulibarri', 'ultimate game developer', '动作rpg', 'echo']
+    },
     { label: 'Life', url: '/life/', alias: ['life', '生活', '碎碎念', '生活板块'] },
     {
       label: '资讯',
@@ -560,11 +648,18 @@
       alias: ['日程', '日程表', '日历', '安排', '计划', '待办', 'schedule', 'calendar', 'todo',
         '我的日程', '日程板块', '日程页', '日程界面', '今天的安排', '任务表']
     },
+    /* 只有这一个地方能叫「点子」。
+     *
+     * 上一版这里有两条都带 ideas / 点子 别名的记录 ——
+     * 一个是已经删掉的 /ideas/ 板块，一个是 /ideas-vault/。
+     * 相似度打分是平的，她就在两个之间反复跳错，而且被指出来之后还是跳错，
+     * 因为她根本没有可以区分的信息。现在只留一条，不给歧义留位置。 */
     {
-      label: '点子',
-      url: '/ideas-vault/',
-      alias: ['点子', '点子库', '点子保险库', 'ideas', '玩法参考', '参考', '比赛', '创作大赛',
-        '腾讯游戏创作大赛', '比赛点子', '游戏点子', '玩法点子', '灵感库']
+      label: '策划室',
+      url: '/studio/',
+      alias: ['策划', '策划室', '策划页', '点子', '点子库', '灵感库', 'ideas', 'studio',
+        '游戏策划', '策划案', '策划书', '方案', '立项', '项目', '我的游戏', '做游戏',
+        '玩法', '玩法设计', '比赛', '创作大赛', '腾讯游戏创作大赛']
     },
     { label: '归档', url: '/archives/', alias: ['归档', 'archive', 'archives', '全部文章', '文章列表', '所有文章', '文章归档'] },
     { label: '分类', url: '/categories/', alias: ['分类', 'categories', 'category', '分类页'] },
@@ -1057,7 +1152,7 @@
   // ---------------- 调用模型 ----------------
 
   const buildMessages = async (userText, mode) => {
-    const msgs = [{ role: 'system', content: PERSONA }]
+    const msgs = [{ role: 'system', content: PERSONA }, { role: 'system', content: await nowContext() }]
     const art = currentArticle()
 
     if (mode === 'web') {
@@ -1074,7 +1169,16 @@
         msgs.push({ role: 'system', content: '互联网搜索没有返回结果，请如实告诉对方没搜到。' })
       }
     } else if (mode === 'site') {
-      const hits = await searchCorpus(userText.replace(/^全站搜(一下)?[：:]\s*/, ''))
+      // 索引现在是加密的，未解锁时会抛。抛出来的原因要原样说给主人听 ——
+      // 以前这里一 catch 就变成「没搜到」，而真实原因是「还没输暗号」。
+      let hits
+      try {
+        hits = await searchCorpus(userText.replace(/^全站搜(一下)?[：:]\s*/, ''))
+      } catch (e) {
+        const why = window.NOIMPTY_SEARCH ? window.NOIMPTY_SEARCH.explain(String(e.message)) : String(e.message)
+        msgs.push({ role: 'system', content: `站内索引读不出来，原因是：${why}\n把这个原因告诉对方，别说成「没搜到」。` })
+        hits = []
+      }
       if (hits.length) {
         msgs.push({
           role: 'system',

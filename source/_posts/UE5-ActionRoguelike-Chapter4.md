@@ -2,7 +2,7 @@
 title: UE5 C++ 第四章复盘：第一次用蓝图，以及 C++ 与蓝图的分工边界
 date: 2026-08-12 13:00:00
 categories:
-  - [Study,UE5]
+  - [课外, UE5-Looman]
 tags:
   - C++
   - ActionRoguelike
@@ -12,6 +12,9 @@ tags:
 description: 第四章是从"纯 C++ 搭骨架"转向"C++ 与蓝图协作"的转折点。本篇完整梳理四节课：什么时候该在蓝图里建组件、BlueprintImplementableEvent 与 BlueprintNativeEvent 的调用方向、接口为什么必须用 Execute_ 调用、Parent 节点为什么不能省、事件分发器如何解耦拉杆与爆炸桶、以及 SpawnActor 的几个隐藏参数。重点解释每一次报错的成因与排查路径。
 cover: /img/covers/UE5-ActionRoguelike-Chapter4.svg
 series: UE5 ActionRoguelike
+privacy: protected
+sitemap: false
+private_section: 课外
 ---
 
 # 前言

@@ -21,14 +21,23 @@ html.noimpty-home-hub #aside-content {
   display: none !important;
 }
 
+/* 首页三张卡片横排。
+ *
+ * 上一版是通栏竖着堆的，问题很实际：三张原图全是竖幅
+ * （1054×1396 / 719×1077 / 674×1393），塞进一个宽扁的框里
+ * background-size: cover 会把左右大量裁掉，人脸直接被切没。
+ * 横排之后每张卡是 3:4 的竖幅，和原图比例接近，几乎不用裁。 */
 .noimpty-home-sections {
   display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--section-gap);
   width: 100%;
 }
 
+
 .noimpty-home-sections__intro {
   padding: 4px 6px 2px;
+  grid-column: 1 / -1;
 }
 
 .noimpty-home-sections__eyebrow,
@@ -59,7 +68,9 @@ html.noimpty-home-hub #aside-content {
 .noimpty-section-card {
   position: relative;
   display: flex;
-  min-height: clamp(410px, 64vh, 650px);
+  /* 3:4 竖幅，和三张原图的比例接近，裁切最少 */
+  aspect-ratio: 3 / 4;
+  min-height: 340px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: var(--section-radius);
@@ -88,11 +99,18 @@ html.noimpty-home-hub #aside-content {
   transition: transform 0.65s cubic-bezier(0.22, 1, 0.36, 1), filter 0.45s ease;
 }
 
+/* 遮罩自下而上。
+ * 原来是左重右轻的横向渐变 —— 那是为通栏卡片（文字压在左侧）设计的。
+ * 竖幅卡片文字在底部，横向渐变只会把人脸压暗，所以换成纵向。 */
 .noimpty-section-card::after {
   z-index: -1;
-  background:
-    linear-gradient(90deg, rgba(15, 11, 18, 0.83) 0%, rgba(15, 11, 18, 0.38) 48%, rgba(15, 11, 18, 0.12) 100%),
-    linear-gradient(0deg, rgba(15, 11, 18, 0.5), transparent 50%);
+  background: linear-gradient(
+    0deg,
+    rgba(15, 11, 18, 0.9) 0%,
+    rgba(15, 11, 18, 0.55) 28%,
+    rgba(15, 11, 18, 0.1) 62%,
+    rgba(15, 11, 18, 0.02) 100%
+  );
 }
 
 .noimpty-section-card:hover .noimpty-section-card__image,
@@ -106,22 +124,38 @@ html.noimpty-home-hub #aside-content {
   outline-offset: 5px;
 }
 
-.noimpty-section-card--study {
-  --section-position: center 39%;
+/* 裁切位置。三张图的脸都在画面上方 25~30% 处，
+ * 但原图高宽比差很多（1.32 / 1.50 / 2.07），落进同一个 3:4 的框里
+ * 被裁掉的比例完全不同，所以要分别给值：
+ *
+ *   core  原图 1054×1396，比例几乎就是 3:4，基本不裁，给多少都一样
+ *   extra 原图 719×1077，纵向裁掉约一成
+ *   life  原图 674×1393，很瘦长，纵向要裁掉三成多，所以要压到很上面
+ */
+.noimpty-section-card--core {
+  --section-position: center 30%;
 }
 
-.noimpty-section-card--ideas {
-  --section-position: center 42%;
+.noimpty-section-card--extra {
+  --section-position: center 25%;
 }
 
 .noimpty-section-card--life {
-  --section-position: center 26%;
+  --section-position: center 14%;
 }
 
+/* 卡片里的三样东西（Private 标 / 标题 / 进入提示）都是 <span>，
+ * 默认是行内元素会连成一串 —— 原来中间夹着一段描述所以看不出来，
+ * 描述删掉之后就变成「core 输入暗号后进入」挤在一行。
+ * 这里显式改成纵向排列。 */
 .noimpty-section-card__content {
   align-self: flex-end;
-  width: min(680px, 88%);
-  padding: clamp(34px, 6vw, 72px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  box-sizing: border-box;
+  padding: clamp(20px, 2.2vw, 30px);
 }
 
 .noimpty-section-card__meta {
@@ -146,9 +180,11 @@ html.noimpty-home-hub #aside-content {
 }
 
 .noimpty-section-card__title {
+  display: block;
   margin: 0;
   color: #fff;
-  font-size: clamp(3.4rem, 9vw, 7.4rem);
+  /* 三分之一宽的卡片，字号要跟着降下来，否则 extra 会撑破边 */
+  font-size: clamp(2rem, 3.6vw, 3.4rem);
   font-weight: 800;
   letter-spacing: -0.045em;
   line-height: 0.94;
@@ -166,10 +202,11 @@ html.noimpty-home-hub #aside-content {
 .noimpty-section-card__action {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 26px;
-  font-size: 0.92rem;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 0.82rem;
   font-weight: 700;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .noimpty-section-card__action::after {
@@ -517,6 +554,28 @@ html.noimpty-private-locked #rightside {
   }
 }
 
+/* 中等屏幕：三列会把卡片挤得太窄，字号再降也不好看，所以直接掉成一列。
+   一列的时候恢复宽扁比例 —— 竖幅卡片占满手机屏一屏多，滑起来很累。 */
+@media (max-width: 900px) {
+  .noimpty-home-sections {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .noimpty-section-card {
+    aspect-ratio: 16 / 10;
+    min-height: 260px;
+  }
+
+  /* 一列时卡片变宽，字可以放大回来 */
+  .noimpty-section-card__title {
+    font-size: clamp(2.6rem, 9vw, 4.6rem);
+  }
+
+  .noimpty-section-card__content {
+    padding: clamp(24px, 5vw, 40px);
+  }
+}
+
 @media (max-width: 768px) {
   :root {
     --section-radius: 22px;
@@ -528,7 +587,8 @@ html.noimpty-private-locked #rightside {
   }
 
   .noimpty-section-card {
-    min-height: 56svh;
+    aspect-ratio: 4 / 3;
+    min-height: 240px;
   }
 
   .noimpty-section-card::after {
@@ -543,7 +603,7 @@ html.noimpty-private-locked #rightside {
   }
 
   .noimpty-section-card__title {
-    font-size: clamp(3rem, 17vw, 5rem);
+    font-size: clamp(2.4rem, 13vw, 4rem);
   }
 
   .noimpty-section-card__description {
@@ -567,4 +627,120 @@ html.noimpty-private-locked #rightside {
   .noimpty-gate {
     transition: none !important;
   }
+}
+
+/* ══════════════════════════════════════════════════════════
+   板块重构后新增的零件
+   —— 课内 / 课外两个 hub、课程信息表、以及「为什么这么排」那种说明块
+   ══════════════════════════════════════════════════════════ */
+
+/* 课内是四门课。三列网格会让第四张孤零零地掉到第二行，
+   所以这一档单独用两列，2×2 看起来才是「一组」。 */
+.noimpty-track-grid--four {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* 整张卡片是个 <a>，卡片内的文字会继承链接的下划线。
+   悬停时一整块文字全部加下划线非常难看，这里统一去掉 ——
+   卡片自己有位移和阴影反馈，不需要再靠下划线表示可点。 */
+.noimpty-track-card,
+.noimpty-track-card:hover,
+.noimpty-track-card * {
+  text-decoration: none;
+}
+
+/* 讲师 / 课程英文全名。放在标题下面，比塞进正文里清楚。 */
+.noimpty-track-card__by {
+  display: block;
+  margin: -4px 0 10px;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+  color: var(--noimpty-accent);
+  opacity: 0.9;
+}
+
+/* 「约 150 小时 · 还没开始」这类状态行，钉在卡片底部 */
+.noimpty-track-card__stat {
+  display: block;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--noimpty-border);
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+  color: var(--card-meta, #9b9098);
+}
+
+/* 各门课自己的辉光色。和卡片的 --track-glow 一个机制。 */
+.noimpty-track-card--ue5b      { --track-glow: rgba(140, 108, 216, 0.22); }
+.noimpty-track-card--dsa       { --track-glow: rgba(233, 89, 120, 0.22); }
+.noimpty-track-card--csapp     { --track-glow: rgba(226, 140, 62, 0.2); }
+.noimpty-track-card--njuos     { --track-glow: rgba(72, 176, 132, 0.2); }
+.noimpty-track-card--cs144     { --track-glow: rgba(48, 151, 212, 0.22); }
+
+/* 课程信息表：讲师、教材、主页、进度。定义列表的排版，不是表格 —— 
+   条目数会变（有的课有教材有的没有），表格的固定列反而更别扭。 */
+.noimpty-course-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px 26px;
+  margin: 0 0 30px;
+  padding: 18px 22px;
+  border: 1px solid var(--noimpty-border);
+  border-radius: 16px;
+  background: rgba(233, 89, 120, 0.045);
+}
+
+.noimpty-course-meta > div {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 0.85rem;
+  line-height: 1.75;
+}
+
+.noimpty-course-meta b {
+  flex: none;
+  min-width: 4.5em;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  color: var(--noimpty-accent);
+}
+
+.noimpty-course-meta span { color: var(--card-meta, #9b9098); }
+.noimpty-course-meta a { color: inherit; border-bottom: 1px dashed currentColor; }
+.noimpty-course-meta a:hover { color: var(--noimpty-accent); }
+
+/* 「这个顺序是怎么排的」「课程覆盖」这类说明块。
+   它不是文章正文，但也不是元信息 —— 给它一条左边线，和上面的卡片区分开。 */
+.noimpty-plan {
+  margin: 34px 0 8px;
+  padding: 4px 0 4px 20px;
+  border-left: 3px solid var(--noimpty-border);
+}
+
+.noimpty-plan h3 {
+  margin: 22px 0 10px;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+  color: var(--noimpty-accent);
+}
+.noimpty-plan h3:first-child { margin-top: 0; }
+
+.noimpty-plan p,
+.noimpty-plan li {
+  font-size: 0.9rem;
+  line-height: 1.95;
+  color: var(--card-meta, #9b9098);
+}
+
+.noimpty-plan p { margin: 0 0 12px; }
+.noimpty-plan ul { margin: 0 0 16px; padding-left: 20px; }
+.noimpty-plan li { margin: 5px 0; }
+.noimpty-plan b { color: var(--text-highlight-color); }
+
+@media (max-width: 768px) {
+  .noimpty-track-grid--four { grid-template-columns: minmax(0, 1fr); }
+  .noimpty-course-meta { grid-template-columns: minmax(0, 1fr); padding: 15px 17px; }
+  .noimpty-plan { padding-left: 14px; }
 }

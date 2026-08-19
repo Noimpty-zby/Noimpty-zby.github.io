@@ -3,11 +3,14 @@ title: GAMES101 作业 2：三角形光栅化与 Z-Buffer
 date: 2026-07-17 15:55:14
 description: 记录 GAMES101 作业 2 中三角形内部判断、包围盒遍历、透视正确深度插值与 Z-Buffer 深度测试的实现过程。
 categories:
-  - [Study, GAMES101]
+  - [课外, GAMES101]
 tags:
   - 光栅化
 cover: /img/covers/homework-two.svg
 series: GAMES101
+privacy: protected
+sitemap: false
+private_section: 课外
 ---
 
 今天完成了 GAMES101 作业 2。这次作业的任务，是把已经完成坐标变换的三角形真正光栅化到屏幕上，并使用 Z-Buffer 处理两个三角形之间的遮挡关系。

@@ -659,7 +659,7 @@
       url: '/studio/',
       alias: ['策划', '策划室', '策划页', '点子', '点子库', '灵感库', 'ideas', 'studio',
         '游戏策划', '策划案', '策划书', '方案', '立项', '项目', '我的游戏', '做游戏',
-        '玩法', '玩法设计', '比赛', '创作大赛', '腾讯游戏创作大赛']
+        '玩法', '玩法设计']
     },
     { label: '归档', url: '/archives/', alias: ['归档', 'archive', 'archives', '全部文章', '文章列表', '所有文章', '文章归档'] },
     { label: '分类', url: '/categories/', alias: ['分类', 'categories', 'category', '分类页'] },
@@ -1008,7 +1008,7 @@
       <input type="password" data-f="apiKey" placeholder="sk-..." autocomplete="off">
       <label>Tavily API Key（联网搜索，可留空）</label>
       <input type="password" data-f="tavilyKey" placeholder="tvly-..." autocomplete="off">
-      <label>GitHub Token（日程表保存用，可留空）</label>
+      <label>GitHub Token（日程表保存 + 策划室反馈用，可留空）</label>
       <input type="password" data-f="ghToken" placeholder="github_pat_..." autocomplete="off">
       <label>解锁密码（每次重开浏览器输一次）</label>
       <input type="password" data-f="pass" placeholder="自己设一个" autocomplete="new-password">

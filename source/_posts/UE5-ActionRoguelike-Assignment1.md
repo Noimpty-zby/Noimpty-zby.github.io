@@ -2,7 +2,7 @@
 title: UE5 C++ 作业一复盘：角色跳跃与爆炸桶，从需求到状态机再到代码
 date: 2026-08-09 13:00:00
 categories:
-  - [Study,UE5]
+  - [课外, UE5-Looman]
 tags:
   - C++
   - ActionRoguelike
@@ -13,6 +13,9 @@ tags:
 description: ActionRoguelike 课程 Assignment 1 的完整复盘。第一部分用 Enhanced Input 实现角色跳跃并读通 ACharacter::Jump 的源码分层；第二部分从零设计一个爆炸桶，覆盖 TakeDamage 重写、伤害系统的双端结构、UPROPERTY 说明符的判断标准、组件与一次性效果的生命周期差异、RadialForceComponent 与冲量、以及本次实际踩过的十四个坑。
 cover: /img/covers/UE5-ActionRoguelike-Assignment1.svg
 series: UE5 ActionRoguelike
+privacy: protected
+sitemap: false
+private_section: 课外
 ---
 
 # 前言

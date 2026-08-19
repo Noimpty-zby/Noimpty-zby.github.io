@@ -3,12 +3,15 @@ title: 从 Blinn-Phong 到 Mipmap：着色、插值与纹理过滤
 date: 2026-07-19 13:47:50
 description: 从局部光照模型出发，梳理着色频率、重心坐标、图形渲染管线，以及双线性插值、Mipmap 和各向异性过滤。
 categories:
-  - [Study, GAMES101]
+  - [课外, GAMES101]
 tags:
   - 着色
   - 纹理
 cover: /img/covers/shading-1.svg
 series: GAMES101
+privacy: protected
+sitemap: false
+private_section: 课外
 ---
 
 上一篇笔记完成了三角形的光栅化：我们已经知道一个三角形覆盖了哪些采样点。接下来的问题是，**这些点最终应该呈现什么颜色？**

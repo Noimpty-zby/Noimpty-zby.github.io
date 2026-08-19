@@ -41,6 +41,12 @@ jobs:
         run: npm test
 
       - name: Build site
+        env:
+          # 站内搜索索引（search.xml）是全站所有文章的完整正文，一个 GET 就下完 ——
+          # 全站上锁之后它是最大的口子，所以构建时用暗号把它整体加密。
+          # 没配这个 secret 的话构建照样成功，只是 search.xml 会被清空（站内搜索用不了）。
+          # 改了暗号必须重新部署一次，否则旧密文解不开。
+          NOIMPTY_PASSPHRASE: ${{ secrets.SITE_PASSPHRASE }}
         run: npm run clean && npm run build
 
       # 构建「成功」但页面是空的，这种事真发生过：
@@ -56,6 +62,56 @@ jobs:
             exit 1
           fi
           echo "没有空页面，共 $(find public -name '*.html' | wc -l) 个 HTML"
+
+      # 站内死链。板块结构一改，正文里、模板里、配置里那些手写的站内链接
+      # 不会报错，只会在有人点下去的时候 404 —— 而那个人多半永远不会告诉你。
+      # 这一步扫每个 HTML 里的每个 href/src，解析不到文件就让部署失败。
+      - name: 站内死链检查
+        run: node tools/linkcheck.mjs
+
+      # 公开页面泄漏检查。对外只剩首页，它上面的每一个字都是公开的 ——
+      # 包括被 CSS 藏起来的部分，因为「藏起来」只是不显示，源码里照样有。
+      # 这类泄漏漏过两次（卡片小字、侧边栏公告），都不是逻辑错误，
+      # 是「顺手写了一句人话」，靠人盯没用。
+      - name: 公开页面泄漏检查
+        run: node tools/leakcheck.mjs
+
+      # 上锁自检。这几条如果没过，部署出去的站就是敞开的 ——
+      # 而这种「敞开」在页面上完全看不出来，只有直接请求那几个文件才会发现。
+      - name: 上锁自检
+        run: |
+          fail=0
+
+          # 1. 锁清单必须生成，而且不能是空的
+          if [ ! -f public/js/protected-manifest.js ]; then
+            echo "::error::没有生成 protected-manifest.js —— 全站都会是公开的"; fail=1
+          elif ! grep -q '"entries":\[{' public/js/protected-manifest.js; then
+            echo "::error::锁清单是空的"; fail=1
+          fi
+
+          # 2. RSS 和 sitemap 必须不存在
+          for f in atom.xml sitemap.xml; do
+            if [ -f "public/$f" ]; then
+              echo "::error::$f 还在 —— 它会把文章清单直接推出去"; fail=1
+            fi
+          done
+
+          # 3. robots.txt 必须拒绝全站
+          if ! grep -q '^Disallow: /$' public/robots.txt 2>/dev/null; then
+            echo "::error::robots.txt 没有拒绝全站抓取"; fail=1
+          fi
+
+          # 4. search.xml 要么是密文，要么是空的，绝不能是明文正文
+          if grep -q '<entry>' public/search.xml 2>/dev/null; then
+            echo "::error::search.xml 是明文，里面是全站正文 —— 没配 SITE_PASSPHRASE"; fail=1
+          fi
+
+          # 5. 首页是唯一对外的页面，上面不能出现任何文章链接
+          if grep -oE 'href="/[0-9]{4}/[0-9]{2}/[0-9]{2}/' public/index.html 2>/dev/null | head -1 | grep -q .; then
+            echo "::error::首页上挂着文章链接 —— 首页不上锁，等于公开"; fail=1
+          fi
+
+          [ $fail -eq 0 ] && echo "上锁自检通过" || exit 1
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4

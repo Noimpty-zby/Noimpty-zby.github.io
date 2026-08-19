@@ -2,7 +2,7 @@
 title: UE5 C++ 第一章复盘：从零创建 ActionRoguelike 到可移动、可观察、带动画的第三人称角色
 date: 2026-07-31 13:00:00
 categories:
-  - [Study,UE5]
+  - [课外, UE5-Looman]
 tags:
   - C++
   - Enhanced Input
@@ -10,6 +10,9 @@ tags:
 description: 完整梳理 ActionRoguelike 第一章的项目创建、C++ 角色、Actor Components、第三人称相机、Enhanced Input、镜头相对移动以及动画蓝图配置，并解释每一步为什么要这样做。
 cover: /img/covers/UE5-ActionRoguelike-Chapter1.svg
 series: UE5 ActionRoguelike
+privacy: protected
+sitemap: false
+private_section: 课外
 ---
 
 # 前言

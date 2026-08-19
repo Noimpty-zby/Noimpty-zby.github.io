@@ -2,7 +2,7 @@
 title: UE5 C++ 第三章复盘：从每帧筛选目标到接口解耦的完整交互系统
 date: 2026-08-11 18:00:00
 categories:
-  - [Study,UE5]
+  - [课外, UE5-Looman]
 tags:
   - C++
   - ActionRoguelike
@@ -13,6 +13,9 @@ tags:
 description: 完整梳理 ActionRoguelike 第三章六节课：GameMode/PlayerController/Pawn 的职责划分、球体重叠与点积目标筛选、Tick 驱动的程序化动画、UInterface 双类结构与依赖倒置、Enhanced Input 到接口调用的完整链路、自定义检测通道的白名单过滤、以及核心重定向背后的对象命名机制，并解释每一步为什么这么写。
 cover: /img/covers/UE5-ActionRoguelike-Chapter3.svg
 series: UE5 ActionRoguelike
+privacy: protected
+sitemap: false
+private_section: 课外
 ---
 
 # 前言

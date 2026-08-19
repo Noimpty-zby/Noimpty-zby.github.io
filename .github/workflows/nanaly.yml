@@ -15,18 +15,12 @@ on:
     - cron: '0 2 */3 * *'
     # 写随笔：每周日北京时间晚上 8 点（UTC 12:00 周日）
     - cron: '0 12 * * 0'
-    # 找点子：一周三次，周一 / 周四 / 周六，北京时间晚上 9 点（UTC 13:00）。
-    #
-    # 为什么是这三天：间隔 3-2-2 天，最匀；周六那次你第二天有整块时间能真动手；
-    # 而且避开周日晚上 8 点的随笔，不跟它挤在同一晚。
-    # 走深度思考，一次几分钟，交白卷也算正常输出 —— 多跑几次才有稳定产出。
-    - cron: '0 13 * * 1,4,6'
   workflow_dispatch:
     inputs:
       what:
         description: '做什么'
         type: choice
-        options: [reply, patrol, notes, news, ideas, react, column, all]
+        options: [reply, patrol, notes, news, react, column, all]
         default: patrol
       dry:
         description: '只演练不动真格'
@@ -70,9 +64,6 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "what=${{ inputs.what }}" >> $GITHUB_OUTPUT
             echo "dry=${{ inputs.dry && '--dry' || '' }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.schedule }}" = "0 13 * * 1,4,6" ]; then
-            echo "what=ideas" >> $GITHUB_OUTPUT
-            echo "dry=" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "0 12 * * 0" ]; then
             echo "what=column" >> $GITHUB_OUTPUT
             echo "dry=" >> $GITHUB_OUTPUT
@@ -106,12 +97,8 @@ jobs:
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           # 勾了「强制重写」时，覆盖掉「今天/这周已经生成过」的防重复判断
           NANALY_FORCE: ${{ inputs.force && '1' || '0' }}
-          # 点子和比赛方案存在一个**私有**仓库里，不进这个公开仓库。
-          # IDEAS_REPO 例：Noimpty-zby/noimpty-ideas
-          # IDEAS_TOKEN 是一把细粒度 PAT，只勾那个私有仓库、只给 Contents 读写。
-          # 两个都没配的话，ideas 这一步会直接跳过 —— 绝不会退回到往公开仓库里写。
-          IDEAS_REPO: ${{ secrets.IDEAS_REPO }}
-          IDEAS_TOKEN: ${{ secrets.IDEAS_TOKEN }}
+          # 注：找点子那一步已经独立出去了，见 .github/workflows/studio.yml
+          #     （它变成了「策划室」——不再是找参考资料，而是自己立项写策划书）
           # 她提交时用的署名。不配就用一个不会关联到任何 GitHub 账号的地址。
           # 想让她的提交显示成你小号的头像：用小号登录 github.com/settings/emails，
           # 复制那个形如 12345678+用户名@users.noreply.github.com 的地址存成这个 secret。

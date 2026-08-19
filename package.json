@@ -7,7 +7,9 @@
     "clean": "node node_modules/hexo/bin/hexo clean",
     "deploy": "node node_modules/hexo/bin/hexo deploy",
     "server": "node node_modules/hexo/bin/hexo server",
-    "test": "node tools/tests/run-all.mjs"
+    "test": "node tools/tests/run-all.mjs",
+    "linkcheck": "node tools/linkcheck.mjs",
+    "leakcheck": "node tools/leakcheck.mjs"
   },
   "hexo": {
     "version": "8.1.2"

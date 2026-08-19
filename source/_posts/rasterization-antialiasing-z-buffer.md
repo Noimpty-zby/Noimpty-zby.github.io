@@ -3,11 +3,14 @@ title: 从标准立方体到屏幕：光栅化、抗锯齿与 Z-Buffer
 date: 2026-07-16 18:08:16
 description: 整理视口变换、三角形光栅化、采样与混叠、MSAA 抗锯齿以及 Z-Buffer 深度测试的基本原理。
 categories:
-  - [Study, GAMES101]
+  - [课外, GAMES101]
 tags:
   - 光栅化
 cover: /img/covers/rasterization-antialiasing-z-buffer.svg
 series: GAMES101
+privacy: protected
+sitemap: false
+private_section: 课外
 ---
 
 这篇文章继续整理 GAMES101 的光栅化部分，主要包括视口变换、像素采样、混叠与抗锯齿，以及处理遮挡关系的 Z-Buffer 算法。

@@ -17,18 +17,30 @@ nav:
   # Whether to fix navigation bar
   fixed: true
 
+# 导航。
+#
+# 除了「首页」和「关于」，下面每一项都在锁后面（见 scripts/noimpty-lockdown.js）。
+# 留在导航里是为了你自己方便 —— 未解锁的人点进去只会撞到暗号框。
+#
+# 归档/分类/标签收进「更多」：它们是内部索引，不该和三个正经板块并列。
+#
+# 三个板块用 core / extra / life，和首页卡片上的字一致。
+# 用英文单词而不是「自学课内」这类中文标签，有两个理由：
+#   1. 导航是公开可见的，中文标签等于把里面有什么写在门口
+#   2. 三个词长度接近，和后面几个中文项排在一起也不会长短不齐
 menu:
   首页: / || fas fa-home
-  Study: /study/ || fas fa-graduation-cap
-  Ideas: /ideas/ || fas fa-lightbulb
-  Life: /life/ || fas fa-heart
-  资讯: /news/ || fas fa-newspaper
-  日程: /schedule/ || fas fa-calendar-days
-  点子: /ideas-vault/ || fas fa-lightbulb
-  归档: /archives/ || fas fa-box-archive
-  分类: /categories/ || fas fa-folder-open
-  标签: /tags/ || fas fa-tags
-  关于: /about/ || fas fa-circle-info
+  core: /in-class/ || fas fa-book
+  extra: /extra/ || fas fa-compass
+  life: /life/ || fas fa-heart
+  studio: /studio/ || fas fa-drafting-compass
+  更多||fas fa-ellipsis:
+    资讯: /news/ || fas fa-newspaper
+    日程: /schedule/ || fas fa-calendar-days
+    归档: /archives/ || fas fa-box-archive
+    分类: /categories/ || fas fa-folder-open
+    标签: /tags/ || fas fa-tags
+    关于: /about/ || fas fa-circle-info
 
 # --------------------------------------
 # Code Blocks Settings
@@ -291,10 +303,12 @@ aside:
   mobile: true
   # Position: left / right
   position: right
+  # 全站上锁：侧边栏的归档/标签/分类入口一并关掉。
+  # 这三个是「从侧边栏直连进文章」的主要路径。
   display:
-    archive: true
-    tag: true
-    category: true
+    archive: false
+    tag: false
+    category: false
   card_author:
     enable: true
     description:
@@ -305,9 +319,21 @@ aside:
       link: https://github.com/noimpty-zby
   card_announcement:
     enable: true
-    content: "以图形学为主的学习笔记，目前集中在两条线：GAMES101 的课程笔记与作业复盘，以及 UE5 C++ 的实践记录。写的时候尽量讲清楚每一步「为什么这么做」，而不只是记录做了什么。"
+    # ⚠️ 这段公告会渲染进**每一个页面**的 HTML，包括不上锁的首页。
+    #    首页的侧边栏虽然被 CSS 藏起来了，但藏起来的东西还在源码里 ——
+    #    原来这里写的是「以图形学为主的学习笔记，目前集中在两条线：GAMES101…UE5 C++…」，
+    #    等于把三个板块里有什么直接摆在了对外公开的页面上，比卡片上的小字漏得还多。
+    #    要写具体内容就写进各个板块页（那些在锁后面），别写在这里。
+    content: "写给自己看的记录。"
+  # ⚠️ 下面四张卡片全部关掉，这是「上锁」里最容易漏的一处。
+  #
+  # 它们会把文章标题、封面、分类名、标签名直接渲染进**每一个页面**的 HTML ——
+  # 包括首页和关于页这种不上锁的页面。privacy-gate 只能在浏览器里事后删掉它们，
+  # 而「查看源代码」看到的是删之前的东西。所以必须从源头不生成。
+  #
+  # 想重新打开：把 enable 改回 true，同时接受标题会出现在公开页面上。
   card_recent_post:
-    enable: true
+    enable: false
     # If set 0 will show all
     limit: 4
     # Sort: date / updated
@@ -321,14 +347,14 @@ aside:
     storage: 10
     avatar: true
   card_categories:
-    enable: true
+    enable: false
     # If set 0 will show all
     limit: 8
     # Choose: none / true / false
     expand: none
     sort_order:
   card_tags:
-    enable: true
+    enable: false
     # If set 0 will show all
     limit: 24
     color: false
@@ -340,7 +366,7 @@ aside:
     order: 1
     sort_order:
   card_archives:
-    enable: true
+    enable: false
     # Type: monthly / yearly
     type: monthly
     # Eg: YYYY年MM月
@@ -1102,9 +1128,12 @@ inject:
     - <link rel="stylesheet" href="/css/noimpty-ai.css">
     - <link rel="stylesheet" href="/css/nanaly-notes.css">
     - <link rel="stylesheet" href="/css/schedule.css">
-    - <link rel="stylesheet" href="/css/ideas-vault.css">
+    - <link rel="stylesheet" href="/css/studio.css">
+    # 顺序有讲究：protected-manifest 给出锁清单，privacy-gate 立刻据此打遮罩，
+    # noimpty-search 依赖 gate 存下的暗号才能解密索引。三者不能调换。
     - <script src="/js/protected-manifest.js"></script>
     - <script src="/js/privacy-gate.js"></script>
+    - <script src="/js/noimpty-search.js"></script>
     - <script src="/js/section-hub.js"></script>
     # ↓↓↓ GoatCounter 访问统计。把 '' 里填成你的站点代号（xxx.goatcounter.com 里的 xxx）
     # 留空则完全不加载统计脚本。这不是密钥，它本来就会出现在网页源码里。
@@ -1112,7 +1141,7 @@ inject:
     # 比赛方案和点子存在这个**私有**仓库里，不进博客仓库、不进构建产物。
     # 填成「你的用户名/私有仓库名」，例如 Noimpty-zby/noimpty-ideas。
     # 这一行会出现在网页源码里，但仓库是私有的 —— 没有 token 谁都读不到，所以不算泄漏。
-    - <script>window.NOIMPTY_IDEAS_REPO = ''</script>
+    - <script>window.NOIMPTY_IDEAS_REPO = 'Noimpty-zby/noimpty-ideas'</script>
     - <script src="/js/analytics.js"></script>
   bottom:
     - <script src="/js/toc-sync.js"></script>
@@ -1120,7 +1149,7 @@ inject:
     # 娜娜莉：API Key 不写在代码里，由使用者在面板中输入并存在本机 localStorage
     - <script src="/js/noimpty-ai.js"></script>
     - <script src="/js/schedule.js"></script>
-    - <script src="/js/ideas-vault.js"></script>
+    - <script src="/js/studio.js"></script>
 
 # CDN Settings
 # Don't modify the following settings unless you know how they work

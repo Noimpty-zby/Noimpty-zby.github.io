@@ -2,7 +2,7 @@
 title: UE5 C++ 作业二复盘：黑洞引力与传送接力，深度理解时序控制与物理逻辑
 date: 2026-08-15 20:00:00
 categories:
-  - [Study,UE5]
+  - [课外, UE5-Looman]
 tags:
   - C++
   - ActionRoguelike
@@ -13,6 +13,9 @@ tags:
 description: ActionRoguelike 课程 Assignment 2 的深度复盘。通过重构弹丸基类建立继承体系，实现具备“引力吞噬”逻辑的黑洞弹和“两段式计时接力”的传送弹。重点探讨负值 RadialForce 的量级、多定时器句柄管理以及利用 Instigator 实现跨 Actor 逻辑通讯。
 cover: /img/covers/UE5-ActionRoguelike-Assignment1.svg
 series: UE5 ActionRoguelike
+privacy: protected
+sitemap: false
+private_section: 课外
 ---
 
 # 前言

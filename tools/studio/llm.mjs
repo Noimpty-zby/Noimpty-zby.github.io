@@ -27,11 +27,21 @@ const DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || ''
 const DEEPSEEK_BASE = (process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com').replace(/\/$/, '')
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_PRO_MODEL || 'deepseek-v4-pro'
 
+/* DeepSeek 的思考档位：low / high / max。
+ *
+ * 注意 high 就是**默认值** —— 写 high 等于什么都没写。
+ * 而且官方的映射是 low→low、medium/high→high、只有 max 才真的拉满。
+ *
+ * 策划这活儿的价值几乎全在「想」那一步：对照否决清单、估工作量、
+ * 判断自己上一版哪里写错了。这些都是推理，不是写作。
+ * 一周只跑三次，多想那点钱不值一提，所以默认 max。 */
+const DEEPSEEK_EFFORT = process.env.DEEPSEEK_EFFORT || 'max'
+
 export const backend = () => (ANTHROPIC_KEY ? 'claude' : (DEEPSEEK_KEY ? 'deepseek' : 'none'))
 
 export const describeBackend = () => ({
-  claude: `Claude（${MODEL}）`,
-  deepseek: `DeepSeek（${DEEPSEEK_MODEL}）—— 降级模式，没配 ANTHROPIC_API_KEY`,
+  claude: `Claude（${MODEL} / 深度步骤用 ${DEEP_MODEL}，扩展思考开）`,
+  deepseek: `DeepSeek（${DEEPSEEK_MODEL}，思考档位 ${DEEPSEEK_EFFORT}）—— 降级模式，没配 ANTHROPIC_API_KEY`,
   none: '没有可用的模型 —— ANTHROPIC_API_KEY 和 DEEPSEEK_API_KEY 都没配'
 }[backend()])
 
@@ -97,7 +107,9 @@ const askDeepSeek = async ({ system, user, maxTokens, deep, timeout }) => {
       model: DEEPSEEK_MODEL,
       messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
       thinking: { type: deep ? 'enabled' : 'disabled' },
-      ...(deep ? { reasoning_effort: 'high' } : { temperature: 0.6 }),
+      /* 思考模式下 temperature / top_p / penalty 全部无效（官方明说不报错但也不生效），
+       * 所以这两条是互斥的，别同时发。 */
+      ...(deep ? { reasoning_effort: DEEPSEEK_EFFORT } : { temperature: 0.6 }),
       max_tokens: maxTokens
     }),
     signal: AbortSignal.timeout(timeout)

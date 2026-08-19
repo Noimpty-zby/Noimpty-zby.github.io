@@ -12,8 +12,8 @@
  *   5. 什么都没有    → 探索
  */
 import assert from 'node:assert/strict'
-import { decide, exploreRounds } from '../studio/run.mjs'
-import { DOC_PLAN, nextDoc, docByFile, SYSTEM, parseAudit, auditPrompt, explorePrompt } from '../studio/prompts.mjs'
+import { decide, exploreRounds, exploreFile } from '../studio/run.mjs'
+import { DOC_PLAN, nextDoc, docByFile, SYSTEM, parseAudit, auditPrompt, explorePrompt, postmortemPrompt } from '../studio/prompts.mjs'
 import { parseColumn } from '../nanaly/column.mjs'   // 只为确认 tools 之间没有循环 import
 
 let pass = 0
@@ -240,6 +240,46 @@ check('★ 已否决的方向会带进下一轮探索', () => {
   })
   assert.match(p.user, /振刀战斗/)
   assert.match(p.user, /亮点取决于动画质量/, '只给名字不给原因的话，它会换个名字再端上来')
+})
+
+console.log('\n策划室 · 同一天跑两次')
+
+check('★★ 探索记录的文件名带轮次号，同一天两次不会互相覆盖', () => {
+  const a = exploreFile('2026-08-19', 7)
+  const b = exploreFile('2026-08-19', 8)
+  assert.notEqual(a, b, '只带日期的话，第二次会盖掉第一次的记录，而且轮数只算 1 轮')
+  assert.match(a, /2026-08-19/, '日期还是要在文件名里，方便人翻')
+})
+
+check('cycle 缺失时也不炸（老 state.json 没有这个字段）', () => {
+  assert.equal(typeof exploreFile('2026-08-19', undefined), 'string')
+})
+
+console.log('\n策划室 · 他说停掉的时候')
+
+check('★★ 他明确说停掉 → 结论写死停更，模型没有投票权', () => {
+  const p = postmortemPrompt({
+    charter: 'C', project: { name: 'X' }, existingDocs: 'D', feedbacks: 'F', changelog: '', forced: true
+  })
+  assert.match(p.user, /没有投票权/, '他是甲方，说停就是停')
+  assert.match(p.user, /结论：停更/)
+  assert.doesNotMatch(p.user, /结论：继续 \/ 停更/, '强制停更时不许再给它二选一')
+  assert.match(p.user, /保留意见/, '不同意可以写下来，但不能改结论')
+})
+
+check('★ 只是负面连击（他没明说）→ 仍然是判断题', () => {
+  const p = postmortemPrompt({
+    charter: 'C', project: { name: 'X' }, existingDocs: 'D', feedbacks: 'F', changelog: ''
+  })
+  assert.match(p.user, /结论：继续 \/ 停更/, '这种情况该由模型判断，不该一律停')
+})
+
+check('两条路共用同一份停更说明规格', () => {
+  const spec = /## 为什么停[\s\S]*## 什么时候这个想法会重新成立/
+  const forced = postmortemPrompt({ charter: 'C', project: { name: 'X' }, existingDocs: '', feedbacks: '', changelog: '', forced: true })
+  const judged = postmortemPrompt({ charter: 'C', project: { name: 'X' }, existingDocs: '', feedbacks: '', changelog: '' })
+  assert.match(forced.user, spec)
+  assert.match(judged.user, spec)
 })
 
 console.log('\n模块之间没有循环 import')

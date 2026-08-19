@@ -53,9 +53,14 @@ jobs:
           # 没配的话会降级到 DeepSeek 并在日志里明说降级了。
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          # 模型名会变。想换的时候在这里改，不用动代码。
-          STUDIO_MODEL: ${{ vars.STUDIO_MODEL }}
-          STUDIO_DEEP_MODEL: ${{ vars.STUDIO_DEEP_MODEL }}
+          # 模型名会变。想换的时候去仓库 Settings → Variables 里加同名变量，
+          # 不用动代码。留空就走 tools/studio/llm.mjs 里的默认值。
+          STUDIO_MODEL: ${{ vars.STUDIO_MODEL }}              # Claude 常规步骤
+          STUDIO_DEEP_MODEL: ${{ vars.STUDIO_DEEP_MODEL }}    # Claude 深度步骤
+          DEEPSEEK_PRO_MODEL: ${{ vars.DEEPSEEK_PRO_MODEL }}  # 降级时用哪个 DeepSeek
+          # DeepSeek 思考档位：low / high / max，默认 max。
+          # 注意 high 是官方默认值 —— 填 high 等于没填。
+          DEEPSEEK_EFFORT: ${{ vars.DEEPSEEK_EFFORT }}
 
           # ── 检索 ────────────────────────────────────────────────
           # 探索阶段先搜再判断。不配的话探索照常跑，但她只能凭自己脑子里的知识，

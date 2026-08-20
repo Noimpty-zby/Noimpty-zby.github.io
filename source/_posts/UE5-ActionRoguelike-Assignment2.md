@@ -11,7 +11,7 @@ tags:
   - RadialForce
   - Instigator
 description: ActionRoguelike 课程 Assignment 2 的完整复盘。先清掉第三、四章遗留的七处崩溃级与逻辑级隐患，再抽出弹丸基类，实现具备引力吞噬的黑洞弹与两段计时的传送弹，最后用 FTimerDelegate 把三个技能的发射流程收口成一套。覆盖 UCLASS(Abstract)、PostInitializeComponents 绑定时机、TeleportTo 的 bNoCheck 陷阱、FTimerHandle 生命周期，以及 check / ensure / if 的选择标准。
-cover: /img/covers/UE5-ActionRoguelike-Assignment2.svg
+cover: /img/covers/UE5-ActionRoguelike-Assignment1.svg
 series: UE5 ActionRoguelike
 privacy: protected
 sitemap: false

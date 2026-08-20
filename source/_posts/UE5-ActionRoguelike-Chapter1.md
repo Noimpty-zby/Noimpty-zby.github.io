@@ -2012,7 +2012,3 @@ Character Movement 改变运动状态，Animation Blueprint 读取状态并输�
 - [Epic Games：USpringArmComponent::GetTargetRotation](https://dev.epicgames.com/documentation/en-us/unreal-engine/API/Runtime/Engine/GameFramework/USpringArmComponent/GetTargetRotation/1?application_version=5.3)
 - [Epic Games：FVector::RightVector](https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Core/Math/TVector/RightVector?application_version=5.5)
 - [Epic Games：Animation Blueprints](https://dev.epicgames.com/documentation/en-us/unreal-engine/animation-blueprints-in-unreal-engine)
-
-## 本系列的其他文章
-
-{% series %}

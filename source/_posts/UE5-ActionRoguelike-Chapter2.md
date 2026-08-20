@@ -1594,7 +1594,3 @@ UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ExplosionEffect, Hit.Impact
 - [Epic Games：Overview of Niagara Effects](https://dev.epicgames.com/documentation/en-us/unreal-engine/overview-of-niagara-effects-for-unreal-engine)
 - [Epic Games：Enhanced Input](https://dev.epicgames.com/documentation/en-us/unreal-engine/enhanced-input-in-unreal-engine)
 - [Tom Looman：Unreal Engine 5 C++ Timers](https://tomlooman.com/unreal-engine-cpp-timers/)
-
-## 本系列的其他文章
-
-{% series %}

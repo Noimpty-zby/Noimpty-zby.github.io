@@ -1,8 +1,12 @@
 {
-  "version": 1,
+  "version": 2,
   "updatedAt": "",
   "cycle": 0,
   "candidates": [],
+  "rejected": [],
   "projects": [],
-  "recentActions": []
+  "recentActions": [],
+  "laneHistory": [],
+  "lastShortlist": "",
+  "nextPlan": null
 }

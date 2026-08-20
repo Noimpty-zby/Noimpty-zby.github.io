@@ -306,8 +306,167 @@
 .sd-fb__row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 10px; }
 .sd-fb__status { font-size: .82em; color: var(--card-meta, #9b9098); }
 
+/* ---------- 下一轮预告 ---------- */
+/* 这套东西一周只醒三次，中间那两天页面上是静的。
+ * 写一句「下次准备做什么」，你才知道现在插队还来不来得及 —— 而插队是关键设计。 */
+
+.sd-next {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 13px 16px;
+  margin: 0 0 18px;
+  border: 1px dashed var(--noimpty-border, rgba(233, 89, 120, .35));
+  border-radius: 12px;
+  background: rgba(233, 89, 120, .05);
+}
+.sd-next > b { font-size: .74em; letter-spacing: .1em; color: var(--card-meta, #9b9098); }
+.sd-next__what { font-size: 1em; font-weight: 700; color: var(--noimpty-accent, #e95978); }
+.sd-next__why,
+.sd-next__hint { font-style: normal; font-size: .78em; color: var(--card-meta, #9b9098); line-height: 1.7; }
+
+/* ---------- 候选方向 ---------- */
+
+.sd-chip--flagged { background: rgba(230, 145, 63, .16); color: #e6913f; }
+.sd-chip--soft { background: rgba(150, 150, 160, .13); color: var(--card-meta, #9b9098); }
+.sd-card.is-flagged { border-style: dashed; }
+
+.sd-btn--sm { font-size: .78em; padding: 5px 14px; }
+
+.sd-lane {
+  display: inline-block;
+  font-size: .72em;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(120, 140, 220, .14);
+  color: #7b8cd6;
+}
+.sd-tag {
+  display: inline-block;
+  font-size: .7em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(150, 150, 160, .14);
+  color: var(--card-meta, #9b9098);
+}
+.sd-tag.is-warn { background: rgba(230, 145, 63, .16); color: #e6913f; }
+.sd-tag.is-good { background: rgba(90, 190, 140, .16); color: #4fae83; }
+
+.sd-linkish {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: .74em;
+  color: var(--noimpty-accent, #e95978);
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+
+.sd-cands { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.sd-cand {
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, .22));
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: var(--card-bg, rgba(255, 255, 255, .04));
+  transition: border-color .18s, opacity .18s;
+}
+.sd-cand:hover { border-color: var(--noimpty-accent-soft, #ff91a8); }
+.sd-cand.is-voted { opacity: .6; }
+.sd-cand__head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.sd-cand__title { font-weight: 700; font-size: .98em; line-height: 1.5; }
+.sd-cand__meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.sd-cand__acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.sd-vote__status { font-size: .78em; color: var(--card-meta, #9b9098); }
+
+/* 四维分。做成横条而不是数字表，是因为这里要一眼看出的不是「几分」，
+ * 而是**哪一维是短板** —— 短板决定上限，那是这套打分唯一的重点。 */
+.sd-dims {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 6px 16px;
+  margin-top: 10px;
+}
+.sd-dim { display: flex; align-items: center; gap: 7px; font-size: .74em; }
+.sd-dim > b { flex: none; width: 4.6em; color: var(--card-meta, #9b9098); font-weight: 400; }
+.sd-dim__bar {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(150, 150, 160, .18);
+  overflow: hidden;
+}
+.sd-dim__bar u {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--noimpty-accent, #e95978);
+  text-decoration: none;
+}
+.sd-dim > em { flex: none; font-style: normal; width: 1em; text-align: right; color: var(--card-meta, #9b9098); }
+.sd-dim > em.is-weak { color: #e6913f; font-weight: 700; }
+
+/* ---------- 已否决清单 ---------- */
+
+.sd-rejected { list-style: none; padding: 0; margin: 10px 0 0; }
+.sd-rejected li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 0;
+  border-bottom: 1px dashed var(--noimpty-border, rgba(233, 89, 120, .18));
+  font-size: .86em;
+}
+.sd-rejected li > span { font-size: .84em; color: var(--card-meta, #9b9098); line-height: 1.65; }
+
+/* ---------- 实验台 ---------- */
+
+.sd-callout {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(90, 190, 140, .4);
+  background: rgba(90, 190, 140, .07);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin: 0 0 16px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.sd-callout:hover { background: rgba(90, 190, 140, .12); }
+.sd-callout > b { display: block; font-size: .92em; color: #4fae83; }
+.sd-callout > span { display: block; font-size: .78em; color: var(--card-meta, #9b9098); line-height: 1.7; margin-top: 3px; }
+
+.sd-exp__proj { font-size: .96em; margin: 24px 0 10px; }
+.sd-exps { display: flex; flex-direction: column; gap: 14px; }
+.sd-exp {
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, .22));
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+.sd-exp.is-done { border-color: rgba(90, 190, 140, .4); background: rgba(90, 190, 140, .05); }
+.sd-exp__top { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+.sd-exp__claim { font-weight: 700; font-size: .96em; line-height: 1.6; margin: 10px 0 8px; }
+.sd-exp__body {
+  display: grid;
+  grid-template-columns: 5.2em 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: .82em;
+  line-height: 1.7;
+}
+.sd-exp__body dt { color: var(--card-meta, #9b9098); }
+.sd-exp__body dd { margin: 0; }
+.sd-expfb { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--noimpty-border, rgba(233, 89, 120, .2)); }
+.sd-expfb.is-sent { opacity: .65; }
+
 @media (max-width: 560px) {
   .sd-grid { grid-template-columns: 1fr; }
   .sd-doc__file { display: none; }
   .sd-body { font-size: .92em; }
+  .sd-dims { grid-template-columns: 1fr; }
+  .sd-exp__body { grid-template-columns: 1fr; }
+  .sd-exp__body dt { margin-top: 6px; }
+  .sd-cand__acts .sd-btn { flex: 1 1 auto; }
 }

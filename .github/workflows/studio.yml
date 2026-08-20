@@ -18,9 +18,12 @@ on:
       what:
         description: '做什么（auto = 按优先级自己决定）'
         type: choice
+        # shortlist = 把攒下来的候选摆在一起比一次，选出第一名。
+        #   用来解「一个 4 星候选都没有，于是永远在探索」那个死锁 ——
+        #   绝对分（够不够好）没有锚点，相对排序（哪个最好）有。
         # audit = 拿硬约束把某个已经立了的项目重审一遍。
-        # 立项前的校验是后来才加的，在那之前立的项目没被查过，用这个补一次。
-        options: [auto, explore, charter, expand, revise, postmortem, audit]
+        #   立项前的校验是后来才加的，在那之前立的项目没被查过，用这个补一次。
+        options: [auto, explore, shortlist, charter, expand, revise, postmortem, audit]
         default: auto
       dry:
         description: '只演练不动真格（产出会打印在日志里，不写进仓库）'
@@ -87,6 +90,12 @@ jobs:
           # 这道门是有代价的（第一个项目会晚一周），但它换掉的是
           # 「第一个想法直接变成最终答案」—— 上一版就是这么把振刀立成项的。
           STUDIO_MIN_EXPLORES: '3'
+          # 攒到多少个候选就该停下来比一比，而不是继续无限扫。
+          # 这个数配合上面那个决定了探索期有多长：6 个候选 + 3 轮 ≈ 两周。
+          # 再往上扫的边际收益很低 —— 第七个方向不会比前六个好，只会让选择变难。
+          STUDIO_SHORTLIST_AT: '6'
+          # 候选池上限，超出的从最旧的开始掉
+          STUDIO_CANDIDATE_CAP: '14'
 
           # 提交署名
           NANALY_GIT_NAME: ${{ secrets.NANALY_GIT_NAME }}

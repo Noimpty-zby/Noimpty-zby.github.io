@@ -11,6 +11,20 @@
  * 反馈也是同一条路反着走：你在页面上写，直接 PUT 回私有仓库的 feedback/inbox.json，
  * 策划 AI 下次跑的时候读到它，逐条回应。整条链路不经过任何第三方。
  *
+ * ── 这一版加了什么，以及为什么 ──────────────────────────
+ *
+ * 第一版你唯一的入口是「读完某份文档给个评价」。也就是说
+ * **必须先立项，你才说得上话** —— 而立项恰恰是最贵、最难回头的一步。
+ * 实测的结果就是：你只能在事后连点两次「停掉」，不能在方向阶段拦一下。
+ *
+ * 所以这一版多了三条你能插手的通道：
+ *
+ *   候选投票   在方向还只是候选的时候就能「就它了 / 加一星 / 否掉」
+ *   实验台     文档里那些「最小原型 → 观察什么 → 什么结果算推翻」
+ *              变成可勾选的条目，你做完回填真实结果 ——
+ *              那是这套系统能拿到的唯一一手证据，权重高于任何一轮推理
+ *   下一轮预告 告诉你它下次醒来准备做什么，你才知道现在插队还来不来得及
+ *
  * pjax 换页不会重新执行本脚本，所以入口是 mount() 并挂在 pjax:complete 上。
  */
 (() => {
@@ -25,7 +39,8 @@
 
   let root = null
   let state = null            // state.json
-  let view = { kind: 'list' } // list | project | doc | explore
+  let inbox = null            // feedback/inbox.json（缓存一份，投票时增量追加）
+  let view = { kind: 'list' } // list | project | doc | explore | experiments | lessons
   const cache = new Map()
 
   // ---------------- 取数据 ----------------
@@ -89,8 +104,24 @@
     } catch (_) { return fallback }
   }
 
+  /* 分块转 base64。
+   *
+   * 不能写成 `btoa(String.fromCharCode(...bytes))` —— 那是一次展开成
+   * 几万个函数实参的调用，字节数一多就是 RangeError: Maximum call stack size exceeded。
+   * 收件箱是**只增不减**的（跑完只是把条目标成已处理），中文注释又是一个字三字节，
+   * 所以这个上限不是理论问题，攒够一两百条就会撞上 —— 撞上之后
+   * 页面上所有的写入（反馈、投票、实验回填）会一起坏掉，而报错完全看不出原因。 */
+  const toBase64 = text => {
+    const bytes = new TextEncoder().encode(text)
+    let bin = ''
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000))
+    }
+    return btoa(bin)
+  }
+
   const writeFile = async (path, text, message, sha) => {
-    const b64 = btoa(String.fromCharCode(...new TextEncoder().encode(text)))
+    const b64 = toBase64(text)
     return gh(path, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -108,8 +139,6 @@
   // ---------------- markdown 渲染 ----------------
   //
   // 策划文档比点子那批更规整（提示词把格式定死了），但仍然要能兜住走样的写法。
-  // 这一套是从原来的点子页搬过来的，改动：去掉了「机制卡片」那种针对旧格式的特化，
-  // 换成通用的标题层级 + 表格 + 键值条目。
 
   // 占位符。写成转义而不是真的写一个空字节进来，
   // 否则整个 .js 会被当成二进制文件（grep 会拒绝、有些工具链会改坏它）。
@@ -173,7 +202,7 @@
       if (!line) { closeAll(); continue }
       if (isHole(line)) { closeAll(); out.push(line); continue }
 
-      // 表格 —— 策划文档里到处是表格（风险登记、内容清单、进程曲线），这一块必须稳
+      // 表格 —— 策划文档里到处是表格（风险登记、内容清单、90 秒分镜），这一块必须稳
       if (isRow(line) && isSep((lines[i + 1] || '').trim())) {
         closeAll()
         const head = cells(line)
@@ -252,26 +281,67 @@
       })
   }
 
-  // ---------------- 界面片段 ----------------
+  // ---------------- 常量 ----------------
 
   const note = (text, kind = '') =>
     `<div class="sd-note${kind ? ' is-' + kind : ''}">${esc(text)}</div>`
 
   const shell = inner => `<div class="sd-wrap">${inner}</div>`
 
+  /* 文档名要和 tools/studio/prompts.mjs 里的 DOC_PLAN 保持一致。
+   * 对不上不会报错，只会在列表里显示成文件名 —— 所以改那边的时候记得改这里。 */
   const DOC_NAMES = {
     '00-pitch.md': '立项书',
-    '01-pillars.md': '设计支柱',
-    '02-core-loop.md': '核心循环',
-    '03-systems.md': '系统设计',
-    '04-content.md': '内容与进程',
-    '05-tech.md': '技术方案',
-    '06-production.md': '生产计划',
-    '07-competitive.md': '竞品与风险',
+    '01-showcase.md': '参赛与展示方案',
+    '02-pillars.md': '设计支柱',
+    '03-core-loop.md': '核心循环',
+    '04-systems.md': '系统设计',
+    '05-content.md': '内容与进程',
+    '06-tech.md': '技术方案',
+    '07-production.md': '生产计划',
+    '08-competitive.md': '竞品与风险',
     'CHANGELOG.md': '修订记录',
-    'POSTMORTEM.md': '停更说明'
+    'POSTMORTEM.md': '停更说明',
+    'AUDIT.md': '硬约束校验'
   }
-  const TOTAL_DOCS = 8
+  /* 九份策划文档 —— 只有它们是可以被改写的。
+   * CHANGELOG / POSTMORTEM / AUDIT 也能点开、也能留言，但对它们的反馈会被
+   * 落到最近的一份策划文档上，而不是覆盖它们本身（那会把修订历史一次抹掉）。 */
+  const PLAN_DOCS = ['00-pitch.md', '01-showcase.md', '02-pillars.md', '03-core-loop.md',
+    '04-systems.md', '05-content.md', '06-tech.md', '07-production.md', '08-competitive.md']
+  const isPlanDoc = f => PLAN_DOCS.includes(f)
+  const TOTAL_DOCS = PLAN_DOCS.length
+
+  // 赛道，和 tools/studio/lanes.mjs 的枚举一一对应
+  const LANE_NAMES = {
+    'proc-gen': '程序化生成', physics: '物理与破坏', geometry: '运行时几何',
+    shader: '材质与后处理', simulation: '大规模模拟', time: '时间与因果',
+    space: '空间与视角', emergence: '规则涌现', 'code-feel': '纯代码表现层'
+  }
+  const laneName = id => LANE_NAMES[id] || (id ? id : '未标注赛道')
+
+  const DIMS = [
+    ['glance', '一眼可辨', '截图里有没有一个没见过的画面'],
+    ['talk', '技术讲点', '能撑起多久的技术追问'],
+    ['ship', '可完成', '75 人日内能不能做到完整'],
+    ['unique', '独特', '在评委那堆作品里是不是又一个']
+  ]
+
+  const stars = n => `<span class="sd-stars" title="${n} 星">${'★'.repeat(Math.max(0, n | 0))}${'☆'.repeat(Math.max(0, 5 - (n | 0)))}</span>`
+
+  const dimBars = c => {
+    if (!c || c.glance == null) return ''
+    return `<div class="sd-dims">${DIMS.map(([k, name, hint]) => {
+      const v = Number(c[k]) || 0
+      return `<div class="sd-dim" title="${esc(name)}：${esc(hint)}">
+        <b>${esc(name)}</b>
+        <i class="sd-dim__bar"><u style="width:${v * 20}%"></u></i>
+        <em class="${v <= 2 ? 'is-weak' : ''}">${v}</em>
+      </div>`
+    }).join('')}</div>`
+  }
+
+  // ---------------- 门口 ----------------
 
   const renderBlocked = why => {
     const msg = {
@@ -287,28 +357,60 @@
       <button class="sd-btn" data-act="unlock">解锁并加载</button>`)
   }
 
-  const statusChip = p => p.status === 'stopped'
-    ? '<span class="sd-chip sd-chip--stopped">已停更</span>'
-    : '<span class="sd-chip sd-chip--active">进行中</span>'
+  const statusChip = p => ({
+    stopped: '<span class="sd-chip sd-chip--stopped">已停更</span>',
+    flagged: '<span class="sd-chip sd-chip--flagged">待定 · 校验没过</span>'
+  }[p.status] || '<span class="sd-chip sd-chip--active">进行中</span>')
+
+  // ---------------- 列表页 ----------------
+
+  /* 下一轮预告。
+   *
+   * 这套东西一周只醒三次，中间那两天你能看到的只有一堆文档。
+   * 写上一句「下次会做：深化《X》的核心循环」，你就知道现在给反馈还来不来得及插队 ——
+   * 而反馈插队正是这套东西最关键的一条设计。 */
+  const nextBanner = () => {
+    const n = state && state.nextPlan
+    if (!n || !n.kind) return ''
+    const bits = [n.label, n.target, n.doc].filter(Boolean).join(' · ')
+    return `<div class="sd-next">
+      <b>下次醒来准备做</b>
+      <span class="sd-next__what">${esc(bits)}</span>
+      ${n.why ? `<i class="sd-next__why">${esc(n.why)}</i>` : ''}
+      <i class="sd-next__hint">想改这个安排？在下面给反馈或者给候选投票，你的输入会插队。</i>
+    </div>`
+  }
+
+  const pendingCount = () =>
+    ((inbox && inbox.items) || []).filter(x => x && !x.handled).length
 
   const renderList = () => {
     const projects = (state && state.projects) || []
     const candidates = (state && state.candidates) || []
+    const rejected = (state && state.rejected) || []
+    const waiting = pendingCount()
 
     if (!projects.length && !candidates.length) {
       root.innerHTML = shell(`
         ${note('私有仓库连上了，但还没有任何立项。', 'info')}
+        ${nextBanner()}
         <p class="sd-dim">策划室一周跑三次（周一 / 周四 / 周六晚上）。第一步是<strong>探索</strong> ——
-        它会先判断在你的约束下哪一类游戏做得出来又能做出亮点，再给出几个方向和参考指数。
-        四星以上的方向才会进入立项。</p>
+        它会先判断在你的约束下哪一类东西能让评委停下来，再给出几个方向，
+        每个方向按<strong>一眼可辨 / 技术讲点 / 可完成 / 独特</strong>四维打分。</p>
         <p class="sd-dim">如果它一直在探索却不立项，多半是 <code>charter.md</code> 写得太空 ——
         总纲是这套东西唯一的地基，填得含糊，产出就是通用废话。</p>
-        <button class="sd-btn" data-act="reload">重新加载</button>`)
+        <div class="sd-actions">
+          <button class="sd-btn sd-btn--ghost" data-act="explore-list">看探索记录</button>
+          <button class="sd-btn sd-btn--ghost" data-act="lessons">教训清单</button>
+          <button class="sd-btn sd-btn--ghost" data-act="reload">重新加载</button>
+        </div>`)
       return
     }
 
     root.innerHTML = shell(`
       ${note('这些内容存在私有仓库里，网站文件里没有一个字。', 'info')}
+      ${nextBanner()}
+      ${waiting ? note(`还有 ${waiting} 条你的输入没被处理 —— 下次跑的时候会优先吃掉它们。`, 'info') : ''}
       ${projects.length ? `
         <h2 class="sd-sectionhead">立项</h2>
         <div class="sd-grid">
@@ -316,42 +418,140 @@
             const done = (p.docs || []).length
             const pct = Math.round(done / TOTAL_DOCS * 100)
             return `
-            <button class="sd-card ${p.status === 'stopped' ? 'is-stopped' : ''}" data-act="project" data-id="${esc(p.id)}">
+            <button class="sd-card ${p.status === 'stopped' ? 'is-stopped' : ''} ${p.status === 'flagged' ? 'is-flagged' : ''}" data-act="project" data-id="${esc(p.id)}">
               <div class="sd-card__top">${statusChip(p)}<span class="sd-card__id">${esc(p.id)}</span></div>
               <div class="sd-card__title">${esc(p.name)}</div>
+              ${p.lane ? `<div class="sd-lane">${esc(laneName(p.lane))}</div>` : ''}
               <div class="sd-card__bar"><i style="width:${pct}%"></i></div>
-              <div class="sd-card__meta">${done} / ${TOTAL_DOCS} 份文档${p.stoppedWhy ? ` · ${esc(p.stoppedWhy)}` : ''}</div>
+              <div class="sd-card__meta">${done} / ${TOTAL_DOCS} 份文档${p.stoppedWhy ? ` · ${esc(p.stoppedWhy)}` : ''}${p.flaggedWhy ? ` · ${esc(p.flaggedWhy)}` : ''}</div>
             </button>`
           }).join('')}
         </div>` : ''}
       ${candidates.length ? `
         <h2 class="sd-sectionhead">候选方向</h2>
-        <p class="sd-dim">探索阶段扫出来的方向，四星以上会自动进入立项。</p>
-        <ul class="sd-candidates">
-          ${candidates.map(c => `<li><span class="sd-stars">${'★'.repeat(c.stars)}${'☆'.repeat(Math.max(0, 5 - c.stars))}</span>${esc(c.title)}</li>`).join('')}
+        <p class="sd-dim">探索扫出来的方向。四维分由代码汇总，<strong>短板决定上限</strong> ——
+        任何一维给到 1 或 2，这个方向就上不了四星，其它三维再高也补不回来。
+        四星以上才会自动进入立项。</p>
+        <p class="sd-dim"><strong>你可以直接插手：</strong>「就它了」会跳过「扫够几轮」那道等待门槛直接立项（仍然要过一次硬约束校验；活跃项目满员的话它会置顶排队，一有空位自动立项），
+        「加一星」是轻推，「否掉」会把它移出候选池并写进否决清单 —— 以后换个名字端上来也会被拦。</p>
+        <div class="sd-cands">
+          ${candidates.map(c => `
+            <div class="sd-cand" data-title="${esc(c.title)}">
+              <div class="sd-cand__head">
+                ${stars(c.stars)}
+                <span class="sd-cand__title">${esc(c.title)}</span>
+              </div>
+              <div class="sd-cand__meta">
+                <span class="sd-lane">${esc(laneName(c.lane))}</span>
+                ${c.pinned ? '<span class="sd-tag is-good">你点名要立 · 排队中</span>' : ''}
+                ${c.laneCollision ? '<span class="sd-tag is-warn">赛道撞车，已降分</span>' : ''}
+                ${c.shortlisted ? '<span class="sd-tag is-good">评比第一名</span>' : ''}
+                ${c.boostedBy ? '<span class="sd-tag is-good">你加过星</span>' : ''}
+                ${c.from ? `<button class="sd-linkish" data-act="explore-open" data-file="${esc(String(c.from).replace(/^explore\//, ''))}">看那一轮的分析</button>` : ''}
+              </div>
+              ${dimBars(c)}
+              <div class="sd-cand__acts">
+                <button class="sd-btn sd-btn--sm" data-act="vote" data-vote="pick" data-title="${esc(c.title)}" data-lane="${esc(c.lane || '')}"${c.pinned ? ' disabled' : ''}>${c.pinned ? '已排队立项' : '就它了，立项'}</button>
+                <button class="sd-btn sd-btn--sm sd-btn--ghost" data-act="vote" data-vote="boost" data-title="${esc(c.title)}" data-lane="${esc(c.lane || '')}">加一星</button>
+                <button class="sd-btn sd-btn--sm sd-btn--ghost" data-act="vote" data-vote="drop" data-title="${esc(c.title)}" data-lane="${esc(c.lane || '')}">否掉</button>
+                <span class="sd-vote__status" role="status" aria-live="polite"></span>
+              </div>
+            </div>`).join('')}
+        </div>` : ''}
+      ${rejected.length ? `
+        <h2 class="sd-sectionhead">已否决 <span class="sd-dim">（${rejected.length}）</span></h2>
+        <p class="sd-dim">每一轮探索都会带上这份清单 —— 换个名字端上来一样会被否。</p>
+        <ul class="sd-rejected">
+          ${rejected.slice(0, 12).map(r => `<li><b>${esc(r.title)}</b><span>${esc(r.verdict || '否决')}｜${esc(r.why || '原因见审查记录')}</span></li>`).join('')}
         </ul>` : ''}
       <div class="sd-actions">
-        <button class="sd-btn sd-btn--ghost" data-act="explore-list">看探索记录</button>
+        <button class="sd-btn sd-btn--ghost" data-act="explore-list">探索与评比记录</button>
+        <button class="sd-btn sd-btn--ghost" data-act="experiments">实验台</button>
+        <button class="sd-btn sd-btn--ghost" data-act="lessons">教训清单</button>
         <button class="sd-btn sd-btn--ghost" data-act="reload">重新加载</button>
       </div>`)
   }
+
+  // ---------------- 候选投票 ----------------
+
+  const VOTE_LABEL = { pick: '就它了，立项', boost: '加一星', drop: '否掉' }
+
+  const submitVote = async (btn) => {
+    const box = btn.closest('.sd-cand')
+    const status = box ? box.querySelector('.sd-vote__status') : null
+    const action = btn.dataset.vote
+    const title = btn.dataset.title
+    // 投过就把这一张卡上的三个按钮全部锁掉。
+    // 不锁的话很容易「否掉」之后手一抖又点「加一星」——
+    // 那条加一星找不到对应候选，会变成一条永远处理不掉的输入。
+    const buttons = box ? [...box.querySelectorAll('[data-act="vote"]')] : [btn]
+    if (btn.disabled) return
+
+    /* 「就它了」和「否掉」都不可逆（一个花掉一次立项，一个把方向写进否决清单），
+     * 所以要确认一次。加一星是轻推，不打断。 */
+    if (action !== 'boost') {
+      const word = action === 'pick'
+        ? `确定要立项《${title}》吗？\n\n它会跳过「扫够几轮」这道等待门槛，下次跑的时候直接进立项流程。\n（硬约束校验还是会跑 —— 撞了约束它仍然会拦下并告诉你否在哪一条。）`
+        : `确定否掉《${title}》吗？\n\n它会被移出候选池，并写进否决清单。以后换个名字端上来也会被拦。`
+      if (!window.confirm(word)) return
+    }
+
+    let note = ''
+    if (action === 'drop') {
+      note = window.prompt('一句话说说为什么否掉它（会写进否决清单，将来每一轮探索都会带着这句话跑）', '') || ''
+    }
+
+    buttons.forEach(b => { b.disabled = true })
+    if (status) status.textContent = '正在写进私有仓库…'
+    try {
+      await appendInbox({
+        kind: 'candidate',
+        action,
+        title,
+        lane: btn.dataset.lane || null,
+        note
+      }, `候选投票：${VOTE_LABEL[action]}「${title.slice(0, 20)}」`)
+      if (status) {
+        status.textContent = action === 'pick'
+          ? '收到。下次跑的时候会直接走立项。'
+          : action === 'drop' ? '收到，已排队移出候选池。' : '收到，下次跑的时候会加上去。'
+      }
+      if (box) box.classList.add('is-voted')
+    } catch (e) {
+      // 没写进去就把按钮放开，让他能再点一次
+      buttons.forEach(b => { b.disabled = false })
+      if (status) status.textContent = writeError(e)
+    }
+  }
+
+  // ---------------- 项目页 ----------------
 
   const renderProject = async id => {
     const p = ((state && state.projects) || []).find(x => x.id === id)
     if (!p) return renderList()
     root.innerHTML = shell(note('正在读取…'))
 
-    const files = await listDir(`projects/${id}`)
+    const [files, exp] = await Promise.all([
+      listDir(`projects/${id}`),
+      readJson(`experiments/${id}.json`, { items: [] })
+    ])
     const docs = files.filter(f => f.name.endsWith('.md')).map(f => f.name).sort()
+    const openExp = (exp.items || []).filter(x => x.status !== 'done').length
 
     view = { kind: 'project', id }
     root.innerHTML = shell(`
       <button class="sd-btn sd-btn--ghost" data-act="back">← 回到列表</button>
       <div class="sd-head">
-        <div class="sd-head__chips">${statusChip(p)}<span class="sd-card__id">${esc(p.id)}</span></div>
+        <div class="sd-head__chips">${statusChip(p)}<span class="sd-card__id">${esc(p.id)}</span>${p.lane ? `<span class="sd-lane">${esc(laneName(p.lane))}</span>` : ''}</div>
         <h2 class="sd-head__title">${esc(p.name)}</h2>
         <div class="sd-head__meta">立项于 ${esc((p.createdAt || '').slice(0, 10))} · ${docs.length} 份文档</div>
       </div>
+      ${p.status === 'flagged' ? note(`这个项目在硬约束校验里没过：${p.flaggedWhy || '见 AUDIT.md'}。它不会再被自动深化。想继续的话，把私有仓库里 projects/${id}/meta.json 的 status 改回 active。`, 'warn') : ''}
+      ${p.status === 'stopped' ? note('这个项目已经停更。你仍然可以读它、也可以留反馈 —— 反馈会被归档进修订记录，正面的评价会进教训清单。', 'info') : ''}
+      ${openExp ? `<button class="sd-callout" data-act="experiments" data-id="${esc(id)}">
+        <b>${openExp} 条实验还没回填结果</b>
+        <span>做完其中任何一条，回来填上结果 —— 那是这套系统唯一能拿到的一手证据，它的分量高于任何一轮推理。</span>
+      </button>` : ''}
       <div class="sd-doclist">
         ${docs.map(name => `
           <button class="sd-doc" data-act="doc" data-id="${esc(id)}" data-file="${esc(name)}">
@@ -359,6 +559,9 @@
             <span class="sd-doc__name">${esc(DOC_NAMES[name] || name)}</span>
             <span class="sd-doc__file">${esc(name)}</span>
           </button>`).join('')}
+      </div>
+      <div class="sd-actions">
+        <button class="sd-btn sd-btn--ghost" data-act="experiments" data-id="${esc(id)}">实验台</button>
       </div>`)
   }
 
@@ -384,7 +587,7 @@
         <h2 class="sd-head__title">${esc(p.name)}</h2>
       </div>
       <div class="sd-body">${md2html(text || '（这份文档是空的）')}</div>
-      ${feedbackForm(id, file)}`)
+      ${feedbackForm(id, file, p)}`)
   }
 
   // ---------------- 反馈 ----------------
@@ -398,11 +601,14 @@
     ['停掉', '这个方向不值得继续']
   ]
 
-  const feedbackForm = (id, file) => `
+  const feedbackForm = (id, file, p) => `
     <form class="sd-fb" data-id="${esc(id)}" data-file="${esc(file)}">
       <h3>读完了？给它一个反馈</h3>
-      <p class="sd-dim">下次跑的时候它会逐条回应，并据此改写这一份。
-      最有价值的不是「好」或「不好」，是<strong>具体哪一句让你觉得不对</strong>。</p>
+      <p class="sd-dim">${isPlanDoc(file)
+        ? '下次跑的时候它会逐条回应，并据此改写这一份。'
+        : '这一份是记录，不是可改写的策划文档 —— 你的意见会被落到最近的一份策划文档上。'}
+      最有价值的不是「好」或「不好」，是<strong>具体哪一句让你觉得不对</strong>。
+      ${p && p.status !== 'active' ? '<br>这个项目已经不在推进中了，反馈会被归档进修订记录。' : ''}</p>
       <div class="sd-fb__verdicts">
         ${VERDICTS.map(([v, hint], i) => `
           <label class="sd-fb__v">
@@ -418,10 +624,52 @@
       </div>
     </form>`
 
+  const writeError = e => {
+    const m = String((e && e.message) || e)
+    return /403|404/.test(m)
+      ? '写不进去 —— token 需要 Contents: Read and write 权限（只读的话只能看不能反馈）'
+      : '写入失败：' + m.slice(0, 80)
+  }
+
+  /* 往收件箱追加一条。
+   *
+   * 每次都重新读一遍再写，而不是用页面上缓存的那份 —— 中间可能跑过一次
+   * Actions 把某些条目标成了已处理，拿旧的覆盖回去会让那些条目"复活"，
+   * 于是同一条反馈被处理两次。多一次 GET 换掉这个，划算。 */
+  const appendInbox = async (item, message) => {
+    const cur = await readFile('feedback/inbox.json').catch(() => null)
+    let box = { version: 1, items: [] }
+    if (cur) { try { box = JSON.parse(cur.text) } catch (_) {} }
+    if (!Array.isArray(box.items)) box.items = []
+
+    const full = {
+      id: `fb-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      at: new Date().toISOString(),
+      handled: false,
+      ...item
+    }
+    box.items.push(full)
+
+    /* 已处理的条目留最近 60 条就够了。
+     * 收件箱是**队列**不是档案 —— 真正的历史在每个项目的 CHANGELOG.md 里，
+     * 那份是不会被裁的。不裁的话这个文件只会一直长，
+     * 而它每次投票、每次反馈都要整份重写一遍。 */
+    const done = box.items.filter(x => x && x.handled)
+    if (done.length > 60) {
+      const keep = new Set(done.slice(-60))
+      box.items = box.items.filter(x => x && (!x.handled || keep.has(x)))
+    }
+
+    await writeFile('feedback/inbox.json', JSON.stringify(box, null, 2) + '\n',
+      message, cur ? cur.sha : undefined)
+    inbox = box
+    return full
+  }
+
   const submitFeedback = async (form) => {
     const status = form.querySelector('.sd-fb__status')
     const btn = form.querySelector('button[type=submit]')
-    const verdict = form.querySelector('input[name=verdict]:checked')?.value || '一般'
+    const verdict = (form.querySelector('input[name=verdict]:checked') || {}).value || '一般'
     const noteText = form.querySelector('.sd-fb__note').value.trim()
 
     if (!noteText && verdict !== '很有搞头') {
@@ -432,40 +680,133 @@
     btn.disabled = true
     status.textContent = '正在写进私有仓库…'
     try {
-      const cur = await readFile('feedback/inbox.json').catch(() => null)
-      let inbox = { version: 1, items: [] }
-      if (cur) { try { inbox = JSON.parse(cur.text) } catch (_) {} }
-      if (!Array.isArray(inbox.items)) inbox.items = []
-
-      inbox.items.push({
-        id: `fb-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        at: new Date().toISOString(),
+      await appendInbox({
+        kind: 'doc',
         project: form.dataset.id,
         file: form.dataset.file,
         verdict,
-        note: noteText,
-        handled: false
-      })
-
-      await writeFile('feedback/inbox.json',
-        JSON.stringify(inbox, null, 2) + '\n',
-        `反馈：${form.dataset.id}/${form.dataset.file}（${verdict}）`,
-        cur ? cur.sha : undefined)
-
+        note: noteText
+      }, `反馈：${form.dataset.id}/${form.dataset.file}（${verdict}）`)
       form.querySelector('.sd-fb__note').value = ''
       status.textContent = '收到了。下次跑的时候它会处理这条。'
       form.classList.add('is-sent')
     } catch (e) {
-      const m = String(e.message || e)
-      status.textContent = /403|404/.test(m)
-        ? '写不进去 —— token 需要 Contents: Read and write 权限（只读的话只能看不能反馈）'
-        : '写入失败：' + m.slice(0, 80)
+      status.textContent = writeError(e)
     } finally {
       btn.disabled = false
     }
   }
 
-  // ---------------- 探索记录 ----------------
+  // ---------------- 实验台 ----------------
+
+  /* 为什么要有这一页：
+   *
+   * 六条铁律里第三条一直要求「每个主张配一个可证伪的验证方案」，模型也一直照写。
+   * 但写完就沉进文档里了 —— 没有人知道哪些做过、结果是什么。
+   * 于是「验证」变成了一种文体，不是一个环节。
+   *
+   * 这一页把它们摆出来，让你能回填真实结果。回填之后那条结果会以
+   * 「一手数据」的身份触发一次修订，而且提示词里明说了：
+   * 数据面前不许辩论，直接按数据改。 */
+  const RESULTS = [
+    ['成立', '做出来了，和文档里写的一样'],
+    ['部分成立', '大体对，但有出入 —— 说清出入在哪'],
+    ['不成立', '做了，结果推翻了这条主张']
+  ]
+
+  const renderExperiments = async (onlyId) => {
+    root.innerHTML = shell(note('正在读取…'))
+    view = { kind: 'experiments', id: onlyId || '' }
+    const projects = ((state && state.projects) || []).filter(p => !onlyId || p.id === onlyId)
+    const sets = await Promise.all(projects.map(async p => ({
+      project: p,
+      data: await readJson(`experiments/${p.id}.json`, { items: [] })
+    })))
+    const any = sets.some(s => (s.data.items || []).length)
+
+    root.innerHTML = shell(`
+      <button class="sd-btn sd-btn--ghost" data-act="${onlyId ? 'project' : 'back'}" data-id="${esc(onlyId || '')}">← 回去</button>
+      <h2 class="sd-sectionhead">实验台</h2>
+      <p class="sd-dim">这些是从策划文档里抽出来的<strong>可证伪主张</strong>：做什么最小原型、看什么现象、
+      什么结果算这条主张被推翻。它们是这套系统唯一能拿到的一手证据 ——
+      你回填一条真实结果，下一轮修订就必须按它改，模型没有辩论的余地。</p>
+      ${any ? sets.filter(s => (s.data.items || []).length).map(s => `
+        <h3 class="sd-exp__proj">${esc(s.project.name)}</h3>
+        <div class="sd-exps">
+          ${(s.data.items || []).map(x => `
+            <div class="sd-exp ${x.status === 'done' ? 'is-done' : ''}">
+              <div class="sd-exp__top">
+                <span class="sd-chip">${esc(x.id)}</span>
+                <span class="sd-chip sd-chip--soft">${esc(DOC_NAMES[x.from] || x.from || '')}</span>
+                ${x.cost ? `<span class="sd-chip sd-chip--soft">${esc(x.cost)}</span>` : ''}
+                ${x.status === 'done' ? `<span class="sd-chip sd-chip--active">已回填：${esc(x.result || '')}</span>` : ''}
+              </div>
+              <div class="sd-exp__claim">${esc(x.claim)}</div>
+              <dl class="sd-exp__body">
+                <dt>做什么</dt><dd>${esc(x.prototype)}</dd>
+                <dt>看什么</dt><dd>${esc(x.observe)}</dd>
+                <dt>什么算推翻</dt><dd>${esc(x.falsify)}</dd>
+                ${x.note ? `<dt>你写的</dt><dd>${esc(x.note)}</dd>` : ''}
+              </dl>
+              ${x.status === 'done' ? '' : `
+              <form class="sd-expfb" data-id="${esc(s.project.id)}" data-exp="${esc(x.id)}" data-file="${esc(x.from || '')}">
+                <div class="sd-fb__verdicts">
+                  ${RESULTS.map(([v, hint], i) => `
+                    <label class="sd-fb__v">
+                      <input type="radio" name="result-${esc(x.id)}" value="${esc(v)}"${i === 0 ? ' checked' : ''}>
+                      <span><b>${esc(v)}</b><i>${esc(hint)}</i></span>
+                    </label>`).join('')}
+                </div>
+                <textarea class="sd-fb__note" rows="3" placeholder="实际看到了什么？数字、现象、你的判断。写具体一点 —— 这段会被当成硬数据用。"></textarea>
+                <div class="sd-fb__row">
+                  <button class="sd-btn sd-btn--sm" type="submit">回填结果</button>
+                  <span class="sd-fb__status" role="status" aria-live="polite"></span>
+                </div>
+              </form>`}
+            </div>`).join('')}
+        </div>`).join('')
+        : note('还没有登记任何实验。每写一份新文档，它会在末尾附上 1~3 条这一份新出现的可证伪主张。', 'info')}`)
+  }
+
+  const submitExperiment = async form => {
+    const status = form.querySelector('.sd-fb__status')
+    const btn = form.querySelector('button[type=submit]')
+    const picked = form.querySelector('input[type=radio]:checked')
+    const result = picked ? picked.value : '成立'
+    const noteText = form.querySelector('.sd-fb__note').value.trim()
+
+    if (!noteText) {
+      status.textContent = '写一句实际看到了什么 —— 光一个结论没法拿来改文档'
+      return
+    }
+    btn.disabled = true
+    status.textContent = '正在写进私有仓库…'
+    try {
+      await appendInbox({
+        kind: 'experiment',
+        project: form.dataset.id,
+        expId: form.dataset.exp,
+        file: form.dataset.file || '',
+        result,
+        note: noteText
+      }, `实验结果：${form.dataset.id}/${form.dataset.exp}（${result}）`)
+      status.textContent = '收到。下次跑的时候会按这条数据改文档 —— 这条优先级排在所有意见前面。'
+      form.classList.add('is-sent')
+    } catch (e) {
+      status.textContent = writeError(e)
+    } finally {
+      btn.disabled = false
+    }
+  }
+
+  // ---------------- 探索 / 评比 / 教训 ----------------
+
+  const exploreLabel = name => {
+    if (name.startsWith('评比-')) return '候选评比 · ' + name.replace('评比-', '').replace('.md', '')
+    if (name.startsWith('审查-')) return '硬约束校验 · ' + name.replace('审查-', '').replace('.md', '')
+    return '探索 · ' + name.replace('.md', '')
+  }
+  const exploreIcon = name => name.startsWith('评比-') ? '⚖' : (name.startsWith('审查-') ? '⚑' : '✦')
 
   const renderExploreList = async () => {
     root.innerHTML = shell(note('正在读取…'))
@@ -473,13 +814,14 @@
     view = { kind: 'explore' }
     root.innerHTML = shell(`
       <button class="sd-btn sd-btn--ghost" data-act="back">← 回到列表</button>
-      <h2 class="sd-sectionhead">探索记录</h2>
-      <p class="sd-dim">每次探索扫出的方向和判断。没被立项的方向也留在这里 —— 它们记录了「为什么当时没选」。</p>
+      <h2 class="sd-sectionhead">探索与评比记录</h2>
+      <p class="sd-dim">每次探索扫出的方向和判断、每次候选评比的排名、每次立项前的硬约束校验，都在这里。
+      没被选上的方向也留着 —— 它们记录了「为什么当时没选」。</p>
       ${files.length
         ? `<div class="sd-doclist">${files.map(n => `
             <button class="sd-doc" data-act="explore-open" data-file="${esc(n)}">
-              <span class="sd-doc__no">✦</span>
-              <span class="sd-doc__name">${esc(n.replace('.md', ''))}</span>
+              <span class="sd-doc__no">${exploreIcon(n)}</span>
+              <span class="sd-doc__name">${esc(exploreLabel(n))}</span>
             </button>`).join('')}</div>`
         : note('还没有探索记录。', 'info')}`)
   }
@@ -487,21 +829,49 @@
   const renderExploreDoc = async file => {
     root.innerHTML = shell(note('正在读取…'))
     const f = await readFile(`explore/${file}`)
+    view = { kind: 'explore-doc', file }
     root.innerHTML = shell(`
-      <button class="sd-btn sd-btn--ghost" data-act="explore-list">← 回到探索记录</button>
-      <div class="sd-head"><h2 class="sd-head__title">探索 · ${esc(file.replace('.md', ''))}</h2></div>
+      <button class="sd-btn sd-btn--ghost" data-act="explore-list">← 回到记录列表</button>
+      <div class="sd-head"><h2 class="sd-head__title">${esc(exploreLabel(file))}</h2></div>
+      ${note('看完想对某个方向表态？回到列表页，在「候选方向」里点「就它了 / 加一星 / 否掉」—— 那是能直接改变下一轮走向的入口。', 'info')}
       <div class="sd-body">${md2html(f ? f.text : '（读不到）')}</div>`)
+  }
+
+  const renderLessons = async () => {
+    root.innerHTML = shell(note('正在读取…'))
+    const f = await readFile('lessons.md')
+    view = { kind: 'lessons' }
+    root.innerHTML = shell(`
+      <button class="sd-btn sd-btn--ghost" data-act="back">← 回到列表</button>
+      <div class="sd-head"><h2 class="sd-head__title">教训清单</h2></div>
+      <p class="sd-dim">每次停更或否决，它会往这里追加一条<strong>可以拿去检查别的方向</strong>的规则。
+      这份清单会进每一轮探索的上下文 —— 它是这套系统唯一的长期记忆。
+      （它由 AI 自己维护，和你写的 <code>charter.md</code> 分开放，那份它只读不改。）</p>
+      <div class="sd-body">${md2html(f ? f.text : '（还没有教训 —— 也就是还没有东西死掉。）')}</div>`)
   }
 
   // ---------------- 流程 ----------------
 
   const load = async () => {
+    /* 先单独查一次配置和凭据。
+     *
+     * 不能指望下面那个 catch —— readJson 把所有异常都吞了（它要能兜住
+     * 「文件还不存在」这种正常情况）。于是保险箱锁着的时候，
+     * state.json 读回来是那个空对象兜底值，页面显示的是
+     * **「私有仓库连上了，但还没有任何立项」** —— 一句彻头彻尾的假话，
+     * 而真正该出现的「点猫爪解锁」那个按钮永远不会出现。 */
+    const why = preflight()
+    if (why) return renderBlocked(why)
+
     root.innerHTML = shell(note('正在从私有仓库读取…'))
     try {
-      state = await readJson('state.json', { projects: [], candidates: [] })
+      const raw = await readFile('state.json')   // 这一个不吞异常：403 要能冒上来
+      state = raw ? JSON.parse(raw.text) : { projects: [], candidates: [] }
       if (!state || typeof state !== 'object') state = { projects: [], candidates: [] }
       state.projects = Array.isArray(state.projects) ? state.projects : []
       state.candidates = Array.isArray(state.candidates) ? state.candidates : []
+      state.rejected = Array.isArray(state.rejected) ? state.rejected : []
+      inbox = await readJson('feedback/inbox.json', { items: [] })
       view = { kind: 'list' }
       renderList()
       expose()
@@ -520,6 +890,7 @@
     window.NOIMPTY_STUDIO = Object.freeze({
       state: () => JSON.parse(JSON.stringify(state || {})),
       view: () => ({ ...view }),
+      pending: () => pendingCount(),
       reload: () => load()
     })
   }
@@ -534,10 +905,13 @@
       const act = b.dataset.act
       if (act === 'reload') return load()
       if (act === 'back') { view = { kind: 'list' }; return renderList() }
-      if (act === 'project') return renderProject(b.dataset.id)
+      if (act === 'project') return b.dataset.id ? renderProject(b.dataset.id) : renderList()
       if (act === 'doc') return renderDoc(b.dataset.id, b.dataset.file)
       if (act === 'explore-list') return renderExploreList()
       if (act === 'explore-open') return renderExploreDoc(b.dataset.file)
+      if (act === 'experiments') return renderExperiments(b.dataset.id || '')
+      if (act === 'lessons') return renderLessons()
+      if (act === 'vote') return submitVote(b)
       if (act === 'unlock') {
         try { if (window.NANALY && window.NANALY.requestUnlock) window.NANALY.requestUnlock() } catch (_) {}
         setTimeout(load, 1200)
@@ -545,6 +919,8 @@
     })
 
     node.addEventListener('submit', e => {
+      const exp = e.target.closest('.sd-expfb')
+      if (exp) { e.preventDefault(); return submitExperiment(exp) }
       const form = e.target.closest('.sd-fb')
       if (!form) return
       e.preventDefault()

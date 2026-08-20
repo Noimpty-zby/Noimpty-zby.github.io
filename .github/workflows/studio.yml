@@ -41,8 +41,11 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
-    # 深度思考一次可能跑十几分钟，默认的 6 小时用不着，但也别卡在 10 分钟上
-    timeout-minutes: 45
+    # 一次深度调用最长 20 分钟（见 tools/studio/llm.mjs 的 DEEP_TIMEOUT），
+    # 最多重试两次，再加上检索和几次仓库读写 —— 最坏情况要一小时出头。
+    # 45 分钟会在真的卡住时把整个 job 砍掉，那一轮的产出就全丢了。
+    # 公开仓库的 Actions 分钟数不要钱，这里放宽没有成本。
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
 
@@ -66,6 +69,11 @@ jobs:
           # DeepSeek 思考档位：low / high / max，默认 max。
           # 注意 high 是官方默认值 —— 填 high 等于没填。
           DEEPSEEK_EFFORT: ${{ vars.DEEPSEEK_EFFORT }}
+          # 单次调用超时（毫秒）。深度步骤默认 20 分钟 ——
+          # 开 max 档时推理链很长，10 分钟会卡在边界上，表现为「每轮固定超时一次」。
+          # 改这个的话记得连上面的 timeout-minutes 一起改。
+          STUDIO_DEEP_TIMEOUT_MS: ${{ vars.STUDIO_DEEP_TIMEOUT_MS }}
+          STUDIO_TIMEOUT_MS: ${{ vars.STUDIO_TIMEOUT_MS }}
 
           # ── 检索 ────────────────────────────────────────────────
           # 探索阶段先搜再判断。不配的话探索照常跑，但她只能凭自己脑子里的知识，

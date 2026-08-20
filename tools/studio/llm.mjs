@@ -43,6 +43,22 @@ const DEEPSEEK_EFFORT = process.env.DEEPSEEK_EFFORT || 'max'
  * 3 倍是经验值：12000 的文档预算 → 实发 36000，推理再长也压不掉正文。 */
 const DEEPSEEK_HEADROOM = Number(process.env.DEEPSEEK_HEADROOM || 3)
 
+/* 单次调用的超时（毫秒）。
+ *
+ * 这两个数第一版是写死的：deep 10 分钟，普通 3 分钟。**deep 那个太短了。**
+ *
+ * 算一下就知道：探索这一步给的文档预算是 14000 tokens，DeepSeek 思考模式下
+ * 推理和正文共用额度，乘上 3 倍余量之后实发 42000。按常见吞吐，
+ * 光生成就要十几到三十分钟 —— 10 分钟本来就不够。
+ *
+ * 实测表现是「每一轮探索都固定超时一次，重试才过」：它卡在边界上。
+ * 这不是模型能力问题，换个更强的模型只会更慢（思考更久）。
+ *
+ * 代价：一次真的卡住的调用会占掉更长时间。所以工作流那边的
+ * timeout-minutes 要跟着放大，否则整个 job 会被 GitHub 砍掉。 */
+const DEEP_TIMEOUT = Number(process.env.STUDIO_DEEP_TIMEOUT_MS || 1200000)   // 20 分钟
+const FAST_TIMEOUT = Number(process.env.STUDIO_TIMEOUT_MS || 240000)         //  4 分钟
+
 export const backend = () => (ANTHROPIC_KEY ? 'claude' : (DEEPSEEK_KEY ? 'deepseek' : 'none'))
 
 export const describeBackend = () => ({
@@ -199,7 +215,7 @@ export const ask = async (system, user, opts = {}) => {
 
   const maxTokens = opts.maxTokens || 8000
   const deep = !!opts.deep
-  const timeout = opts.timeout || (deep ? 600000 : 180000)
+  const timeout = opts.timeout || (deep ? DEEP_TIMEOUT : FAST_TIMEOUT)
   const tries = Math.max(1, 1 + (opts.retries == null ? 2 : opts.retries))
   const tag = `studio/${which}${deep ? '+deep' : ''}${opts.label ? '/' + opts.label : ''}`
 

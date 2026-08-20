@@ -208,6 +208,15 @@
 }
 .sd-body .sd-kv__v { display: block; padding-left: 2px; }
 
+/* 同一个形态，但它是独立成段而不是列表项的时候。
+ * 探索文档里到处是这个（模板就是这么写的），不给它结构的话
+ * 七八段连起来就是一堵墙，扫不出层次。 */
+.sd-body .sd-kvp {
+  margin: 16px 0 14px;
+  padding-left: 11px;
+  border-left: 2px solid var(--noimpty-border, rgba(233, 89, 120, .25));
+}
+
 .sd-body blockquote {
   margin: 14px 0;
   padding: 2px 16px;

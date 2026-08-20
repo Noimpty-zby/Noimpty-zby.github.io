@@ -1440,7 +1440,3 @@ if (DamageEvent.IsOfType(FPointDamageEvent::ClassID))
 - [Epic Games：Properties（UPROPERTY 说明符）](https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-uproperties)
 - [Tom Looman：Unreal Engine 5 C++ Timers](https://tomlooman.com/unreal-engine-cpp-timers/)
 - [Tom Looman：Unreal Engine C++ Complete Guide](https://tomlooman.com/unreal-engine-cpp-guide/)
-
-## 本系列的其他文章
-
-{% series %}

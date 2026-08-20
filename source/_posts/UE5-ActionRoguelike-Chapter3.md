@@ -1587,7 +1587,3 @@ constexpr ECollisionChannel COLLISION_INTERACTION = ECC_GameTraceChannel1;
 - [Epic Games：Core Redirects](https://dev.epicgames.com/documentation/en-us/unreal-engine/core-redirects-in-unreal-engine)
 - [Tom Looman：Unreal Engine UFUNCTION Specifiers Explained](https://tomlooman.com/unreal-engine-ufunction-specifiers/)
 - [Tom Looman：ActionRoguelike on GitHub](https://github.com/tomlooman/ActionRoguelike)
-
-## 本系列的其他文章
-
-{% series %}

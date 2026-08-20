@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-08-18T04:46:07.521Z",
+  "updatedAt": "2026-08-20T11:14:21.762Z",
   "days": {
     "2026-08-15": [
       {
@@ -14,7 +14,7 @@
         "autoWhy": "你发了《UE5 C++ 作业二复盘：黑洞引力与传送接力，深度理解时序控制与物理逻辑》"
       }
     ],
-    "2026-08-18": [
+    "2026-08-20": [
       {
         "id": "tmsv90xfdk9wm",
         "text": "学完Tom Looman第五章：属性",
@@ -23,6 +23,16 @@
       {
         "id": "tmsv92r2pbpig",
         "text": "提交第五章属性博客",
+        "done": false
+      },
+      {
+        "id": "tmt1f9lj24wej",
+        "text": "学完第六章",
+        "done": false
+      },
+      {
+        "id": "tmt1f9rudbvx0",
+        "text": "提交第六章博客",
         "done": false
       }
     ]

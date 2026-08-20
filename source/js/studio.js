@@ -185,8 +185,11 @@
     const out = []
     const toc = []
     let list = null, para = false, quote = false
+    /* 段落不一定用 </p> 收尾 —— 「**标签** —— 正文」那种会被渲染成
+     * 标签一行、正文一段的两层结构，收尾标签不一样。所以记着当前该收什么。 */
+    let paraEnd = '</p>'
 
-    const closePara = () => { if (para) { out[out.length - 1] += '</p>'; para = false } }
+    const closePara = () => { if (para) { out[out.length - 1] += paraEnd; para = false } }
     const closeList = () => { if (list) { out.push('</' + list + '>'); list = null } }
     const closeQuote = () => { if (quote) { out.push('</blockquote>'); quote = false } }
     const closeAll = () => { closePara(); closeList(); closeQuote() }
@@ -260,8 +263,28 @@
       }
       closeList()
 
-      if (para) out[out.length - 1] += '<br>' + line
-      else { out.push(`<p>${line}`); para = true }
+      if (para) { out[out.length - 1] += '<br>' + line; continue }
+
+      /* 「**评委第一眼看到什么** —— 正文…」这种**独立成段**的带标签句子。
+       *
+       * 无序列表里的同一个形态早就特殊处理了（sd-kv），但段落形态一直没有，
+       * 于是它渲染出来就是一整段普通文字，只是开头几个字是粗体 ——
+       * 一份文档里七八个这样的段落连在一起，就是一堵墙，扫不出结构。
+       *
+       * 而这个写法恰恰是探索提示词里的模板写法，所以它到处都是。
+       * 模型有时候会自己把它提升成 ### 小标题（那样很好看），有时候不会 ——
+       * 好不好读不该取决于模型这一次的心情，所以在这里兜住。 */
+      const kvp = line.match(/^<strong>([^<]{2,28})<\/strong>\s*(?:——|—{1,2}|--)\s*([\s\S]+)$/)
+      if (kvp) {
+        out.push(`<p class="sd-kvp"><b class="sd-kv__k">${kvp[1]}</b><span class="sd-kv__v">${kvp[2]}`)
+        para = true
+        paraEnd = '</span></p>'
+        continue
+      }
+
+      out.push(`<p>${line}`)
+      para = true
+      paraEnd = '</p>'
     }
     closeAll()
 

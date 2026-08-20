@@ -27,7 +27,7 @@ import {
   explorePrompt, postmortemPrompt, shortlistPrompt, parseShortlist,
   parseDirections, parseExperiments
 } from '../studio/prompts.mjs'
-import { rollup, dedupeLanes, parseLane, parseDims, mainOk, coldLanes, LANE_IDS } from '../studio/lanes.mjs'
+import { rollup, dedupeLanes, parseLane, parseDims, mainOk, coldLanes, LANE_IDS, compareCandidates } from '../studio/lanes.mjs'
 import { forExplore, sections, showcaseSection } from '../studio/charterlens.mjs'
 import { parseColumn } from '../nanaly/column.mjs'   // 只为确认 tools 之间没有循环 import
 
@@ -285,6 +285,25 @@ check('评比不会在活跃项目满员时触发（立不了项，比了也没�
 })
 
 console.log('\n策划室 · 赛道与打分（多样性靠代码，不靠提示词）')
+
+check('★★ 同星级并列时，不许靠数组顺序决定（那等于挑最新的那一轮）', () => {
+  // 实测出现过：池子里六个候选全是 4★，于是「挑星级最高的」变成了「挑最新的」
+  const 强 = { title: '强', stars: 4, glance: 5, talk: 4, ship: 3, unique: 5 }   // 均 4.25
+  const 弱 = { title: '弱', stars: 4, glance: 4, talk: 4, ship: 3, unique: 4 }   // 均 3.75
+  assert.equal([弱, 强].sort(compareCandidates)[0].title, '强', '并列时看没被压缩掉的四维平均')
+})
+
+check('★ 平均也一样时，短板浅的赢', () => {
+  const 平 = { title: '平', stars: 4, glance: 4, talk: 4, ship: 4, unique: 4 }
+  const 偏 = { title: '偏', stars: 4, glance: 5, talk: 5, ship: 3, unique: 3 }
+  assert.equal([偏, 平].sort(compareCandidates)[0].title, '平', '短板才是真正的风险')
+})
+
+check('星级仍然压倒一切（并列规则只在同星级内部生效）', () => {
+  const 五星短板深 = { title: '五星', stars: 5, glance: 5, talk: 5, ship: 4, unique: 5 }
+  const 四星很均衡 = { title: '四星', stars: 4, glance: 4, talk: 4, ship: 4, unique: 4 }
+  assert.equal([四星很均衡, 五星短板深].sort(compareCandidates)[0].title, '五星')
+})
 
 check('★★ 短板封顶：三维满分 + 一维 1 分，上不了 4 星', () => {
   const r = rollup({ glance: 5, talk: 5, ship: 5, unique: 1 })

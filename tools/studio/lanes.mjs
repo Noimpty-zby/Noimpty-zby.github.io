@@ -120,6 +120,26 @@ export const rollup = dims => {
   return { glance: g, talk: t, ship: s, unique: u, stars }
 }
 
+/* 候选之间怎么排序。
+ *
+ * 为什么不能只按星级排：星级是**压缩过**的（短板封顶 + 取整），
+ * 压缩之后大量候选会挤在同一档。实测有一轮池子里六个候选全是 4★ ——
+ * 这时候「挑星级最高的那个」等于「挑数组里排在最前面的那个」，
+ * 而数组顺序只反映哪一轮最新。**最新 ≠ 最好**，那是个隐形的随机数。
+ *
+ * 所以并列时往下看没被压缩掉的信息：先比四维平均（谁整体更强），
+ * 再比最低那一维（谁的短板更浅 —— 短板才是真正的风险）。
+ * 这只在同星级内部起作用，压不过星级本身。
+ */
+export const compareCandidates = (a, b) => {
+  const dims = c => [c.glance ?? 3, c.talk ?? 3, c.ship ?? 3, c.unique ?? 3]
+  const avg = c => dims(c).reduce((x, y) => x + y, 0) / 4
+  const worst = c => Math.min(...dims(c))
+  return (b.stars || 0) - (a.stars || 0)
+    || avg(b) - avg(a)
+    || worst(b) - worst(a)
+}
+
 /* 从模型输出里抽一个方向的四维分。
  * 容错：写「一眼可辨：4/5」「**技术讲点** — 3」「可完成 3 分」都能吃下。
  * 抽不到的维度按 3 处理（不奖不罚），并标记 partial ——

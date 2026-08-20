@@ -49,7 +49,7 @@ import * as S from './store.mjs'
 import { ask, backend, describeBackend } from './llm.mjs'
 import { gather, attachRefs, hasSearch } from './search.mjs'
 import { forExplore, forDesign, showcaseSection } from './charterlens.mjs'
-import { laneName, dedupeLanes, laneHistogram, coldLanes, mainOk, rollup } from './lanes.mjs'
+import { laneName, dedupeLanes, laneHistogram, coldLanes, mainOk, rollup, compareCandidates } from './lanes.mjs'
 import {
   DOC_PLAN, docByFile, nextDoc,
   explorePrompt, parseDirections,
@@ -941,7 +941,7 @@ export const decide = ({ state, pending }) => {
    * 但它仍然只是**排序依据**，不是唯一的门槛 ——
    * 真正的门槛是这里的「扫够了没有」和 doCharter 里那次独立的硬约束校验。 */
   if (active.length < MAX_ACTIVE) {
-    const worthy = pool.filter(c => c.stars >= 4).sort((a, b) => b.stars - a.stars)
+    const worthy = pool.filter(c => c.stars >= 4).sort(compareCandidates)
     if (worthy.length) {
       if (rounds < MIN_EXPLORE_ROUNDS) {
         return { kind: 'explore', why: `候选只来自 ${rounds} 轮探索，不足 ${MIN_EXPLORE_ROUNDS} 轮，先接着扫` }

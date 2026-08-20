@@ -593,7 +593,14 @@ ${material}
 **让一个系统在运行时算出一个别人得靠美术做出来的画面。**
 先判断在他这里这句话可以具体成什么，再往下找方向。
 
-然后给出 **3 到 4 个方向**，每个严格按下面的格式写：
+然后给出 **3 到 4 个方向**，每个严格按下面的格式写。
+
+⚠️ 两条格式硬要求，程序靠它们读你的输出，写错了这一轮就白跑：
+
+1. **每个方向的标题必须是二级标题，并且照抄「## 方向 N：」这个开头**
+   （N 用阿拉伯数字）。不要写成「## 方向一」，不要写成「### 方向 1」，
+   不要在标题前面加编号或者别的装饰。
+2. **每个方向里必须有单独的一行 \`**赛道**：<id>\`。** 这一行是程序的锚点。
 
 ${DIRECTION_FORMAT}
 
@@ -639,27 +646,79 @@ ${READ_ME_TAIL}
 
 /* 从探索输出里抽方向。
  *
- * 上一版用两个全局正则分别抓标题和星级，然后按下标配对 ——
- * 只要模型少写一个「参考指数」，后面全体错位，而且不会报错。
- * 现在改成先按「## 方向 N」切块，再在块内各抽各的：错位不可能发生，
- * 缺字段只影响那一个方向。 */
+ * ── 这个函数被改过两次，两次都是被真实故障逼的 ──
+ *
+ * 第一版：两个全局正则分别抓标题和星级，按下标配对。
+ * 只要模型少写一个「参考指数」，后面全体错位，而且不报错。
+ *
+ * 第二版：按 `^## 方向 N：` 切块，块内各抽各的。错位不可能了，但**更脆**：
+ * 实测有一轮模型把标题写成了别的样子，正则一条都没匹配上 ——
+ * 文档写出来了、素材也搜了、深度思考也跑了，最后抽出 **0 个候选**，整轮白跑。
+ *
+ * 第三版（现在）：**别把标题当锚点。**
+ *
+ * 标题的写法是模型的自由（一/1/①、##/###、冒号/顿号/破折号），
+ * 而 `赛道：xxx` 是我们发明并且强制要求的字段 —— 它才是可靠的锚点。
+ * 所以流程是：
+ *
+ *   1. 先试「标题里带方向 N」这条快路（最常见，也最准）
+ *   2. 走不通 → 找出所有**小节里含「赛道：」的标题**，取其中最外层的那一批
+ *   3. 还是不行 → 返回空，调用方会把原文头部打进日志，让人一眼看出格式跑成了什么样
+ *
+ * 换句话说：格式可以变，但只要它照着我们要求的字段写了，就一定抽得出来。
+ */
+const headingsOf = text => [...text.matchAll(/^(#{1,6})[ \t]*(.+?)[ \t#]*$/gm)]
+  .map(m => ({ index: m.index, level: m[1].length, text: m[2].trim() }))
+
+/* 一个标题管辖的范围：到**下一个同级或更高级**的标题为止。
+ * 用层级而不是「下一个标题」，是因为方向内部还有 ### 小标题
+ * （核心机制 / 技术内核 / 打分），按「下一个标题」切的话打分那一段会被切掉。 */
+const sectionOf = (text, hs, i) => {
+  const next = hs.slice(i + 1).find(x => x.level <= hs[i].level)
+  return text.slice(hs[i].index, next ? next.index : text.length)
+}
+
+const LANE_LINE = /^\s*\**\s*赛道\s*\**\s*[:：]/m
+const TITLE_PREFIX = /^\s*(方向|候选|Direction)\s*[0-9０-９一二三四五六七八九十①②③④⑤⑥⑦⑧⑨⑩]+\s*[:：、.．·\-—]*\s*/i
+
 export const parseDirections = (raw, from = '', at = '') => {
   const text = String(raw || '')
-  const marks = [...text.matchAll(/^##\s*方向\s*(\d+)\s*[:：]?\s*(.+)$/gm)]
-  return marks.map((m, i) => {
-    const start = m.index
-    const end = i + 1 < marks.length ? marks[i + 1].index : text.length
-    const block = text.slice(start, end)
+  const hs = headingsOf(text)
+  if (!hs.length) return []
+
+  // 快路：标题里明写了「方向 N」
+  let picks = hs.map((h, i) => ({ h, i })).filter(({ h }) => TITLE_PREFIX.test(h.text))
+
+  /* 慢路：拿「赛道：」当锚点。
+   *
+   * 判据是「这一节里**恰好有一条**赛道行」，不是「有赛道行」——
+   * 差别很重要：文档最外面那个一级标题（「# 这一轮的判断」）的辖区覆盖全文，
+   * 里面有四条赛道行，按「有」来算它自己就成了唯一的方向，四个方向变一个。
+   * 恰好一条，才说明这一节讲的是**一个**方向。 */
+  if (!picks.length) {
+    const anchored = hs.map((h, i) => ({ h, i }))
+      .filter(({ i }) => (sectionOf(text, hs, i).match(new RegExp(LANE_LINE.source, 'gm')) || []).length === 1)
+    if (anchored.length) {
+      const outermost = Math.min(...anchored.map(x => x.h.level))
+      picks = anchored.filter(x => x.h.level === outermost)
+      parseDirections.usedFallback = true
+    }
+  } else {
+    parseDirections.usedFallback = false
+  }
+
+  return picks.map(({ h, i }) => {
+    const block = sectionOf(text, hs, i)
     const dims = parseDims(block)
     return {
-      title: m[2].trim().slice(0, 80),
+      title: h.text.replace(TITLE_PREFIX, '').trim().slice(0, 80) || h.text.slice(0, 80),
       lane: parseLane(block),
       glance: dims.glance, talk: dims.talk, ship: dims.ship, unique: dims.unique,
       stars: dims.stars,
       partial: dims.partial,
       from, at
     }
-  })
+  }).filter(d => d.title)
 }
 
 // ---------------- 横向评比（比稿）----------------

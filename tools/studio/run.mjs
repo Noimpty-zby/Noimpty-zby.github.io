@@ -260,7 +260,18 @@ const doExplore = async ({ charter, exploreView, state }) => {
 
   log(`  抽出 ${fresh.length} 个候选：`)
   fresh.forEach(f => log(`    · ${f.title}｜${laneName(f.lane)}｜${f.stars}★（辨 ${f.glance} 讲 ${f.talk} 完 ${f.ship} 独 ${f.unique}）`))
-  if (!fresh.length) log('    （一个都没抽出来，去看原文 —— 多半是格式跑偏了）')
+
+  /* 一个都没抽出来 = 这一轮白跑（文档写了、钱花了、状态没进）。
+   * 所以别只说「去看原文」—— 那要人开私有仓库翻文件才知道发生了什么。
+   * 直接把它写的所有标题打进日志：格式跑成什么样，一眼就看得出来。 */
+  if (!fresh.length) {
+    log('    ⚠️ 一个都没抽出来 —— 这一轮的深度思考白跑了。它实际写的标题是：')
+    const heads = String(out).split('\n').filter(l => /^#{1,6}\s/.test(l)).slice(0, 14)
+    if (heads.length) heads.forEach(h => log('       ' + h.trim().slice(0, 70)))
+    else log('       （它一个 markdown 标题都没写 —— 输出多半整个跑偏了）')
+    log('    解析器认两种锚点：标题里写「方向 N」，或者小节里有「赛道：」那一行。')
+    log('    两个都没有的话，去 explore/ 看原文，然后把提示词里的格式要求再收紧一点。')
+  }
 
   state.candidates = [...fresh, ...state.candidates].slice(0, CANDIDATE_CAP)
   state.laneHistory = [...(state.laneHistory || []), ...fresh.map(f => f.lane).filter(Boolean)].slice(-60)

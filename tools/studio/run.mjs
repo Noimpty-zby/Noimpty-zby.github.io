@@ -89,11 +89,27 @@ const SHORTLIST_AT = Number(process.env.STUDIO_SHORTLIST_AT || 6)
 /* 候选池上限。超出的从最旧的开始掉。 */
 const CANDIDATE_CAP = Number(process.env.STUDIO_CANDIDATE_CAP || 14)
 
-/* 候选池里代表了几个不同的探索轮次。
- * 用 from（那一轮的记录文件名）去重，不用计数器 —— 老的 state.json 里没有计数器，
- * 而 from 是一开始就在写的，不需要迁移。 */
-export const exploreRounds = state =>
+/* 扫过几轮方向了。
+ *
+ * ⚠️ 这个函数第一版是纯派生的：数当前候选池里有几个不同的 from。
+ * 那是错的，而且错得很隐蔽 —— **候选池会被裁剪，而裁剪会让轮数倒退。**
+ *
+ * 实测撞上了：一次横向评比淘汰了 4 个候选、主人又手动否掉 1 个，
+ * 结果最早那一轮的候选一个不剩，于是「扫过 3 轮」退回成「扫过 2 轮」，
+ * 立项门槛重新锁上，下一轮又被打发去探索。
+ *
+ * 但那三轮是**真的跑过了**。删掉它们的产物不会让它们没发生过。
+ * 而且这还有个更难看的后果：评比越是尽职（淘汰得越干净），轮数掉得越多，
+ * 越难立项 —— 把「认真筛选」变成了一种惩罚。
+ *
+ * 所以改成单调计数器 state.exploreDone，只增不减。
+ * 仍然和旧口径取 max，是为了兼容没有这个字段的老 state.json ——
+ * 那种情况下派生值就是当时最好的估计。 */
+const distinctRounds = state =>
   new Set((state.candidates || []).map(c => c.from).filter(Boolean)).size
+
+export const exploreRounds = state =>
+  Math.max(Number(state.exploreDone) || 0, distinctRounds(state))
 
 /* 一轮探索记录的文件名。**必须带轮次号，不能只带日期。**
  *
@@ -273,6 +289,13 @@ const doExplore = async ({ charter, exploreView, state }) => {
     log('    两个都没有的话，去 explore/ 看原文，然后把提示词里的格式要求再收紧一点。')
   }
 
+  /* 记一笔「又扫过一轮」。必须在更新候选池**之前**算，
+   * 而且只有真的产出了候选才算 —— 交白卷或者解析失败的那种不该占一轮。 */
+  if (fresh.length) state.exploreDone = exploreRounds(state) + 1
+
+  const dropped = Math.max(0, state.candidates.length + fresh.length - CANDIDATE_CAP)
+  if (dropped) log(`  候选池满了（上限 ${CANDIDATE_CAP}），最旧的 ${dropped} 个被挤出去`)
+
   state.candidates = [...fresh, ...state.candidates].slice(0, CANDIDATE_CAP)
   state.laneHistory = [...(state.laneHistory || []), ...fresh.map(f => f.lane).filter(Boolean)].slice(-60)
   return { action: 'explore', added: fresh.length }
@@ -290,9 +313,32 @@ const doShortlist = async ({ charter, state }) => {
   if (pool.length < 2) { log('  候选不够两个，没什么可比的'); return null }
 
   log(`  把 ${pool.length} 个候选摆在一起比一次 —— 相对排序，必须选出第一名`)
+
+  /* 把每个候选**当初的分析正文**捞回来。
+   *
+   * 第一版只把标题列给它看，那是在拿标题排名次 —— 一个方向凭什么好、
+   * 技术内核是什么、人日怎么估的，全都不在上下文里。
+   * 而这一步决定了接下来三周多的文档产出往哪个方向写，是全流程里
+   * 单次影响最大的一个判断，不该建立在十来个短语上。 */
+  const byFile = new Map()
+  for (const from of new Set(pool.map(c => c.from).filter(Boolean))) {
+    const name = String(from).replace(/^explore\//, '')
+    const text = await S.readText(`${S.EXPLORE_DIR}/${name}`)
+    if (!text) { log(`  读不到 ${from}，这一批候选只能凭标题比`); continue }
+    parseDirections(text).forEach(d => byFile.set(d.title, d.block))
+  }
+  const same = (x, y) => clean(x).replace(/\s/g, '') === clean(y).replace(/\s/g, '')
+  const withBlocks = pool.map(c => {
+    const hit = byFile.get(c.title)
+      || [...byFile.entries()].find(([t]) => same(t, c.title))?.[1]
+    return { ...c, block: hit || '' }
+  })
+  const got = withBlocks.filter(c => c.block).length
+  log(`  捞回了 ${got}/${pool.length} 个候选的原始分析正文${got < pool.length ? '（剩下的只能凭标题比）' : ''}`)
+
   const p = shortlistPrompt({
     charter,
-    candidates: pool,
+    candidates: withBlocks,
     rejected: state.rejected || [],
     lessons: await S.loadLessons() || ''
   })
@@ -1123,6 +1169,8 @@ const main = async () => {
       at: beijing()
     }
     log(`\n  下一轮预计：${state.nextPlan.label}${state.nextPlan.target ? ` · ${state.nextPlan.target}` : ''}${state.nextPlan.doc ? ` · ${state.nextPlan.doc}` : ''}`)
+    // 「为什么是这个」比「是这个」有用得多 —— 尤其是当结果出乎意料的时候
+    if (state.nextPlan.why) log(`  （${state.nextPlan.why}）`)
   } catch (e) {
     state.nextPlan = null
   }

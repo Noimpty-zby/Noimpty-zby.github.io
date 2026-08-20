@@ -23,7 +23,11 @@ on:
         #   绝对分（够不够好）没有锚点，相对排序（哪个最好）有。
         # audit = 拿硬约束把某个已经立了的项目重审一遍。
         #   立项前的校验是后来才加的，在那之前立的项目没被查过，用这个补一次。
-        options: [auto, explore, shortlist, charter, expand, revise, postmortem, audit]
+        # plan = 只重算「下一轮会做什么」，不调模型、不花一分钱、几秒钟跑完。
+        #   页面上那句「下一轮预计」是个缓存，代码改了或者你投过票之后
+        #   它就和真实判断对不上了 —— 真出过一次：页面写着「下一轮：探索」，
+        #   实际下一轮是「立项」。拿不准的时候先跑这个看一眼。
+        options: [auto, explore, shortlist, charter, expand, revise, postmortem, audit, plan]
         default: auto
       dry:
         description: '只演练不动真格（产出会打印在日志里，不写进仓库）'
@@ -104,6 +108,22 @@ jobs:
           STUDIO_SHORTLIST_AT: '6'
           # 候选池上限，超出的从最旧的开始掉
           STUDIO_CANDIDATE_CAP: '14'
+
+          # ── 立项闸门 ────────────────────────────────────────────
+          # 立项是全流程里最贵、最难回头的一步。它要**同时**过两条：
+          #
+          #   ① 上面的 ANTHROPIC_API_KEY 配了。立项书是长上下文 + 自我批判，
+          #      降级到 DeepSeek 写出来的立项书会让人照着一个想糊了的方向做三个月。
+          #   ② 这个方向你在策划室页面上点过「就它了，立项」。
+          #      模型可以排名次、可以推荐，但押上这一年的决定必须是你做的。
+          #
+          # 缺哪一条，日志和页面上都会写清楚缺的是哪一条、怎么解开，
+          # 然后这一轮顺位往下走（继续探索或评比），不会白跑。
+          #
+          # 下面这个是总闸，另外一条路：设成 1 就把立项整个按死，
+          # 连点过名 + 有 key 也不放行。调试期用，平时留空。
+          # 想改：仓库 Settings → Variables 里加同名变量。
+          STUDIO_CHARTER_HOLD: ${{ vars.STUDIO_CHARTER_HOLD }}
 
           # 提交署名
           NANALY_GIT_NAME: ${{ secrets.NANALY_GIT_NAME }}

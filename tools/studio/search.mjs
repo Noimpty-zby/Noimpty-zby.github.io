@@ -13,6 +13,7 @@
  */
 
 import { ask } from './llm.mjs'
+import { LANES, laneName } from './lanes.mjs'
 
 const KEY = () => process.env.TAVILY_API_KEY || ''
 
@@ -61,36 +62,41 @@ const dedupe = items => {
  * （「rhythm game input latency forgiveness design」）。
  * 让模型先读总纲、再据此出词，比人手写一批固定词好 ——
  * 总纲会变，固定词不会。 */
-const makeQueries = async (charter, covered) => {
+const makeQueries = async (charter, covered, cold = []) => {
   const out = await ask(
     `你在为一个独立游戏开发者规划检索。只输出检索词，一行一条，不要编号、不要解释、不要开场白。`,
-    `下面是他的情况和约束。请给出 6 到 8 条检索词，用来找**他这种条件下做得出来、而且能做出亮点**的玩法方向。
+    `下面是他的情况和约束。请给出 6 到 8 条检索词。
+
+⚠️ 先说清楚要找什么，因为这决定了检索词的方向：
+
+他做这个游戏**不是给自己玩的，是拿去参赛和写简历的**。
+所以要找的不是「什么游戏好玩」，是 ——
+**什么样的东西能让一个见过几十个学生作品的评委停下来，
+并且背后有一个能在面试里讲十分钟的技术问题。**
 
 【他的总纲】
 ${charter}
 
 ━━━ 检索词怎么写 ━━━
 
-- 搜的是**具体的设计问题或机制拆解**，不是品类。
-  ✗「好玩的独立游戏推荐」✗「2026 值得期待的游戏」
-  ✓「single developer game scope management core mechanic depth」
-  ✓「procedural generation replace art content indie」
-  ✓「physics simulation as core mechanic design breakdown」
-- **至少 4 条英文** —— 机制拆解类的资料英文世界多得多
+- 搜的是**具体的技术实现或机制拆解**，不是品类，也不是排行榜。
+  ✗「好玩的独立游戏推荐」✗「2026 值得期待的游戏」✗「game design tips」
+  ✓「runtime mesh boolean cutting unreal geometry script」
+  ✓「wave function collapse level generation constraints」
+  ✓「mass entity crowd simulation performance unreal」
+  ✓「screen space effect stylized rendering breakdown」
+- **至少 5 条英文** —— 技术拆解类的资料英文世界多得多
 - 不要引号、不要编号、一行一条
 
 ━━━ 覆盖面（这一条是硬的）━━━
 
-**这几条检索词必须打在互不相干的角度上。**
+**每一条检索词必须打在一条不同的赛道上。** 赛道是固定的这几条：
 
-他的总纲第四节里举了一个他欣赏的游戏例子。那一节是**用来排除的，
-不是用来指路的** —— 他在第二节写明了「还没想好，需要你帮我找」。所以：
+${LANES.filter(l => l.id !== 'code-feel').map(l => `  - ${l.name}：${l.hint}`).join('\n')}
 
-- **至多 1 条**检索词可以和第四节那个例子直接相关。
-- 其余每一条打在一个完全不同的地方。这几类角度挑不同的用，别全挤在一类：
-  程序化生成 / 物理模拟 / 视觉风格化与后处理 / 极小规模高完成度 /
-  在成熟品类里换掉一个核心假设 / 系统涌现 / 单人开发的范围控制
-- 自检：**把第四节整节遮住，这批检索词还成立吗？** 不成立就重出一批。
+${cold.length ? `⭐ **这几条赛道一次都没搜过，这一轮必须覆盖：${cold.map(laneName).join('、')}**\n` : ''}
+⛔ **不要出「打击感 / 手感 / 顿帧 / 连招 / 弹反 / 格挡」这一类检索词。**
+那些东西截图里看不见、面试时问三句就到底，对他的两个目标都是零分。
 ${covered.length ? `
 ━━━ 这些方向最近已经扫过了，换一批角度 ━━━
 ${covered.map(t => '- ' + t).join('\n')}` : ''}`,
@@ -107,7 +113,7 @@ ${covered.map(t => '- ' + t).join('\n')}` : ''}`,
  * 跑一轮检索，返回可以直接塞进提示词的素材清单。
  * @returns {{listed: string, hits: Array, queries: Array}} listed 为空表示这轮没有素材
  */
-export const gather = async (charter, covered = []) => {
+export const gather = async (charter, covered = [], cold = []) => {
   if (!hasSearch()) {
     console.log('  没配 TAVILY_API_KEY —— 这一轮不检索，她只能凭自己的知识判断')
     console.log('  （去 tavily.com 拿一把 key 存成 TAVILY_API_KEY，探索质量会有明显差别）')
@@ -115,7 +121,7 @@ export const gather = async (charter, covered = []) => {
   }
 
   console.log('  先想清楚要搜什么…')
-  const queries = await makeQueries(charter, covered)
+  const queries = await makeQueries(charter, covered, cold)
   if (!queries.length) {
     console.log('  没能出检索词，这一轮不检索')
     return { listed: '', hits: [], queries: [] }

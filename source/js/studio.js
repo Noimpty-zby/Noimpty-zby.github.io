@@ -171,51 +171,140 @@
   let seq = 0
   const slug = () => 'sd-h' + (++seq)
 
-  const md2html = source => {
-    const codes = []
-    const blocks = []
-    let s = normalize(source)
-    s = s.replace(/```([\w+-]*)\r?\n?([\s\S]*?)```/g, (_, lang, b) => {
-      blocks.push({ lang, body: b.replace(/\r?\n$/, '') })
-      return ph('C', blocks.length - 1)
-    })
-    s = esc(s)
-    s = inline(s, codes)
+  /* ── 好例 / 坏例 ──────────────────────────────────────
+   * 提示词里的六条铁律逼着它到处写「✗ 这样不行 / ✓ 这样才对」，
+   * 于是文档里成对的好坏例子非常多。渲染成普通文字的话，
+   * 那个决定性的第一个字符和后面的正文一样重 —— 扫的时候根本分不出正负。
+   * 这里把它拎成一个带色条的块：**扫一眼就知道哪句是反面教材。** */
+  const EG = { '✓': 'good', '✅': 'good', '✔': 'good', '✗': 'bad', '✘': 'bad', '❌': 'bad' }
+  const egOf = t => {
+    const m = String(t).match(/^([✓✅✔✗✘❌])[ \t]*(.*)$/)
+    return m && m[2] ? { kind: EG[m[1]], mark: m[1], body: m[2] } : null
+  }
 
+  /* ── 提示块 ───────────────────────────────────────────
+   * ⭐ 是「这一条最重要」，⚠️ 是「这里有坑」，⛔ 是「禁止」。
+   * 总纲和策划文档里这三个符号是有明确分工的，不是装饰 ——
+   * 所以它们该长得像一个块，而不是像一段碰巧以表情开头的文字。 */
+  const CALLOUT = { '⭐': 'star', '⚠': 'warn', '⛔': 'stop', '💡': 'tip', '📌': 'pin', '❗': 'warn' }
+  /* 连写的同一个符号（「⭐⭐ 这一节最重要」）整串算一个记号。
+   * 连写是作者在加重语气，不是两个提示块 —— 只认第一个的话，
+   * 第二个会掉进正文里，看起来像个错字。 */
+  const calloutOf = t => {
+    const m = String(t).match(/^([⭐⚠⛔💡📌❗])(?:️)?((?:\1(?:️)?)*)[ \t]*(.*)$/)
+    return m && m[3] ? { kind: CALLOUT[m[1]], mark: m[1] + (m[2] || ''), body: m[3] } : null
+  }
+
+  /* 「**标签** —— 正文」这种带标签的句子。
+   * 探索和评比的提示词里就是这个模板，所以文档里到处都是。
+   * 不拎出来的话，七八段这样的文字连在一起就是一堵墙，扫不出结构。 */
+  const kvOf = (t, withColon) => t.match(withColon
+    ? /^<strong>([^<]{2,28})<\/strong>\s*(?:——|—{1,2}|--|：|:)\s*([\s\S]+)$/
+    : /^<strong>([^<]{2,28})<\/strong>\s*(?:——|—{1,2}|--)\s*([\s\S]+)$/)
+
+  /* 一段行渲染成 HTML。
+   *
+   * 抽成独立函数是为了能**递归**：引用块（&gt;）里同样会出现列表、
+   * 小标题、好例坏例。第一版把引用块里的每一行都当成一个 <p>，
+   * 于是总纲里那些「> 为什么这么处理，说清楚免得以后有人把它挪回去」
+   * 底下的分条全部塌成了一坨。
+   *
+   * 传进来的行**已经过 esc 和 inline** —— 递归时绝不能再来一遍，
+   * 否则 &amp; 会被二次转义，&lt;strong&gt; 会以字面量出现在页面上。
+   */
+  const renderLines = (lines, toc, opts = {}) => {
     const out = []
-    const toc = []
-    let list = null, para = false, quote = false
-    /* 段落不一定用 </p> 收尾 —— 「**标签** —— 正文」那种会被渲染成
-     * 标签一行、正文一段的两层结构，收尾标签不一样。所以记着当前该收什么。 */
-    let paraEnd = '</p>'
+    /* 列表栈。每层记 { tag, indent }，靠缩进决定进出层级 ——
+     * 第一版没有这个栈，每一行都 trim() 之后当顶层列表项，
+     * 于是所有嵌套结构被拍平成一层。 */
+    const stack = []
+    let para = false, paraEnd = '</p>'
 
     const closePara = () => { if (para) { out[out.length - 1] += paraEnd; para = false } }
-    const closeList = () => { if (list) { out.push('</' + list + '>'); list = null } }
-    const closeQuote = () => { if (quote) { out.push('</blockquote>'); quote = false } }
-    const closeAll = () => { closePara(); closeList(); closeQuote() }
+    const popList = () => { const l = stack.pop(); if (l) out.push('</' + l.tag + '>') }
+    const closeLists = (toIndent = -1) => {
+      while (stack.length && stack[stack.length - 1].indent > toIndent) { closePara(); popList() }
+    }
+    const closeAll = () => { closePara(); while (stack.length) popList() }
+    const inList = () => stack.length > 0
 
-    const lines = s.split(/\r?\n/)
     const isRow = l => /^\|.*\|$/.test(l)
     const isSep = l => /^\|[\s:|-]+\|$/.test(l) && l.includes('-')
     const cells = l => l.replace(/^\||\|$/g, '').split('|').map(c => c.trim())
     const isHole = l => l.length > 2 && l[0] === HOLE && l[l.length - 1] === HOLE
+    const bullet = l => l.match(/^[-*+]\s+(.*)$/)
+    const numbered = l => l.match(/^(\d+)[.)]\s+(.*)$/)
+
+    /* 一个 <li> 的内容长什么样。四种形态，按「信息密度」从高到低试。 */
+    const liBody = body => {
+      const eg = egOf(body)
+      if (eg) return { cls: ` class="sd-eg is-${eg.kind}"`, html: `<i class="sd-eg__m">${eg.mark}</i>${eg.body}` }
+      const co = calloutOf(body)
+      if (co) return { cls: ` class="sd-li-callout is-${co.kind}"`, html: `<i class="sd-co__m">${co.mark}</i>${co.body}` }
+      const kv = kvOf(body, true)
+      if (kv) return { cls: ' class="sd-kv"', html: `<b class="sd-kv__k">${kv[1]}</b><span class="sd-kv__v">${kv[2]}</span>` }
+      return { cls: '', html: body }
+    }
 
     for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim()
-      if (!line) { closeAll(); continue }
+      const raw = String(lines[i]).replace(/\t/g, '  ')
+      const line = raw.trim()
+      const indent = raw.match(/^ */)[0].length
+
+      if (!line) {
+        /* 空行不一定是列表的结束 —— markdown 里「松散列表」的每一项之间
+         * 就隔着空行。所以往前看一眼：下一个非空行还是同层或更深的列表项的话，
+         * 列表继续开着。第一版在这里无条件关掉所有列表，
+         * 于是一个写成松散形式的清单会被切成好几段互不相干的短列表，
+         * 有序列表的编号还会从 1 重新开始。 */
+        closePara()
+        if (!inList()) continue
+        let j = i + 1
+        while (j < lines.length && !String(lines[j]).trim()) j++
+        const nxt = j < lines.length ? String(lines[j]).replace(/\t/g, '  ') : ''
+        const nxtIndent = nxt ? nxt.match(/^ */)[0].length : -1
+        const nxtIsItem = !!(bullet(nxt.trim()) || numbered(nxt.trim()))
+        if (!(nxtIsItem && nxtIndent >= stack[0].indent)) closeAll()
+        continue
+      }
+
       if (isHole(line)) { closeAll(); out.push(line); continue }
 
       // 表格 —— 策划文档里到处是表格（风险登记、内容清单、90 秒分镜），这一块必须稳
-      if (isRow(line) && isSep((lines[i + 1] || '').trim())) {
+      if (isRow(line) && isSep(String(lines[i + 1] || '').trim())) {
         closeAll()
         const head = cells(line)
+        /* 对齐信息以前是直接丢掉的。工作量表、风险表里那一列人日靠右对齐
+         * 才读得出量级差别，全靠左的话得一个字一个字比。 */
+        const align = cells(String(lines[i + 1]).trim()).map(c => {
+          const l = c.startsWith(':'), r = c.endsWith(':')
+          return l && r ? 'center' : (r ? 'right' : (l ? 'left' : ''))
+        })
         const rows = []
         i += 2
-        while (i < lines.length && isRow(lines[i].trim())) { rows.push(cells(lines[i].trim())); i++ }
+        while (i < lines.length && isRow(String(lines[i]).trim())) { rows.push(cells(String(lines[i]).trim())); i++ }
         i--
+        /* 没写对齐、但整列都是数字的，自动靠右。
+         *
+         * 「人日」这一列在每一份策划文档里都有，而模型写表格时几乎从不写
+         * `|---:|`。全靠左的话，2 / 3 / 12 / 16 的个位数对不齐，
+         * 得一个字一个字比才看得出量级 —— 而看量级正是这张表存在的理由。
+         * 只在**整列都是数字**时才动，一格文字就退回默认，不猜。
+         *
+         * ⚠️ 日期不算数字。「2026-08-19」全是数字和横杠，但它是标签不是量 ——
+         * 靠右对齐它没有意义，而且窄列里会被折成「2026- / 08-19」两行。
+         * 所以只认「一个数」和「一个范围」两种形态，多一段就退出。 */
+        const numeric = v => /^[+-]?[\d.,]+\s*%?$/.test(v)
+          || /^[\d.,]+\s*[-–—~/／]\s*[\d.,]+\s*%?$/.test(v)
+        for (let n = 0; n < align.length; n++) {
+          if (align[n]) continue
+          const col = rows.map(r => (r[n] || '').trim()).filter(Boolean)
+          if (col.length >= 2 && col.every(numeric)) align[n] = 'right'
+        }
+        const at = n => align[n] ? ` class="is-${align[n]}"` : ''
         out.push('<div class="sd-tablewrap"><table><thead><tr>' +
-          head.map(c => `<th>${c}</th>`).join('') + '</tr></thead><tbody>' +
-          rows.map(r => '<tr>' + r.map(c => `<td>${c}</td>`).join('') + '</tr>').join('') +
+          head.map((c, n) => `<th${at(n)}>${c}</th>`).join('') + '</tr></thead><tbody>' +
+          rows.map(r => '<tr>' + r.map((c, n) => `<td${at(n)}>${c}</td>`).join('') + '</tr>').join('') +
           '</tbody></table></div>')
         continue
       }
@@ -227,58 +316,105 @@
         const bare = text.replace(/<[^>]+>/g, '').trim()
         const level = h[1].length
         const id = slug()
-        if (level <= 2) toc.push({ id, name: bare, level })
+        if (toc && level <= 2) toc.push({ id, name: bare, level })
         out.push(`<h${Math.min(6, level + 1)} class="sd-h sd-h--${level}" id="${id}">${text}</h${Math.min(6, level + 1)}>`)
         continue
       }
 
-      if (/^(-{3,}|\*{3,}|_{3,})$/.test(line)) { closeAll(); out.push('<hr>'); continue }
+      // ━━━ 是提示词里用来分隔小节的，语义上就是一条分割线
+      if (/^(-{3,}|\*{3,}|_{3,}|[━─]{3,})$/.test(line)) { closeAll(); out.push('<hr>'); continue }
 
+      // 引用块：整块收集起来，剥掉 &gt; 之后**递归**渲染，里面的结构才留得住
       if (/^&gt;\s?/.test(line)) {
-        closePara(); closeList()
-        if (!quote) { out.push('<blockquote>'); quote = true }
-        out.push(`<p>${line.replace(/^&gt;\s?/, '')}</p>`)
+        closeAll()
+        const inner = []
+        while (i < lines.length && /^\s*(&gt;\s?|&gt;$)/.test(String(lines[i]))) {
+          inner.push(String(lines[i]).replace(/^\s*&gt;\s?/, ''))
+          i++
+        }
+        i--
+        const first = (inner.find(x => x.trim()) || '').trim()
+        const co = calloutOf(first)
+        /* 引用块本身已经带上颜色了，里面的提示块就别再套一个框 ——
+         * 套两层的结果是「框里还有个一模一样的框」，两条边线、两块底色，
+         * 而它们说的是同一件事。bare 只留记号和留白。 */
+        out.push(`<blockquote${co ? ` class="sd-quote is-${co.kind}"` : ''}>${renderLines(inner, null, { bare: !!co })}</blockquote>`)
         continue
       }
-      closeQuote()
 
-      const ul = line.match(/^[-*+]\s+(.*)$/)
-      const ol = line.match(/^\d+[.)]\s+(.*)$/)
+      const ul = bullet(line)
+      const ol = numbered(line)
       if (ul || ol) {
         closePara()
         const want = ul ? 'ul' : 'ol'
-        if (list !== want) { closeList(); out.push('<' + want + '>'); list = want }
-        const body = (ul || ol)[1]
-        /* 「**它到底怎么运作** —— …」把标签拎出来，别和正文挤成一行。
-         *
-         * 只对无序列表做。有序列表里也这么干的话，被拎出来那条会因为
+        closeLists(indent)
+        const top = stack[stack.length - 1]
+        if (!top || top.indent < indent) {
+          /* 有序列表要带上起始序号。不带的话，一份从「3. …」接着往下写的
+           * 清单会被渲染成从 1 开始 —— 和正文里「见上面第 3 条」对不上。 */
+          const start = ol && ol[1] !== '1' ? ` start="${Number(ol[1])}"` : ''
+          out.push('<' + want + start + '>')
+          stack.push({ tag: want, indent })
+        } else if (top.tag !== want) {
+          popList()
+          out.push('<' + want + '>')
+          stack.push({ tag: want, indent })
+        }
+        const body = (ul || ol)[ul ? 1 : 2]
+        /* 标签抽取只对无序列表做。有序列表里也这么干的话，被拎出来那条会因为
          * list-style:none 丢掉自己的序号，后面的项就从 2 开始 ——
          * 「最大的三个风险」渲染出来变成「(无号) / 2 / 3」，很难看，
          * 而策划文档里恰恰到处都是有序列表。 */
-        const kv = ul && body.match(/^<strong>([^<]{2,28})<\/strong>\s*(?:——|—{1,2}|--|：|:)\s*([\s\S]+)$/)
-        out.push(kv
-          ? `<li class="sd-kv"><b class="sd-kv__k">${kv[1]}</b><span class="sd-kv__v">${kv[2]}</span></li>`
-          : `<li>${body}</li>`)
+        const { cls, html } = ul ? liBody(body) : { cls: '', html: body }
+        out.push(`<li${cls}>${html}</li>`)
         continue
       }
-      closeList()
+
+      /* 列表项的续行。比列表项本身缩进更多的普通文字，属于上一条，
+       * 不是一个新段落 —— 第一版会在这里把列表关掉、另起一段，
+       * 于是一条写长了、换了行的清单项会把整个列表从中间劈开。 */
+      if (inList() && indent > stack[stack.length - 1].indent && out.length) {
+        const last = out[out.length - 1]
+        if (last.endsWith('</li>')) {
+          /* 续行要插进**最里面**那个容器。
+           * 「**标签** —— 正文」渲染出来是 <li><b>标签</b><span>正文</span></li>，
+           * 而 span 是 display:block —— 只剥掉 </li> 的话，续行会掉在 span 外面，
+           * 于是「标签 / 正文」那两层结构变成了三层，第二行还对不齐。 */
+          const tail = last.endsWith('</span></li>') ? '</span></li>' : '</li>'
+          out[out.length - 1] = last.slice(0, -tail.length) + '<br>' + line + tail
+          continue
+        }
+      }
+      closeLists()
 
       if (para) { out[out.length - 1] += '<br>' + line; continue }
 
+      // 「✗ 打击感要强」这种整段的反面教材
+      const eg = egOf(line)
+      if (eg) {
+        out.push(`<p class="sd-eg is-${eg.kind}"><i class="sd-eg__m">${eg.mark}</i>${eg.body}`)
+        para = true; paraEnd = '</p>'
+        continue
+      }
+
+      // 「⭐ 这一条最重要…」这种整段的提示
+      const co = calloutOf(line)
+      if (co) {
+        out.push(`<p class="sd-callout is-${co.kind}${opts.bare ? ' is-bare' : ''}"><i class="sd-co__m">${co.mark}</i><span class="sd-co__b">${co.body}`)
+        para = true; paraEnd = '</span></p>'
+        continue
+      }
+
       /* 「**评委第一眼看到什么** —— 正文…」这种**独立成段**的带标签句子。
-       *
-       * 无序列表里的同一个形态早就特殊处理了（sd-kv），但段落形态一直没有，
-       * 于是它渲染出来就是一整段普通文字，只是开头几个字是粗体 ——
-       * 一份文档里七八个这样的段落连在一起，就是一堵墙，扫不出结构。
-       *
-       * 而这个写法恰恰是探索提示词里的模板写法，所以它到处都是。
        * 模型有时候会自己把它提升成 ### 小标题（那样很好看），有时候不会 ——
-       * 好不好读不该取决于模型这一次的心情，所以在这里兜住。 */
-      const kvp = line.match(/^<strong>([^<]{2,28})<\/strong>\s*(?:——|—{1,2}|--)\s*([\s\S]+)$/)
+       * 好不好读不该取决于模型这一次的心情，所以在这里兜住。
+       *
+       * 注意段落形态不认全角冒号：「**注意**：这一节不是…」在中文里是
+       * 正常的句子开头，不是标签，拎出来反而把一句完整的话拆断了。 */
+      const kvp = kvOf(line, false)
       if (kvp) {
         out.push(`<p class="sd-kvp"><b class="sd-kv__k">${kvp[1]}</b><span class="sd-kv__v">${kvp[2]}`)
-        para = true
-        paraEnd = '</span></p>'
+        para = true; paraEnd = '</span></p>'
         continue
       }
 
@@ -287,16 +423,36 @@
       paraEnd = '</p>'
     }
     closeAll()
+    return out.join('')
+  }
+
+  const md2html = source => {
+    const codes = []
+    const blocks = []
+    let s = normalize(source)
+    s = s.replace(/```([\w+-]*)\r?\n?([\s\S]*?)```/g, (_, lang, b) => {
+      blocks.push({ lang, body: b.replace(/\r?\n$/, '') })
+      return ph('C', blocks.length - 1)
+    })
+    s = esc(s)
+    s = inline(s, codes)
+
+    const toc = []
+    const body = renderLines(s.split(/\r?\n/), toc)
 
     const nav = toc.length >= 3
       ? `<nav class="sd-toc"><b>这一份讲了什么</b><ol>${toc.filter(t => t.level <= 2).map(t =>
           `<li class="sd-toc__l${t.level}"><a href="#${t.id}">${esc(t.name)}</a></li>`).join('')}</ol></nav>`
       : ''
 
-    return (nav + out.join(''))
+    return (nav + body)
       .replace(new RegExp(HOLE + 'C(\\d+)' + HOLE, 'g'), (whole, n) => {
         const c = blocks[n]
-        return c ? `<pre><code>${esc(c.body)}</code></pre>` : whole
+        if (!c) return whole
+        // 语言标签以前是解析出来就扔掉的。技术方案那一份里 C++ 和蓝图伪码
+        // 混在一起，不标出来得靠读代码本身猜。
+        const tag = c.lang ? `<b class="sd-code__lang">${esc(c.lang)}</b>` : ''
+        return `<div class="sd-code">${tag}<pre><code>${esc(c.body)}</code></pre></div>`
       })
       .replace(new RegExp(HOLE + 'I(\\d+)' + HOLE, 'g'), (whole, n) => {
         const c = codes[n]
@@ -392,16 +548,42 @@
    * 这套东西一周只醒三次，中间那两天你能看到的只有一堆文档。
    * 写上一句「下次会做：深化《X》的核心循环」，你就知道现在给反馈还来不来得及插队 ——
    * 而反馈插队正是这套东西最关键的一条设计。 */
+  /* 这一句是**算出来存下的缓存**，不是现算的。所以要把「什么时候算的」
+   * 一起显示出来 —— 它真的错过一次：页面上写着「下一轮：探索新方向」，
+   * 而实际下一轮是「立项」（代码改了之后判断变了，缓存没跟着变）。
+   * 一句带时间戳的话是可以被怀疑的，一句不带的会被当成事实。 */
+  const planAge = at => {
+    const t = Date.parse(String(at || '').replace(' ', 'T') + '+08:00')
+    if (!t) return ''
+    const days = Math.floor((Date.now() - t) / 86400000)
+    return days >= 7 ? `${esc(String(at).slice(0, 10))} 算的，可能过期了` : `${esc(String(at).slice(0, 16))} 算的`
+  }
+
   const nextBanner = () => {
     const n = state && state.nextPlan
     if (!n || !n.kind) return ''
     const bits = [n.label, n.target, n.doc].filter(Boolean).join(' · ')
+    const age = planAge(n.at)
     return `<div class="sd-next">
       <b>下次醒来准备做</b>
       <span class="sd-next__what">${esc(bits)}</span>
       ${n.why ? `<i class="sd-next__why">${esc(n.why)}</i>` : ''}
-      <i class="sd-next__hint">想改这个安排？在下面给反馈或者给候选投票，你的输入会插队。</i>
+      ${n.held ? `<i class="sd-next__held"><b>立项闸门没开</b>${esc(n.held.why)}<em>${esc(n.held.how)}</em></i>` : ''}
+      <i class="sd-next__hint">想改这个安排？在下面给反馈或者给候选投票，你的输入会插队。${age ? `（${age}）` : ''}</i>
     </div>`
+  }
+
+  /* 候选卡片上要显示的闸门状态。
+   *
+   * 浏览器看不到 Actions 里的 secrets，所以「有没有 Claude key」这件事
+   * 只能从上一轮跑出来的 nextPlan.held 里推。推不出来的时候不猜 ——
+   * 宁可少说一句，也不能显示一个错的绿灯，那比不显示更糟。 */
+  const gateHint = c => {
+    const held = state && state.nextPlan && state.nextPlan.held
+    if (!c.pinned) return { cls: 'is-idle', text: '差你点头 —— 点「就它了」才会进立项' }
+    if (held && held.code === 'NO_CLAUDE') return { cls: 'is-warn', text: '你点过名了，但还差 Claude key（ANTHROPIC_API_KEY）' }
+    if (held && held.code === 'HOLD') return { cls: 'is-warn', text: '你点过名了，但立项总闸拉着（STUDIO_CHARTER_HOLD）' }
+    return { cls: 'is-good', text: '你点名要立 · 排队中，下次有空位就立项' }
   }
 
   const pendingCount = () =>
@@ -453,9 +635,12 @@
       ${candidates.length ? `
         <h2 class="sd-sectionhead">候选方向</h2>
         <p class="sd-dim">探索扫出来的方向。四维分由代码汇总，<strong>短板决定上限</strong> ——
-        任何一维给到 1 或 2，这个方向就上不了四星，其它三维再高也补不回来。
-        四星以上才会自动进入立项。</p>
-        <p class="sd-dim"><strong>你可以直接插手：</strong>「就它了」会跳过「扫够几轮」那道等待门槛直接立项（仍然要过一次硬约束校验；活跃项目满员的话它会置顶排队，一有空位自动立项），
+        任何一维给到 1 或 2，这个方向就上不了四星，其它三维再高也补不回来。</p>
+        <p class="sd-dim"><strong>⭐ 它不会自己开始立项。</strong>立项要同时过两条：配了 Claude 的
+        <code>ANTHROPIC_API_KEY</code>（立项书不接受降级模型），并且<strong>你在这里点过「就它了」</strong>。
+        候选攒得再多、星级再高，没有你那一下点击，它只会一直探索和评比下去 ——
+        押上这一年的决定必须是你做的。</p>
+        <p class="sd-dim"><strong>三个按钮：</strong>「就它了」把这个方向排进立项队列，并跳过「扫够几轮」那道等待门槛（仍然要过一次独立的硬约束校验），
         「加一星」是轻推，「否掉」会把它移出候选池并写进否决清单 —— 以后换个名字端上来也会被拦。</p>
         <div class="sd-cands">
           ${candidates.map(c => `
@@ -466,12 +651,12 @@
               </div>
               <div class="sd-cand__meta">
                 <span class="sd-lane">${esc(laneName(c.lane))}</span>
-                ${c.pinned ? '<span class="sd-tag is-good">你点名要立 · 排队中</span>' : ''}
                 ${c.laneCollision ? '<span class="sd-tag is-warn">赛道撞车，已降分</span>' : ''}
                 ${c.shortlisted ? '<span class="sd-tag is-good">评比第一名</span>' : ''}
                 ${c.boostedBy ? '<span class="sd-tag is-good">你加过星</span>' : ''}
                 ${c.from ? `<button class="sd-linkish" data-act="explore-open" data-file="${esc(String(c.from).replace(/^explore\//, ''))}">看那一轮的分析</button>` : ''}
               </div>
+              ${(() => { const g = gateHint(c); return `<div class="sd-gate ${g.cls}">${esc(g.text)}</div>` })()}
               ${dimBars(c)}
               <div class="sd-cand__acts">
                 <button class="sd-btn sd-btn--sm" data-act="vote" data-vote="pick" data-title="${esc(c.title)}" data-lane="${esc(c.lane || '')}"${c.pinned ? ' disabled' : ''}>${c.pinned ? '已排队立项' : '就它了，立项'}</button>
@@ -914,7 +1099,11 @@
       state: () => JSON.parse(JSON.stringify(state || {})),
       view: () => ({ ...view }),
       pending: () => pendingCount(),
-      reload: () => load()
+      reload: () => load(),
+      /* 渲染器也挂出来。两个用处：在控制台上拿一段真实文档试排版，
+       * 以及让 tools/tests/studio-render.test.mjs 能直接测它 ——
+       * 这一段是纯函数，是这个文件里最值得测、也最容易测的部分。 */
+      md2html: src => md2html(src)
     })
   }
 

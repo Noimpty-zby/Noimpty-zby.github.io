@@ -16,6 +16,21 @@
  *   6. 候选攒够了但都不够格      → 横向评比，选出最好的一个（解死锁，见下）。
  *   7. 什么都没有                → 探索。
  *
+ * ── 关于这个顺序，三件容易看错的事 ─────────────────────
+ *
+ * **4 永远压过 5，这是故意的。** 手上有没写完的项目时，绝不开新坑 ——
+ * 所以 MAX_ACTIVE=2 的第二个名额实际上只在「第一个写完 9 份文档」或者
+ * 「第一个停更了」之后才会腾出来。看起来像是并行两个项目，实际上是
+ * 「一个正在做 + 一个可以随时接手」。一个人的注意力就这么多。
+ *
+ * **0 和 5 现在都要过立项闸门**（见下面 charterGate）。闸门要求他点过
+ * 「就它了」，所以 5 号那条自动立项的路事实上已经关掉了 ——
+ * 留着它不是摆设：它负责在闸门没开的时候，把「有够格候选、差哪一条」
+ * 算出来给页面看，并且在闸门以后放宽时原地复活。
+ *
+ * **闸门拦下不等于这一轮作废。** 拦下只记一笔 held，然后接着往 6、7 走。
+ * 一周只醒三次，为一道没开的闸门浪费掉一次运行是不划算的。
+ *
  * ── 这一版改了什么，以及为什么 ───────────────────────────
  *
  * 第一版跑了六轮，结果是：一个项目在纸面上死了，然后系统卡在探索循环里出不来。
@@ -42,6 +57,7 @@
  *   node tools/studio/run.mjs explore     强制探索
  *   node tools/studio/run.mjs shortlist   强制把现有候选评比一次
  *   node tools/studio/run.mjs audit       重审已经立了的项目（补查老项目用）
+ *   node tools/studio/run.mjs plan        只重算「下一轮会做什么」，不调模型、不花钱
  *   node tools/studio/run.mjs --dry       只演练，不往仓库写任何东西
  */
 
@@ -88,6 +104,53 @@ const SHORTLIST_AT = Number(process.env.STUDIO_SHORTLIST_AT || 6)
 
 /* 候选池上限。超出的从最旧的开始掉。 */
 const CANDIDATE_CAP = Number(process.env.STUDIO_CANDIDATE_CAP || 14)
+
+/* ── 立项闸门 ─────────────────────────────────────────────
+ *
+ * 立项是全流程里最贵、最难回头的一步：它决定接下来三周多的文档往哪个方向写，
+ * 而写出来的东西他会照着做一整年。所以它不该是「攒够 4 星就自动发生」的事 ——
+ * 上一版就是那样，结果第一个想法直接变成了最终答案。
+ *
+ * 现在要**同时**满足两条才准立项，缺一条就拦下，并写清楚拦在哪、怎么解开：
+ *
+ *   ① 配了 ANTHROPIC_API_KEY。
+ *      立项书是长上下文 + 自我批判 —— 读进总纲、对照否决清单、估工作量、
+ *      判断这个方向到底成不成立。这是模型能力差距最大的一类活儿。
+ *      降级到 DeepSeek 写日常步骤可以，写立项书不行：
+ *      一份写糊了的立项书比没有更糟，它会让人照着一个错方向做三个月。
+ *
+ *   ② 这个方向被他在页面上点过「就它了」（candidate.pinned）。
+ *      模型可以排名次、可以推荐，但「押上这一年」这个决定必须是人做的。
+ *      注意这一条同时也让 0 号优先级和 5 号优先级合流了 ——
+ *      两条路现在都要求他点过头，区别只剩「跳不跳过扫够轮数那道门」。
+ *
+ * 另外留一个总闸 STUDIO_CHARTER_HOLD=1，用来在调试期把立项整个按死，
+ * 不用去动 key 也不用去动候选池。
+ *
+ * ⚠️ env 是**调用时**读的，不是模块加载时读的。
+ * 这样单测才能逐条构造闸门状态；llm.mjs 里的 backend() 是加载时读的，
+ * 所以这里不能图省事直接用它。 */
+export const charterGate = (candidate, env = process.env) => {
+  const on = v => /^(1|true|yes|on)$/i.test(String(v == null ? '' : v).trim())
+  const has = v => String(v == null ? '' : v).trim().length > 0
+
+  if (on(env.STUDIO_CHARTER_HOLD)) return {
+    ok: false, code: 'HOLD',
+    why: '立项总闸拉下了（STUDIO_CHARTER_HOLD=1）',
+    how: '想放行：去仓库 Settings → Variables，把 STUDIO_CHARTER_HOLD 删掉或改成 0'
+  }
+  if (!has(env.ANTHROPIC_API_KEY)) return {
+    ok: false, code: 'NO_CLAUDE',
+    why: '还没配 ANTHROPIC_API_KEY —— 立项书不接受降级模型',
+    how: '想放行：把 Claude 的 key 配进仓库 Secrets 里的 ANTHROPIC_API_KEY'
+  }
+  if (!candidate || !candidate.pinned) return {
+    ok: false, code: 'NOT_PINNED',
+    why: `《${(candidate && candidate.title) || '（还没有候选）'}》你还没点过「就它了」`,
+    how: '想放行：去策划室页面，在这个方向的卡片上点「就它了，立项」'
+  }
+  return { ok: true, code: 'OK', why: '', how: '' }
+}
 
 /* 扫过几轮方向了。
  *
@@ -303,6 +366,34 @@ const doExplore = async ({ charter, exploreView, state }) => {
 
 // ---------------- 动作：横向评比 ----------------
 
+/* 评比说要淘汰的那几个，翻译成候选池里真实的标题。
+ *
+ * ⭐ 他点过「就它了」的方向，评比**淘汰不掉**。
+ *
+ * 这个洞在加立项闸门之前几乎碰不到：置顶了下一轮就立项，没有停留时间。
+ * 闸门一加就完全不同了 —— 一个置顶的方向可能在池子里等好几周（等 Claude key），
+ * 而这期间每隔一轮就跑一次评比。模型不知道他点过头，完全可能在某一轮
+ * 把它排到最后并淘汰掉，于是**他那一下点击被一次自动评比无声地推翻了**，
+ * 他下次打开页面只会发现那个方向不见了，没有任何解释。
+ *
+ * 模型可以说它不好 —— 那句话会留在评比记录里，他自己看完再决定要不要否掉。
+ * 但它不能替他改主意。
+ *
+ * 导出是为了能单测：这是个「错了不报错、只是他的决定悄悄没了」的地方。 */
+export const resolveDropped = (pool, dropped) => {
+  const norm = s => clean(s).replace(/\s/g, '')
+  const out = new Set()
+  const kept = []
+  ;(dropped || []).forEach(d => {
+    const hit = (pool || []).find(c =>
+      norm(c.title).includes(norm(d)) || norm(d).includes(norm(c.title)))
+    if (!hit) return
+    if (hit.pinned) { if (!kept.includes(hit.title)) kept.push(hit.title); return }
+    out.add(hit.title)
+  })
+  return { dropped: out, protectedTitles: kept }
+}
+
 /* 这一步是用来解死锁的，见文件头「毛病三」。
  *
  * 它不产出新方向，只做一件事：把攒下来的候选摆在一起排序，选出第一名。
@@ -351,7 +442,11 @@ const doShortlist = async ({ charter, state }) => {
     `---\ndate: ${beijing()}\nkind: shortlist\npool: ${pool.length}\nwinner: ${JSON.stringify(parsed?.winner || '')}\n---\n\n# 候选评比 · ${today()}\n\n${body || out}\n`,
     '策划室：候选横向评比')
 
-  // 无论解析成不解析得出来，这批候选都算比过了 —— 否则下一轮又是同一批同一个结果
+  /* 无论解析成不解析得出来，这批候选都算比过了 —— 否则下一轮又是同一批同一个结果。
+   *
+   * ⚠️ 这里先按**裁剪前**的池子记一次，是给下面那两条提前返回用的
+   * （它们不动候选池，池子还是原样）。真正走完全程的那条路会在函数末尾
+   * 用**裁剪后**的池子重记一次 —— 那一次才是对的，原因见末尾的注释。 */
   state.lastShortlist = candidateFingerprint(pool)
 
   if (!parsed) {
@@ -373,10 +468,10 @@ const doShortlist = async ({ charter, state }) => {
   const rolled = rollup(parsed.dims)
   log(`  第一名：《${win.title}》 → 重打分 ${rolled.stars}★（辨 ${rolled.glance} 讲 ${rolled.talk} 完 ${rolled.ship} 独 ${rolled.unique}）`)
 
-  const droppedTitles = new Set()
-  ;(parsed.dropped || []).forEach(d => {
-    const hit = pool.find(c => norm(c.title).includes(norm(d)) || norm(d).includes(norm(c.title)))
-    if (hit) droppedTitles.add(hit.title)
+  const { dropped: droppedTitles, protectedTitles } = resolveDropped(pool, parsed.dropped)
+  protectedTitles.forEach(t => {
+    log(`  ⚠️ 评比想淘汰《${t}》，但你点过「就它了」—— 保留。`)
+    log(`     （它排在后面的理由留在评比记录里，你自己看完再决定要不要否掉）`)
   })
   if (droppedTitles.size) log(`  淘汰：${[...droppedTitles].join('、')}`)
 
@@ -394,6 +489,19 @@ const doShortlist = async ({ charter, state }) => {
     /* 第一名排到最前面。decide 挑候选时按星级排序，但同星级时
      * 「评比选出来的那个」应该赢过「碰巧也是这个星级的那个」。 */
     .sort((a, b) => (b.title === win.title) - (a.title === win.title))
+
+  /* 指纹必须用**裁剪之后**的池子重记一遍。
+   *
+   * 这里第一版记的是裁剪前的池子，那是个会自我延续的 bug：
+   * 评比淘汰掉 4 个 → 池子从 10 变 6 → 下一轮算出来的指纹当然和存下的
+   * 那个「10 个的指纹」对不上 → decide 认为「这批还没比过」→ 又比一次 →
+   * 又淘汰几个 → 指纹又变……**评比越尽职，越停不下来**，而每一轮都是
+   * 一次深度调用的钱。
+   *
+   * 之前没炸出来，纯粹是因为评比完第一名通常够 4 星，5 号优先级直接
+   * 返回立项，根本走不到 6 号。立项闸门一加，这条路就通了 —— 于是
+   * 这个 bug 会立刻变成一个每周烧三次钱的死循环。 */
+  state.lastShortlist = candidateFingerprint(state.candidates)
 
   return { action: 'shortlist', winner: win.title, stars: rolled.stars }
 }
@@ -419,6 +527,19 @@ const runAudit = async ({ charter, subject, kind }) => {
 // ---------------- 动作：立项 ----------------
 
 const doCharter = async ({ charter, state, candidate, forced = false }) => {
+  /* 闸门在这里再查一次。
+   *
+   * decide() 已经查过了，这里是**最后一道**：手动强制（run.mjs charter）
+   * 完全绕过 decide，而那恰恰是最容易在半夜手滑立错项的入口。
+   * 两处都查的代价是一行，漏查的代价是一份用降级模型写出来的立项书。 */
+  const gate = charterGate(candidate)
+  if (!gate.ok) {
+    log(`\n  ✗ 立项闸门没开：${gate.why}`)
+    log(`     ${gate.how}`)
+    log('  这一轮不立项。候选原样留在池子里，什么都没丢、什么都没否。')
+    return null
+  }
+
   log(`  立项候选：《${candidate.title}》${forced ? '（这是主人直接点的名）' : ''}`)
   log('  先过硬约束校验 —— 独立判断，不告诉它探索时给了几分')
 
@@ -920,9 +1041,18 @@ const absorbOrphans = async (state, inbox) => {
  *
  * 导出是为了能单测（tools/tests/studio.test.mjs）。
  */
-export const decide = ({ state, pending }) => {
+export const decide = ({ state, pending, env = process.env }) => {
   const active = state.projects.filter(p => p.status === 'active')
   const activeIds = new Set(active.map(p => p.id))
+
+  /* 闸门拦下过什么。**只记录，不改变走向** —— 拦下之后这一轮照常往下走，
+   * 不该因为立项被拦就白白浪费掉一次运行。最后把它挂在返回值上，
+   * 页面和日志才说得清「为什么明明有够格的候选却没立项」。 */
+  let held = null
+  const hold = (gate, candidate) => {
+    if (!held) held = { ...gate, title: (candidate && candidate.title) || '' }
+    return held
+  }
 
   /* 只看挂在活跃项目上的反馈。挂在别处的由 absorbOrphans 归档掉了，
    * 但单测会直接调 decide，所以这里也要挡一道 —— 两处都挡，
@@ -941,10 +1071,25 @@ export const decide = ({ state, pending }) => {
    * 而不会像一条永远处理不掉的待办那样把后面所有优先级饿死。
    *
    * 它跳过的是「扫够几轮」这道等待门槛。那道门是用来拦模型自嗨的，
-   * 不是用来拦他的 —— 他有权直接下注。 */
+   * 不是用来拦他的 —— 他有权直接下注。
+   *
+   * 但它跳不过**立项闸门**：置顶只满足了闸门的第二条（他点过头），
+   * 第一条（有 Claude key）还得单独成立。这不是不信任他的判断，
+   * 是他点头的那一刻在买一份立项书，而降级模型交不出那份货。
+   *
+   * 连点两次也只是重复置位 —— pinned 是候选上的一个状态，不是一条待办，
+   * 所以拦下之后它安静地留在池子里等，不会把后面的优先级饿死。 */
   if (active.length < MAX_ACTIVE) {
-    const pinned = (state.candidates || []).find(c => c.pinned)
-    if (pinned) return { kind: 'charter', candidate: pinned, forced: true }
+    /* 有多个置顶时按点名时间取最早的那个 —— 先点的先立，
+     * 而不是「候选数组里排在前面的那个」（那顺序只反映哪一轮最新）。 */
+    const pinned = (state.candidates || [])
+      .filter(c => c.pinned)
+      .sort((a, b) => String(a.pinnedAt || '').localeCompare(String(b.pinnedAt || '')))[0]
+    if (pinned) {
+      const gate = charterGate(pinned, env)
+      if (gate.ok) return { kind: 'charter', candidate: pinned, forced: true }
+      hold(gate, pinned)
+    }
   }
 
   /* 1. 有实验跑出了真实结果 → 立刻据此修订。
@@ -990,9 +1135,16 @@ export const decide = ({ state, pending }) => {
     const worthy = pool.filter(c => c.stars >= 4).sort(compareCandidates)
     if (worthy.length) {
       if (rounds < MIN_EXPLORE_ROUNDS) {
-        return { kind: 'explore', why: `候选只来自 ${rounds} 轮探索，不足 ${MIN_EXPLORE_ROUNDS} 轮，先接着扫` }
+        return { kind: 'explore', held, why: `候选只来自 ${rounds} 轮探索，不足 ${MIN_EXPLORE_ROUNDS} 轮，先接着扫` }
       }
-      return { kind: 'charter', candidate: worthy[0] }
+      const gate = charterGate(worthy[0], env)
+      if (gate.ok) return { kind: 'charter', candidate: worthy[0] }
+      /* 闸门没开 —— **不 return**，接着往 6、7 走。
+       *
+       * 这一条是故意的：立项被拦不代表这一轮没事可做。返回 charter 然后让
+       * doCharter 把它拒掉的话，这一轮就彻底白跑了（一周只醒三次，浪费不起）。
+       * 拦下的理由记在 held 里，页面上会显示「差哪一条、怎么解开」。 */
+      hold(gate, worthy[0])
     }
 
     /* 6. 候选攒够了、轮数也够了，但一个 4 星都没有 → 横向评比。
@@ -1006,20 +1158,84 @@ export const decide = ({ state, pending }) => {
      * 指纹是为了防止同一批候选被反复评比 —— 那会变成一个更贵的新死锁。 */
     if (pool.length >= SHORTLIST_AT && rounds >= MIN_EXPLORE_ROUNDS) {
       if (candidateFingerprint(pool) !== state.lastShortlist) {
-        return { kind: 'shortlist', why: `攒了 ${pool.length} 个候选（${rounds} 轮）但没有一个够格 —— 别再扫了，摆一起比一次` }
+        return {
+          kind: 'shortlist', held,
+          why: held
+            ? `攒了 ${pool.length} 个候选（${rounds} 轮），但立项闸门没开 —— 先把这批摆一起比一次，排好队等闸门`
+            : `攒了 ${pool.length} 个候选（${rounds} 轮）但没有一个够格 —— 别再扫了，摆一起比一次`
+        }
       }
-      return { kind: 'explore', why: '这批候选刚比过，第一名还是不够格 —— 补几个新的再比' }
+      /* 「刚比过」之后为什么还在探索，有两种完全不同的原因，说错了很误导：
+       *   闸门没开 → 第一名其实够格，只是差你点头 / 差 key，探索是在等
+       *   没有闸门 → 第一名真的不够格，探索是在补货 */
+      return {
+        kind: 'explore', held,
+        why: held
+          ? `这批刚比过，第一名已经排在最前面 —— ${held.why}，先接着扫方向等着`
+          : '这批候选刚比过，第一名还是不够格 —— 补几个新的再比'
+      }
     }
   }
 
   // 7. 兜底 → 探索
-  return { kind: 'explore' }
+  return {
+    kind: 'explore', held,
+    why: held ? `立项被闸门拦下（${held.why}）—— 这一轮接着扫方向，不浪费` : ''
+  }
 }
 
 const PLAN_LABEL = {
   explore: '探索新方向', charter: '立项', expand: '深化文档',
   revise: '处理反馈并修订', postmortem: '停更评估', audit: '硬约束校验',
-  shortlist: '候选横向评比'
+  shortlist: '候选横向评比', plan: '只重算下一轮预告'
+}
+
+/* 重算「下一轮会做什么」并写进 state。
+ *
+ * 这是纯展示字段，决策时不读它 —— 读它就等于把状态机的判断缓存了一份，早晚不一致。
+ * 而「早晚不一致」是已经发生过的事，值得记下来：
+ *
+ *   某一轮只处理了页面上的投票、没有主产出，走的是 main() 里
+ *   `if (!result)` 那条提前返回 —— 那条路**存了 state 却没重算 nextPlan**。
+ *   于是页面上挂着一句上一轮算的旧话。再叠上一次代码改动
+ *   （exploreDone 那个计数器修好之后，立项门槛从「关」变成了「开」），
+ *   页面显示「下一轮：探索新方向」，而实际下一轮是「立项」——
+ *   最贵最难回头的那一步，预告里一个字都没提。
+ *
+ * 所以现在：**凡是要存 state 的地方，先过这里。** 抽成函数就是为了不再漏。
+ * 另外它一分钱都不花（decide 是纯函数），所以还能单独当一个动作跑：
+ * `node tools/studio/run.mjs plan`。 */
+const refreshNextPlan = (state, inbox) => {
+  try {
+    const next = decide({ state, pending: S.pendingFeedback(inbox) })
+    state.nextPlan = {
+      kind: next.kind,
+      label: PLAN_LABEL[next.kind] || next.kind,
+      target: next.project?.name || next.candidate?.title || '',
+      doc: next.kind === 'expand' && next.project ? (nextDoc(next.project.docs || [])?.name || '') : '',
+      why: next.why || '',
+      /* 闸门拦下的那一条也存进来 —— 页面靠它回答「为什么明明有够格的候选，
+       * 下一轮却还是探索」。没有这一条的话那个问题只能去翻 Actions 日志。 */
+      held: next.held
+        ? { code: next.held.code, why: next.held.why, how: next.held.how, title: next.held.title || '' }
+        : null,
+      at: beijing()
+    }
+  } catch (_) {
+    state.nextPlan = null
+  }
+  return state.nextPlan
+}
+
+const logNextPlan = plan => {
+  if (!plan) return
+  log(`\n  下一轮预计：${plan.label}${plan.target ? ` · ${plan.target}` : ''}${plan.doc ? ` · ${plan.doc}` : ''}`)
+  // 「为什么是这个」比「是这个」有用得多 —— 尤其是当结果出乎意料的时候
+  if (plan.why) log(`  （${plan.why}）`)
+  if (plan.held) {
+    log(`  ⚠️ 立项闸门没开：${plan.held.why}`)
+    log(`     ${plan.held.how}`)
+  }
 }
 
 // ---------------- 主流程 ----------------
@@ -1031,10 +1247,13 @@ const main = async () => {
   log(`  检索：${hasSearch() ? 'Tavily 已配置' : '没配 TAVILY_API_KEY，探索只能凭模型自己的知识'}`)
   if (DRY) log('  演练模式 —— 不会往仓库写任何东西')
 
-  if (backend() === 'none') {
+  /* plan 是唯一一个不调模型的动作（decide 是纯函数），所以它不受这道门管 ——
+   * 「一个模型都没配」的时候，恰恰最需要能问一句「那你下一轮打算干什么」。 */
+  if (backend() === 'none' && FORCE !== 'plan') {
     log('\n  没有可用的模型。配一个：')
     log('    ANTHROPIC_API_KEY  （推荐，策划书这活儿值这个钱）')
     log('    DEEPSEEK_API_KEY   （兜底）')
+    log('  只想看看下一轮会做什么的话：node tools/studio/run.mjs plan（不花钱）')
     process.exit(1)
   }
 
@@ -1080,6 +1299,37 @@ const main = async () => {
   const pending = S.pendingFeedback(inbox)
   if (pending.length) log(`  待处理反馈：${pending.length} 条`)
 
+  /* 一个用来存 inbox 的小工具。三个地方要用，行为必须一致：
+   * plan 分支、主动作成功之后、主动作没产出但前置处理动过 inbox 的时候。
+   *
+   * ingested 也算进来 —— 实验回填会往 inbox 条目上补 file / claim
+   * （给接下来那次修订指路）。不存的话这些补充会丢，下一轮得重算一遍。 */
+  const flushInbox = async (handled = new Set()) => {
+    if (DRY || !(handled.size || voted || ingested || archived)) return
+    inbox.items = (inbox.items || []).map(x =>
+      handled.has(x.id) ? { ...x, handled: true, handledAt: beijing() } : x)
+    await S.saveInbox(inbox, `策划室：处理了 ${handled.size + voted + archived} 条输入`)
+  }
+
+  /* ── plan：只重算下一轮预告，一分钱不花 ──────────────────
+   *
+   * 存在的理由是 nextPlan 是个**缓存**。代码改了、他在页面上投了票、
+   * 或者某一轮走的是提前返回那条路，缓存就和真实判断对不上了 ——
+   * 而页面上显示的正是这个缓存。真出过一次：页面写着「下一轮：探索」，
+   * 实际下一轮是「立项」。
+   *
+   * 所以给他一个随时能按的刷新键：Actions 里选 plan，或者本地跑
+   * `node tools/studio/run.mjs plan`。前置处理（投票 / 回填 / 归档）
+   * 照常消化 —— 那几种本来就是当场结算的，不是待办。 */
+  if (FORCE === 'plan') {
+    await flushInbox()
+    const next = refreshNextPlan(state, inbox)
+    logNextPlan(next)
+    if (!DRY) await S.saveState(state, '策划室：重算下一轮预告')
+    else log('\n  演练模式 —— 没有写回仓库')
+    return
+  }
+
   /* 强制指定时，「拿哪个项目」也得跟着变。
    *
    * audit 是用来补查老项目的，postmortem 是用来给审查没过的项目收尾的 ——
@@ -1098,20 +1348,38 @@ const main = async () => {
      * 然后把那些反馈标成已处理。他的输入没了，而且用错了地方。
      * postmortem 更严重：一条给 P02 的「停掉」会把 P01 停掉。 */
     const mine = forProject ? pending.filter(x => x.project === forProject.id) : []
+    /* 强制立项时挑哪个候选：先看置顶的，没有置顶的就挑**排序后最好的那个**。
+     *
+     * 第一版这里是 `state.candidates[0]` —— 数组第 0 个。而数组顺序只反映
+     * 「哪一轮最新」，不反映哪个好。也就是说手动跑一次 charter，
+     * 立的是「最近扫出来的那个」，不是「最该立的那个」。
+     * decide 走的是 compareCandidates，这里也得走同一把尺子。 */
+    const byPin = (state.candidates || [])
+      .filter(c => c.pinned)
+      .sort((a, b) => String(a.pinnedAt || '').localeCompare(String(b.pinnedAt || '')))[0]
     plan = {
       kind: FORCE, project: forProject, items: mine,
-      candidate: (state.candidates || []).find(c => c.pinned) || state.candidates[0],
+      candidate: byPin || [...(state.candidates || [])].sort(compareCandidates)[0],
       forced: FORCE === 'charter'
     }
   } else {
     plan = decide({ state, pending })
   }
 
-  // 置顶了但轮不上：说清楚，否则他会以为那一票没生效
+  /* 置顶了但这一轮没轮上：必须说清楚为什么，否则他会以为那一票没生效。
+   * 两种「没轮上」的原因完全不同，对策也不同，所以要分开讲：
+   *   闸门没开 → 缺 key 或者总闸拉着，去解那一条
+   *   闸门开着但活跃项目满员 → 什么都不用做，等空位，它会自动排上 */
   const waiting = (state.candidates || []).find(c => c.pinned)
   if (waiting && plan.kind !== 'charter') {
-    log(`  （你点名的《${waiting.title}》已经置顶排着 —— 活跃项目满了，`)
-    log(`    停掉或写完一个之后它会自动排到最前面，不用再点一次）`)
+    const gate = charterGate(waiting)
+    if (!gate.ok) {
+      log(`  （你点名的《${waiting.title}》还立不了：${gate.why}）`)
+      log(`    ${gate.how}`)
+    } else {
+      log(`  （你点名的《${waiting.title}》已经置顶排着 —— 活跃项目满了，`)
+      log(`    停掉或写完一个之后它会自动排到最前面，不用再点一次）`)
+    }
   }
 
   if (plan.kind === 'revise' && !(plan.items || []).length) {
@@ -1133,16 +1401,16 @@ const main = async () => {
 
   // 前置处理动过 inbox 的话，即使这一轮的主动作没产出，也得把它存回去
   const handled = new Set(result?.handled || [])
-
-  if (!DRY && (handled.size || voted || archived)) {
-    inbox.items = (inbox.items || []).map(x =>
-      handled.has(x.id) ? { ...x, handled: true, handledAt: beijing() } : x)
-    await S.saveInbox(inbox, `策划室：处理了 ${handled.size + voted + archived} 条输入`)
-  }
+  await flushInbox(handled)
 
   if (!result) {
-    log('\n  这一轮没有产出。状态不变，下次再来。')
-    if (!DRY && (voted || archived)) await S.saveState(state, '策划室：处理了页面上的输入')
+    log('\n  这一轮没有产出。')
+    /* ⚠️ 这条路以前只存 state、不重算 nextPlan，页面上于是挂着一句旧话。
+     * 现在**存之前必过 refreshNextPlan** —— 见它的函数注释。
+     * 而且即使这一轮什么都没动，也值得重算一次：闸门的状态可能变了
+     * （比如他刚配上 Claude key），页面该立刻反映出来。 */
+    logNextPlan(refreshNextPlan(state, inbox))
+    if (!DRY) await S.saveState(state, '策划室：这一轮没有产出，只更新了状态与预告')
     return
   }
 
@@ -1158,22 +1426,7 @@ const main = async () => {
    * 为什么值得多算这一次：这套东西一周只醒三次，中间那两天他能看到的
    * 只有一堆文档。写上一句「下次会做：深化《X》的核心循环」，
    * 他就知道现在给反馈还来不来得及插队 —— 而反馈插队正是这套东西的关键设计。 */
-  try {
-    const next = decide({ state, pending: S.pendingFeedback(inbox) })
-    state.nextPlan = {
-      kind: next.kind,
-      label: PLAN_LABEL[next.kind] || next.kind,
-      target: next.project?.name || next.candidate?.title || '',
-      doc: next.kind === 'expand' && next.project ? (nextDoc(next.project.docs || [])?.name || '') : '',
-      why: next.why || '',
-      at: beijing()
-    }
-    log(`\n  下一轮预计：${state.nextPlan.label}${state.nextPlan.target ? ` · ${state.nextPlan.target}` : ''}${state.nextPlan.doc ? ` · ${state.nextPlan.doc}` : ''}`)
-    // 「为什么是这个」比「是这个」有用得多 —— 尤其是当结果出乎意料的时候
-    if (state.nextPlan.why) log(`  （${state.nextPlan.why}）`)
-  } catch (e) {
-    state.nextPlan = null
-  }
+  logNextPlan(refreshNextPlan(state, inbox))
 
   if (!DRY) await S.saveState(state, `策划室：第 ${state.cycle} 轮（${plan.kind}）`)
 

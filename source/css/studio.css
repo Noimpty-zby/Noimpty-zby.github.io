@@ -176,6 +176,21 @@
 .sd-toc .sd-toc__l1 { font-weight: 600; }
 .sd-toc .sd-toc__l2 { list-style: none; margin-left: -12px; }
 .sd-toc .sd-toc__l2::before { content: '· '; color: var(--card-meta, #9b9098); }
+/* 目录和正文里的链接自己定死颜色，不吃主题的默认 a 样式 ——
+ * 吃默认的话目录会变成一排带下划线的蓝紫色链接，看着像坏了。 */
+.sd-toc a {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color .15s, border-color .15s;
+}
+.sd-toc a:hover { color: var(--noimpty-accent, #e95978); border-bottom-color: var(--noimpty-accent, #e95978); }
+.sd-body a {
+  color: var(--noimpty-accent, #e95978);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(233, 89, 120, .4);
+}
+.sd-body a:hover { border-bottom-color: var(--noimpty-accent, #e95978); }
 
 .sd-body .sd-h { line-height: 1.5; }
 .sd-body .sd-h--1 {
@@ -217,20 +232,102 @@
   border-left: 2px solid var(--noimpty-border, rgba(233, 89, 120, .25));
 }
 
+/* 嵌套列表。层级靠缩进和一个更轻的记号来分，不靠加大行距 ——
+ * 策划文档一层套一层的地方不少（系统 → 子系统 → 可裁剪项），
+ * 每层都拉开距离的话一屏就装不下一个系统了。 */
+.sd-body ul ul, .sd-body ol ol, .sd-body ul ol, .sd-body ol ul {
+  margin: 4px 0 6px;
+  padding-left: 20px;
+}
+.sd-body ul ul { list-style: circle; }
+.sd-body ul ul ul { list-style: square; }
+
+/* ── 好例 / 坏例 ────────────────────────────────────────
+ * 六条铁律逼着它到处写「✗ 这样不行 / ✓ 这样才对」，成对出现的地方非常多。
+ * 渲染成普通文字的话，那个决定性的第一个字符和正文一样重，扫的时候分不出正负。
+ * 所以给一条色边 —— 判断「哪句是反面教材」不该需要逐字读。 */
+.sd-body .sd-eg {
+  list-style: none;
+  margin: 8px 0 8px -22px;
+  padding: 7px 12px 7px 11px;
+  border-left: 3px solid;
+  border-radius: 0 7px 7px 0;
+  line-height: 1.8;
+}
+.sd-body p.sd-eg { margin-left: 0; }
+.sd-body .sd-eg__m { font-style: normal; font-weight: 700; margin-right: 7px; }
+.sd-body .sd-eg.is-good { border-color: #3aa76d; background: rgba(58, 167, 109, .09); }
+.sd-body .sd-eg.is-good .sd-eg__m { color: #3aa76d; }
+.sd-body .sd-eg.is-bad { border-color: #c0504a; background: rgba(192, 80, 74, .09); }
+.sd-body .sd-eg.is-bad .sd-eg__m { color: #c0504a; }
+
+/* ── 提示块 ─────────────────────────────────────────────
+ * ⭐ 是「这一条最重要」，⚠️ 是「这里有坑」，⛔ 是「禁止」。
+ * 总纲和策划文档里这三个符号有明确分工，不是装饰，所以它们该长得像一个块。 */
+.sd-body .sd-callout {
+  display: flex;
+  gap: 9px;
+  margin: 16px 0;
+  padding: 10px 13px;
+  border-left: 3px solid;
+  border-radius: 0 8px 8px 0;
+  line-height: 1.85;
+}
+.sd-body .sd-co__m { font-style: normal; flex: none; line-height: 1.7; }
+.sd-body .sd-co__b { display: block; }
+.sd-body .sd-li-callout { list-style: none; margin-left: -22px; }
+.sd-body .sd-li-callout .sd-co__m { margin-right: 6px; }
+
+.sd-body .sd-callout.is-star { border-color: #d99b1c; background: rgba(217, 155, 28, .1); }
+.sd-body .sd-callout.is-warn { border-color: #d97b28; background: rgba(217, 123, 40, .1); }
+.sd-body .sd-callout.is-stop { border-color: #c0504a; background: rgba(192, 80, 74, .1); }
+.sd-body .sd-callout.is-tip  { border-color: #2f8f95; background: rgba(47, 143, 149, .1); }
+.sd-body .sd-callout.is-pin  { border-color: var(--noimpty-accent, #e95978); background: rgba(233, 89, 120, .09); }
+/* 已经在一个带色引用块里了 —— 别再套一层框，只留记号和留白 */
+.sd-body .sd-callout.is-bare {
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0 0 10px;
+}
+
 .sd-body blockquote {
   margin: 14px 0;
   padding: 2px 16px;
   border-left: 3px solid var(--noimpty-border, rgba(233, 89, 120, .3));
   color: var(--card-meta, #9b9098);
 }
+/* 引用块里现在会有列表和小标题（渲染器改成递归了），别让它们贴边 */
+.sd-body blockquote > :first-child { margin-top: 0; }
+.sd-body blockquote > :last-child { margin-bottom: 0; }
+.sd-body blockquote.sd-quote { padding: 10px 16px; border-radius: 0 8px 8px 0; }
+.sd-body blockquote.sd-quote.is-star { border-color: #d99b1c; background: rgba(217, 155, 28, .07); }
+.sd-body blockquote.sd-quote.is-warn { border-color: #d97b28; background: rgba(217, 123, 40, .07); }
+.sd-body blockquote.sd-quote.is-stop { border-color: #c0504a; background: rgba(192, 80, 74, .07); }
+.sd-body blockquote.sd-quote.is-tip  { border-color: #2f8f95; background: rgba(47, 143, 149, .07); }
+
 .sd-body hr { border: 0; border-top: 1px dashed var(--noimpty-border, rgba(233, 89, 120, .3)); margin: 26px 0; }
 
+/* 代码块。语言标签浮在右上角 —— 技术方案那一份里 C++ 和蓝图伪码混着写，
+ * 不标出来只能靠读代码本身猜是哪种。 */
+.sd-body .sd-code { position: relative; margin: 14px 0; }
+.sd-body .sd-code__lang {
+  position: absolute;
+  top: 7px;
+  right: 10px;
+  font-size: .7em;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .45);
+  pointer-events: none;
+}
 .sd-body pre {
   border-radius: 10px;
   padding: 12px 14px;
   overflow: auto;
   background: rgba(0, 0, 0, .28);
   font-size: .86em;
+  margin: 0;
 }
 .sd-body code { font-size: .9em; }
 
@@ -249,6 +346,11 @@
   font-weight: 700;
   white-space: nowrap;
 }
+/* 对齐来自 markdown 的 |:---|---:| —— 人日、字数这类量能靠右对齐，
+ * 才看得出量级差别（全靠左的话得一个字一个字比） */
+.sd-tablewrap th.is-left,   .sd-tablewrap td.is-left   { text-align: left; }
+.sd-tablewrap th.is-right,  .sd-tablewrap td.is-right  { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sd-tablewrap th.is-center, .sd-tablewrap td.is-center { text-align: center; }
 .sd-tablewrap tbody tr:nth-child(even) { background: rgba(150, 130, 140, .05); }
 
 .sd-cite { font-size: .72em; }
@@ -334,7 +436,38 @@
 .sd-next__why,
 .sd-next__hint { font-style: normal; font-size: .78em; color: var(--card-meta, #9b9098); line-height: 1.7; }
 
+/* 「立项闸门没开，差的是这一条」。放在预告里而不是候选区，是因为
+ * 它回答的是「为什么下一轮还是探索」—— 那个问题是看着预告产生的。 */
+.sd-next__held {
+  font-style: normal;
+  font-size: .78em;
+  line-height: 1.75;
+  margin-top: 4px;
+  padding: 8px 11px;
+  border-left: 3px solid #d97b28;
+  border-radius: 0 7px 7px 0;
+  background: rgba(217, 123, 40, .1);
+  color: var(--card-meta, #9b9098);
+}
+.sd-next__held > b { display: block; color: #d97b28; letter-spacing: .04em; }
+.sd-next__held > em { display: block; font-style: normal; opacity: .85; margin-top: 2px; }
+
 /* ---------- 候选方向 ---------- */
+
+/* 每张候选卡片上都写一句「这个方向离立项还差什么」。
+ * 不写的话，一个四星候选摆在那里几周不动，看起来像系统坏了 ——
+ * 而实际上它只是在等一下点击。 */
+.sd-gate {
+  font-size: .78em;
+  line-height: 1.6;
+  margin: 8px 0 10px;
+  padding: 6px 10px;
+  border-left: 3px solid;
+  border-radius: 0 6px 6px 0;
+}
+.sd-gate.is-idle { border-color: rgba(150, 150, 160, .5); background: rgba(150, 150, 160, .09); color: var(--card-meta, #9b9098); }
+.sd-gate.is-warn { border-color: #d97b28; background: rgba(217, 123, 40, .1); color: #d97b28; }
+.sd-gate.is-good { border-color: #3aa76d; background: rgba(58, 167, 109, .1); color: #3aa76d; }
 
 .sd-chip--flagged { background: rgba(230, 145, 63, .16); color: #e6913f; }
 .sd-chip--soft { background: rgba(150, 150, 160, .13); color: var(--card-meta, #9b9098); }

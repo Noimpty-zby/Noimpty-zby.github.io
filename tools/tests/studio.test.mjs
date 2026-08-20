@@ -21,7 +21,7 @@
  *   · 孤儿反馈      —— 挂在已停更项目上的反馈永远悬着，红点消不掉
  */
 import assert from 'node:assert/strict'
-import { decide, exploreRounds, exploreFile, candidateFingerprint, reviseTarget } from '../studio/run.mjs'
+import { decide, exploreRounds, exploreFile, candidateFingerprint, reviseTarget, charterGate, resolveDropped } from '../studio/run.mjs'
 import {
   DOC_PLAN, nextDoc, docByFile, SYSTEM, parseAudit, auditPrompt,
   explorePrompt, postmortemPrompt, shortlistPrompt, parseShortlist,
@@ -52,19 +52,46 @@ const fb = (over = {}) => ({ id: 'fb1', project: 'P01-x', file: '00-pitch.md', v
 const scanned = (...cs) => cs.map((c, i) => ({ ...c, from: `explore/2026-01-0${i + 1}.md` }))
 const sameRound = (...cs) => cs.map(c => ({ ...c, from: 'explore/2026-01-01.md' }))
 
+/* ── 立项闸门 ────────────────────────────────────────────
+ *
+ * 立项现在要**同时**满足两条：配了 ANTHROPIC_API_KEY，且这个方向被他
+ * 在页面上点过「就它了」（pinned）。所以下面凡是「应该立项」的用例，
+ * 都得显式把闸门打开 —— 这本身就是一层保护：
+ * 哪天有人把闸门拆了，这些用例照样绿，但「立项闸门」那一组会立刻红。
+ *
+ * env 传进 decide 而不是改 process.env，是因为要在同一次进程里
+ * 逐条构造闸门状态（有 key / 没 key / 总闸拉下），改全局做不到。 */
+const OPEN = { ANTHROPIC_API_KEY: 'sk-test' }
+const NO_KEY = {}
+const HELD = { ANTHROPIC_API_KEY: 'sk-test', STUDIO_CHARTER_HOLD: '1' }
+const pick = c => ({ ...c, pinned: true, pinnedAt: '2026-01-01 00:00:00' })
+
 console.log('\n策划室 · 决策优先级')
 
 check('★ 什么都没有 → 探索', () => {
   assert.equal(decide({ state: state(), pending: [] }).kind, 'explore')
 })
 
-check('★ 有 4 星候选、且扫够了轮数 → 立项', () => {
+check('★ 有 4 星候选、扫够了轮数、闸门全开 → 立项', () => {
   const s = state({
-    candidates: scanned({ title: '甲', stars: 4 }, { title: '乙', stars: 5 }, { title: '丙', stars: 2 })
+    candidates: scanned({ title: '甲', stars: 4 }, pick({ title: '乙', stars: 5 }), { title: '丙', stars: 2 })
   })
-  const p = decide({ state: s, pending: [] })
+  const p = decide({ state: s, pending: [], env: OPEN })
   assert.equal(p.kind, 'charter')
-  assert.equal(p.candidate.title, '乙', '应该挑星级最高的那个')
+  assert.equal(p.candidate.title, '乙', '立的是他点过名的那个')
+})
+
+/* 同一个池子，只是闸门没开 —— 这一条是上面那条的对照组。
+ * 分开写是因为「拦住了」和「拦对了地方」是两件事：
+ * 拦住之后必须还能说出拦在哪一条，否则页面上只剩一个说不清的「探索」。 */
+check('★★ 同样的池子，没配 Claude key → 不立项，但要说得出拦在哪', () => {
+  const s = state({
+    candidates: scanned({ title: '甲', stars: 4 }, pick({ title: '乙', stars: 5 }), { title: '丙', stars: 2 })
+  })
+  const p = decide({ state: s, pending: [], env: NO_KEY })
+  assert.notEqual(p.kind, 'charter', '立项书不接受降级模型')
+  assert.equal(p.held?.code, 'NO_CLAUDE')
+  assert.match(p.held?.how || '', /ANTHROPIC_API_KEY/, '要写清怎么解开，不能只说不行')
 })
 
 check('候选都不够格（3 星以下）且数量还不多 → 继续探索', () => {
@@ -74,18 +101,33 @@ check('候选都不够格（3 星以下）且数量还不多 → 继续探索', 
 
 check('★★ 只扫过一轮 → 就算有 5 星候选也不立项，接着扫', () => {
   const s = state({ candidates: sameRound({ title: '甲', stars: 5 }, { title: '乙', stars: 4 }) })
-  const p = decide({ state: s, pending: [] })
+  const p = decide({ state: s, pending: [], env: OPEN })
   assert.equal(p.kind, 'explore', '一轮里的几个方向常常是同一个念头的几种说法，没得挑')
   assert.match(p.why || '', /轮/, '要说清为什么这次不立项，否则日志里看不出是被门槛拦的')
 })
 
-check('★★ 扫够三轮 → 才放行立项', () => {
+check('★★ 扫够三轮 → 轮数这道门才放行（拦住它的换成闸门）', () => {
   const two = state({ candidates: scanned({ title: '甲', stars: 5 }, { title: '乙', stars: 4 }) })
-  assert.equal(decide({ state: two, pending: [] }).kind, 'explore', '两轮还不够')
+  const p2 = decide({ state: two, pending: [], env: OPEN })
+  assert.equal(p2.kind, 'explore', '两轮还不够')
+  assert.match(p2.why || '', /轮/, '两轮时该说是轮数不够，而不是闸门')
+
   const three = state({
     candidates: scanned({ title: '甲', stars: 5 }, { title: '乙', stars: 4 }, { title: '丙', stars: 3 })
   })
-  assert.equal(decide({ state: three, pending: [] }).kind, 'charter', '三轮就该放行了')
+  const p3 = decide({ state: three, pending: [], env: OPEN })
+  assert.notEqual(p3.kind, 'charter', '轮数够了也不自动立项 —— 还差他点头')
+  assert.equal(p3.held?.code, 'NOT_PINNED', '这时候拦住它的应该是闸门，不再是轮数')
+})
+
+/* 轮数门槛现在只管**自动立项**那条路，管不到他点名那条。
+ * 这是设计如此，不是漏洞：那道门是用来拦模型自嗨的，不是用来拦他的。
+ * 写成测试是为了让这件事以后被看见 —— 它读起来像个洞，其实是个决定。 */
+check('★★ 他点了名 → 跳过轮数门槛（那道门拦的是模型，不是他）', () => {
+  const s = state({ candidates: sameRound(pick({ title: '甲', stars: 5 })) })
+  const p = decide({ state: s, pending: [], env: OPEN })
+  assert.equal(p.kind, 'charter')
+  assert.equal(p.forced, true)
 })
 
 /* 真实故障：一次评比淘汰了 4 个候选、主人又否掉 1 个，最早那一轮的候选一个不剩，
@@ -96,12 +138,12 @@ check('★★ 裁剪候选池不会让轮数倒退（否则评比越尽职越难
     exploreDone: 3,
     // 评比之后只剩下来自两轮的候选了
     candidates: [
-      { title: '甲', stars: 4, from: 'explore/2026-01-02.md' },
+      pick({ title: '甲', stars: 4, from: 'explore/2026-01-02.md' }),
       { title: '乙', stars: 4, from: 'explore/2026-01-03.md' }
     ]
   })
   assert.equal(exploreRounds(s), 3, '真实扫过的轮数只增不减')
-  assert.equal(decide({ state: s, pending: [] }).kind, 'charter', '门槛不该被裁剪重新锁上')
+  assert.equal(decide({ state: s, pending: [], env: OPEN }).kind, 'charter', '门槛不该被裁剪重新锁上')
 })
 
 check('★ 老 state.json 没有计数器时，退回按 from 去重估算', () => {
@@ -206,8 +248,8 @@ console.log('\n策划室 · 主人直接拍板')
  * 而它优先级最高，于是**每一轮都被它短路**，后面所有事情一起饿死。 */
 
 check('★★ 置顶的候选 → 立刻立项，不再等轮数门槛', () => {
-  const s = state({ candidates: sameRound({ title: '甲', stars: 5, pinned: true }) })
-  const p = decide({ state: s, pending: [] })
+  const s = state({ candidates: sameRound(pick({ title: '甲', stars: 5 })) })
+  const p = decide({ state: s, pending: [], env: OPEN })
   assert.equal(p.kind, 'charter', '门槛是用来拦模型自嗨的，不是用来拦他的')
   assert.equal(p.forced, true, '要标出这是他点的名 —— 校验没过时说法不一样')
   assert.equal(p.candidate.title, '甲')
@@ -217,28 +259,140 @@ check('★★ 置顶的候选优先于任何普通候选', () => {
   const s = state({
     candidates: scanned(
       { title: '模型看好的', stars: 5 },
-      { title: '他点名的', stars: 3, pinned: true },
+      pick({ title: '他点名的', stars: 3 }),
       { title: '别的', stars: 4 })
   })
-  assert.equal(decide({ state: s, pending: [] }).candidate.title, '他点名的')
+  assert.equal(decide({ state: s, pending: [], env: OPEN }).candidate.title, '他点名的')
+})
+
+/* 连点两次「就它了」的情况真实存在（页面上按钮点重了、或者隔天又点了一次）。
+ * 这时候按**点名时间**取最早的那个，而不是候选数组里排在前面的那个 ——
+ * 数组顺序只反映哪一轮最新，拿它当优先级等于掷骰子。 */
+check('★ 有两个置顶时，先点的那个先立', () => {
+  const s = state({
+    candidates: scanned(
+      { ...pick({ title: '后点的', stars: 5 }), pinnedAt: '2026-02-02 10:00:00' },
+      { ...pick({ title: '先点的', stars: 3 }), pinnedAt: '2026-01-01 10:00:00' })
+  })
+  assert.equal(decide({ state: s, pending: [], env: OPEN }).candidate.title, '先点的')
 })
 
 check('★★ 活跃项目已满时，置顶的候选安静排队，不会把后面的优先级饿死', () => {
   const s = state({
     projects: [project({ id: 'A' }), project({ id: 'B' })],
-    candidates: sameRound({ title: '甲', stars: 5, pinned: true })
+    candidates: sameRound(pick({ title: '甲', stars: 5 }))
   })
-  const p = decide({ state: s, pending: [fb({ project: 'A', verdict: '停掉' })] })
+  const p = decide({ state: s, pending: [fb({ project: 'A', verdict: '停掉' })], env: OPEN })
   assert.equal(p.kind, 'postmortem', '他点的名不该盖住他后来说的「停掉」')
 })
 
 check('★ 满员时置顶候选留在池子里，不会被丢掉', () => {
   const s = state({
     projects: [project({ id: 'A', docs: ALL_DOCS }), project({ id: 'B', docs: ALL_DOCS })],
-    candidates: sameRound({ title: '甲', stars: 5, pinned: true })
+    candidates: sameRound(pick({ title: '甲', stars: 5 }))
   })
-  decide({ state: s, pending: [] })
+  decide({ state: s, pending: [], env: OPEN })
   assert.equal(s.candidates[0].pinned, true, '一有空位它就该自动排到最前面，不用他再点一次')
+})
+
+console.log('\n策划室 · 立项闸门（最贵、最难回头的那一步）')
+
+/* 立项决定了接下来三周多的文档往哪写，写出来的东西他会照着做一年。
+ * 所以它要同时过两条：有 Claude key（立项书不接受降级模型），
+ * 且这个方向被他点过「就它了」（押这一年的决定必须是人做的）。
+ *
+ * 每一条都单独测，而且都要测「拦下时说不说得出怎么解开」——
+ * 一个只会说「不行」的闸门，和一个坏掉的系统在体感上没有区别。 */
+
+check('★★ 两条都满足 → 放行', () => {
+  assert.equal(charterGate(pick({ title: '甲' }), OPEN).ok, true)
+})
+
+check('★★ 没配 ANTHROPIC_API_KEY → 拦下（降级模型写不了立项书）', () => {
+  const g = charterGate(pick({ title: '甲' }), NO_KEY)
+  assert.equal(g.ok, false)
+  assert.equal(g.code, 'NO_CLAUDE')
+  assert.match(g.how, /ANTHROPIC_API_KEY/)
+})
+
+check('★★ 他没点过「就它了」→ 拦下（模型可以推荐，不能替他下注）', () => {
+  const g = charterGate({ title: '甲', stars: 5 }, OPEN)
+  assert.equal(g.ok, false)
+  assert.equal(g.code, 'NOT_PINNED')
+  assert.match(g.why, /甲/, '要指名道姓说是哪个方向被拦了')
+  assert.match(g.how, /就它了/)
+})
+
+check('★ 总闸拉下时，其它条件全满足也不放行', () => {
+  const g = charterGate(pick({ title: '甲' }), HELD)
+  assert.equal(g.ok, false)
+  assert.equal(g.code, 'HOLD')
+})
+
+check('★ 总闸认几种写法，写反了不该悄悄放行', () => {
+  const on = ['1', 'true', 'TRUE', 'yes', 'on']
+  on.forEach(v => assert.equal(
+    charterGate(pick({ title: '甲' }), { ...OPEN, STUDIO_CHARTER_HOLD: v }).code, 'HOLD', `${v} 应该拦住`))
+  const off = ['', '0', 'false', 'no', undefined]
+  off.forEach(v => assert.equal(
+    charterGate(pick({ title: '甲' }), { ...OPEN, STUDIO_CHARTER_HOLD: v }).ok, true, `${v} 应该放行`))
+})
+
+check('★ key 只有空格 → 当没配（否则会拿一把空 key 去发请求，报 401 才发现）', () => {
+  assert.equal(charterGate(pick({ title: '甲' }), { ANTHROPIC_API_KEY: '   ' }).code, 'NO_CLAUDE')
+})
+
+check('★★ 没有候选可立时也不许崩 —— 返回拦下，不是抛异常', () => {
+  assert.equal(charterGate(undefined, OPEN).ok, false)
+  assert.equal(charterGate(null, OPEN).code, 'NOT_PINNED')
+})
+
+/* 闸门拦下之后，这一轮**不能白跑**。一周只醒三次，
+ * 为一道没开的闸门浪费掉一次运行是不划算的 —— 所以要顺位往下走。 */
+check('★★ 闸门拦下 → 顺位往下走，不是原地不动', () => {
+  const s = state({ candidates: scanned(pick({ title: '甲', stars: 5 }), { title: '乙', stars: 4 }, { title: '丙', stars: 4 }) })
+  const p = decide({ state: s, pending: [], env: NO_KEY })
+  assert.equal(p.kind, 'explore', '拦下不等于这一轮没事可做')
+  assert.equal(p.held?.code, 'NO_CLAUDE')
+  assert.match(p.why || '', /闸门/, '要在 why 里说清是被闸门挡的，否则看起来像它自己想去探索')
+})
+
+check('★★ 闸门拦不住已经在做的事 —— 深化、修订、停更照常', () => {
+  const s = state({
+    projects: [project({ id: 'A' })],
+    candidates: scanned(pick({ title: '甲', stars: 5 }))
+  })
+  assert.equal(decide({ state: s, pending: [], env: NO_KEY }).kind, 'expand', '手上的项目不受立项闸门影响')
+  assert.equal(decide({ state: s, pending: [fb({ project: 'A' })], env: NO_KEY }).kind, 'revise')
+  assert.equal(decide({ state: s, pending: [fb({ project: 'A', verdict: '停掉' })], env: NO_KEY }).kind, 'postmortem')
+})
+
+/* 加了闸门之后，一个置顶的方向会在池子里**等好几周**（等 Claude key），
+ * 而这期间每隔一轮就跑一次评比。所以「评比能不能淘汰他点过名的方向」
+ * 从一个碰不到的边角，变成了一个每两轮就掷一次的骰子。 */
+check('★★ 他点过「就它了」的方向，评比淘汰不掉', () => {
+  const pool = [pick({ title: '他点名的' }), { title: '普通的' }]
+  const r = resolveDropped(pool, ['他点名的', '普通的'])
+  assert.equal(r.dropped.has('普通的'), true)
+  assert.equal(r.dropped.has('他点名的'), false, '一次自动评比不能推翻他的决定')
+  assert.deepEqual(r.protectedTitles, ['他点名的'], '保下来的要报出来，不能悄悄保')
+})
+
+check('★ 没人点名时，评比照常淘汰', () => {
+  const r = resolveDropped([{ title: '甲' }, { title: '乙' }], ['甲'])
+  assert.deepEqual([...r.dropped], ['甲'])
+  assert.deepEqual(r.protectedTitles, [])
+})
+
+check('★ 模型把标题抄走样了也要认得出来（它是照抄的，会顺手改字）', () => {
+  const r = resolveDropped([{ title: '桌面套娃——你就是棋盘上那颗棋子' }], ['桌面套娃'])
+  assert.equal(r.dropped.has('桌面套娃——你就是棋盘上那颗棋子'), true)
+})
+
+check('★ 淘汰名单里有池子里不存在的东西 → 忽略，不炸', () => {
+  const r = resolveDropped([{ title: '甲' }], ['查无此项'])
+  assert.equal(r.dropped.size, 0)
+  assert.equal(resolveDropped(null, null).dropped.size, 0)
 })
 
 console.log('\n策划室 · 反馈落在哪一份文档上')
@@ -294,12 +448,33 @@ check('候选指纹与顺序无关（同一批只是排序变了，不该被当�
   assert.equal(a, b)
 })
 
-check('★ 评比之后第一名上了 4 星 → 下一轮就立项', () => {
+check('★ 评比之后第一名上了 4 星、他也点了名 → 下一轮就立项', () => {
   const s = state({
-    candidates: scanned({ title: 'a', stars: 4 }, { title: 'b', stars: 3 }, { title: 'c', stars: 3 }),
+    candidates: scanned(pick({ title: 'a', stars: 4 }), { title: 'b', stars: 3 }, { title: 'c', stars: 3 }),
     lastShortlist: 'whatever'
   })
-  assert.equal(decide({ state: s, pending: [] }).kind, 'charter')
+  assert.equal(decide({ state: s, pending: [], env: OPEN }).kind, 'charter')
+})
+
+/* 这一条盯的是一个会自我延续的死循环，触发条件在加了立项闸门之后才凑齐：
+ *
+ *   评比淘汰掉几个 → 池子变小 → 指纹变了 → decide 认为「这批还没比过」
+ *   → 又比一次 → 又淘汰几个 → 指纹又变……
+ *
+ * 以前走不到这里，因为评比完第一名通常够 4 星，5 号优先级直接返回立项。
+ * 闸门一加，5 号不再自动放行，这条路就通了。所以 doShortlist 必须用
+ * **裁剪之后**的池子记指纹 —— 这里守的就是那件事。 */
+check('★★ 评比裁剪过池子之后，同一批不会被反复评比（指纹要按裁剪后的池子记）', () => {
+  const survivors = scanned({ title: 'a', stars: 4 }, { title: 'b', stars: 3 }, { title: 'c', stars: 3 },
+    { title: 'd', stars: 3 }, { title: 'e', stars: 3 }, { title: 'f', stars: 3 })
+  const s = state({
+    candidates: survivors,
+    // doShortlist 末尾按裁剪后的池子记的指纹
+    lastShortlist: candidateFingerprint(survivors)
+  })
+  const p = decide({ state: s, pending: [], env: NO_KEY })
+  assert.notEqual(p.kind, 'shortlist', '刚比过的这一批不该再比一次 —— 每一次都是一次深度调用的钱')
+  assert.equal(p.kind, 'explore')
 })
 
 check('评比不会在活跃项目满员时触发（立不了项，比了也没用）', () => {

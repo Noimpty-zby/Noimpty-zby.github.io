@@ -95,7 +95,7 @@ export const laneMenu = () => LANES.map(l =>
 export const DIMS = [
   { key: 'glance', name: '一眼可辨', what: '截图或前十秒里有没有一个没见过的画面' },
   { key: 'talk', name: '技术讲点', what: '能撑起多久的技术追问' },
-  { key: 'ship', name: '可完成', what: '75 人日内能不能做到完整而不只是能跑' },
+  { key: 'ship', name: '可完成', what: '90 人日内能不能做到完整而不只是能跑' },
   { key: 'unique', name: '独特', what: '在评委那一堆作品里是不是又一个' }
 ]
 

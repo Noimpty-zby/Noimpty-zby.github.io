@@ -88,6 +88,32 @@ check('★★ 扫够三轮 → 才放行立项', () => {
   assert.equal(decide({ state: three, pending: [] }).kind, 'charter', '三轮就该放行了')
 })
 
+/* 真实故障：一次评比淘汰了 4 个候选、主人又否掉 1 个，最早那一轮的候选一个不剩，
+ * 于是「扫过 3 轮」退回成「扫过 2 轮」，立项门槛重新锁上。
+ * 那三轮是真的跑过了 —— 删掉产物不会让它们没发生过。 */
+check('★★ 裁剪候选池不会让轮数倒退（否则评比越尽职越难立项）', () => {
+  const s = state({
+    exploreDone: 3,
+    // 评比之后只剩下来自两轮的候选了
+    candidates: [
+      { title: '甲', stars: 4, from: 'explore/2026-01-02.md' },
+      { title: '乙', stars: 4, from: 'explore/2026-01-03.md' }
+    ]
+  })
+  assert.equal(exploreRounds(s), 3, '真实扫过的轮数只增不减')
+  assert.equal(decide({ state: s, pending: [] }).kind, 'charter', '门槛不该被裁剪重新锁上')
+})
+
+check('★ 老 state.json 没有计数器时，退回按 from 去重估算', () => {
+  const s = state({ candidates: scanned({ title: '甲' }, { title: '乙' }) })
+  assert.equal(exploreRounds(s), 2)
+})
+
+check('计数器和派生值取大的那个', () => {
+  assert.equal(exploreRounds({ exploreDone: 1, candidates: scanned({ t: 1 }, { t: 2 }, { t: 3 }) }), 3)
+  assert.equal(exploreRounds({ exploreDone: 5, candidates: [] }), 5)
+})
+
 check('轮数按 from 去重，不是按候选个数', () => {
   assert.equal(exploreRounds({ candidates: sameRound({ title: 'a' }, { title: 'b' }, { title: 'c' }) }), 1)
   assert.equal(exploreRounds({ candidates: scanned({ title: 'a' }, { title: 'b' }) }), 2)

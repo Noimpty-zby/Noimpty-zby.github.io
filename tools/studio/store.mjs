@@ -133,6 +133,10 @@ export const emptyState = () => ({
   /* 历史上出现过的赛道。候选池会滚动淘汰旧条目，但「这条赛道扫过了」
    * 这件事不该跟着一起被忘掉 —— 忘掉的代价是半年后又扫一遍同样的角度。 */
   laneHistory: [],
+  /* 扫过几轮方向了。单调计数器，只增不减。
+   * 不能从候选池里派生 —— 评比和手动否决都会裁剪候选池，
+   * 派生值会跟着倒退，把「已经扫够了」这件事凭空抹掉。 */
+  exploreDone: 0,
   /* 上一次横向评比针对的候选指纹。同一批候选不重复评比 ——
    * 否则「没有 4 星 → 评比 → 还是没有 4 星 → 评比」会变成新的死循环。 */
   lastShortlist: '',
@@ -156,6 +160,10 @@ export const loadState = async () => {
     projects: Array.isArray(raw.projects) ? raw.projects : [],
     recentActions: Array.isArray(raw.recentActions) ? raw.recentActions : [],
     laneHistory: Array.isArray(raw.laneHistory) ? raw.laneHistory : [],
+    /* 老 state.json 没有这个字段。用当时候选池的派生值当种子 ——
+     * 那是能拿到的最好估计，而且不会比真实轮数大。 */
+    exploreDone: Number(raw.exploreDone) ||
+      new Set((raw.candidates || []).map(c => c && c.from).filter(Boolean)).size,
     version: 2
   }
 }

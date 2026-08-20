@@ -722,6 +722,9 @@ export const parseDirections = (raw, from = '', at = '') => {
     const dims = parseDims(block)
     return {
       title: h.text.replace(TITLE_PREFIX, '').trim().slice(0, 80) || h.text.slice(0, 80),
+      /* 正文也带出来（截断）。横向评比要用 ——
+       * 只给标题的话，那一步是在拿标题排名次，而不是在比较方案。 */
+      block: block.slice(0, 2600),
       lane: parseLane(block),
       glance: dims.glance, talk: dims.talk, ship: dims.ship, unique: dims.unique,
       stars: dims.stars,
@@ -754,9 +757,14 @@ export const shortlistPrompt = ({ charter, candidates, rejected = [], lessons = 
 ${charter}
 
 【候选池】
-${candidates.map((c, i) => `[${i + 1}] ${c.title}
-    赛道：${laneName(c.lane)}｜来自：${c.from || '未知轮次'}
-    当时的四维分：一眼可辨 ${c.glance || '?'}／技术讲点 ${c.talk || '?'}／可完成 ${c.ship || '?'}／独特 ${c.unique || '?'}`).join('\n\n')}
+
+⚠️ **这里刻意没有给你它们当初的评分。**
+给了的话你会去确认那些分数，而不是重新判断 —— 实测过一次，
+重打分的四个数和原分一模一样。你现在要做的是**从头比一遍**。
+
+${candidates.map((c, i) => `━━━━━━ [${i + 1}] ${c.title} ━━━━━━
+赛道：${laneName(c.lane)}｜来自：${c.from || '未知轮次'}
+${c.block ? c.block.replace(/^#{1,6}\s*/gm, '') : '（找不到当初的分析正文，只能凭标题判断这一个）'}`).join('\n\n')}
 
 ${rejected.length ? `【已经被否掉的方向，别把它们的近亲选出来】\n${rejected.map(r => `- ${r.title}：${r.why || ''}`).join('\n')}\n` : ''}${lessons ? `【已经死过的项目和死因】\n${lessons}\n` : ''}
 ━━━ 你要做的 ━━━

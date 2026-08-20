@@ -371,6 +371,94 @@ check('★ 方向按块解析，少写一个字段不会让后面全体错位', 
   assert.ok(dirs[2].stars <= 3, '独特只有 2 分，短板封顶')
 })
 
+/* 下面这一组全是真实故障的回归测试：
+ * 有一轮模型换了个标题写法，正则一条都没匹配上 —— 文档写出来了、
+ * 素材搜了、深度思考跑了，最后抽出 0 个候选，整轮白跑。
+ * 标题的写法是模型的自由，「赛道：」才是我们强制要求的字段，所以它才是锚点。 */
+
+check('★★ 标题用中文数字（方向一）也抽得出来', () => {
+  const dirs = parseDirections(`## 方向一：拿中文数字写标题
+**赛道**：physics
+**打分**
+- 一眼可辨：4
+- 技术讲点：4
+- 可完成：4
+- 独特：4
+
+## 方向二：第二个
+**赛道**：proc-gen
+- 一眼可辨：3
+- 技术讲点：3
+- 可完成：3
+- 独特：3`)
+  assert.equal(dirs.length, 2)
+  assert.equal(dirs[0].title, '拿中文数字写标题', '「方向一：」这个前缀要剥掉')
+  assert.equal(dirs[0].lane, 'physics')
+  assert.equal(dirs[1].lane, 'proc-gen')
+})
+
+check('★★ 标题降到三级（### 方向 1）也抽得出来', () => {
+  const dirs = parseDirections(`### 方向 1：三级标题
+**赛道**：geometry
+- 一眼可辨：5
+- 技术讲点：4
+- 可完成：4
+- 独特：4`)
+  assert.equal(dirs.length, 1)
+  assert.equal(dirs[0].lane, 'geometry')
+  assert.equal(dirs[0].stars, 4)
+})
+
+check('★★ 标题里压根没有「方向」两个字 → 用「赛道：」当锚点兜住', () => {
+  const dirs = parseDirections(`# 这一轮的判断
+
+## 让墙自己长出来
+**赛道**：proc-gen
+### 核心机制
+略
+### 打分
+- 一眼可辨：4
+- 技术讲点：4
+- 可完成：4
+- 独特：4
+
+## 把时间做成一根可以拖的轴
+**赛道**：time
+### 打分
+- 一眼可辨：3
+- 技术讲点：4
+- 可完成：4
+- 独特：4
+
+## 结论
+推第一个。`)
+  assert.equal(dirs.length, 2, '「结论」那一节没有赛道行，不该被当成方向')
+  assert.equal(dirs[0].title, '让墙自己长出来')
+  assert.equal(dirs[1].lane, 'time')
+})
+
+check('★★ 方向内部的三级小标题不会被误当成方向', () => {
+  const dirs = parseDirections(`## 方向 1：只有一个方向
+**赛道**：shader
+### 核心机制
+略
+### 技术内核
+略
+### 打分
+- 一眼可辨：4
+- 技术讲点：5
+- 可完成：3
+- 独特：4`)
+  assert.equal(dirs.length, 1, '### 核心机制 / ### 打分 都是它的下级，不是新方向')
+  assert.equal(dirs[0].talk, 5, '打分在三级小节里，按层级切段才抽得到')
+})
+
+check('交白卷 / 完全跑偏的输出 → 返回空，不编造候选', () => {
+  assert.deepEqual(parseDirections('（这一轮没有值得立项的方向）'), [])
+  assert.deepEqual(parseDirections(''), [])
+  assert.deepEqual(parseDirections('一段没有任何标题的散文，说了很多但什么格式都没照。'), [])
+})
+
 check('没扫过的赛道能列出来（探索时要求覆盖）', () => {
   const cold = coldLanes(state({ laneHistory: ['physics', 'proc-gen'] }))
   assert.ok(!cold.includes('physics'))

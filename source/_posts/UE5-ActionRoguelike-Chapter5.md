@@ -1,6 +1,6 @@
 ---
 title: UE5 C++ 第五章复盘：属性组件、多播委托，以及从轮询到事件驱动
-date: 2026-08-21 13:00:00
+date: 2026-08-21 10:00:00
 categories:
   - [课外, UE5-Looman]
 tags:
@@ -10,7 +10,7 @@ tags:
   - 委托与事件分发
   - UMG
 description: 第五章第一次做"系统"而不是"单个 Actor"。本篇完整梳理四节课：为什么血量要做成 ActorComponent、TakeDamage 只是引擎的伤害入口而非伤害逻辑、UMG 血条那一大坨蓝图连线到底每根线是什么、执行流与数据流的区别、DECLARE_DYNAMIC_MULTICAST_DELEGATE 每个词的含义、Bind Event 的三根输入线、事件驱动必须配的初始同步、AddDynamic 为什么会在运行期而不是编译期报错、以及绑定为什么非得放在 PostInitializeComponents。重点解释蓝图每一根连线的语义，以及每个坑的真实成因。
-cover: /img/covers/UE5-ActionRoguelike-Chapter5.svg
+cover: /img/covers/UE5-ActionRoguelike-Chapter4.svg
 series: UE5 ActionRoguelike
 privacy: protected
 sitemap: false

@@ -1072,7 +1072,7 @@ SphereComp->IgnoreActorWhenMoving(GetInstigator(), true);
 - [x] 用「目标点 − 枪口」重算 `SpawnRotation`
 - [x] 画出修正前（紫）与修正后（黄）两条对照线
 - [ ] `SpawnActor` 返回值判空（待办⑨相关）
-- [ ] 验证子弹是否自撞 Mesh（待办③）
+- [x] 验证子弹是否自撞 Mesh
 
 ## 交互评分
 
@@ -1080,7 +1080,6 @@ SphereComp->IgnoreActorWhenMoving(GetInstigator(), true);
 - [x] 两项都归一化到 `[0, 1]` 再加权
 - [x] 权重暴露为 `EditDefaultsOnly` 属性
 - [x] 用 `GetActorBounds` 中心而非 `GetActorLocation`
-- [ ] **确认循环外 `SelectedActor = BestActor` 仍在**（截图里没看到，可能只是裁掉了）
 - [ ] 排除身后候选（待办①）
 - [ ] `NormalizedDistanceTo` 加钳制（待办②）
 - [ ] 循环不变量外提（待办⑦）

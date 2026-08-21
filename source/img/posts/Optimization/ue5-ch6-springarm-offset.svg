@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 680 310" role="img" font-family="-apple-system, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, &quot;Helvetica Neue&quot;, Arial, sans-serif">
+<title>弹簧臂 SocketOffset 与 TargetOffset 的区别</title>
+<desc>俯视图：TargetOffset 在世界空间移动枢轴，SocketOffset 在相机局部空间只移动末端相机，碰撞探测从枢轴斜向扫到最终相机位置。</desc>
+<style>
+.bg{fill:#FAF9F5}
+.tp{fill:#2C2C2A}
+.tsec{fill:#5F5E5A}
+.shape{fill:#F1EFE8;stroke:#888780}
+.line{stroke:#888780}
+.teal{stroke:#0F6E56}
+.tealt{fill:#0F6E56}
+.coral{stroke:#993C1D}
+.coralt{fill:#993C1D}
+.camfill{fill:#FAECE7;stroke:#993C1D}
+.camtext{fill:#712B13}
+@media (prefers-color-scheme: dark){
+.bg{fill:#1F1E1C}
+.tp{fill:#E8E6DF}
+.tsec{fill:#B4B2A9}
+.shape{fill:#2C2C2A;stroke:#888780}
+.teal{stroke:#5DCAA5}
+.tealt{fill:#5DCAA5}
+.coral{stroke:#F0997B}
+.coralt{fill:#F0997B}
+.camfill{fill:#4A1B0C;stroke:#F0997B}
+.camtext{fill:#F5C4B3}
+}
+</style>
+<defs>
+<marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+</defs>
+
+<rect class="bg" x="0" y="0" width="680" height="310" rx="10"/>
+<text class="tp" x="24" y="34" font-size="15" font-weight="500">弹簧臂的两种偏移（俯视）</text>
+
+<circle class="shape" cx="470" cy="200" r="20" stroke-width="1"/>
+<text class="tsec" x="470" y="248" font-size="12" text-anchor="middle">角色胶囊体</text>
+
+<line class="teal" x1="470" y1="198" x2="470" y2="156" stroke-width="1.5" marker-end="url(#ah)"/>
+<text class="tealt" x="496" y="174" font-size="12">TargetOffset</text>
+<text class="tsec" x="496" y="191" font-size="12">世界空间・移动枢轴</text>
+
+<circle class="tealt" cx="470" cy="150" r="3"/>
+<text class="tsec" x="470" y="132" font-size="12" text-anchor="middle">ArmOrigin（枢轴）</text>
+
+<line class="line" x1="466" y1="150" x2="256" y2="150" stroke-width="1.5" marker-end="url(#ah)"/>
+<text class="tsec" x="360" y="140" font-size="12" text-anchor="middle">TargetArmLength = 175</text>
+
+<circle cx="250" cy="150" r="5" fill="none" class="line" stroke-width="1.2"/>
+
+<line class="coral" x1="250" y1="156" x2="250" y2="220" stroke-width="1.5" marker-end="url(#ah)"/>
+<text class="coralt" x="238" y="176" font-size="12" text-anchor="end">SocketOffset</text>
+<text class="tsec" x="238" y="193" font-size="12" text-anchor="end">相机局部空间・跟随旋转</text>
+
+<rect class="camfill" x="200" y="226" width="100" height="34" rx="6" stroke-width="1"/>
+<text class="camtext" x="250" y="248" font-size="14" text-anchor="middle">相机</text>
+
+<line class="line" x1="466" y1="154" x2="308" y2="240" stroke-width="1" stroke-dasharray="4 4" fill="none" marker-end="url(#ah)"/>
+<text class="tsec" x="392" y="216" font-size="12" text-anchor="middle">碰撞探测 Sweep</text>
+
+<text class="tsec" x="24" y="288" font-size="12">TargetOffset 移动枢轴（探测起点、Lag 目标一起动）；SocketOffset 只移动末端相机，枢轴不动。</text>
+</svg>

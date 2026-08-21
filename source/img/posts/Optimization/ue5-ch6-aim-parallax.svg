@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 680 350" role="img" font-family="-apple-system, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, &quot;Helvetica Neue&quot;, Arial, sans-serif">
+<title>相机与枪口视差导致的弹道失效</title>
+<desc>侧视图：相机射线越过掩体顶部命中远处墙面，而从枪口连向该点的实际弹道被掩体挡住。</desc>
+<style>
+.bg{fill:#FAF9F5}
+.tp{fill:#2C2C2A}
+.tsec{fill:#5F5E5A}
+.box{fill:#F1EFE8;stroke:#B4B2A9}
+.boxt{fill:#2C2C2A}
+.line{stroke:#888780}
+.g{stroke:#639922}
+.gt{fill:#3B6D11}
+.a{stroke:#BA7517}
+.at{fill:#854F0B}
+@media (prefers-color-scheme: dark){
+.bg{fill:#1F1E1C}
+.tp{fill:#E8E6DF}
+.tsec{fill:#B4B2A9}
+.box{fill:#2C2C2A;stroke:#5F5E5A}
+.boxt{fill:#E8E6DF}
+.g{stroke:#97C459}
+.gt{fill:#C0DD97}
+.a{stroke:#EF9F27}
+.at{fill:#FAC775}
+}
+</style>
+
+<rect class="bg" x="0" y="0" width="680" height="350" rx="10"/>
+<text class="tp" x="24" y="34" font-size="15" font-weight="500">相机看得到，枪口打不到（侧视）</text>
+
+<line class="line" x1="40" y1="290" x2="640" y2="290" stroke-width="1"/>
+
+<line class="g" x1="130" y1="115" x2="576" y2="170" stroke-width="1.5"/>
+<line class="a" x1="130" y1="223" x2="576" y2="170" stroke-width="1.5"/>
+
+<rect class="box" x="330" y="190" width="60" height="100" rx="4" stroke-width="1"/>
+<text class="boxt" x="360" y="245" font-size="12" text-anchor="middle">掩体</text>
+
+<rect class="box" x="560" y="100" width="30" height="190" rx="4" stroke-width="1"/>
+<text class="boxt" x="575" y="250" font-size="12" text-anchor="middle">墙</text>
+
+<rect class="box" x="60" y="100" width="70" height="30" rx="4" stroke-width="1"/>
+<text class="boxt" x="95" y="120" font-size="12" text-anchor="middle">相机</text>
+
+<rect class="box" x="70" y="210" width="60" height="26" rx="4" stroke-width="1"/>
+<text class="boxt" x="100" y="228" font-size="12" text-anchor="middle">枪口</text>
+
+<circle cx="576" cy="170" r="5" fill="none" class="g" stroke-width="1.5"/>
+<text class="gt" x="548" y="142" font-size="12" text-anchor="end">准星判定的命中点</text>
+
+<circle cx="330" cy="199" r="5" fill="none" class="a" stroke-width="1.5"/>
+<text class="at" x="318" y="172" font-size="12" text-anchor="end">实际弹着点</text>
+
+<line class="g" x1="60" y1="318" x2="90" y2="318" stroke-width="1.5"/>
+<text class="tsec" x="98" y="322" font-size="12">相机射线（准星方向）</text>
+<line class="a" x1="300" y1="318" x2="330" y2="318" stroke-width="1.5"/>
+<text class="tsec" x="338" y="322" font-size="12">抛射物实际飞行方向</text>
+</svg>

@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="340" viewBox="0 0 680 340" role="img">
+<title>血条 UI 的四层结构与各层职责</title>
+<desc>BP_GameMode 指定 HUD 类，BP_HUD 在 BeginPlay 创建控件，MainHUD_WBP 负责屏幕布局，PlayerHealth_WBP 是可复用的血条零件。</desc>
+<style>
+text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+.th{font-size:14px;font-weight:500;fill:#2C2C2A}
+.ts{font-size:12px;fill:#5F5E5A}
+rect{stroke-width:.8}
+.g{fill:#F1EFE8;stroke:#888780}
+.tl{fill:#E1F5EE;stroke:#1D9E75}
+.p{fill:#EEEDFE;stroke:#7F77DD}
+.ln{stroke:#888780;stroke-width:1;fill:none}
+@media (prefers-color-scheme:dark){
+.th{fill:#E8E6DE}.ts{fill:#B4B2A9}
+.g{fill:#2C2C2A;stroke:#888780}
+.tl{fill:#085041;stroke:#5DCAA5}
+.p{fill:#3C3489;stroke:#AFA9EC}
+}
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+
+<rect class="g" x="60" y="40" width="280" height="48" rx="8"/>
+<text class="th" x="80" y="58" dominant-baseline="central">BP_GameMode</text>
+<text class="ts" x="80" y="76" dominant-baseline="central">HUD Class 指向 BP_HUD</text>
+
+<rect class="tl" x="60" y="110" width="280" height="48" rx="8"/>
+<text class="th" x="80" y="128" dominant-baseline="central">BP_HUD</text>
+<text class="ts" x="80" y="146" dominant-baseline="central">BeginPlay 时创建并加入视口</text>
+<text class="ts" x="370" y="134" dominant-baseline="central">归 Controller 所有，不随角色销毁</text>
+
+<rect class="p" x="60" y="180" width="280" height="48" rx="8"/>
+<text class="th" x="80" y="198" dominant-baseline="central">MainHUD_WBP</text>
+<text class="ts" x="80" y="216" dominant-baseline="central">画布面板，负责屏幕布局</text>
+<text class="ts" x="370" y="204" dominant-baseline="central">以后准心 / 弹药也挂这一层</text>
+
+<rect class="p" x="60" y="250" width="280" height="48" rx="8"/>
+<text class="th" x="80" y="268" dominant-baseline="central">PlayerHealth_WBP</text>
+<text class="ts" x="80" y="286" dominant-baseline="central">一个进度条</text>
+<text class="ts" x="370" y="274" dominant-baseline="central">可复用零件，敌人血条也能用</text>
+
+<path class="ln" d="M200 88 V104" marker-end="url(#a)"/>
+<path class="ln" d="M200 158 V174" marker-end="url(#a)"/>
+<path class="ln" d="M200 228 V244" marker-end="url(#a)"/>
+</svg>

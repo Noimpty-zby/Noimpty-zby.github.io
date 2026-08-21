@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="262" viewBox="0 0 680 262" role="img">
+<title>Actor 初始化顺序与委托绑定时机</title>
+<desc>构造函数里组件刚创建尚未注册且 CDO 也会执行，PostInitializeComponents 时组件已注册是绑定委托的位置，BeginPlay 之后伤害可能已经发生。</desc>
+<style>
+text{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+.th{font-size:14px;font-weight:500;fill:#2C2C2A}
+.ts{font-size:12px;fill:#5F5E5A}
+.ln{stroke:#B4B2A9;stroke-width:1.2;fill:none}
+.d{fill:#F1EFE8;stroke:#888780;stroke-width:.8}
+.k{fill:#E1F5EE;stroke:#1D9E75;stroke-width:1.4}
+@media (prefers-color-scheme:dark){
+.th{fill:#E8E6DE}.ts{fill:#B4B2A9}
+.ln{stroke:#5F5E5A}
+.d{fill:#2C2C2A;stroke:#888780}
+.k{fill:#085041;stroke:#5DCAA5}
+}
+</style>
+<defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+
+<path class="ln" d="M100 45 V222" marker-end="url(#a)"/>
+
+<circle class="d" cx="100" cy="62" r="6"/>
+<text class="th" x="128" y="54" dominant-baseline="central">Constructor</text>
+<text class="ts" x="128" y="72" dominant-baseline="central">组件被创建，尚未注册；CDO 也会执行到这里</text>
+
+<circle class="k" cx="100" cy="132" r="9"/>
+<text class="th" x="128" y="124" dominant-baseline="central">PostInitializeComponents</text>
+<text class="ts" x="128" y="142" dominant-baseline="central">组件已注册可用 —— 在这里绑定委托</text>
+
+<circle class="d" cx="100" cy="202" r="6"/>
+<text class="th" x="128" y="194" dominant-baseline="central">BeginPlay</text>
+<text class="ts" x="128" y="212" dominant-baseline="central">游戏逻辑开始，此时伤害可能已经发生过了</text>
+</svg>

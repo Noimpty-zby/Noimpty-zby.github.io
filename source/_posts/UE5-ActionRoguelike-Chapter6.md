@@ -10,7 +10,7 @@ tags:
   - 控制台变量
   - 相机与瞄准
 description: 第六章一节新玩法都没做，五节课全在优化。本篇完整梳理：为什么过肩相机必须用 SocketOffset 而不是直接挪相机组件、碰撞响应"取两边较弱者"这条规则如何让子弹穿过胶囊体打在 Mesh 上、TAutoConsoleVariable 每个参数的含义与 ECVF_Cheat 的真实效果、为什么 API 强迫你写 GetValueOnGameThread、弹道修正的三步几何与它自带的两个失效场景、交互评分加入距离项后权重配比会让背后的物体胜出。重点解释每个优化在解决什么问题、优化后得到了什么，以及每段代码为什么这么写。
-cover: /img/posts/Optimization/ue5-ch6-cover.svg
+cover: /img/covers/UE5-ActionRoguelike-Chapter1.svg
 series: UE5 ActionRoguelike
 privacy: protected
 sitemap: false

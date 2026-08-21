@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 680 500" role="img" font-family="-apple-system, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, &quot;Helvetica Neue&quot;, Arial, sans-serif">
+<title>第六章瞄准链路总览</title>
+<desc>从开火输入到命中骨骼的六步链路，右侧标注每一步由哪个碰撞通道或预设决定。</desc>
+<style>
+.bg{fill:#FAF9F5}
+.tp{fill:#2C2C2A}
+.tsec{fill:#5F5E5A}
+.box{fill:#F1EFE8;stroke:#B4B2A9}
+.boxt{fill:#2C2C2A}
+.boxs{fill:#5F5E5A}
+.line{stroke:#888780}
+.lead{stroke:#B4B2A9}
+.pu{fill:#EEEDFE;stroke:#534AB7}
+.put{fill:#3C3489}
+.pus{fill:#534AB7}
+@media (prefers-color-scheme: dark){
+.bg{fill:#1F1E1C}
+.tp{fill:#E8E6DF}
+.tsec{fill:#B4B2A9}
+.box{fill:#2C2C2A;stroke:#5F5E5A}
+.boxt{fill:#E8E6DF}
+.boxs{fill:#B4B2A9}
+.lead{stroke:#5F5E5A}
+.pu{fill:#3C3489;stroke:#AFA9EC}
+.put{fill:#CECBF6}
+.pus{fill:#AFA9EC}
+}
+</style>
+<defs>
+<marker id="ah3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+</defs>
+
+<rect class="bg" x="0" y="0" width="680" height="500" rx="10"/>
+<text class="tp" x="24" y="34" font-size="15" font-weight="500">从开火到命中骨骼：每一步由谁决定</text>
+
+<rect class="box" x="60" y="62" width="270" height="50" rx="8" stroke-width="1"/>
+<text class="boxt" x="195" y="84" font-size="14" text-anchor="middle">开火输入</text>
+<text class="boxs" x="195" y="103" font-size="12" text-anchor="middle">AttackTimerElapsed</text>
+<line class="line" x1="195" y1="114" x2="195" y2="132" stroke-width="1.5" marker-end="url(#ah3)"/>
+
+<rect class="pu" x="60" y="136" width="270" height="50" rx="8" stroke-width="1"/>
+<text class="put" x="195" y="158" font-size="14" text-anchor="middle">相机射线</text>
+<text class="pus" x="195" y="177" font-size="12" text-anchor="middle">LineTraceSingleByChannel</text>
+<line class="lead" x1="332" y1="161" x2="376" y2="161" stroke-width="1" stroke-dasharray="3 3"/>
+<text class="tsec" x="382" y="157" font-size="12">通道：COLLISION_PROJECTILE</text>
+<text class="tsec" x="382" y="174" font-size="12">与抛射物实际碰撞用同一套响应表</text>
+<line class="line" x1="195" y1="188" x2="195" y2="206" stroke-width="1.5" marker-end="url(#ah3)"/>
+
+<rect class="box" x="60" y="210" width="270" height="50" rx="8" stroke-width="1"/>
+<text class="boxt" x="195" y="232" font-size="14" text-anchor="middle">目标点</text>
+<text class="boxs" x="195" y="251" font-size="12" text-anchor="middle">Hit.Location 或射线末端</text>
+<line class="line" x1="195" y1="262" x2="195" y2="280" stroke-width="1.5" marker-end="url(#ah3)"/>
+
+<rect class="box" x="60" y="284" width="270" height="50" rx="8" stroke-width="1"/>
+<text class="boxt" x="195" y="306" font-size="14" text-anchor="middle">重算生成旋转</text>
+<text class="boxs" x="195" y="325" font-size="12" text-anchor="middle">（目标点 − 枪口）.Rotation()</text>
+<line class="line" x1="195" y1="336" x2="195" y2="354" stroke-width="1.5" marker-end="url(#ah3)"/>
+
+<rect class="pu" x="60" y="358" width="270" height="50" rx="8" stroke-width="1"/>
+<text class="put" x="195" y="380" font-size="14" text-anchor="middle">抛射物飞行</text>
+<text class="pus" x="195" y="399" font-size="12" text-anchor="middle">ProjectileMovement 逐帧 sweep</text>
+<line class="lead" x1="332" y1="383" x2="376" y2="383" stroke-width="1" stroke-dasharray="3 3"/>
+<text class="tsec" x="382" y="379" font-size="12">Projectile 预设：Query Only</text>
+<text class="tsec" x="382" y="396" font-size="12">对 projectile 自身忽略，对检测通道全忽略</text>
+<line class="line" x1="195" y1="410" x2="195" y2="428" stroke-width="1.5" marker-end="url(#ah3)"/>
+
+<rect class="pu" x="60" y="432" width="270" height="50" rx="8" stroke-width="1"/>
+<text class="put" x="195" y="454" font-size="14" text-anchor="middle">命中角色 Mesh</text>
+<text class="pus" x="195" y="473" font-size="12" text-anchor="middle">FHitResult 带回 BoneName</text>
+<line class="lead" x1="332" y1="457" x2="376" y2="457" stroke-width="1" stroke-dasharray="3 3"/>
+<text class="tsec" x="382" y="453" font-size="12">CharacterMesh 预设：阻挡 projectile</text>
+<text class="tsec" x="382" y="470" font-size="12">Pawn 预设：忽略 projectile（胶囊体放行）</text>
+</svg>

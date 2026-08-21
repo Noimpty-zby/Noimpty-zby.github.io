@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 680 270" role="img" font-family="-apple-system, &quot;PingFang SC&quot;, &quot;Microsoft YaHei&quot;, &quot;Helvetica Neue&quot;, Arial, sans-serif">
+<title>第六章的三层优化</title>
+<desc>三个并列区块：表现层（玩家看得到）、判定层（玩家感觉得到）、开发效率层（只有开发者看得到）。</desc>
+<style>
+.bg{fill:#FAF9F5}
+.tp{fill:#2C2C2A}
+.tsec{fill:#5F5E5A}
+.b1{fill:#E1F5EE;stroke:#0F6E56}
+.t1{fill:#085041}
+.s1{fill:#0F6E56}
+.b2{fill:#EEEDFE;stroke:#534AB7}
+.t2{fill:#3C3489}
+.s2{fill:#534AB7}
+.b3{fill:#FAEEDA;stroke:#854F0B}
+.t3{fill:#633806}
+.s3{fill:#854F0B}
+@media (prefers-color-scheme: dark){
+.bg{fill:#1F1E1C}
+.tp{fill:#E8E6DF}
+.tsec{fill:#B4B2A9}
+.b1{fill:#085041;stroke:#5DCAA5}
+.t1{fill:#9FE1CB}
+.s1{fill:#5DCAA5}
+.b2{fill:#3C3489;stroke:#AFA9EC}
+.t2{fill:#CECBF6}
+.s2{fill:#AFA9EC}
+.b3{fill:#633806;stroke:#EF9F27}
+.t3{fill:#FAC775}
+.s3{fill:#EF9F27}
+}
+</style>
+
+<rect class="bg" x="0" y="0" width="680" height="270" rx="10"/>
+<text class="tp" x="24" y="34" font-size="15" font-weight="500">第六章的三层优化</text>
+
+<rect class="b1" x="30" y="60" width="190" height="152" rx="12" stroke-width="1"/>
+<text class="t1" x="125" y="90" font-size="14" text-anchor="middle" font-weight="500">表现层</text>
+<text class="s1" x="125" y="110" font-size="12" text-anchor="middle">玩家看得到</text>
+<text class="s1" x="50" y="142" font-size="12">· 准星 UI</text>
+<text class="s1" x="50" y="166" font-size="12">· 过肩相机偏移</text>
+<text class="s1" x="50" y="190" font-size="12">· 命中点落在 Mesh 上</text>
+
+<rect class="b2" x="245" y="60" width="190" height="152" rx="12" stroke-width="1"/>
+<text class="t2" x="340" y="90" font-size="14" text-anchor="middle" font-weight="500">判定层</text>
+<text class="s2" x="340" y="110" font-size="12" text-anchor="middle">玩家感觉得到</text>
+<text class="s2" x="265" y="142" font-size="12">· 自定义碰撞通道</text>
+<text class="s2" x="265" y="166" font-size="12">· 弹道对齐准星</text>
+<text class="s2" x="265" y="190" font-size="12">· 交互评分加距离项</text>
+
+<rect class="b3" x="460" y="60" width="190" height="152" rx="12" stroke-width="1"/>
+<text class="t3" x="555" y="90" font-size="14" text-anchor="middle" font-weight="500">开发效率层</text>
+<text class="s3" x="555" y="110" font-size="12" text-anchor="middle">只有你看得到</text>
+<text class="s3" x="480" y="142" font-size="12">· CVar 调试开关</text>
+<text class="s3" x="480" y="166" font-size="12">· 权重暴露为属性</text>
+<text class="s3" x="480" y="190" font-size="12">· 免重编译调参</text>
+
+<text class="tsec" x="340" y="244" font-size="12" text-anchor="middle">三层的共同点：都不产出新玩法，都在还前五章欠下的债</text>
+</svg>

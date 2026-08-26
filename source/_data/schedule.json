@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-08-21T03:30:17.402Z",
+  "updatedAt": "2026-08-26T06:26:55.463Z",
   "days": {
     "2026-08-15": [
       {
@@ -23,7 +23,7 @@
       {
         "id": "tmsv92r2pbpig",
         "text": "提交第五章属性博客",
-        "done": false,
+        "done": true,
         "when": {
           "type": "post",
           "match": "属性"
@@ -37,7 +37,7 @@
       {
         "id": "tmt1f9rudbvx0",
         "text": "提交第六章博客",
-        "done": false,
+        "done": true,
         "when": {
           "type": "post",
           "match": "优化"

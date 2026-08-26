@@ -196,7 +196,7 @@ ARogueGameMode::ARogueGameMode()
 
 ## 1.5 完整的启动链条
 
-![UE Gameplay Framework 启动链条](/img/posts/Chest-Interaction/ue5-ch3-framework.svg)
+![UE Gameplay Framework 启动链条](/img/posts/ue5-ch3/ue5-ch3-framework.svg)
 
 按时间顺序展开：
 
@@ -362,7 +362,7 @@ Shape.SetSphere(InteractionRadius);
 
 ## 2.4 点积：本节的数学核心
 
-![点积挑选交互目标](/img/posts/Chest-Interaction/ue5-ch3-dot.svg)
+![点积挑选交互目标](/img/posts/ue5-ch3/ue5-ch3-dot.svg)
 
 **两个单位向量的点积等于夹角的余弦。** 所以 `DotResult` 不是什么抽象的数，它就是 cos θ：
 
@@ -548,7 +548,7 @@ LidMeshComponent->SetRelativeRotation(FRotator(CurrentAnimationPitch, 0.f, 0.f))
 
 ## 3.6 Tick 的三个开关
 
-![宝箱 Actor 的 Tick 开关生命周期](/img/posts/Chest-Interaction/ue5-ch3-tick.svg)
+![宝箱 Actor 的 Tick 开关生命周期](/img/posts/ue5-ch3/ue5-ch3-tick.svg)
 
 ```cpp
 PrimaryActorTick.bCanEverTick = true;
@@ -663,7 +663,7 @@ if (Chest) { Chest->OpenLid(); }
 
 接口把这条依赖翻了过来。
 
-![交互接口的依赖关系](/img/posts/Chest-Interaction/ue5-ch3-interface.svg)
+![交互接口的依赖关系](/img/posts/ue5-ch3/ue5-ch3-interface.svg)
 
 注意箭头方向：**宝箱指向接口，而不是组件指向宝箱**。交互组件的 cpp 里从头到尾没有 `#include "RogueItemChest.h"`。以后加一百种可交互物体，这个文件一行都不用改。
 
@@ -948,7 +948,7 @@ EnhancedInput->BindAction(...);   // 没判空
 
 ## 4.10 完整调用链
 
-![交互系统完整调用链](/img/posts/Chest-Interaction/ue5-ch3-callchain.svg)
+![交互系统完整调用链](/img/posts/ue5-ch3/ue5-ch3-callchain.svg)
 
 **两条线的频率完全不同**——左边每秒 60 次，右边可能几秒才一次。它们唯一的接头就是中间那个 `SelectedActor`。
 
@@ -1024,7 +1024,7 @@ Tom 让它们同名是为了方便，但它们是两个层面的东西：
 
 ## 5.2 从黑名单到白名单
 
-![自定义检测通道的白名单过滤](/img/posts/Chest-Interaction/ue5-ch3-collision.svg)
+![自定义检测通道的白名单过滤](/img/posts/ue5-ch3/ue5-ch3-collision.svg)
 
 因为新通道的默认响应是「忽略」，世界上所有已存在的物体——木桶、墙、地板、玩家胶囊体——自动对这个通道视而不见，**你一个都不用改**。
 

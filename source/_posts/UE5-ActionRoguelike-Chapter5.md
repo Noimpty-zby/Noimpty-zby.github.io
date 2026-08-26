@@ -100,7 +100,7 @@ class ARogueBaseActor : public AActor { float Health; };   // ❌
 
 **方案三：做成组件，谁需要谁挂。**
 
-![组合而非继承：同一个属性组件挂在三条不同继承链上](/img/posts/Attribute/ue5-ch5-composition.svg)
+![组合而非继承：同一个属性组件挂在三条不同继承链上](/img/posts/ue5-ch5/ue5-ch5-composition.svg)
 
 血量是一个**横切关注点**——它横穿整个继承树，不属于其中任何一条分支。这类东西的标准解法是**组合优于继承**：把能力做成独立零件，需要的对象自己挂上去。
 
@@ -300,7 +300,7 @@ LogTemp: New Health: 0.000000
 
 ## 2.1 四层结构，每层的存在理由
 
-![血条 UI 的四层结构与各层职责](/img/posts/Attribute/ue5-ch5-ui-stack.svg)
+![血条 UI 的四层结构与各层职责](/img/posts/ue5-ch5/ue5-ch5-ui-stack.svg)
 
 **为什么 UI 挂在 `AHUD` 上，而不是挂在角色身上？**
 
@@ -345,7 +345,7 @@ Event BeginPlay ─▶ Create Main HUD WBP Widget ─▶ Add to Viewport
 
 答案是：**你在 C++ 里加的每一个说明符，都精确对应蓝图里的一个节点或引脚。**
 
-![C++ 反射说明符与蓝图节点的对应关系](/img/posts/Attribute/ue5-ch5-reflection-chain.svg)
+![C++ 反射说明符与蓝图节点的对应关系](/img/posts/ue5-ch5/ue5-ch5-reflection-chain.svg)
 
 本节 C++ 侧的改动只有这些：
 
@@ -395,7 +395,7 @@ TObjectPtr<URogueActionSystemComponent> ActionSystemComponent;
 
 控件图表里节点密密麻麻，我第一次看完全懵。后来发现关键是：**只有三个节点在执行链上**。
 
-![蓝图的执行流与数据流](/img/posts/Attribute/ue5-ch5-exec-vs-data.svg)
+![蓝图的执行流与数据流](/img/posts/ue5-ch5/ue5-ch5-exec-vs-data.svg)
 
 蓝图节点分两类：
 
@@ -518,7 +518,7 @@ HealthBarWidget->SetPercent(...);   // ❌
 
 委托走的是第三条路——**观察者模式**：组件只负责喊一嗓子"血量变了，从 X 到 Y"，至于谁在听、听了干什么，它一概不知也不关心。
 
-![轮询与事件驱动的对比](/img/posts/Attribute/ue5-ch5-poll-vs-event.svg)
+![轮询与事件驱动的对比](/img/posts/ue5-ch5/ue5-ch5-poll-vs-event.svg)
 
 **依赖方向被反转了**：不是组件依赖 UI，而是 UI 主动去订阅组件。组件的头文件里从头到尾没出现过任何 UMG 的东西。
 
@@ -597,7 +597,7 @@ FOnHealthChanged OnHealthChanged;
 
 > 还有个 `BlueprintCallable` 用在委托上，表示允许蓝图调用 `Broadcast`。这里**故意不加**——只有组件自己有权广播，外人只能听。这跟 `BlueprintReadOnly` 是同一个封装思路。
 
-![Bind Event 节点的三根输入线](/img/posts/Attribute/ue5-ch5-bind-event.svg)
+![Bind Event 节点的三根输入线](/img/posts/ue5-ch5/ue5-ch5-bind-event.svg)
 
 | 引脚 | 颜色 | 含义 |
 |---|---|---|
@@ -735,7 +735,7 @@ void OnHealthChanged(float NewHealth, float OldHealth);
 
 这是本节最重要的架构点。
 
-![Actor 初始化顺序与委托绑定时机](/img/posts/Attribute/ue5-ch5-init-order.svg)
+![Actor 初始化顺序与委托绑定时机](/img/posts/ue5-ch5/ue5-ch5-init-order.svg)
 
 **为什么不能在构造函数里绑？**
 
@@ -901,7 +901,7 @@ bool IsAlive() const { return AttributeSet.health > 0.f; }
 
 # 知识链路总览
 
-![第五章完整链路](/img/posts/Attribute/ue5-ch5-chain.svg)
+![第五章完整链路](/img/posts/ue5-ch5/ue5-ch5-chain.svg)
 
 ```text
 爆炸桶 / 投射物

@@ -88,7 +88,7 @@ private_section: 课外
 
 ## 0.1 三层优化
 
-![第六章的三层优化](/img/posts/Optimization/ue5-ch6-layers.svg)
+![第六章的三层优化](/img/posts/ue5-ch6/ue5-ch6-layers.svg)
 
 **表现层——玩家一眼能看到的。** 准星让玩家知道自己在瞄哪；过肩偏移让角色不再挡住视野正中；命中点从胶囊体表面挪到 Mesh 上，爆炸不再发生在离身体半米远的空气里。
 
@@ -200,7 +200,7 @@ DesiredLoc += FRotationMatrix(DesiredRot).TransformVector(SocketOffset);
 
 三行代码就把区别说清楚了：
 
-![弹簧臂的两种偏移](/img/posts/Optimization/ue5-ch6-springarm-offset.svg)
+![弹簧臂的两种偏移](/img/posts/ue5-ch6/ue5-ch6-springarm-offset.svg)
 
 **区别一：坐标空间不同。**
 
@@ -281,7 +281,7 @@ GetWorld()->SweepSingleByChannel(Result, ArmOrigin, DesiredLoc, ...);
 
 这一节的配置正好是这条规则最干净的演示——注意**胶囊体和 Mesh 的对象类型都是 `Pawn`**，抛射物对它俩的响应是同一个格子，差别完全来自另一边：
 
-![碰撞响应是双向握手](/img/posts/Optimization/ue5-ch6-collision-handshake.svg)
+![碰撞响应是双向握手](/img/posts/ue5-ch6/ue5-ch6-collision-handshake.svg)
 
 ## 2.3 四个预设逐个拆解
 
@@ -599,7 +599,7 @@ static TAutoConsoleVariable<float> CVarProjectileAdjustmentDebugDrawing(
 
 这套方案是第三人称射击的标准解法，但它有两个内建的失效场景，值得主动去复现一次：
 
-![相机看得到，枪口打不到](/img/posts/Optimization/ue5-ch6-aim-parallax.svg)
+![相机看得到，枪口打不到](/img/posts/ue5-ch6/ue5-ch6-aim-parallax.svg)
 
 **场景一：掩体 / 墙角。** 相机在头顶后方，枪口在手上，两点相距近一米。**相机能越过矮墙看到的东西，枪口未必打得到。** 玩家看着准星压在敌人身上开枪，子弹啪一声炸在面前的箱子上。
 
@@ -686,7 +686,7 @@ FVector Center         = MyPawn->GetActorLocation();                      // 距
 FVector CameraLocation = PC->PlayerCameraManager->GetCameraLocation();    // 方向基准
 ```
 
-![交互评分的两个基准点](/img/posts/Optimization/ue5-ch6-interaction-basis.svg)
+![交互评分的两个基准点](/img/posts/ue5-ch6/ue5-ch6-interaction-basis.svg)
 
 **球体重叠和距离项用 `Center`（Pawn 位置），点积方向用 `CameraLocation`（相机位置）。** 两个基准点故意不同，而且分工是对的：
 
@@ -893,7 +893,7 @@ APlayerController* PC = CastChecked<APlayerController>(GetOwner());
 
 # 知识链路总览
 
-![第六章瞄准链路总览](/img/posts/Optimization/ue5-ch6-chain.svg)
+![第六章瞄准链路总览](/img/posts/ue5-ch6/ue5-ch6-chain.svg)
 
 ```text
 【瞄准链路】

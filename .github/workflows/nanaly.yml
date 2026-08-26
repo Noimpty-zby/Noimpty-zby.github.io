@@ -97,8 +97,6 @@ jobs:
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           # 勾了「强制重写」时，覆盖掉「今天/这周已经生成过」的防重复判断
           NANALY_FORCE: ${{ inputs.force && '1' || '0' }}
-          # 注：找点子那一步已经独立出去了，见 .github/workflows/studio.yml
-          #     （它变成了「策划室」——不再是找参考资料，而是自己立项写策划书）
           # 她提交时用的署名。不配就用一个不会关联到任何 GitHub 账号的地址。
           # 想让她的提交显示成你小号的头像：用小号登录 github.com/settings/emails，
           # 复制那个形如 12345678+用户名@users.noreply.github.com 的地址存成这个 secret。

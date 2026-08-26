@@ -48,7 +48,6 @@
     path.includes('/in-class/') ? '课内'
       : path.includes('/extra/') ? '课外'
       : path.includes('/life/') ? 'Life'
-      : path.includes('/studio/') ? '策划'
       : path.includes('/news/') ? '资讯'
       : path.includes('/schedule/') ? '日程'
       : '内部'

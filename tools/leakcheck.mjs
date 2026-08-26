@@ -27,20 +27,26 @@ const ROOT = process.env.LEAKCHECK_ROOT || join(process.cwd(), 'public')
  * 课程名、技术栈、板块的真实用途，以及娜娜莉这种一看就知道站上有什么功能的名字。
  *
  * 反过来，这些**不算**泄漏，不要往里加：
- *   - core / extra / life / studio —— 有意选的含糊词，看不出指向
+ *   - core / extra / life —— 有意选的含糊词，看不出指向
  *   - 归档 / 分类 / 标签 / 资讯 / 日程 —— 任何博客都有，不透露内容
  *   - 站点标题、作者名、GitHub 链接 —— 你本来就署名公开的
  */
+// ⚠️ 匹配是朴素的 html.includes()，不看词边界。
+//    所以短词和常见英文单词绝对不能往里加 —— 'Go' 会命中 Google、
+//    'Git' 会命中页脚那个 GitHub 链接，一加进来这个检查就天天误报，
+//    误报几次之后没人会再认真看它。要收就收 'Golang' 这种没有歧义的写法。
 const FORBIDDEN = [
   // 课程与技术栈
   'GAMES101', 'CSAPP', '15-213', 'CS144', 'ActionRoguelike',
   'Unreal', 'UE5', '虚幻',
   '图形学', '光栅化', '着色', '数据结构', '算法',
   '操作系统', '计算机网络', '计算机系统',
+  'AI Infra', 'Linux', 'MySQL', 'Golang', '命令行', '后端开发',
   // 人名（课程作者）
-  '闫令琪', 'Looman', 'Ulibarri', 'Abdul Bari', '蒋炎岩',
+  '闫令琪', 'Looman', 'Abdul Bari', '蒋炎岩',
+  'Colt Steele', 'Stephen Grider',
   // 站上的功能与角色
-  '娜娜莉', '策划案', '策划书', '立项', '游戏策划',
+  '娜娜莉',
   // 板块的真实用途
   '自学课内', '自学课外', '课程笔记', '作业复盘'
 ]

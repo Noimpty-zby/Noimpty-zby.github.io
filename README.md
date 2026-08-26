@@ -34,7 +34,6 @@ npm run server
   /extra/ai-infra/   AI Infra 后端开发（现在这条）—— Linux / Git / Go / MySQL
   /extra/gamedev/    游戏开发（之前那条，已告一段落）—— GAMES101 / UE5·Tom Looman
 /life/        Life
-/studio/      策划室（游戏策划，内容存在私有仓库里）
 /news/        资讯
 /schedule/    日程
 ```
@@ -104,14 +103,14 @@ private_section: 课外        # 课外 / 课内 / Life，决定解锁框上显�
 |---|---|---|
 | `pages.yml` | 测试 → 构建 → 上锁自检 → 部署 | push 到 main |
 | `nanaly.yml` | 回评论 / 巡逻 / 批注 / 资讯 / 随笔 | 见文件内的 cron |
-| `studio.yml` | 策划室：探索 / 立项 / 深化 / 修订 / 停更 | **已停跑**，只能手动触发 |
 | `daily-report.yml` | 每晚站点日报邮件 | 每天 22:00 |
 
 `npm test` 会跑 `tools/tests/` 下的全部测试。部署前会自动跑一遍，红了就不部署。
 
-策划室（`studio.yml`）2026-08-26 起停了定时 —— 方向转去 AI Infra 之后它没有理由
-继续每周三次调深度模型。手动触发还在，私有仓库里已有的产出没删。要恢复自动推进，
-把那个文件里 `schedule:` 的注释去掉。
+**策划室已于 2026-08-26 整个删掉**（原本是一周三次自动写游戏策划书）。方向转去
+AI Infra 之后它没有存在意义了，页面、脚本、工作流和测试都已移除。它的产出在一个
+独立的私有仓库里，那边一个字没动；仓库设置里的 `IDEAS_TOKEN` / `IDEAS_REPO`
+两个 secret 现在没有任何工作流会用，可以删掉。
 
 ## 文章推荐与目录
 

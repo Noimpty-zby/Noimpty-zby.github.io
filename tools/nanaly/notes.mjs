@@ -58,10 +58,9 @@ const anchorOf = p => p
   .trim()
   .slice(0, 30)
 
-const postPath = file => {
-  // source/_posts/homework-three.md → 需要它最终的 url path
-  // 直接从 front-matter 的 date 和文件名推，和 _config.yml 的 permalink 规则保持一致
-  const raw = readFileSync(file, 'utf8')
+// source/_posts/homework-three.md → 它最终的 url path
+// 直接从 front-matter 的 date 和文件名推，和 _config.yml 的 permalink 规则保持一致
+export const pathOf = (file, raw) => {
   const d = (raw.match(/^date:\s*(.+)$/m) || [])[1]
   if (!d) return null
   const m = String(d).trim().match(/^(\d{4})-(\d{2})-(\d{2})/)
@@ -70,22 +69,74 @@ const postPath = file => {
   return `/${m[1]}/${m[2]}/${m[3]}/${slug}/`
 }
 
-export const buildNotes = async () => {
-  const store = readStore()
-  const files = readdirSync(POSTS).filter(f => f.endsWith('.md')).map(f => `${POSTS}/${f}`)
-
+/* 扫一遍文章，同时得出两件事：哪些路径还活着，以及哪几篇需要新写批注。
+ *
+ * 这两件事必须在同一个循环里、按这个顺序算出来，原因见下面 live.add 那一行。
+ */
+export const planNotes = (files, store) => {
+  const live = new Set()
   const todo = []
-  for (const file of files) {
-    const raw = readFileSync(file, 'utf8')
+  let unresolved = 0
+
+  for (const { file, raw } of files) {
+    const p = pathOf(file, raw)
+    if (!p) { unresolved++; continue }
+
+    /* 先登记「这篇还在」，再判断要不要给它写新批注 —— 顺序不能反。
+     *
+     * 下面那行 privacy 判断是「不写新批注」，不是「这篇不存在」。
+     * 要是把它提到 live.add 前面，全站上锁之后每篇文章都带 privacy: protected，
+     * live 就成了空集，接着 pruneOrphans 会把整张批注表当成孤儿清掉。 */
+    live.add(p)
+
     if (/^privacy:\s*protected/m.test(raw)) continue      // 加密文章不写批注
-    const p = postPath(file)
-    if (!p) continue
     const h = hashOf(raw)
     if (store[p] && store[p].hash === h) continue          // 正文没变，跳过
     todo.push({ file, path: p, raw, hash: h })
   }
 
+  return { live, todo, unresolved }
+}
+
+/* 清掉贴不回任何文章的批注。
+ *
+ * 为什么需要这一步：批注表是按永久链接存的，而永久链接由 front-matter 的 date 生成 ——
+ * 所以改一次文章日期或文件名，那篇的批注就留在表里、再也贴不上去。
+ * 真发生过一次：作业二那篇日期从 8-15 改成 8-20，2 条批注就此失效。
+ * 它不报错、不影响构建，只是构建日志里的「嵌入 N 篇」和表里的条数悄悄对不上，
+ * 除非有人去数，否则永远发现不了。
+ *
+ * 判断只看路径对不对得上一篇真实存在的文章，别掺任何别的条件（尤其别掺 privacy）。
+ */
+export const pruneOrphans = (store, live) => {
+  const orphans = Object.keys(store).filter(p => !live.has(p))
+  orphans.forEach(p => { delete store[p] })
+  return orphans
+}
+
+export const buildNotes = async () => {
+  const store = readStore()
+  const files = readdirSync(POSTS)
+    .filter(f => f.endsWith('.md'))
+    .map(f => `${POSTS}/${f}`)
+    .map(file => ({ file, raw: readFileSync(file, 'utf8') }))
+
+  const { live, todo, unresolved } = planNotes(files, store)
+
   console.log(`  ${files.length} 篇文章，需要新写批注的：${todo.length} 篇`)
+
+  // 推不出路径的文章一旦存在，它的批注会被误判成孤儿 —— 那就整轮别删
+  let orphans = []
+  if (unresolved) {
+    console.log(`  有 ${unresolved} 篇推不出路径（多半是 front-matter 里没有 date），本轮跳过孤儿清理`)
+  } else {
+    orphans = pruneOrphans(store, live)
+    if (orphans.length) {
+      console.log(`  清掉 ${orphans.length} 条贴不回去的旧批注（文章改过日期或文件名）：`)
+      orphans.forEach(p => console.log(`      ${p}`))
+    }
+  }
+
   const batch = todo.slice(0, MAX_POSTS_PER_RUN)
   if (todo.length > batch.length) {
     console.log(`  单次最多处理 ${MAX_POSTS_PER_RUN} 篇，剩下 ${todo.length - batch.length} 篇下次再说`)
@@ -140,13 +191,14 @@ ${listed}`, 900)
     notes.forEach(n => console.log(`      「${n.anchor}…」→ ${n.text}`))
   }
 
-  if (!wrote) { console.log('  没有新增批注'); return { wrote: 0 } }
-  if (DRY) { console.log('\n  [演练] 不写文件'); return { wrote, dry: true } }
+  // 只清了孤儿、没写新批注，也是一次必须落盘并提交的改动
+  if (!wrote && !orphans.length) { console.log('  没有新增批注，也没有要清的'); return { wrote: 0, pruned: 0 } }
+  if (DRY) { console.log('\n  [演练] 不写文件'); return { wrote, pruned: orphans.length, dry: true } }
 
   if (!existsSync('source/_data')) mkdirSync('source/_data', { recursive: true })
   writeFileSync(DATA, JSON.stringify(store, null, 2) + '\n')
   console.log(`  已写入 ${DATA}`)
-  return { wrote }
+  return { wrote, pruned: orphans.length }
 }
 
 const GIT_NAME = process.env.NANALY_GIT_NAME || '娜娜莉'

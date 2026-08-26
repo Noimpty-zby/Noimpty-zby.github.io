@@ -24,7 +24,7 @@ description: 课表之外自己挑的课：AI Infra 后端开发，以及此前�
     <h3>AI Infra 后端开发</h3>
     <span class="noimpty-track-card__by">Linux · Git · Go · MySQL</span>
     <p>现在在走的方向。四门课按依赖排：先把每天都要用的工具（命令行、版本控制）拿下，再学语言，最后是数据层。</p>
-    <span class="noimpty-track-card__stat">4 门课 · 还没开始</span>
+    <span class="noimpty-track-card__stat">4 门课 · 已写 1 篇</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--gamedev" href="/extra/gamedev/">
     <span class="noimpty-track-card__index">02</span>

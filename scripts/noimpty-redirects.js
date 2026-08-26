@@ -41,7 +41,7 @@ const REDIRECTS = {
    * 删的时候得用 [System.IO.Directory]::Delete("\\?\完整路径", $true) 绕过路径规范化。
    */
 
-  // ── 板块重构（Study/Ideas → 课内/课外/策划室）──────────
+  // ── 板块重构（Study/Ideas → 课内/课外）────────────────
   //
   // 文章本身的永久链接没变（它是 :year/:month/:day/:title，只改了分类），
   // 所以旧的文章链接照样能打开。变的是**板块页**和**分类页**的地址，
@@ -54,17 +54,15 @@ const REDIRECTS = {
   'study/':                                                  'extra/',
   'study/games101/':                                         'extra/gamedev/games101/',
   'study/ue5/':                                              'extra/gamedev/ue5-looman/',
-  // 竞赛那一栏没有对应的新板块（比赛的事现在归策划室管）
-  'study/competition/':                                      'studio/',
-  'ideas/':                                                  'studio/',
-  'ideas-vault/':                                            'studio/',
+  // 竞赛、点子、点子库这几个老地址原本跳去策划室，而策划室 2026-08-26 已整个删掉。
+  // 现在没有任何一个现存页面是它们的合理去处 —— 与其跳到一个不相干的板块上，
+  // 不如干脆 404：跳错地方比跳不过去更让人困惑。
 
   // 分类页的地址跟着 category_map 变了。
   // 2026-08-26 起分类是三级（课外 / 游戏开发 / GAMES101），所以这里也多了一层。
   'categories/study/':                                       'categories/extra/',
   'categories/study/games101/':                              'categories/extra/gamedev/games101/',
-  'categories/study/ue5/':                                   'categories/extra/gamedev/ue5-looman/',
-  'categories/ideas/':                                       'studio/'
+  'categories/study/ue5/':                                   'categories/extra/gamedev/ue5-looman/'
 }
 
 const withRoot = value => {

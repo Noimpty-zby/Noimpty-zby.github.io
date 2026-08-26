@@ -8,9 +8,6 @@
 //   node tools/nanaly/run.mjs column   写一篇她自己的随笔并提交
 //   node tools/nanaly/run.mjs all      全做一遍
 //
-// 注：找点子已经不在这里了。它独立成了「策划室」，
-//     入口是 tools/studio/run.mjs，工作流是 .github/workflows/studio.yml。
-//     那边不再是「找参考资料」，而是自己立项、写策划书、按你的反馈修订。
 //
 // 加 --dry 只演练不动真格（不发评论、不提交），把会做的事打印出来。
 

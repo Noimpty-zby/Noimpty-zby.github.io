@@ -83,7 +83,6 @@ const SECTION_LABEL = [
   ['/in-class/', '课内'],
   ['/extra/', '课外'],
   ['/life/', 'Life'],
-  ['/studio/', '策划'],
   ['/news/', '资讯'],
   ['/schedule/', '日程'],
   ['/archives/', '归档'],

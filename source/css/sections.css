@@ -425,7 +425,6 @@ html.noimpty-private-locked #rightside {
 }
 
 .noimpty-gate {
-  --gate-image: url('/img/sections/ideas.webp');
   position: fixed;
   z-index: 100000;
   inset: 0;
@@ -433,9 +432,10 @@ html.noimpty-private-locked #rightside {
   place-items: center;
   overflow: auto;
   padding: 24px;
-  background:
-    linear-gradient(rgba(17, 12, 19, 0.72), rgba(17, 12, 19, 0.82)),
-    var(--gate-image) center / cover no-repeat;
+  /* 原本这里还叠了一张 /img/sections/ideas.webp 作底图，但那个文件在
+     「板块重构 + 全站上锁」那次就随点子板块一起删了，url() 一直指向 404 ——
+     也就是说线上一直只有这层渐变。现在把死引用去掉，观感和之前完全一致。 */
+  background: linear-gradient(rgba(17, 12, 19, 0.72), rgba(17, 12, 19, 0.82));
   opacity: 1;
   transition: opacity 0.3s ease;
 }

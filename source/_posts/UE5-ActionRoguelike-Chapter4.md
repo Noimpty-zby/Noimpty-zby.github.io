@@ -98,7 +98,7 @@ TObjectPtr<UNiagaraSystem> TreasureBurstEffect;
 
 ## 0.2 结论：C++ 定"能力和规则"，蓝图填"数据和表现"
 
-![C++ 与蓝图的分工决策树](/img/posts/BluePrint/ue5-ch4-split.svg)
+![C++ 与蓝图的分工决策树](/img/posts/ue5-ch4/ue5-ch4-split.svg)
 
 用宝箱举例：
 
@@ -122,7 +122,7 @@ TObjectPtr<UNiagaraSystem> TreasureBurstEffect;
 
 蓝图凭什么能"看见"C++ 里的类和函数？靠的是 UE 的反射系统。
 
-![UE 反射系统的工作流程](/img/posts/BluePrint/ue5-ch4-reflection.svg)
+![UE 反射系统的工作流程](/img/posts/ue5-ch4/ue5-ch4-reflection.svg)
 
 流程是：编译之前，UHT（Unreal Header Tool）先扫一遍你的头文件，只认 `UCLASS()` / `UPROPERTY()` / `UFUNCTION()` 这几个宏，把它们记录的类型信息生成到 `Xxx.generated.h` 里。蓝图虚拟机运行时就查这份元数据。
 
@@ -257,7 +257,7 @@ PrimaryActorTick.bStartWithTickEnabled = false;
 
 先把三个概念区分清楚，这是本章最容易混的地方：
 
-![三种 UFUNCTION 说明符的调用方向](/img/posts/BluePrint/ue5-ch4-specifiers.svg)
+![三种 UFUNCTION 说明符的调用方向](/img/posts/ue5-ch4/ue5-ch4-specifiers.svg)
 
 | 说明符 | 方向 | C++ 要不要写实现 | 蓝图能不能改 |
 |---|---|---|---|
@@ -312,7 +312,7 @@ if (InteractInterface)
 IRogueInteractionInterface::Execute_Interact(SelectedActor);
 ```
 
-![Execute_Interact 的反射路由与 Parent 节点](/img/posts/BluePrint/ue5-ch4-execute.svg)
+![Execute_Interact 的反射路由与 Parent 节点](/img/posts/ue5-ch4/ue5-ch4-execute.svg)
 
 ### 两条路的区别
 
@@ -509,7 +509,7 @@ BP_Lever (父类：Actor)
 
 我第一次看这张图完全没看懂，因为三根线的语义完全不同。
 
-![事件分发器的登记与广播两个阶段](/img/posts/BluePrint/ue5-ch4-dispatcher.svg)
+![事件分发器的登记与广播两个阶段](/img/posts/ue5-ch4/ue5-ch4-dispatcher.svg)
 
 `Bind Event to On Handle Pulled` 有三个输入：
 
@@ -689,7 +689,7 @@ StartSpawning → Set Actor Tick Enabled (Target = self, Enabled = ✓)
 
 # 知识链路总览
 
-![第四章完整链路](/img/posts/BluePrint/ue5-ch4-chain.svg)
+![第四章完整链路](/img/posts/ue5-ch4/ue5-ch4-chain.svg)
 
 两条链路共用第三章建好的交互入口，之后分道扬镳：
 

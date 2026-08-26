@@ -46,7 +46,9 @@ const tasks = {
   async notes () {
     console.log('给文章写批注…')
     const r = await buildNotes()
-    if (r.wrote && !r.dry && !DRY) await commitNotes()
+    // 只清掉孤儿批注、一条新的都没写，也得提交 ——
+    // 不提交的话那次清理只存在于这台马上就要销毁的 runner 上，等于没做
+    if ((r.wrote || r.pruned) && !r.dry && !DRY) await commitNotes()
     return r
   },
   async news () {

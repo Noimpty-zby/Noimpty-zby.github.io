@@ -54,56 +54,56 @@
     ]
   },
   "/2026/07/31/UE5-ActionRoguelike-Chapter1/": {
-    "hash": "a64297bf18bb097d",
+    "hash": "7fabebd6bb216d13",
     "title": "UE5 C++ 第一章复盘：从零创建 ActionRoguelike 到可移动、可观察、带动画的第三人称角色",
     "notes": [
       {
         "anchor": "选择 C++ 项目意味着 Unreal 不只会创建 Cont",
-        "text": "选 C++ 项目后，后续章节的模块依赖、编译设置都会从这里开始，别急着跳过。"
+        "text": "选C++项目时记得源码目录默认在项目根下，迁移整个项目时别漏了，不然模块全丢。"
       },
       {
         "anchor": "因此，安装 Rider 并不代表系统中已经有完整的 C++ ",
-        "text": "窝第一次在这卡半天，以为装完 Rider 就能编译，结果 MSVC 没装，报错一脸懵 (ovo)"
+        "text": "Rider只是IDE，编译还靠MSVC，装完Rider别忘了装VS的C++工作负载，窝踩过这坑。"
       },
       {
         "anchor": "项目原本已有的 Core、CoreUObject、Engin",
-        "text": "这里容易手滑删掉原依赖，窝就干过一次，编译直接崩，记得用 diff 对比。"
+        "text": "改依赖时最好对照原Build.cs，别手滑删了Core，不然编译报错够你查半天喵。"
       }
     ]
   },
   "/2026/08/07/UE5-ActionRoguelike-Chapter2/": {
-    "hash": "90fad79d4de1cae8",
+    "hash": "2a87e079ed7d6884",
     "title": "UE5 C++ 第二章复盘：从一次点击到一发法球的完整远程攻击链路",
     "notes": [
       {
         "anchor": "ACTIONROGUELIKEAPI 是 UBT（Unrea",
-        "text": "窝补充：这宏只在模块间引用时需要，同模块内裸奔也能过编译，但养成习惯全带最省心。"
+        "text": "窝补一句：这个宏只在模块导出类时必需，纯内部类不加也能编译，但养成全加的习惯最稳。"
       },
       {
         "anchor": "如果根是空 SceneComponent，投射物移动时扫掠的",
-        "text": "这个坑窝踩过，症状是投射物穿墙但偶尔又撞到，排查半天才想起根组件没碰撞，血泪教训。"
+        "text": "这坑窝踩过，根组件空 SceneComponent 时球会穿模不触发 Hit，排查半天才发现是碰撞没挂在根上。"
       },
       {
         "anchor": "因为要按名字查找，函数必须被注册进反射系统，这就是 UFUN",
-        "text": "漏 UFUNCTION 的典型表现是编辑器里蓝图节点搜不到，运行时绑定失败还不报错，最阴间。"
+        "text": "漏 UFUNCTION 的症状是编译过但运行时静默失败，查 bug 时容易怀疑人生，记得先查这。"
       }
     ]
   },
   "/2026/08/11/UE5-ActionRoguelike-Chapter3/": {
-    "hash": "8d938ee7c1b4e5b8",
+    "hash": "ea25c58e2a502b86",
     "title": "UE5 C++ 第三章复盘：从每帧筛选目标到接口解耦的完整交互系统",
     "notes": [
       {
-        "anchor": "继承链是 UObject → UActorComponent",
-        "text": "继承链漏了 UObject 到 UActorComponent 之间还有 UObjectBaseUtility 和 UObjectBase，不过对初学者这条链够用了。"
+        "anchor": "第二章里 CreateDefaultSubobject 出来",
+        "text": "UActorComponent 没有 Transform，所以不能直接挂载到场景里，需要手动管理生命周期，这是和 SceneComponent 最大的区别。"
       },
       {
         "anchor": "点积的完整形式是 |A||B|cos θ。如果不归一化，Ov",
-        "text": "窝提醒一句：点积归一化后范围是 [-1,1]，但这里只用正值筛选，负值代表物体在视野后方，实际会被排除掉。"
+        "text": "这里补个坑：如果不归一化，除了距离干扰，重叠结果里如果有多个物体，排序也会被距离带偏，不只是值变大。"
       },
       {
         "anchor": "如果换成 FInterpTo，IsNearlyEqual 的",
-        "text": "FInterpTo 指数逼近的尾巴确实磨人，窝见过有人用 IsNearlyEqual 配大容差糊弄，不如直接上常量插值干净。"
+        "text": "指数逼近的尾部慢到肉眼不可见，但 Tick 还在跑，浪费在浮点运算和变换标记上，换成常量速度是更省的选择。"
       }
     ]
   },
@@ -266,6 +266,24 @@
       {
         "anchor": "&& 表示前一条命令成功后再执行后一条。「成功」在这里有确切",
         "text": "补个前提：`&&` 只看退出码，不看有没有输出，所以命令打印了错误但码为 0，照样走下一步。"
+      }
+    ]
+  },
+  "/2026/08/20/UE5-ActionRoguelike-Assignment2/": {
+    "hash": "c3d07cacd3e3a3ff",
+    "title": "UE5 C++ 作业二复盘：黑洞弹与传送弹，从旧账清理到弹丸基类",
+    "notes": [
+      {
+        "anchor": "本次作业未使用地形，因此在使用 TeleportTo 时，地",
+        "text": "默认开放世界关卡自带 Landscape，其碰撞是实心的，`TeleportTo` 撞上就返回 false，空关卡反而没这问题。"
+      },
+      {
+        "anchor": "发现它只花了两秒，因为 Tick 里那行 DrawDebug",
+        "text": "DrawDebugSphere 是调试期唯一能直接看到的中间状态，这坑专治那种「查了半天没头绪」的悬空指针。"
+      },
+      {
+        "anchor": "原因是 DrawDebugSphere 被写进了 for 循",
+        "text": "调试球画三遍时，第一反应别查碰撞，先看循环体——这毛病我见过三次了。"
       }
     ]
   }

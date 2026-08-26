@@ -2,7 +2,7 @@
 title: UE5 C++ 作业一复盘：角色跳跃与爆炸桶，从需求到状态机再到代码
 date: 2026-08-09 13:00:00
 categories:
-  - [课外, UE5-Looman]
+  - [课外, 游戏开发, UE5-Looman]
 tags:
   - C++
   - ActionRoguelike

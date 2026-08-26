@@ -2,7 +2,7 @@
 title: UE5 C++ 作业二复盘：黑洞弹与传送弹，从旧账清理到弹丸基类
 date: 2026-08-20 19:00:00
 categories:
-  - [课外, UE5-Looman]
+  - [课外, 游戏开发, UE5-Looman]
 tags:
   - C++
   - ActionRoguelike

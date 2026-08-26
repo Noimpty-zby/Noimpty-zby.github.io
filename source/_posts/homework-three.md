@@ -3,7 +3,7 @@ title: GAMES101 作业三：Blinn–Phong 着色与纹理映射
 date: 2026-07-20 21:25:04
 description: 记录 GAMES101 作业三中 Blinn–Phong 光照、纹理采样和透视校正插值的实现思路，并对比纯材质与纹理着色的结果。
 categories:
-  - [课外, GAMES101]
+  - [课外, 游戏开发, GAMES101]
 tags:
   - 纹理
 cover: /img/covers/homework-three.svg

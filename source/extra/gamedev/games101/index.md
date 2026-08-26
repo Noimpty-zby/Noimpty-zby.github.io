@@ -12,7 +12,7 @@ description: 闫令琪《现代计算机图形学入门》的课程笔记与作�
 ---
 
 <header class="noimpty-page-intro">
-  <p class="noimpty-page-intro__eyebrow">课外 · GAMES101</p>
+  <p class="noimpty-page-intro__eyebrow">游戏开发 · 01</p>
   <h2>现代计算机图形学入门</h2>
   <p>闫令琪（UC Santa Barbara）。课程分四块：光栅化、几何、光线追踪、动画与模拟，配四次 C++ 编程作业。这里收课程笔记和作业复盘。</p>
 </header>

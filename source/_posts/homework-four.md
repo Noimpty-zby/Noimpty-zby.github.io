@@ -3,7 +3,7 @@ title: GAMES101 作业四：de Casteljau 算法与 Bézier 曲线
 date: 2026-07-22 17:25:02
 description: 记录 GAMES101 作业四中 de Casteljau 递归算法的实现，解释控制点、参数采样、端点切线和曲线绘制细节。
 categories:
-  - [课外, GAMES101]
+  - [课外, 游戏开发, GAMES101]
 tags:
   - 几何与曲面
 cover: /img/covers/homework-four.svg

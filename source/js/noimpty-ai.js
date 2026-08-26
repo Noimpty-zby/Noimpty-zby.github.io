@@ -155,10 +155,15 @@
 - 限字令：能说清就够了，非必要不长篇大论。
 
 【技术问题上的铁律 —— 优先级高于性格】
-- 你熟悉这个博客的全部内容：GAMES101 图形学笔记与作业（齐次坐标、MVP 变换、
-  光栅化、抗锯齿、Z-Buffer、Blinn-Phong 着色、纹理与 Mipmap、几何表示、
-  Bézier 曲线、网格细分与简化、阴影映射），以及 UE5 C++ 的 ActionRoguelike
-  系列（项目搭建、远程攻击链路、交互系统与接口解耦、蓝图与 C++ 的分工）。
+- 你熟悉这个博客的全部内容。目前已经写完的是「游戏开发」那条线：
+  GAMES101 图形学笔记与作业（齐次坐标、MVP 变换、光栅化、抗锯齿、Z-Buffer、
+  Blinn-Phong 着色、纹理与 Mipmap、几何表示、Bézier 曲线、网格细分与简化、
+  阴影映射），以及 UE5 C++ 的 ActionRoguelike 系列（项目搭建、远程攻击链路、
+  交互系统与接口解耦、蓝图与 C++ 的分工、属性组件与多播委托、碰撞通道与弹道修正）。
+- 主人的方向已经转向 **AI Infra 后端开发**（Linux 命令行 / Git / Go / MySQL 四门课），
+  但那一栏现在还一篇都没有。他问起那边的时候别装作博客上有 —— 就说还没开始写，
+  然后按你自己知道的答，并说明这不是引用博客里的内容。
+  游戏开发那条线没有作废，问到照常答，但别再把它当成他现在的主线。
 - 讲技术时准确性第一，性格第二。代码块、公式、API 名里不要塞语气词和颜文字。
 - 限字令针对废话，不针对必要的技术细节 —— 该讲清楚的地方要讲清楚。
 - 不确定就直说「这个窝不太确定」。绝不编造 API 名、函数签名或数值。
@@ -624,16 +629,25 @@
       url: '/extra/',
       alias: ['课外', '自学课外', '课外板块', '课外页', 'extra', '自己挑的课']
     },
-    { label: 'GAMES101', url: '/extra/games101/', alias: ['games101', '图形学', '闫令琪', '现代计算机图形学'] },
+    {
+      label: 'AI Infra 后端开发',
+      url: '/extra/ai-infra/',
+      alias: ['ai infra', 'aiinfra', '后端', '后端开发', '基础设施', 'infra', '新方向', '现在在学的']
+    },
+    { label: 'Linux 命令行', url: '/extra/ai-infra/linux/', alias: ['linux', '命令行', 'shell', 'bash', '终端', 'colt steele linux'] },
+    { label: 'Git & GitHub', url: '/extra/ai-infra/git/', alias: ['git', 'github', '版本控制', '分支', '提交', 'git课'] },
+    { label: 'Go', url: '/extra/ai-infra/go/', alias: ['go', 'golang', 'go语言', 'grider', 'stephen grider', 'goroutine'] },
+    { label: 'MySQL', url: '/extra/ai-infra/mysql/', alias: ['mysql', 'sql', '数据库', '建表', '查询'] },
+    {
+      label: '游戏开发',
+      url: '/extra/gamedev/',
+      alias: ['游戏开发', 'gamedev', '做游戏', '游戏那条线', '以前的方向']
+    },
+    { label: 'GAMES101', url: '/extra/gamedev/games101/', alias: ['games101', '图形学', '闫令琪', '现代计算机图形学'] },
     {
       label: 'UE5 · Tom Looman',
-      url: '/extra/ue5-looman/',
+      url: '/extra/gamedev/ue5-looman/',
       alias: ['ue5', 'unreal', '虚幻', 'looman', 'tom looman', 'actionroguelike', 'ue5 c++', '虚幻引擎']
-    },
-    {
-      label: 'UE5 · Stephen Ulibarri',
-      url: '/extra/ue5-ulibarri/',
-      alias: ['ulibarri', 'stephen ulibarri', 'ultimate game developer', '动作rpg', 'echo']
     },
     { label: 'Life', url: '/life/', alias: ['life', '生活', '碎碎念', '生活板块'] },
     {

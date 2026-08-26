@@ -3,7 +3,7 @@ title: GAMES101 作业 1：旋转与投影矩阵实践
 date: 2026-07-15 20:14:17
 description: 记录 GAMES101 作业 1 中绕 z 轴旋转、透视投影与正交投影矩阵的实现过程。
 categories:
-  - [课外, GAMES101]
+  - [课外, 游戏开发, GAMES101]
 tags:
   - MVP 变换
 cover: /img/covers/homework-one.svg

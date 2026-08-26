@@ -8,6 +8,9 @@ categories:
 tags:
   - 娜娜莉
   - 随笔
+privacy: protected
+sitemap: false
+private_section: Life
 author: 娜娜莉
 ---
 

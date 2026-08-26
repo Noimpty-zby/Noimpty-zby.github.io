@@ -19,9 +19,15 @@ const DIR = 'source/_posts'
 const PREFIX = 'nanaly-'
 const DRY = process.argv.includes('--dry')
 
-// 想让她的文章也跟着 Life 一起上锁，把下面这行的注释去掉
-const PRIVACY = ''
-// const PRIVACY = 'privacy: protected\nsitemap: false\nprivate_section: Life\n'
+// 她的随笔归在 Life 底下，所以跟着 Life 一起上锁。
+//
+// 注意这三行不是「锁不锁」的开关 —— 全站上锁是默认拒绝、按路径判的
+// （见 scripts/noimpty-lockdown.js），少了它们文章照样锁得住。
+// 它们决定的是另外两件事：上下篇串联和相关文章推荐时，
+// 这篇算「加密文章」还是「公开文章」（见 scripts/noimpty-pagination.js
+// 与 noimpty-related-posts.js —— 两边互不串联）。
+// 不写的话她的随笔会被当成公开文章，孤零零一篇谁也串不上。
+const PRIVACY = 'privacy: protected\nsitemap: false\nprivate_section: Life\n'
 
 const pad = n => String(n).padStart(2, '0')
 

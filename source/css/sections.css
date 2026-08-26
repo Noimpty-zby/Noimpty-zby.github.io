@@ -634,9 +634,16 @@ html.noimpty-private-locked #rightside {
    —— 课内 / 课外两个 hub、课程信息表、以及「为什么这么排」那种说明块
    ══════════════════════════════════════════════════════════ */
 
-/* 课内是四门课。三列网格会让第四张孤零零地掉到第二行，
+/* 课内和 AI Infra 都是四门课。三列网格会让第四张孤零零地掉到第二行，
    所以这一档单独用两列，2×2 看起来才是「一组」。 */
 .noimpty-track-grid--four {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* 两张卡的档：课外首页（AI Infra / 游戏开发）和游戏开发页（GAMES101 / Looman）。
+   不单独开这一档的话，两张卡会按三列布局各占 1/3，右边空出一整格，
+   看起来像「第三张没加载出来」。 */
+.noimpty-track-grid--two {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -672,11 +679,22 @@ html.noimpty-private-locked #rightside {
 }
 
 /* 各门课自己的辉光色。和卡片的 --track-glow 一个机制。 */
-.noimpty-track-card--ue5b      { --track-glow: rgba(140, 108, 216, 0.22); }
 .noimpty-track-card--dsa       { --track-glow: rgba(233, 89, 120, 0.22); }
 .noimpty-track-card--csapp     { --track-glow: rgba(226, 140, 62, 0.2); }
 .noimpty-track-card--njuos     { --track-glow: rgba(72, 176, 132, 0.2); }
 .noimpty-track-card--cs144     { --track-glow: rgba(48, 151, 212, 0.22); }
+
+/* 课外的两条线。两者要一眼分得开，所以取色盘上离得最远的两个方向：
+   AI Infra 用青（终端/机器那一侧），游戏开发沿用它原本的粉红。 */
+.noimpty-track-card--aiinfra   { --track-glow: rgba(56, 184, 190, 0.24); }
+.noimpty-track-card--gamedev   { --track-glow: rgba(233, 89, 120, 0.24); }
+
+/* AI Infra 底下那四门。顺着各自生态里最有辨识度的颜色来，
+   这样卡片的辉光和图标是同一个印象，不用再看标题。 */
+.noimpty-track-card--linux     { --track-glow: rgba(240, 190, 80, 0.22); }
+.noimpty-track-card--git       { --track-glow: rgba(228, 116, 74, 0.22); }
+.noimpty-track-card--go        { --track-glow: rgba(56, 184, 190, 0.24); }
+.noimpty-track-card--mysql     { --track-glow: rgba(72, 145, 190, 0.22); }
 
 /* 课程信息表：讲师、教材、主页、进度。定义列表的排版，不是表格 —— 
    条目数会变（有的课有教材有的没有），表格的固定列反而更别扭。 */
@@ -740,7 +758,8 @@ html.noimpty-private-locked #rightside {
 .noimpty-plan b { color: var(--text-highlight-color); }
 
 @media (max-width: 768px) {
-  .noimpty-track-grid--four { grid-template-columns: minmax(0, 1fr); }
+  .noimpty-track-grid--four,
+  .noimpty-track-grid--two { grid-template-columns: minmax(0, 1fr); }
   .noimpty-course-meta { grid-template-columns: minmax(0, 1fr); padding: 15px 17px; }
   .noimpty-plan { padding-left: 14px; }
 }

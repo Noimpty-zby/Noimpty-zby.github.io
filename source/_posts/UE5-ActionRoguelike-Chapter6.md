@@ -2,7 +2,7 @@
 title: UE5 C++ 第六章复盘：把前五章欠的债还掉——准星、碰撞通道、控制台变量与弹道修正
 date: 2026-08-21 16:00:00
 categories:
-  - [课外, UE5-Looman]
+  - [课外, 游戏开发, UE5-Looman]
 tags:
   - C++
   - ActionRoguelike

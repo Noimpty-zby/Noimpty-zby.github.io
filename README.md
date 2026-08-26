@@ -30,7 +30,9 @@ npm run server
 
 ```
 /in-class/    自学课内 —— 数据结构与算法 / CSAPP / 操作系统 / 计算机网络
-/extra/       自学课外 —— GAMES101 / UE5·Tom Looman / UE5·Stephen Ulibarri
+/extra/       自学课外 —— 两条线：
+  /extra/ai-infra/   AI Infra 后端开发（现在这条）—— Linux / Git / Go / MySQL
+  /extra/gamedev/    游戏开发（之前那条，已告一段落）—— GAMES101 / UE5·Tom Looman
 /life/        Life
 /studio/      策划室（游戏策划，内容存在私有仓库里）
 /news/        资讯
@@ -41,7 +43,7 @@ npm run server
 
 ```yaml
 categories:
-  - [课外, GAMES101]        # 见下表
+  - [课外, AI Infra, Go]    # 三级，见下表
 tags:
   - 具体的技术标签           # 别再写和分类重复的标签
 privacy: protected          # 全站上锁，每篇都要
@@ -51,9 +53,12 @@ private_section: 课外        # 课外 / 课内 / Life，决定解锁框上显�
 
 | 内容 | categories |
 |---|---|
-| GAMES101 | `- [课外, GAMES101]` |
-| UE5 · Tom Looman | `- [课外, UE5-Looman]` |
-| UE5 · Stephen Ulibarri | `- [课外, UE5-Ulibarri]` |
+| Linux 命令行 | `- [课外, AI Infra, Linux]` |
+| Git & GitHub | `- [课外, AI Infra, Git]` |
+| Go | `- [课外, AI Infra, Go]` |
+| MySQL | `- [课外, AI Infra, MySQL]` |
+| GAMES101 | `- [课外, 游戏开发, GAMES101]` |
+| UE5 · Tom Looman | `- [课外, 游戏开发, UE5-Looman]` |
 | 数据结构与算法 | `- [课内, DSA]` |
 | CSAPP | `- [课内, CSAPP]` |
 | 操作系统 | `- [课内, NJU-OS]` |

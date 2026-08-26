@@ -2,7 +2,7 @@
 title: UE5 C++ 第一章复盘：从零创建 ActionRoguelike 到可移动、可观察、带动画的第三人称角色
 date: 2026-07-31 13:00:00
 categories:
-  - [课外, UE5-Looman]
+  - [课外, 游戏开发, UE5-Looman]
 tags:
   - C++
   - Enhanced Input

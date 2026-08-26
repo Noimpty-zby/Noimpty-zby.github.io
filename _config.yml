@@ -78,9 +78,17 @@ default_category: uncategorized
 category_map:
   课外: extra
   课内: in-class
+  # 课外 · 游戏开发（之前那条线，已告一段落）
+  游戏开发: gamedev
   GAMES101: games101
   UE5-Looman: ue5-looman
-  UE5-Ulibarri: ue5-ulibarri
+  # 课外 · AI Infra 后端开发（现在这条线）
+  AI Infra: ai-infra
+  Linux: linux
+  Git: git
+  Go: go
+  MySQL: mysql
+  # 课内
   DSA: dsa
   CSAPP: csapp
   NJU-OS: nju-os

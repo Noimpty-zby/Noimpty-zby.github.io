@@ -15,6 +15,13 @@ const REDIRECTS = {
   '2026/07/31/UE5_Chapter01_ActionRoguelike_Project_Setup/': '2026/07/31/UE5-ActionRoguelike-Chapter1/',
   '2026/07/20/homework-third/':                              '2026/07/20/homework-three/',
 
+  // ── 板块改结构留下的旧地址 ────────────────────────────
+  // 2026-08-26：方向转去 AI Infra，课外底下改成「游戏开发 / AI Infra」两条线，
+  // 原本平铺在 /extra/ 下的两个课程页收进 /extra/gamedev/。
+  // 文章的永久链接是按日期生成的，不受影响，动的只有这两个落地页。
+  'extra/games101/':                                         'extra/gamedev/games101/',
+  'extra/ue5-looman/':                                       'extra/gamedev/ue5-looman/',
+
   /* ⚠️ 这里原来还有一条：
    *
    *     '2026/08/07/UE5-ActionRoguelike-Chapter2 /'   ← 注意 Chapter2 后面那个空格
@@ -39,18 +46,24 @@ const REDIRECTS = {
   // 文章本身的永久链接没变（它是 :year/:month/:day/:title，只改了分类），
   // 所以旧的文章链接照样能打开。变的是**板块页**和**分类页**的地址，
   // 下面这些是外链、收藏和搜索收录里可能存在的老地址。
+  //
+  // ⚠️ 这些老地址后来又经历了一次改结构（2026-08-26，见上一段），
+  //    所以它们的目标直接写**最终地址**，不要指向中间那一版 ——
+  //    跳转页是 meta refresh，一环套一环会让人白等两次，
+  //    而且中间那一环哪天被删掉，整条链就断在半路。
   'study/':                                                  'extra/',
-  'study/games101/':                                         'extra/games101/',
-  'study/ue5/':                                              'extra/ue5-looman/',
+  'study/games101/':                                         'extra/gamedev/games101/',
+  'study/ue5/':                                              'extra/gamedev/ue5-looman/',
   // 竞赛那一栏没有对应的新板块（比赛的事现在归策划室管）
   'study/competition/':                                      'studio/',
   'ideas/':                                                  'studio/',
   'ideas-vault/':                                            'studio/',
 
-  // 分类页的地址跟着 category_map 变了
+  // 分类页的地址跟着 category_map 变了。
+  // 2026-08-26 起分类是三级（课外 / 游戏开发 / GAMES101），所以这里也多了一层。
   'categories/study/':                                       'categories/extra/',
-  'categories/study/games101/':                              'categories/extra/games101/',
-  'categories/study/ue5/':                                   'categories/extra/ue5-looman/',
+  'categories/study/games101/':                              'categories/extra/gamedev/games101/',
+  'categories/study/ue5/':                                   'categories/extra/gamedev/ue5-looman/',
   'categories/ideas/':                                       'studio/'
 }
 

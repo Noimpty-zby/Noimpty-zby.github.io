@@ -2,7 +2,7 @@
 title: UE5 C++ 第五章复盘：属性组件、多播委托，以及从轮询到事件驱动
 date: 2026-08-21 10:00:00
 categories:
-  - [课外, UE5-Looman]
+  - [课外, 游戏开发, UE5-Looman]
 tags:
   - C++
   - ActionRoguelike

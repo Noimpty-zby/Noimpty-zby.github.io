@@ -3,7 +3,7 @@ title: 从凹凸贴图到网格简化：几何表示、曲线曲面与阴影映�
 date: 2026-07-22 15:09:02
 description: 补充环境贴图与凹凸贴图，梳理隐式和显式几何、Bézier 曲线曲面、Loop 与 Catmull–Clark 细分、网格简化和阴影映射。
 categories:
-  - [课外, GAMES101]
+  - [课外, 游戏开发, GAMES101]
 tags:
   - 几何与曲面
 cover: /img/covers/Geometry.svg

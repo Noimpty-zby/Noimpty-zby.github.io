@@ -6,6 +6,7 @@
 
 import { listDiscussions, createDiscussion, addComment, addReaction, marker, hasMarker, SIGN, findDiscussion, giscusTitle } from './github.mjs'
 import { ask } from '../daily-report/narrate.mjs'
+import { sitePages, PAGE_RE } from './probe.mjs'
 import { createHash } from 'node:crypto'
 
 const SITE = (process.env.SITE_URL || 'https://noimpty-zby.github.io').replace(/\/$/, '')
@@ -148,15 +149,13 @@ export const patrol = async () => {
     return { checked: 0, reported: 0, aborted: true }
   }
 
-  const sm = await getText(`${SITE}/sitemap.xml`)
-  if (!sm.ok) { console.log('  取不到 sitemap，巡逻取消'); return { checked: 0, reported: 0 } }
+  // 页面清单来自锁清单，不是 sitemap —— 全站上锁之后 sitemap 已经不存在了，
+  // 详见 probe.mjs 里 sitePages 上面那段。
+  const all = await sitePages(SITE)
+  if (!all) { console.log('  取不到锁清单，巡逻取消'); return { checked: 0, reported: 0 } }
 
-  const pages = [...sm.body.matchAll(/<loc>([^<]+)<\/loc>/g)]
-    .map(m => m[1])
-    // sitemap 里存的是配置里的正式域名。把源统一成 SITE_URL，
-    // 否则本地调试时会跑去打生产站，测的根本不是眼前这份构建。
-    .map(u => { try { return SITE + new URL(u).pathname } catch (_) { return u } })
-    .filter(u => /\/\d{4}\/\d{2}\/\d{2}\//.test(u))   // 只巡逻文章页
+  const pages = all
+    .filter(u => PAGE_RE.test(u.slice(SITE.length)))   // 只巡逻文章页
     .slice(0, 40)
 
   console.log(`  要巡逻 ${pages.length} 篇文章`)

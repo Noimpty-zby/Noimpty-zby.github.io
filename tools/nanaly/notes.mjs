@@ -25,6 +25,14 @@ const PERSONA = `你是娜娜莉，住在 Noimpty 个人博客里的猫娘。
 
 const hashOf = s => createHash('sha256').update(s).digest('hex').slice(0, 16)
 
+/* 判「正文变没变」时只看正文，不看 front-matter。
+ *
+ * 以前是拿整个文件算哈希的，和上面那句「正文没改过就不重新生成」对不上：
+ * 改个 tag、换张封面、调一次分类，哈希就变，那篇的批注会被整个重写一遍 ——
+ * 白烧一次模型，而且好好的批注被换掉。2026-08-26 把 16 篇文章的分类
+ * 从两级改成三级，一次就让全部文章重新排队，这个差别才暴露出来。 */
+const bodyOf = raw => String(raw).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '')
+
 const readStore = () => {
   try { return JSON.parse(readFileSync(DATA, 'utf8')) } catch (_) { return {} }
 }
@@ -89,8 +97,18 @@ export const planNotes = (files, store) => {
      * live 就成了空集，接着 pruneOrphans 会把整张批注表当成孤儿清掉。 */
     live.add(p)
 
-    if (/^privacy:\s*protected/m.test(raw)) continue      // 加密文章不写批注
-    const h = hashOf(raw)
+    /* 这里曾经有一行 `if (privacy: protected) continue`。
+     *
+     * 它在只有少数文章上锁的年代是对的，但 2026-08-19 全站上锁之后
+     * **每一篇**文章都带上了这个字段 —— 于是这行直接把整个功能关掉了：
+     * 从那天起主人的文章一篇都没再拿到过新批注，工作流每天照跑、照样全绿，
+     * 只是每次都提交不出东西。（她自己的随笔当时还没有 privacy 字段，
+     * 所以又苟延残喘了几周，直到那边也补上。）
+     *
+     * 而且这道过滤本来就挡不住任何东西：批注表存的是正文开头 30 个字符
+     * 当锚点，而**正文全文本来就在同一个公开仓库的 source/_posts/ 里**。
+     * 上锁是前端软锁，从来不是「内容不进仓库」。所以删掉。 */
+    const h = hashOf(bodyOf(raw))
     if (store[p] && store[p].hash === h) continue          // 正文没变，跳过
     todo.push({ file, path: p, raw, hash: h })
   }

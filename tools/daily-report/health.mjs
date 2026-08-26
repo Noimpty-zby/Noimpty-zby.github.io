@@ -7,7 +7,7 @@
 
 import tls from 'node:tls'
 import { CFG, WINDOW } from './sources.mjs'
-import { probeUrl, canaryOk, looksThrottled, mapLimit } from '../nanaly/probe.mjs'
+import { probeUrl, canaryOk, looksThrottled, mapLimit, sitePages } from '../nanaly/probe.mjs'
 
 const T = (ms = 15000) => AbortSignal.timeout(ms)
 const text = async (url, ms) => {
@@ -236,18 +236,19 @@ export const checkDeps = async () => {
 
 // ---------------- 抓一遍全站（泄漏检查和死链检查共用） ----------------
 
-/* 从 sitemap 出发，把站内的 HTML 页面抓下来，同时收集所有站内地址。
+/* 把站内的 HTML 页面抓下来，同时收集所有站内地址。
  *
- * 抓一次两用，理由是：sitemap 里没有分页页（/page/2/、/archives/2026/05/、
- * 标签页、分类页），而受保护文章恰恰会漏在那些地方 ——
- * 只查 sitemap 上那五个入口，会得出「5 处公开索引全部干净」的结论，
- * 同时 /archives/2026/05/ 上白纸黑字挂着那篇文章的标题和链接。
- * 分页页都是从首页/归档页链过去的，所以顺着 <a> 再走一层就能覆盖到。
+ * 种子来自锁清单而不是 sitemap（全站上锁之后 sitemap 已经不存在，
+ * 详见 probe.mjs 里 sitePages 上面那段）。锁清单里已经包含了分类页、
+ * 标签页和按年月归档，比原来的 sitemap 全得多。
+ *
+ * 仍然要顺着 <a> 再走一层：分页页（/page/2/）是模板生成的，
+ * 不在 locals.pages 里，因此也不在锁清单里 ——
+ * 而受保护文章的标题恰恰最容易漏在那种地方。
  */
 const crawlSite = async () => {
-  const sm = await text(`${CFG.site}/sitemap.xml`, 20000)
-  if (!sm.ok) return null
-  const seeds = [...sm.body.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m => m[1])
+  const seeds = await sitePages(CFG.site)
+  if (!seeds) return null
 
   const html = new Map()          // url -> 页面源码
   const targets = new Set()       // 所有站内地址（含图片等静态资源）
@@ -272,7 +273,7 @@ const crawlSite = async () => {
     return found
   }
 
-  // 第一层：sitemap 上的页面
+  // 第一层：锁清单上的页面
   const first = await mapLimit(seeds.slice(0, 60), 3, visit)
   // 第二层：第一层链出去的站内页面（分页、标签、分类都在这一层）
   const more = [...new Set(first.flat())].filter(u => !html.has(u)).slice(0, 60)
@@ -286,7 +287,7 @@ const crawlSite = async () => {
 export const checkLinks = async (crawl) => {
   const out = { name: '死链与坏图', level: LEVEL.ok, detail: '', items: [] }
   try {
-    if (!crawl) { out.level = LEVEL.warn; out.detail = '取不到 sitemap，没法扫'; return out }
+    if (!crawl) { out.level = LEVEL.warn; out.detail = '取不到锁清单，没法扫'; return out }
     const list = [...crawl.targets].slice(0, 400)
     const broken = []
     // 并发压到 3。并发本身就是限流的来源 —— 扫得快一点换来一堆误报，不划算。

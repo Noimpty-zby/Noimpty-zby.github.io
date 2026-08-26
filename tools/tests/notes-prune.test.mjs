@@ -37,11 +37,15 @@ check('没有 date 的文章推不出路径，返回 null', () => {
 
 console.log('\n娜娜莉批注 · 哪些文章算「还活着」')
 
-check('★★ 上锁的文章不写新批注，但必须算「还活着」', () => {
+/* 这条测试原本写的是「上锁的文章不写新批注」，因为当时代码里确实有那么一行。
+ * 那行是 2026-08-19 全站上锁之前留下的，上锁之后每篇文章都带 privacy: protected，
+ * 于是它把整个批注功能关掉了 —— 主人的文章从那天起一篇都没再拿到过新批注，
+ * 工作流每天照跑照样全绿，只是提交不出东西。现在断言反过来。 */
+check('★★ 上锁的文章照样要排进待写队列（全站上锁，每篇都带 privacy）', () => {
   const files = [{ file: 'source/_posts/Geometry.md', raw: post('2026-07-22 15:09:02', 'privacy: protected\n') }]
   const { live, todo } = planNotes(files, {})
   assert.ok(live.has('/2026/07/22/Geometry/'), '上锁的文章没被算进 live —— 它的批注会被当孤儿删掉')
-  assert.equal(todo.length, 0, '上锁的文章不该被排进「要写批注」')
+  assert.equal(todo.length, 1, '上锁的文章被跳过了 —— 那等于整个批注功能是关的')
 })
 
 check('★★ 整站都上锁时，live 不能是空集', () => {
@@ -60,6 +64,23 @@ check('正文没变过的文章不重复写批注', () => {
   const store = { '/2026/07/22/a/': { hash: first[0].hash, title: 't', notes: [] } }
   const { todo: again } = planNotes([{ file: 'source/_posts/a.md', raw }], store)
   assert.equal(again.length, 0)
+})
+
+check('★★ 只动 front-matter（改 tag / 换封面 / 调分类）不重写批注', () => {
+  const raw = post('2026-07-22 15:09:02')
+  const { todo } = planNotes([{ file: 'source/_posts/a.md', raw }], {})
+  const store = { '/2026/07/22/a/': { hash: todo[0].hash, title: 't', notes: [] } }
+  const retagged = post('2026-07-22 15:09:02', 'tags:\n  - 新加的标签\ncover: /img/covers/a.svg\n')
+  assert.equal(planNotes([{ file: 'source/_posts/a.md', raw: retagged }], store).todo.length, 0,
+    '哈希把 front-matter 也算进去了 —— 改个标签就会白烧一次模型、好好的批注被换掉')
+})
+
+check('正文真的改了，还是要重写', () => {
+  const raw = post('2026-07-22 15:09:02')
+  const { todo } = planNotes([{ file: 'source/_posts/a.md', raw }], {})
+  const store = { '/2026/07/22/a/': { hash: todo[0].hash, title: 't', notes: [] } }
+  const rewritten = { file: 'source/_posts/a.md', raw: raw.replace('正文。', '正文整段重写过了。') }
+  assert.equal(planNotes([rewritten], store).todo.length, 1)
 })
 
 check('推不出路径的文章被记进 unresolved，而不是悄悄算作不存在', () => {

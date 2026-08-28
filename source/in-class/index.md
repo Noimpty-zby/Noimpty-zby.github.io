@@ -24,7 +24,7 @@ description: 计算机专业课的自学线：数据结构与算法、计算机�
     <h3>数据结构与算法</h3>
     <span class="noimpty-track-card__by">Abdul Bari · C / C++</span>
     <p>递归、数组、链表、栈与队列、树与 BST/AVL、图、哈希、各类排序，以及时间空间复杂度分析。</p>
-    <span class="noimpty-track-card__stat">约 53 小时 · 还没开始</span>
+    <span class="noimpty-track-card__stat">约 53 小时 · 已写 1 篇</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--csapp" href="/in-class/csapp/">
     <span class="noimpty-track-card__index">02</span>

@@ -647,6 +647,12 @@ html.noimpty-private-locked #rightside {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+/* 七张卡的档：AI Infra 现在有 7 门课/主题。默认三列会排成 3+3+1，
+   最后一张孤零零地掉在第三行；四列排成 4+3，两行都是满的。 */
+.noimpty-track-grid--seven {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 /* 整张卡片是个 <a>，卡片内的文字会继承链接的下划线。
    悬停时一整块文字全部加下划线非常难看，这里统一去掉 ——
    卡片自己有位移和阴影反馈，不需要再靠下划线表示可点。 */
@@ -681,8 +687,6 @@ html.noimpty-private-locked #rightside {
 /* 各门课自己的辉光色。和卡片的 --track-glow 一个机制。 */
 .noimpty-track-card--dsa       { --track-glow: rgba(233, 89, 120, 0.22); }
 .noimpty-track-card--csapp     { --track-glow: rgba(226, 140, 62, 0.2); }
-.noimpty-track-card--njuos     { --track-glow: rgba(72, 176, 132, 0.2); }
-.noimpty-track-card--cs144     { --track-glow: rgba(48, 151, 212, 0.22); }
 
 /* 课外的两条线。两者要一眼分得开，所以取色盘上离得最远的两个方向：
    AI Infra 用青（终端/机器那一侧），游戏开发沿用它原本的粉红。 */
@@ -695,6 +699,13 @@ html.noimpty-private-locked #rightside {
 .noimpty-track-card--git       { --track-glow: rgba(228, 116, 74, 0.22); }
 .noimpty-track-card--go        { --track-glow: rgba(56, 184, 190, 0.24); }
 .noimpty-track-card--mysql     { --track-glow: rgba(72, 145, 190, 0.22); }
+.noimpty-track-card--docker      { --track-glow: rgba(64, 145, 219, 0.24); }
+.noimpty-track-card--transformer { --track-glow: rgba(168, 120, 224, 0.24); }
+.noimpty-track-card--python      { --track-glow: rgba(224, 184, 64, 0.22); }
+
+/* Linux 自己拆出来的两块 */
+.noimpty-track-card--linux-intro    { --track-glow: rgba(240, 190, 80, 0.22); }
+.noimpty-track-card--linux-advanced { --track-glow: rgba(226, 140, 62, 0.22); }
 
 /* 课程信息表：讲师、教材、主页、进度。定义列表的排版，不是表格 —— 
    条目数会变（有的课有教材有的没有），表格的固定列反而更别扭。 */

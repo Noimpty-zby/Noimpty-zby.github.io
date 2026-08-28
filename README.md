@@ -29,9 +29,9 @@ npm run server
 首页是三个入口，除首页和 `/about/` 之外**全站上锁**（见下节）。
 
 ```
-/in-class/    自学课内 —— 数据结构与算法 / CSAPP / 操作系统 / 计算机网络
+/in-class/    自学课内 —— 数据结构与算法 / CSAPP（操作系统、计算机网络跟学校课走，不再自学）
 /extra/       自学课外 —— 两条线：
-  /extra/ai-infra/   AI Infra 后端开发（现在这条）—— Linux / Git / Go / MySQL
+  /extra/ai-infra/   AI Infra 后端开发（现在这条）—— Linux（入门/深入）/ Git / Go / MySQL / Docker / Transformer 推理机制 / Python
   /extra/gamedev/    游戏开发（之前那条，已告一段落）—— GAMES101 / UE5·Tom Looman
 /life/        Life
 /news/        资讯
@@ -52,16 +52,18 @@ private_section: 课外        # 课外 / 课内 / Life，决定解锁框上显�
 
 | 内容 | categories |
 |---|---|
-| Linux 命令行 | `- [课外, AI Infra, Linux]` |
+| Linux 入门 | `- [课外, AI Infra, Linux入门]` |
+| Linux 深入 | `- [课外, AI Infra, Linux深入]` |
 | Git & GitHub | `- [课外, AI Infra, Git]` |
 | Go | `- [课外, AI Infra, Go]` |
 | MySQL | `- [课外, AI Infra, MySQL]` |
+| Docker | `- [课外, AI Infra, Docker]` |
+| Transformer 推理机制 | `- [课外, AI Infra, Transformer 推理机制]` |
+| Python | `- [课外, AI Infra, Python]` |
 | GAMES101 | `- [课外, 游戏开发, GAMES101]` |
 | UE5 · Tom Looman | `- [课外, 游戏开发, UE5-Looman]` |
 | 数据结构与算法 | `- [课内, DSA]` |
 | CSAPP | `- [课内, CSAPP]` |
-| 操作系统 | `- [课内, NJU-OS]` |
-| 计算机网络 | `- [课内, CS144]` |
 | 生活 | `- Life` |
 
 分类的 slug 映射在 `_config.yml` 的 `category_map` 里 —— 加新分类记得同步，

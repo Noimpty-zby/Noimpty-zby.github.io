@@ -65,12 +65,12 @@ private_section: 课外
 
 ## 目录
 
-- [第零节：这一章到底在优化什么](#第零节这一章到底在优化什么)
-- [第一节：准星与过肩相机](#第一节准星与过肩相机)
-- [第二节：自定义碰撞通道，让攻击打在 Mesh 上](#第二节自定义碰撞通道让攻击打在-mesh-上)
-- [第三节：控制台变量，把调试绘制变成开关](#第三节控制台变量把调试绘制变成开关)
-- [第四节：弹道修正，让子弹去准星指的地方](#第四节弹道修正让子弹去准星指的地方)
-- [第五节：交互评分加入距离](#第五节交互评分加入距离)
+- [第零节：这一章到底在优化什么](#第零节：这一章到底在优化什么)
+- [第一节：准星与过肩相机](#第一节：准星与过肩相机)
+- [第二节：自定义碰撞通道，让攻击打在 Mesh 上](#第二节：自定义碰撞通道，让攻击打在-Mesh-上)
+- [第三节：控制台变量，把调试绘制变成开关](#第三节：控制台变量，把调试绘制变成开关)
+- [第四节：弹道修正，让子弹去准星指的地方](#第四节：弹道修正，让子弹去准星指的地方)
+- [第五节：交互评分加入距离](#第五节：交互评分加入距离)
 - [知识链路总览](#知识链路总览)
 - [易错点速查表](#易错点速查表)
 - [遗留待办](#遗留待办)
@@ -1141,4 +1141,4 @@ SphereComp->IgnoreActorWhenMoving(GetInstigator(), true);
 - [Epic Games：UMG UI Designer](https://dev.epicgames.com/documentation/en-us/unreal-engine/umg-ui-designer-for-unreal-engine)
 - [Epic Games：Traces with Raycasts](https://dev.epicgames.com/documentation/en-us/unreal-engine/traces-with-raycasts-in-unreal-engine)
 - [Tom Looman：ActionRoguelike on GitHub](https://github.com/tomlooman/ActionRoguelike)
-- [Tom Looman：Unreal Engine UPROPERTY Specifiers](https://tomlooman.com/unreal-engine-uproperty-specifiers/)
+- [Unreal Garden：All UPROPERTY Specifiers](https://unreal-garden.com/docs/uproperty/)

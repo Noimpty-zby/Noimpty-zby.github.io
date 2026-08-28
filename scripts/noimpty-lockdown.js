@@ -110,9 +110,18 @@ hexo.extend.generator.register('noimpty-privacy-manifest', locals => {
     entries.set(p, labelFor(p))
   }
 
-  // 全部文章 + 全部页面
+  /* 全部文章 + 全部页面。
+   *
+   * Hexo 把 source/css、source/js 底下没有 front-matter 的文件也算进
+   * locals.pages（layout: false，原样透传）—— 这些是静态资源，不是「页面」，
+   * 混进锁清单会被 normalizeWebPath 补上一条它本来没有的斜杠
+   * （比如 css/custom.css → /css/custom.css/），这个地址不对应任何真实页面。
+   * 前端上锁靠的是「除白名单外一律拦」（lockAllExceptPublic），不靠这份清单
+   * 决定锁不锁，所以这些假条目不会漏出内容 —— 但清单本该只列真实页面，过滤掉。 */
+  const isAsset = path => /\.[a-z0-9]{2,5}$/i.test(String(path || ''))
+
   toArray(locals.posts).forEach(item => add(item.path))
-  toArray(locals.pages).forEach(item => add(item.path))
+  toArray(locals.pages).forEach(item => { if (!isAsset(item.path)) add(item.path) })
 
   // 索引页。这些不是「页面」，是生成器产出的，locals.pages 里没有。
   ;['archives/', 'categories/', 'tags/'].forEach(add)

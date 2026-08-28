@@ -57,11 +57,11 @@ private_section: 课外
 
 ## 目录
 
-- [第零节：为什么血量要做成组件](#第零节为什么血量要做成组件)
-- [第一节：属性组件的骨架](#第一节属性组件的骨架)
-- [第二节：血条 UI 与蓝图连线详解](#第二节血条-ui-与蓝图连线详解)
-- [第三节：多播委托，干掉 Tick](#第三节多播委托干掉-tick)
-- [第四节：C++ 侧订阅与死亡处理](#第四节c-侧订阅与死亡处理)
+- [第零节：为什么血量要做成组件](#第零节：为什么血量要做成组件)
+- [第一节：属性组件的骨架](#第一节：属性组件的骨架)
+- [第二节：血条 UI 与蓝图连线详解](#第二节：血条-UI-与蓝图连线详解)
+- [第三节：多播委托，干掉 Tick](#第三节：多播委托，干掉-Tick)
+- [第四节：C++ 侧订阅与死亡处理](#第四节：C-侧订阅与死亡处理)
 - [知识链路总览](#知识链路总览)
 - [易错点速查表](#易错点速查表)
 - [遗留待办](#遗留待办)
@@ -1142,5 +1142,5 @@ Construct 时把组件和最大血量提升为变量，去掉重复的 `Get Owni
 - [Epic Games：Creating Widgets](https://dev.epicgames.com/documentation/en-us/unreal-engine/creating-widgets-in-unreal-engine)
 - [Epic Games：Reflection System / UProperties](https://dev.epicgames.com/documentation/en-us/unreal-engine/unreal-engine-uproperties)
 - [Epic Games：Gameplay Ability System](https://dev.epicgames.com/documentation/en-us/unreal-engine/gameplay-ability-system-for-unreal-engine)
-- [Tom Looman：Unreal Engine UPROPERTY Specifiers](https://tomlooman.com/unreal-engine-uproperty-specifiers/)
+- [Unreal Garden：All UPROPERTY Specifiers](https://unreal-garden.com/docs/uproperty/)
 - [Tom Looman：ActionRoguelike on GitHub](https://github.com/tomlooman/ActionRoguelike)

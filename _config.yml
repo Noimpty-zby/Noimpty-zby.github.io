@@ -84,15 +84,17 @@ category_map:
   UE5-Looman: ue5-looman
   # 课外 · AI Infra 后端开发（现在这条线）
   AI Infra: ai-infra
-  Linux: linux
+  Linux入门: linux-intro
+  Linux深入: linux-advanced
   Git: git
   Go: go
   MySQL: mysql
+  Docker: docker
+  Transformer 推理机制: transformer-inference
+  Python: python
   # 课内
   DSA: dsa
   CSAPP: csapp
-  NJU-OS: nju-os
-  CS144: cs144
   Life: life
   娜娜莉: nanaly
 # tag_map 已清空：Study / GAMES101 / UE5 / Life 这些标签已删除

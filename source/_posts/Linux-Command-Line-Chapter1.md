@@ -3,7 +3,7 @@ title: Linux 命令行第一章：终端、Shell 与内核各自在干什么
 date: 2026-08-25 15:22:00
 description: Colt Steele《The Linux Command Line Bootcamp》第一章的复盘。除了 clear / date / ncal / echo / sort / rm 这几条命令本身，重点整理「一条命令敲下去之后，终端、Shell、命令三者各自负责哪一段」——第一章那几个看起来零散的知识点，其实都能挂回这条线上。
 categories:
-  - [课外, AI Infra, Linux]
+  - [课外, AI Infra, Linux入门]
 tags:
   - Shell
   - 终端与内核

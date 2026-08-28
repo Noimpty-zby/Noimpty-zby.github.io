@@ -8,7 +8,7 @@ top_img: false
 privacy: protected
 private_section: 课外
 sitemap: false
-description: 现在在走的方向：Linux 命令行、Git、Go、MySQL 四门课打底。
+description: 现在在走的方向：Linux、Git、Go、MySQL 打底，外加 Docker、Python、Transformer 推理机制。
 ---
 
 <header class="noimpty-page-intro">
@@ -22,16 +22,17 @@ description: 现在在走的方向：Linux 命令行、Git、Go、MySQL 四门�
   <p>前两门是<b>每天都要用的工具</b>，不熟练的话后面每门课都会被它们拖住 —— 连不上机器、看不懂报错在哪一行、改崩了回不去。所以先拿下，而且它们最短。</p>
   <p>第三门是<b>语言</b>。Go 排在工具之后、数据库之前，因为学它的时候要写小程序、要跑 <code>go test</code>、要在多个分支上试错，前两门刚好是这些事的前提。</p>
   <p>第四门是<b>数据层</b>。放最后不是因为它不重要，而是因为脱离了具体的服务去背 SQL 语法，学完就忘 —— 有了 Go 之后才有地方把查询真正用起来。</p>
+  <p>后面新加的三块 —— Docker、Transformer 推理机制、Python —— 目前还没排进这套依赖链，先开着占位，等真正开始学再定顺序。</p>
 </div>
 
-<div class="noimpty-track-grid noimpty-track-grid--four">
+<div class="noimpty-track-grid noimpty-track-grid--seven">
   <a class="noimpty-track-card noimpty-track-card--linux" href="/extra/ai-infra/linux/">
     <span class="noimpty-track-card__index">01</span>
     <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fab fa-linux"></i></span>
-    <h3>Linux 命令行</h3>
+    <h3>Linux</h3>
     <span class="noimpty-track-card__by">Colt Steele · Beginner To Power User</span>
-    <p>文件系统、权限、管道与重定向、grep/find、vim、shell 脚本。服务器上没有图形界面，这就是唯一的界面。</p>
-    <span class="noimpty-track-card__stat">已写 1 篇</span>
+    <p>文件系统、权限、管道与重定向、grep/find、vim、shell 脚本。服务器上没有图形界面，这就是唯一的界面。拆成入门和深入两部分。</p>
+    <span class="noimpty-track-card__stat">入门已写 1 篇 · 深入还没开始</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--git" href="/extra/ai-infra/git/">
     <span class="noimpty-track-card__index">02</span>
@@ -55,6 +56,30 @@ description: 现在在走的方向：Linux 命令行、Git、Go、MySQL 四门�
     <h3>MySQL</h3>
     <span class="noimpty-track-card__by">Colt Steele · SQL Beginner to Expert</span>
     <p>建表与数据类型、CRUD、聚合、多表连接、索引。从「查得出来」到「查得快」。</p>
+    <span class="noimpty-track-card__stat">还没开始</span>
+  </a>
+  <a class="noimpty-track-card noimpty-track-card--docker" href="/extra/ai-infra/docker/">
+    <span class="noimpty-track-card__index">05</span>
+    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fab fa-docker"></i></span>
+    <h3>Docker</h3>
+    <span class="noimpty-track-card__by">具体教材还没定</span>
+    <p>把服务从「装在我的机器上」变成「装在镜像里」。镜像、容器、Dockerfile、网络与卷，AI Infra 部署绕不开它。</p>
+    <span class="noimpty-track-card__stat">还没开始</span>
+  </a>
+  <a class="noimpty-track-card noimpty-track-card--transformer" href="/extra/ai-infra/transformer/">
+    <span class="noimpty-track-card__index">06</span>
+    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fas fa-brain"></i></span>
+    <h3>Transformer 推理机制</h3>
+    <span class="noimpty-track-card__by">具体资料还没定</span>
+    <p>推理时到底在算什么：attention 的计算量、KV cache、批处理与量化怎么影响速度，不停在调 API 的层面。</p>
+    <span class="noimpty-track-card__stat">还没开始</span>
+  </a>
+  <a class="noimpty-track-card noimpty-track-card--python" href="/extra/ai-infra/python/">
+    <span class="noimpty-track-card__index">07</span>
+    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fab fa-python"></i></span>
+    <h3>Python</h3>
+    <span class="noimpty-track-card__by">具体教材还没定</span>
+    <p>前面几门课的脚本、AI Infra 相关的小工具大多会用它写，重点预计落在标准库和常用第三方库的使用习惯上。</p>
     <span class="noimpty-track-card__stat">还没开始</span>
   </a>
 </div>

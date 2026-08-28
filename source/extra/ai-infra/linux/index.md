@@ -1,44 +1,37 @@
 ---
-title: Linux 命令行
-date: 2026-08-26 10:11:00
-type: noimpty-track
+title: Linux
+date: 2026-08-28 10:04:00
+type: noimpty-hub
 aside: false
 comments: false
 top_img: false
 privacy: protected
 private_section: 课外
 sitemap: false
-description: "Colt Steele《The Linux Command Line Bootcamp: Beginner To Power User》的学习记录。"
+description: 拆成两部分——入门管命令怎么用，深入管为什么这么设计。
 ---
 
 <header class="noimpty-page-intro">
   <p class="noimpty-page-intro__eyebrow">AI Infra · 01</p>
-  <h2>The Linux Command Line Bootcamp: Beginner To Power User</h2>
-  <p>Colt Steele。从 <code>ls</code> 和 <code>cd</code> 一路讲到 shell 脚本。放在第一门是因为后面三门课全都在命令行里发生 —— 训练任务跑在没有图形界面的机器上，那时候命令行不是「一种方式」，是唯一的方式。</p>
+  <h2>Linux</h2>
+  <p>服务器上没有图形界面，命令行是唯一的界面，所以这门排在 AI Infra 最前面。分两部分：<b>入门</b>是能把命令用熟、把日常操作跑顺；<b>深入</b>是命令背后的东西——进程、内存、系统调用、性能排查。先有入门的手感，深入才不会是空中楼阁。</p>
 </header>
 
-<div class="noimpty-course-meta">
-  <div><b>讲师</b><span>Colt Steele</span></div>
-  <div><b>平台</b><span>Udemy · 英文授课</span></div>
-  <div><b>环境</b><span>Bash · 任意发行版</span></div>
-  <div><b>进度</b><span>第一章已完成</span></div>
+<div class="noimpty-track-grid noimpty-track-grid--two">
+  <a class="noimpty-track-card noimpty-track-card--linux-intro" href="/extra/ai-infra/linux/intro/">
+    <span class="noimpty-track-card__index">01</span>
+    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fab fa-linux"></i></span>
+    <h3>Linux 入门</h3>
+    <span class="noimpty-track-card__by">Colt Steele · Beginner To Power User</span>
+    <p>文件系统、权限、管道与重定向、grep/find、vim、shell 脚本。</p>
+    <span class="noimpty-track-card__stat">已写 1 篇</span>
+  </a>
+  <a class="noimpty-track-card noimpty-track-card--linux-advanced" href="/extra/ai-infra/linux/advanced/">
+    <span class="noimpty-track-card__index">02</span>
+    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fas fa-layer-group"></i></span>
+    <h3>Linux 深入</h3>
+    <span class="noimpty-track-card__by">具体资料还没定</span>
+    <p>进程与内存、系统调用、性能排查。等入门学完再展开。</p>
+    <span class="noimpty-track-card__stat">还没开始</span>
+  </a>
 </div>
-
-<div class="noimpty-plan">
-  <h3>课程覆盖</h3>
-  <ul>
-    <li><b>文件系统</b> —— 目录树的结构、绝对路径与相对路径、<code>ls</code> / <code>cd</code> / <code>pwd</code></li>
-    <li><b>增删改查</b> —— <code>touch</code> / <code>mkdir</code> / <code>cp</code> / <code>mv</code> / <code>rm</code>，以及通配符</li>
-    <li><b>看文档</b> —— <code>man</code>、<code>--help</code>、<code>which</code>，自己查而不是搜答案</li>
-    <li><b>权限</b> —— 用户、组、<code>chmod</code> 的数字与符号两种写法、<code>sudo</code></li>
-    <li><b>重定向与管道</b> —— stdin/stdout/stderr、<code>&gt;</code> 与 <code>&gt;&gt;</code>、<code>|</code> 串联命令</li>
-    <li><b>搜索</b> —— <code>grep</code> 与正则、<code>find</code> 按条件筛文件</li>
-    <li><b>编辑器</b> —— vim 的模式、移动、增删改查、退出</li>
-    <li><b>Shell 脚本</b> —— 变量、条件、循环、参数，把重复操作固化下来</li>
-  </ul>
-
-  <h3>这里会写什么</h3>
-  <p>命令的用法查手册就有，抄一遍没有意义。这里只写三类：<b>删错过的东西</b>（<code>rm</code> 的通配符、路径写错一个字符的后果），<b>看不懂的报错</b>（权限、路径、退出码到底在说什么），<b>把一串手工操作变成脚本的过程</b> —— 以及那个脚本第一次跑崩的原因。</p>
-</div>
-
-{% section_posts Linux %}

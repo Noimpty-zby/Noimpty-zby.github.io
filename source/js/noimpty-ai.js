@@ -622,8 +622,6 @@
     },
     { label: '数据结构与算法', url: '/in-class/dsa/', alias: ['数据结构', '算法', 'dsa', '数据结构与算法', 'abdul bari'] },
     { label: 'CSAPP', url: '/in-class/csapp/', alias: ['csapp', '15213', '计算机系统', '深入理解计算机系统', 'cmu'] },
-    { label: '操作系统', url: '/in-class/nju-os/', alias: ['操作系统', 'os', 'nju os', '南大操作系统', '蒋炎岩', 'jyy'] },
-    { label: '计算机网络', url: '/in-class/cs144/', alias: ['计算机网络', '网络', 'cs144', 'tcp', '网络课'] },
     {
       label: '自学课外',
       url: '/extra/',
@@ -634,10 +632,15 @@
       url: '/extra/ai-infra/',
       alias: ['ai infra', 'aiinfra', '后端', '后端开发', '基础设施', 'infra', '新方向', '现在在学的']
     },
-    { label: 'Linux 命令行', url: '/extra/ai-infra/linux/', alias: ['linux', '命令行', 'shell', 'bash', '终端', 'colt steele linux'] },
+    { label: 'Linux', url: '/extra/ai-infra/linux/', alias: ['linux', '命令行', 'shell', 'bash', '终端'] },
+    { label: 'Linux 入门', url: '/extra/ai-infra/linux/intro/', alias: ['linux入门', 'linux 入门', 'linux基础', 'colt steele linux'] },
+    { label: 'Linux 深入', url: '/extra/ai-infra/linux/advanced/', alias: ['linux深入', 'linux 深入', 'linux进阶', '内核', '系统调用'] },
     { label: 'Git & GitHub', url: '/extra/ai-infra/git/', alias: ['git', 'github', '版本控制', '分支', '提交', 'git课'] },
     { label: 'Go', url: '/extra/ai-infra/go/', alias: ['go', 'golang', 'go语言', 'grider', 'stephen grider', 'goroutine'] },
     { label: 'MySQL', url: '/extra/ai-infra/mysql/', alias: ['mysql', 'sql', '数据库', '建表', '查询'] },
+    { label: 'Docker', url: '/extra/ai-infra/docker/', alias: ['docker', '容器', '容器化', '镜像'] },
+    { label: 'Transformer 推理机制', url: '/extra/ai-infra/transformer/', alias: ['transformer', '推理', '推理机制', 'attention', 'kv cache'] },
+    { label: 'Python', url: '/extra/ai-infra/python/', alias: ['python', 'py'] },
     {
       label: '游戏开发',
       url: '/extra/gamedev/',

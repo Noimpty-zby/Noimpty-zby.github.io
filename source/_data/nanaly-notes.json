@@ -32,24 +32,20 @@
     ]
   },
   "/2026/08/09/UE5-ActionRoguelike-Assignment1/": {
-    "hash": "678d567a99e74561",
+    "hash": "56aa2209f5f59ea5",
     "title": "UE5 C++ 作业一复盘：角色跳跃与爆炸桶，从需求到状态机再到代码",
     "notes": [
       {
         "anchor": "真正的执行在别处。ACharacter::CheckJump",
-        "text": "窝补一句：`bPressedJump` 是 `UPROPERTY(Transient)`，每帧输入系统会重置它，别指望它跨帧保持。"
-      },
-      {
-        "anchor": "Jump() 内部只是重复置同一个 true，是幂等的，所以",
-        "text": "「非幂等」这个词用得好，但窝补个前提：`Triggered` 在按住时每帧触发，`Started` 只在按下瞬间触发，这是两者可靠性的根源。"
+        "text": "别忘了 `bPressedJump` 在 `Jump()` 里被置位后，`CheckJumpInput` 每帧还会清掉它，时序别搞反。"
       },
       {
         "anchor": "后果是：UBT 能编译它（它是合法的 C++），但 UHT ",
-        "text": "静默失败最坑——窝见过有人把普通类当 UE 类写，编译过但蓝图全红，排查半天才想起 UHT 这茬。"
+        "text": "静默失败是最坑的，建议建完类先编译一次再开编辑器，别让 UHT 的报错藏起来。"
       },
       {
         "anchor": "单个桶的开销可以忽略。但关卡里放 200 个桶，就是每帧 2",
-        "text": "200 个桶的比喻很准，但窝补一句：profiler 里均匀低开销恰恰是最难查的，热点分散比一个热点更恶心。"
+        "text": "200 个桶的 Tick 浪费其实没这么夸张，但积少成多，养成关掉的习惯总没错。"
       }
     ]
   },
@@ -90,42 +86,38 @@
     ]
   },
   "/2026/08/11/UE5-ActionRoguelike-Chapter3/": {
-    "hash": "ea25c58e2a502b86",
+    "hash": "f7ed2174724c843c",
     "title": "UE5 C++ 第三章复盘：从每帧筛选目标到接口解耦的完整交互系统",
     "notes": [
       {
-        "anchor": "第二章里 CreateDefaultSubobject 出来",
-        "text": "UActorComponent 没有 Transform，所以不能直接挂载到场景里，需要手动管理生命周期，这是和 SceneComponent 最大的区别。"
+        "anchor": "代价是：PC 自己没有世界位置（它不在关卡里），拿位置必须绕",
+        "text": "PC 没有世界位置这一点，新手最容易在拿位置时踩坑，绕 GetPawn() 这层别忘了。"
       },
       {
-        "anchor": "点积的完整形式是 |A||B|cos θ。如果不归一化，Ov",
-        "text": "这里补个坑：如果不归一化，除了距离干扰，重叠结果里如果有多个物体，排序也会被距离带偏，不只是值变大。"
+        "anchor": "GetSafeNormal() 而不是 GetNormal(",
+        "text": "GetSafeNormal 防 NaN 的坑很实用，零向量在重叠检测里真实存在，别省这一步。"
       },
       {
         "anchor": "如果换成 FInterpTo，IsNearlyEqual 的",
-        "text": "指数逼近的尾部慢到肉眼不可见，但 Tick 还在跑，浪费在浮点运算和变换标记上，换成常量速度是更省的选择。"
+        "text": "FInterpTo 末尾空转这个观察很细，实际项目里容易忽略，建议直接换 FInterpConstantTo。"
       }
     ]
   },
   "/2026/08/12/UE5-ActionRoguelike-Chapter4/": {
-    "hash": "478f814ef560ac16",
+    "hash": "c77accb44ead643b",
     "title": "UE5 C++ 第四章复盘：第一次用蓝图，以及 C++ 与蓝图的分工边界",
     "notes": [
       {
-        "anchor": "这一节课程里没有，是我自己整理的。因为学完第一节我脑子是乱的",
-        "text": "Tom Looman 课程默认你已理解蓝图的价值，所以没解释动机。这节补得必要，但建议先看官方文档的蓝图入门部分。"
+        "anchor": "这条好一点，但还是有代价：策划想把\"一个粒子\"改成\"两个粒子",
+        "text": "这其实就是最常见的「改需求成本」问题，C++ 字段的每次变更都要求重编译，蓝图侧改动则零编译，这正是分工边界的现实意义。"
       },
       {
-        "anchor": "问题在于：SetActorTickEnabled(false",
-        "text": "这个坑很经典：性能开关和状态标志混用，后续维护必炸。建议从一开始就分开变量。"
+        "anchor": "宝箱刚放进关卡、还没被交互时，CurrentAnimatio",
+        "text": "初始化即触发的坑很隐蔽，建议在构造函数里先设 `bChestOpened = true` 或让 `IsNearlyEqual` 带容差，避免首帧误判。"
       },
       {
         "anchor": "如果某个类是纯蓝图实现的接口（在 Class Setting",
-        "text": "纯蓝图接口的 Cast 失败是静默的，调试时极难发现。建议在 if 里加日志或断言。"
-      },
-      {
-        "anchor": "蓝图里一旦画了 Event Interact，C++ 的 I",
-        "text": "BlueprintNativeEvent 的覆盖语义容易踩坑，尤其从 C++ 迁移到蓝图时。这里说得清楚，值得记。"
+        "text": "纯蓝图接口的 Cast 盲区是新手高频坑，排查时若发现 `if` 静默跳过，优先检查接口是否真的挂在了 C++ 类上。"
       }
     ]
   },
@@ -292,20 +284,20 @@
     ]
   },
   "/2026/08/21/UE5-ActionRoguelike-Chapter5/": {
-    "hash": "b3d66c100443d375",
+    "hash": "76b199675a9d7e5f",
     "title": "UE5 C++ 第五章复盘：属性组件、多播委托，以及从轮询到事件驱动",
     "notes": [
       {
         "anchor": "玩家能用了。然后敌人也要血量——敌人是 APawn 派生的，",
-        "text": "APawn 拿不到 ACharacter 的血量这个坑，其实也暗示了继承树越深越难复用——这是组合优于继承最直观的教训。"
+        "text": "AActor 是 APawn 的父类，敌人如果不需要移动，直接挂 AActor 也行，别死磕 ACharacter。"
       },
       {
-        "anchor": "注意参数名是 InValueChange 而不是 Damag",
-        "text": "参数名用 InValueChange 这个细节容易被忽略，但正是它让组件保持中立，避免写成两个几乎一样的函数。"
+        "anchor": "AActor::TakeDamage 的基类实现目前是原样返",
+        "text": "基类原样返回伤害不代表以后也这样，引擎版本升级或子类重写都可能改，别依赖这个行为。"
       },
       {
-        "anchor": "还有个隐藏福利：Dynamic 委托内部存的是弱引用。监听者",
-        "text": "Dynamic 委托弱引用这个福利很多人不知道，但别依赖它——如果监听者生命周期比组件短，还是手动解绑更稳。"
+        "anchor": "留空时 UMG 会回退到\"第一个本地玩家\"，单机能跑。但控件",
+        "text": "分屏 bug 的根因是 PlayerOwner 未显式传入，单机掩盖了问题，联机必炸。"
       }
     ]
   },

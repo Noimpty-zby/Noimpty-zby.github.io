@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-08-26T06:26:55.463Z",
+  "updatedAt": "2026-09-01T12:57:52.967Z",
   "days": {
     "2026-08-15": [
       {
@@ -42,6 +42,25 @@
           "type": "post",
           "match": "优化"
         }
+      }
+    ],
+    "2026-09-04": [
+      {
+        "id": "tmtio96ur4e91",
+        "text": "git学习知识整理",
+        "done": false
+      },
+      {
+        "id": "tmtio9p30jwy",
+        "text": "linux-day2整理",
+        "done": false
+      }
+    ],
+    "2026-09-06": [
+      {
+        "id": "tmtio9z6o1r7a",
+        "text": "dsa递归完结！！",
+        "done": false
       }
     ]
   }

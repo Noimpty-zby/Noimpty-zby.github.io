@@ -69,13 +69,29 @@ const recentContext = () => {
       .split('\n').map(s => s.trim()).filter(Boolean).slice(0, 20)
     if (log.length) bits.push('主人最近的提交记录：\n' + log.map(l => '- ' + l).join('\n'))
   } catch (_) {}
+  /* 只喂最近 20 篇，而且**必须按日期倒序取**。
+   *
+   * 这里原来是 readdirSync 的顺序（= 文件名字母序）直接 slice(0, 20)。
+   * 文章少的时候看不出来，到 26 篇就开始出事：被切掉的正好是
+   * nanaly-2026-w33/34/35 —— 她自己写过的全部三篇随笔。于是她每周
+   * 写新随笔时都不知道自己上周写过什么，只能凭空重来一遍。
+   * 这个坏法一声不吭：随笔照发、工作流全绿，只有人读到「怎么又在说这个」
+   * 才可能察觉。 */
   try {
     const posts = readdirSync('source/_posts').filter(f => f.endsWith('.md'))
-    const titles = posts.map(f => {
-      const raw = readFileSync(`source/_posts/${f}`, 'utf8')
-      return (raw.match(/^title:\s*(.+)$/m) || [])[1]
-    }).filter(Boolean).slice(0, 20)
-    bits.push('博客里现有的文章：\n' + titles.map(t => '- ' + t.trim()).join('\n'))
+      .map(f => {
+        const raw = readFileSync(`source/_posts/${f}`, 'utf8')
+        return {
+          title: (raw.match(/^title:\s*(.+)$/m) || [])[1],
+          date: (raw.match(/^date:\s*(.+)$/m) || [])[1] || ''
+        }
+      })
+      .filter(p => p.title)
+      // front-matter 的 date 是 YYYY-MM-DD HH:mm:ss，字典序即时间序
+      .sort((a, b) => String(b.date).localeCompare(String(a.date)))
+      .slice(0, 20)
+    bits.push('博客里最近的文章（含你自己写的随笔，别重复写同一件事）：\n'
+      + posts.map(p => '- ' + p.title.trim()).join('\n'))
   } catch (_) {}
   return bits.join('\n\n')
 }

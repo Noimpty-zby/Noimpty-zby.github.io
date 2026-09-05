@@ -24,7 +24,7 @@ description: 拆成两部分——入门管命令怎么用，深入管为什么�
     <h3>Linux 入门</h3>
     <span class="noimpty-track-card__by">Colt Steele · Beginner To Power User</span>
     <p>文件系统、权限、管道与重定向、grep/find、vim、shell 脚本。</p>
-    <span class="noimpty-track-card__stat">已写 1 篇</span>
+    <span class="noimpty-track-card__stat">已写 3 篇</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--linux-advanced" href="/extra/ai-infra/linux/advanced/">
     <span class="noimpty-track-card__index">02</span>

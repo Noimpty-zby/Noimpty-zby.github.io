@@ -24,7 +24,7 @@ description: 课表之外自己挑的课：AI Infra 后端开发，以及此前�
     <h3>AI Infra 后端开发</h3>
     <span class="noimpty-track-card__by">Linux · Git · Go · MySQL · Docker · Python · Transformer</span>
     <p>现在在走的方向。从每天都要用的工具（命令行、版本控制）打底，再学语言、数据层、容器化部署，外加一块专门啃 Transformer 推理原理。</p>
-    <span class="noimpty-track-card__stat">7 门课 · 已写 3 篇</span>
+    <span class="noimpty-track-card__stat">7 门课 · 已写 5 篇</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--gamedev" href="/extra/gamedev/">
     <span class="noimpty-track-card__index">02</span>

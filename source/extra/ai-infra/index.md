@@ -32,7 +32,7 @@ description: 现在在走的方向：Linux、Git、Go、MySQL 打底，外加 Do
     <h3>Linux</h3>
     <span class="noimpty-track-card__by">Colt Steele · Beginner To Power User</span>
     <p>文件系统、权限、管道与重定向、grep/find、vim、shell 脚本。服务器上没有图形界面，这就是唯一的界面。拆成入门和深入两部分。</p>
-    <span class="noimpty-track-card__stat">入门已写 1 篇 · 深入还没开始</span>
+    <span class="noimpty-track-card__stat">入门已写 3 篇 · 深入还没开始</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--git" href="/extra/ai-infra/git/">
     <span class="noimpty-track-card__index">02</span>

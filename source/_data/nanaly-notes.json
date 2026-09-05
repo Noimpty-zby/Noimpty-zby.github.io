@@ -72,7 +72,7 @@
     "title": "UE5 C++ 第二章复盘：从一次点击到一发法球的完整远程攻击链路",
     "notes": [
       {
-        "anchor": "ACTIONROGUELIKEAPI 是 UBT（Unrea",
+        "anchor": "ACTIONROGUELIKE_API 是 UBT（Unrea",
         "text": "窝补一刀：这个宏只对模块内的类可见，跨模块引用还得在 Build.cs 里加依赖，别只靠它。"
       },
       {

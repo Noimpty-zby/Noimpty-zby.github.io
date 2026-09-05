@@ -42,6 +42,17 @@ for (const f of files) {
   })
 }
 
+/* Hexo 的构建脚本也一起看一眼。
+ * 它们坏了会让 hexo generate 直接炸，不像浏览器脚本那样闷声不响，
+ * 但顺手的事 —— 而且 scripts/ 下面同样有大段中文注释和模板字符串。
+ * 娜娜莉那几个 tools/*.mjs 不在这里：它们是 ESM，坏了工作流当场就红。 */
+console.log('\nHexo 构建脚本 · 语法')
+for (const f of readdirSync('scripts').filter(f => f.endsWith('.js')).sort()) {
+  check(`${f} 能被解析`, () => {
+    new vm.Script(`(function(exports,require,module,__filename,__dirname){${readFileSync(join('scripts', f), 'utf8')}\n})`, { filename: f })
+  })
+}
+
 console.log('\n娜娜莉的人设 · 模板字符串里的反引号')
 
 const AI = join(DIR, 'noimpty-ai.js')

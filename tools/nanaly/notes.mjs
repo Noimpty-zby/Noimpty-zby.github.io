@@ -57,11 +57,21 @@ const paragraphsOf = md => {
     .map(p => p.replace(/\s+/g, ' '))
 }
 
-// 文章正文里的段落，和 Hexo 渲染出来的 <p> 要能对上，
-// 所以锚点取的是「去掉 markdown 记号之后」的开头一小截
-const anchorOf = p => p
+/* 文章正文里的段落，和 Hexo 渲染出来的 <p> 要能对上，
+ * 所以锚点取的是「去掉 markdown 记号之后」的开头一小截。
+ *
+ * ⚠️ 这里**不能剥下划线**。它曾经和 * ` ~ 一起被当成强调符号剥掉，
+ * 结果是 `ACTIONROGUELIKE_API` 变成 `ACTIONROGUELIKEAPI` —— 而渲染出来的
+ * 页面上那个下划线好好地留着，锚点从此对不上，那条批注被静默丢弃
+ * （scripts/noimpty-nanaly-notes.js 的原则是「宁可少一条也不贴错」，
+ * 所以它不会报错，只是那条批注永远不出现）。
+ *
+ * 判据很清楚：CommonMark 本来就不把词内下划线当强调，`snake_case` 是字面量；
+ * 而这个博客里有两百多个带下划线的标识符（BP_PlayerCharacter、UE_KINDA_SMALL_NUMBER
+ * 这类），却一处都没用过 `_斜体_` 的写法。剥它百害无一利。 */
+export const anchorOf = p => p
   .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-  .replace(/[*_`~]/g, '')
+  .replace(/[*`~]/g, '')
   .replace(/\$([^$]*)\$/g, '$1')
   .trim()
   .slice(0, 30)

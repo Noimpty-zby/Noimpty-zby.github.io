@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-09-01T12:57:52.967Z",
+  "updatedAt": "2026-09-05T09:39:35.095Z",
   "days": {
     "2026-08-15": [
       {
@@ -48,12 +48,12 @@
       {
         "id": "tmtio96ur4e91",
         "text": "git学习知识整理",
-        "done": false
+        "done": true
       },
       {
         "id": "tmtio9p30jwy",
         "text": "linux-day2整理",
-        "done": false
+        "done": true
       }
     ],
     "2026-09-06": [

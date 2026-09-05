@@ -21,7 +21,7 @@ description: "Colt Steele《The Linux Command Line Bootcamp: Beginner To Power U
   <div><b>讲师</b><span>Colt Steele</span></div>
   <div><b>平台</b><span>Udemy · 英文授课</span></div>
   <div><b>环境</b><span>Bash · 任意发行版</span></div>
-  <div><b>进度</b><span>第一章已完成</span></div>
+  <div><b>进度</b><span>第三章已完成</span></div>
 </div>
 
 <div class="noimpty-plan">

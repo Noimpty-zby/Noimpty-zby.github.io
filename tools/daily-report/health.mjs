@@ -15,6 +15,45 @@ const text = async (url, ms) => {
   return { status: res.status, ok: res.ok, body: res.ok ? await res.text() : '' }
 }
 
+/* 只取正文开头的一小截，读够就把连接掐掉。
+ *
+ * 这是给 search.xml 用的：它是全站正文的密文，2 MB 上下，
+ * 而判断「它到底是不是密文」只需要开头那几百字节。更要命的是它排在
+ * crawlSite() 那一百多个请求后面 —— 整包拉完很容易撞上 GitHub Pages
+ * 那边的限流，连接被掐，undici 抛出来的是一句没头没脑的
+ * `TypeError: terminated`，于是整栏上锁检查显示成「检查失败」。
+ *
+ * 先用 Range 跟服务器要前几 KB；它要是不认（返回 200 而不是 206），
+ * 就自己从流里读够了主动 cancel。两种情况都不会把整包下下来。
+ * total 从 Content-Range / Content-Length 拿，用来在报告里写体积。
+ */
+const head = async (url, bytes = 2048, ms = 15000) => {
+  const res = await fetch(url, {
+    signal: T(ms),
+    redirect: 'follow',
+    headers: { Range: `bytes=0-${bytes - 1}` }
+  })
+  const cr = res.headers.get('content-range') || ''
+  const total = Number((cr.match(/\/(\d+)\s*$/) || [])[1] || res.headers.get('content-length') || 0)
+  if (!res.ok || !res.body) {
+    try { await res.body?.cancel() } catch (_) { /* 已经没了就算了 */ }
+    return { status: res.status, ok: res.ok, body: '', total }
+  }
+  const reader = res.body.getReader()
+  const dec = new TextDecoder()
+  let body = ''
+  try {
+    while (body.length < bytes) {
+      const { done, value } = await reader.read()
+      if (done) break
+      body += dec.decode(value, { stream: true })
+    }
+  } finally {
+    try { await reader.cancel() } catch (_) { /* 同上 */ }
+  }
+  return { status: res.status, ok: true, body, total }
+}
+
 const LEVEL = { ok: 'ok', warn: 'warn', bad: 'bad' }
 
 // ---------------- 1. 上锁有没有漏 ----------------
@@ -31,7 +70,7 @@ const LEVEL = { ok: 'ok', warn: 'warn', bad: 'bad' }
  *
  * 新的问法是四条，每一条对应一个「不用打开任何上锁页面就能拿到内容」的口子：
  *
- *   1. 真正公开的那两个页面上，有没有出现文章标题或链接
+ *   1. 真正公开的那几个页面（现在只有首页）上，有没有出现**文章**的链接
  *   2. atom.xml / sitemap.xml 还在不在（它们应该已经被 lockdown 移除）
  *   3. search.xml 有没有加密（它是全站正文，一个 GET 就下完）
  *   4. robots.txt 有没有拒绝爬虫
@@ -42,6 +81,22 @@ const LEVEL = { ok: 'ok', warn: 'warn', bad: 'bad' }
  */
 export const checkLeak = async (crawl) => {
   const out = { name: '上锁检查', level: LEVEL.ok, detail: '', items: [] }
+
+  /* 单条子检查出错时只降到 warn，而且**不许覆盖已经查实的 bad**。
+   *
+   * 原来四条子检查共用一个 try，catch 里无条件 `out.level = warn`。
+   * 于是 2026-08-26 那份日报长这样：① 已经判定有泄漏（bad），接着拉
+   * search.xml 时抛了 terminated，最后整栏显示成「留意 · 检查失败：terminated」——
+   * 一次网络抖动就能把真漏洞盖成一行「检查失败」。这是这一项里最不能接受的坏法：
+   * 它恰好在「确实漏了」的时候最容易把话说轻。 */
+  const degrade = (where, e) => {
+    out.items.push({ where, note: '这一项没查成：' + String((e && e.message) || e).slice(0, 80), leak: false })
+    if (out.level === LEVEL.ok) out.level = LEVEL.warn
+    return 1
+  }
+
+  // 锁清单是后面每一条的前提，取不到就只能整项作废
+  let manifest
   try {
     const man = await text(`${CFG.site}/js/protected-manifest.js`)
     if (!man.ok) {
@@ -50,38 +105,62 @@ export const checkLeak = async (crawl) => {
       return out
     }
     const m = man.body.match(/Object\.freeze\((\{[\s\S]*\})\)/)
-    const manifest = m ? JSON.parse(m[1]) : {}
-    const locked = (manifest.entries || []).map(e => e.path)
-    const publicPaths = new Set(manifest.publicPaths || ['/'])
-    const postPaths = locked.filter(p => /^\/\d{4}\//.test(p))
+    manifest = m ? JSON.parse(m[1]) : {}
+  } catch (e) {
+    out.level = LEVEL.warn
+    out.detail = '取不到锁清单：' + String((e && e.message) || e).slice(0, 120)
+    return out
+  }
 
-    if (!locked.length) {
-      out.level = LEVEL.bad
-      out.detail = '锁清单是空的 —— 全站都是公开的'
-      return out
-    }
+  const locked = (manifest.entries || []).map(e => e.path)
+  const publicPaths = new Set(manifest.publicPaths || ['/'])
+  const postPaths = locked.filter(p => /^\/\d{4}\//.test(p))
 
-    let bad = 0
+  if (!locked.length) {
+    out.level = LEVEL.bad
+    out.detail = '锁清单是空的 —— 全站都是公开的'
+    return out
+  }
 
-    // ① 真正公开的页面上不该出现任何上锁路径
-    if (crawl) {
-      crawl.html.forEach((body, url) => {
-        const where = url.replace(CFG.site, '') || '/'
-        if (!publicPaths.has(where)) return          // 上锁页面里有链接是正常的
-        const hit = locked.filter(p => body.includes(`href="${p}"`) || body.includes(`href='${p}'`))
-        if (hit.length) {
-          out.items.push({ where: `公开页 ${where}`, note: `挂着 ${hit.length} 个内部链接：${hit.slice(0, 3).join('、')}`, leak: true })
-          out.level = LEVEL.bad
-          bad++
-        }
-      })
-    } else {
-      out.level = LEVEL.warn
-      out.items.push({ where: '公开页面', note: '这次没能抓取，只查了 feed 和索引', leak: false })
-    }
+  let bad = 0
+  let failed = 0
 
-    // ② feed 和 sitemap 应该已经不存在
-    for (const [label, path] of [['RSS/Atom', '/atom.xml'], ['站点地图', '/sitemap.xml']]) {
+  /* ① 公开页面上不该出现**文章**链接。
+   *
+   * 只比 postPaths，不要比 locked ——「链到一个上锁页面」不是泄漏。
+   * 首页的导航栏永远挂着 /archives/、/categories/、/tags/，板块卡片还链着
+   * /extra/、/in-class/、/life/，这些页面自己全都在锁后面，点过去只会弹暗号框，
+   * 拿不到任何东西。tools/leakcheck.mjs 里那份「这些不算泄漏」的清单
+   * （归档 / 分类 / 标签）说的是同一件事，两边口径必须一致。
+   *
+   * 这里曾经写的是 locked.filter(...)。postPaths 就在上面几行算好了，
+   * 却只被末尾那句成功文案用到 —— 检查本身从来没用过它。
+   * 后果是从 2026-08-19 起，日报每天都报「发现 1 处漏洞 · 公开页 / 挂着 3 个
+   * 内部链接」，命中的全是导航链接，文章一篇都没有。天天喊狼来了，
+   * 真漏的那天就没人看了。
+   *
+   * 至于公开页上会不会写出「屋里放着什么」（课程名、技术栈这类人话），
+   * 那是另一回事，由 tools/leakcheck.mjs 在构建时按敏感词查，
+   * pages.yml 里红了就不部署。别把那件事挪到这里来做。 */
+  if (crawl) {
+    crawl.html.forEach((body, url) => {
+      const where = url.replace(CFG.site, '') || '/'
+      if (!publicPaths.has(where)) return          // 上锁页面里有链接是正常的
+      const hit = postPaths.filter(p => body.includes(`href="${p}"`) || body.includes(`href='${p}'`))
+      if (hit.length) {
+        out.items.push({ where: `公开页 ${where}`, note: `挂着 ${hit.length} 篇文章的链接：${hit.slice(0, 3).join('、')}`, leak: true })
+        out.level = LEVEL.bad
+        bad++
+      }
+    })
+  } else {
+    out.level = LEVEL.warn
+    out.items.push({ where: '公开页面', note: '这次没能抓取，只查了 feed 和索引', leak: false })
+  }
+
+  // ② feed 和 sitemap 应该已经不存在
+  for (const [label, path] of [['RSS/Atom', '/atom.xml'], ['站点地图', '/sitemap.xml']]) {
+    try {
       const r = await text(`${CFG.site}${path}`, 15000)
       if (r.ok) {
         out.items.push({ where: label, note: `${path} 还能访问 —— 它会把文章清单直接推出去，应该关掉`, leak: true })
@@ -90,27 +169,30 @@ export const checkLeak = async (crawl) => {
       } else {
         out.items.push({ where: label, note: `已关闭（HTTP ${r.status}）`, leak: false })
       }
-    }
+    } catch (e) { failed += degrade(label, e) }
+  }
 
-    // ③ search.xml 必须是密文。它是这套软锁里唯一一个「一个 URL 拿走全站正文」的口子
-    const s = await text(`${CFG.site}/search.xml`, 25000)
+  // ③ search.xml 必须是密文。它是这套软锁里唯一一个「一个 URL 拿走全站正文」的口子。
+  //    只取开头 2KB —— 判密文用得着的就是开头那几百字节，见 head() 上面的说明。
+  try {
+    const s = await head(`${CFG.site}/search.xml`, 2048, 20000)
+    // 只读了开头，体积得靠响应头拿；拿不到就别硬凑一个说法
+    const size = s.total ? `${(s.total / 1024).toFixed(0)} KB` : ''
     if (!s.ok) {
       out.items.push({ where: '搜索索引', note: `取不到（HTTP ${s.status}）`, leak: false })
+    } else if (s.body.trim().startsWith('{') && /"alg"\s*:\s*"AES-GCM"/.test(s.body.slice(0, 400))) {
+      out.items.push({ where: '搜索索引', note: size ? `已加密（${size} 密文）` : '已加密（密文，取不到大小）', leak: false })
+    } else if (/<entry>/.test(s.body)) {
+      out.items.push({ where: '搜索索引', note: `search.xml 是明文${size ? `，${size}` : ''} —— 全站正文一个 GET 就下完，构建时没有 NOIMPTY_PASSPHRASE`, leak: true })
+      out.level = LEVEL.bad
+      bad++
     } else {
-      const head = s.body.trim().slice(0, 200)
-      if (head.startsWith('{') && /"alg"\s*:\s*"AES-GCM"/.test(s.body.slice(0, 400))) {
-        out.items.push({ where: '搜索索引', note: `已加密（${(s.body.length / 1024).toFixed(0)} KB 密文）`, leak: false })
-      } else if (/<entry>/.test(s.body)) {
-        const n = (s.body.match(/<entry>/g) || []).length
-        out.items.push({ where: '搜索索引', note: `search.xml 是明文，里面有 ${n} 篇文章的完整正文 —— 构建时没有 NOIMPTY_PASSPHRASE`, leak: true })
-        out.level = LEVEL.bad
-        bad++
-      } else {
-        out.items.push({ where: '搜索索引', note: '是空的（没配暗号，站内搜索用不了，但也没漏）', leak: false })
-      }
+      out.items.push({ where: '搜索索引', note: '是空的（没配暗号，站内搜索用不了，但也没漏）', leak: false })
     }
+  } catch (e) { failed += degrade('搜索索引', e) }
 
-    // ④ robots.txt
+  // ④ robots.txt
+  try {
     const rb = await text(`${CFG.site}/robots.txt`, 15000)
     if (!rb.ok || !/Disallow:\s*\/\s*$/m.test(rb.body)) {
       out.items.push({ where: '爬虫', note: 'robots.txt 没有拒绝全站抓取 —— 内容会被搜索引擎收录', leak: true })
@@ -118,14 +200,13 @@ export const checkLeak = async (crawl) => {
     } else {
       out.items.push({ where: '爬虫', note: 'robots.txt 已拒绝全站抓取', leak: false })
     }
+  } catch (e) { failed += degrade('爬虫', e) }
 
-    out.detail = bad
-      ? `发现 ${bad} 处漏洞`
+  out.detail = bad
+    ? `发现 ${bad} 处漏洞`
+    : failed
+      ? `${locked.length} 个路径上锁（含 ${postPaths.length} 篇文章），查到的都干净，但有 ${failed} 项没查成`
       : `${locked.length} 个路径上锁（含 ${postPaths.length} 篇文章），公开面干净`
-  } catch (e) {
-    out.level = LEVEL.warn
-    out.detail = '检查失败：' + String(e.message || e).slice(0, 160)
-  }
   return out
 }
 

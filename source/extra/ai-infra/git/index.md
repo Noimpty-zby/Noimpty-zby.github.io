@@ -21,7 +21,7 @@ description: Colt Steele《The Git & Github Bootcamp》的学习记录。
   <div><b>讲师</b><span>Colt Steele</span></div>
   <div><b>平台</b><span>Udemy · 英文授课</span></div>
   <div><b>配套</b><span>GitHub 协作流程</span></div>
-  <div><b>进度</b><span>还没开始</span></div>
+  <div><b>进度</b><span>命令行速成 + 基本循环，已写 2 篇</span></div>
 </div>
 
 <div class="noimpty-plan">

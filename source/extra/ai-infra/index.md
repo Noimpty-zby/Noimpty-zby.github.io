@@ -40,7 +40,7 @@ description: 现在在走的方向：Linux、Git、Go、MySQL 打底，外加 Do
     <h3>Git &amp; GitHub</h3>
     <span class="noimpty-track-card__by">Colt Steele · The Git &amp; Github Bootcamp</span>
     <p>提交、分支、合并、撤销、变基，以及 Git 底层到底存了什么。重点是「改崩了怎么回去」。</p>
-    <span class="noimpty-track-card__stat">还没开始</span>
+    <span class="noimpty-track-card__stat">已写 2 篇</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--go" href="/extra/ai-infra/go/">
     <span class="noimpty-track-card__index">03</span>

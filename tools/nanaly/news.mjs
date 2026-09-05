@@ -18,29 +18,39 @@ const DIR = 'source/news'
 const DRY = process.argv.includes('--dry')
 const TAVILY_KEY = process.env.TAVILY_API_KEY || ''
 
-// 四个主题。
-//
-// 前两个是主人明确说「最想知道」的，而且他是**真的会拿去做决定**的 ——
-// 所以这两块走深度思考（pro 模型），每条要写得足够长、必须落到
-// 「这对一个想进游戏客户端岗的学生意味着什么」。
-// 后两个是了解性质的，flash 够用，短一点也没关系。
-const TOPICS = [
+/* 四个主题。
+ *
+ * 前两个是主人明确说「最想知道」的，而且他是**真的会拿去做决定**的 ——
+ * 所以这两块走深度思考（pro 模型），每条要写得足够长、必须落到
+ * 「这对一个想进 AI Infra / 后端岗的学生意味着什么」。
+ * 后两个是学习和动手性质的，flash 够用，短一点也没关系。
+ *
+ * ⚠️ 这张表是**搜索词的源头**，它决定了 Tavily 会捞回什么。
+ * 光改 source/_data/noimpty-profile.md 是不够的 —— profile 只能让她
+ * 「把捞回来的东西筛掉」，捞的动作还是照这里搜。
+ * 2026-08-26 主人从游戏客户端转到 AI Infra，profile 当天就改了，
+ * 但这张表一直留着「游戏客户端 面试 真题 UE C++ 八股 面经」这种查询，
+ * 于是接下来每一期都在搜游戏、筛游戏、写游戏 —— 2026-09-04 那期三条全是
+ * 米哈游 C++ 面经和多益的游戏客户端岗。搜索费和两次 pro 模型的钱全白花。
+ * **以后再换方向，profile 和这张表必须一起改。** */
+export const TOPICS = [
   {
     key: 'jobs',
-    title: '行业职场动态',
+    title: '岗位与行业动态',
     want: 3,
     deep: true,
     minWords: 120,
-    // 他要的是客户端/引擎/Gameplay 岗位的动向，不是泛泛的行业新闻
-    angle: `他的目标是**游戏客户端开发**（Gameplay / 引擎方向）的实习和校招。
-所以「和他有关」的判据是：这条消息能不能改变他投哪家、准备什么、或者对行业的判断。
-一条裁员新闻，如果裁的是发行和市场，对他几乎没意义；如果裁的是客户端/引擎组，
-或者反过来某家在扩招客户端，那才值得写 —— 而且要写清楚是哪条线。`,
+    angle: `他的目标是 **AI Infra / 后端开发**的实习和校招。
+所以「和他有关」的判据是：这条消息能不能改变他投哪家、准备什么、或者对这条路的判断。
+一条大模型融资、发布会、榜单的新闻对他没有意义；
+「某家在扩招推理平台 / 基础设施」、「这类岗位现在到底要求会什么」才值得写 ——
+而且要写清楚是哪条线。
+**游戏行业的岗位一条都别写。方向 2026-08 已经转了，那一类现在是噪音。**`,
     queries: [
-      '游戏 客户端 开发 招聘 校招 实习 岗位',
-      '游戏公司 裁员 引擎组 技术中台 组织调整',
-      'game client programmer hiring layoffs engine team',
-      '游戏行业 校招 技术岗 趋势 2026'
+      'AI Infra 基础设施 后端 招聘 实习 校招 岗位',
+      '推理平台 训练平台 工程师 招聘 要求 技能栈',
+      'AI infrastructure platform engineer hiring requirements',
+      '后端开发 校招 2026 要求 趋势 Go 云原生'
     ]
   },
   {
@@ -49,39 +59,54 @@ const TOPICS = [
     want: 3,
     deep: true,
     minWords: 140,
-    angle: `他要面的是**游戏客户端 / Gameplay 岗**，技术栈是 UE5 + C++，
-图形学在学 GAMES101 那条线，手上有一个 ActionRoguelike 的完整项目。
-所以有用的是：真题和考点、项目怎么讲、简历怎么写、别人踩过的坑。
-「保持自信、好好准备」这种正确的废话一个字都别写。
+    angle: `他要面的是 **AI Infra / 后端岗**，在补的基础是
+Linux → Git → Go → MySQL → Docker → 推理机制，课内还有数据结构和 CSAPP。
+**但他现在的水平很低，别高估**：Linux 命令行学到第三章，Git 到基本循环，
+Go 一行没写过，数据结构刚开篇。
+所以对他有用的是**入门到中段的真题和考点**，以及「项目怎么讲、简历怎么写」——
+他简历上工程侧目前是空的。分布式共识、内核调优这种深水区的八股，
+现在写给他等于白写。
 如果素材里有具体的题目或考点，**必须把题目本身摘出来**，
-并且用一两句说清楚考的是什么、他现在的水平大概能不能答上。`,
+并且用一两句说清楚考的是什么、以他现在的水平大概能不能答上。
+「保持自信、好好准备」这种正确的废话一个字都别写。
+**游戏客户端 / UE / 图形学的面经一条都别选。**`,
     queries: [
-      '游戏客户端 面试 真题 UE C++ 八股 面经',
-      '游戏 引擎 开发 面试 经验 分享 校招',
-      'game client programmer interview questions unreal c++',
-      '图形学 面试 渲染管线 问题 校招'
+      '后端 面试 真题 面经 Go 并发 Linux 校招',
+      'MySQL 索引 事务 慢查询 面试题 后端',
+      'backend infrastructure interview questions kubernetes docker linux',
+      '实习 简历 项目 怎么写 后端 没有经验'
     ]
   },
   {
-    key: 'ue5',
-    title: 'UE5 与引擎学习',
+    key: 'practice',
+    title: '工程实践与踩坑',
     want: 2,
     minWords: 60,
-    angle: '偏向能直接写进项目、或者能在面试里说出来的东西。纯营销通稿跳过。',
+    angle: `Linux、Git、Go、MySQL、Docker 这几门课里**能直接跟着做**的东西，
+以及别人真实踩过的坑（权限、容器网络、慢查询、goroutine 泄漏这类）。
+按他现在的水平挑：**一篇能跟着做完的入门实操，胜过一篇看不懂的先进阶资料。**
+纯概念综述、营销通稿、"2026 年十大趋势"这种跳过。`,
     queries: [
-      'Unreal Engine 5 教程 更新 新特性',
-      'Unreal Engine 5 tutorial release notes rendering'
+      'Linux 命令行 权限 管道 实践 踩坑 入门',
+      'Go 并发 goroutine channel 实践 踩坑 内存',
+      'Docker 容器 入门 实操 网络 卷 踩坑',
+      'MySQL 索引 慢查询 优化 实战 入门'
     ]
   },
   {
-    key: 'games',
-    title: '游戏与实况',
+    key: 'project',
+    title: '能上手的小项目',
     want: 2,
     minWords: 50,
-    angle: '轻松向。但如果某个新作的机制设计有值得拆解的地方，优先写那个。',
+    angle: `他现在最缺的是**工程侧的东西** —— 没写过服务、没碰过容器与编排、
+没做过分布式，简历上这一块是空的。
+所以这一栏只收「**一个人能做完、能写进简历**」的后端 / Infra 小项目：
+步骤清晰、有仓库或教程、规模不大。
+动辄几万字的系统设计大部头别选，他现在做不完，收藏了也是吃灰。`,
     queries: [
-      '游戏 新作 实况 评测 值得关注',
-      'new game release gameplay notable'
+      '后端 小项目 练手 从零实现 教程 开源',
+      'build your own database web server 从零实现',
+      'side project backend golang build from scratch tutorial'
     ]
   }
 ]
@@ -332,7 +357,7 @@ export const buildNews = async () => {
 你在给主人整理一份「${t.title}」的简报。
 
 【主人的情况】
-${profile || '（他是在学图形学和 UE5、准备找游戏客户端岗位的学生。）'}
+${profile || '（他是在补 Linux / Git / Go / MySQL、准备找 AI Infra 或后端实习的学生，水平还很低。）'}
 
 【这一栏的角度】
 ${t.angle || ''}`,

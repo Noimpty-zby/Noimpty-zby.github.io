@@ -52,10 +52,15 @@ export const listDiscussions = async () => {
           nodes{
             id title url
             reactions(first:20){ nodes{ content user{ login } } }
-            comments(first:50){
+            # 必须是 last —— 和下面 replies 同一个道理，而且这一层更要命。
+            # first:50 取的是**最旧**的 50 条：任何一篇文章的评论一过 50，
+            # 新来的评论对回评和巡逻就彻底隐身了（她不再接手），
+            # 同时她自己留的判重标记也会被挤出视野（她开始重复念叨）。
+            # 日报那边 sources.mjs 用的一直是 last:30，这里之前漏了。
+            comments(last:50){
               nodes{
                 id body createdAt url author{ login }
-                # 必须是 last。去重靠的是找她自己留的标记，取最旧的 20 条时
+                # 同上。去重靠的是找她自己留的标记，取最旧的 20 条时
                 # 楼层一多标记就被挤出视野，她会一遍遍重复回同一条评论。
                 replies(last:20){ nodes{ id body createdAt author{ login } } }
               }
@@ -137,10 +142,17 @@ export const SIGN = '\n\n<sub>—— 娜娜莉，住在这个博客里的猫。�
 //
 // 官方认可的绕法是显式派发一次 workflow_dispatch（GITHUB_TOKEN 可以做这件事）。
 // 需要 workflow 里有 permissions: actions: write。
+//
+// 派发失败会**抛异常**，别改回只打一行日志。理由和 pushWithRetry 那段一模一样：
+// 这是整条链路的最后一步，它没成功就等于「文件进了仓库、线上看不见」，
+// 而工作流是绿的、邮件照发，没有任何人会发现。
+// 抛出去至少能让那次运行变红 —— 内容已经推上去了，重跑一次 pages.yml 就能补上。
 
 export const triggerDeploy = async (workflowFile = 'pages.yml', ref = 'main') => {
   const token = process.env.GITHUB_TOKEN || ''
-  if (!token) { console.log('  没有 GITHUB_TOKEN，无法触发部署'); return false }
+  // 没 token 基本只会发生在本地手跑：那种情况下推上去的提交本来就会触发 on:push
+  // （防递归规则只管 GITHUB_TOKEN 推的提交），部署照样会发生，不该在这里报警。
+  if (!token) { console.log('  没有 GITHUB_TOKEN，跳过触发部署（本地推送会自己触发）'); return false }
   try {
     const res = await fetch(
       `https://api.github.com/repos/${OWNER}/${NAME}/actions/workflows/${workflowFile}/dispatches`,
@@ -155,11 +167,9 @@ export const triggerDeploy = async (workflowFile = 'pages.yml', ref = 'main') =>
         signal: AbortSignal.timeout(20000)
       })
     if (res.status === 204) { console.log('  已触发站点部署'); return true }
-    const t = await res.text()
-    console.log(`  触发部署失败：HTTP ${res.status} ${t.slice(0, 160)}`)
-    return false
+    throw new Error(`HTTP ${res.status} ${(await res.text()).slice(0, 160)}`)
   } catch (e) {
-    console.log('  触发部署失败：' + String(e.message || e).slice(0, 140))
-    return false
+    throw new Error('没能触发站点部署（' + String(e.message || e).slice(0, 160)
+      + '）—— 东西已经推进仓库了，但线上还是旧的，去重跑一次 pages.yml')
   }
 }

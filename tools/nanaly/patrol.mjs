@@ -103,6 +103,30 @@ const inspect = async pageUrl => {
   return { pageUrl, title, issues: issues.concat(found) }
 }
 
+const PATROL_PERSONA = '你是娜娜莉，住在这个博客里的猫娘。毒舌但可靠，自称「窝」，说话简短。禁止使用 • 和 ω。'
+
+// 固定的排前面，变量排后面 —— 规矩和原因见 narrate.mjs 里 reviewPrompt 上面那段。
+// 原来第一行是《文章标题》，把下面那整块硬性约束（约 250 token）全踩脏了。
+export const patrolPrompt = (title, list) => `你在博客里闲逛时，发现有一篇文章出了问题。
+
+写一条评论提醒主人。两三句话，先说你是怎么发现的（比如顺手点了个链接），再把问题列清楚。
+
+**硬性约束，违反了会给主人惹麻烦：**
+1. 只能陈述下面清单里的内容。清单之外的任何问题都不许提，一个字都不行
+2. **不许推测原因。** 你只知道它打不开，不知道为什么。
+   禁止说「地址写错了」「应该是 xxx」「服务器抽风」「少了文件名」这类猜测 ——
+   你没有依据，说了就是编
+3. 不许评论文章内容本身有什么毛病，那不是这次巡逻的范围
+4. 别啰嗦，别道歉，也别假装很严重
+
+这条评论会公开发在主人的博客上，读者都看得到。说错了是他丢人。
+
+━━━ 这一篇 ━━━
+《${title}》
+
+问题清单（这是你**唯一**知道的事实）：
+${list}`
+
 // ---------------- 主流程 ----------------
 
 export const patrol = async () => {
@@ -162,24 +186,8 @@ export const patrol = async () => {
     const shown = item.issues.slice(0, 8)
     const list = shown.map(i => `- ${i.what}`).join('\n')
       + (item.issues.length > shown.length ? `\n- …另外还有 ${item.issues.length - shown.length} 处` : '')
-    const said = await ask(
-      '你是娜娜莉，住在这个博客里的猫娘。毒舌但可靠，自称「窝」，说话简短。禁止使用 • 和 ω。',
-      `你在博客里闲逛时，发现《${item.title}》这篇有问题。
+    const said = await ask(PATROL_PERSONA, patrolPrompt(item.title, list), 400, { label: '巡逻' })
 
-问题清单（这是你**唯一**知道的事实）：
-${list}
-
-写一条评论提醒主人。两三句话，先说你是怎么发现的（比如顺手点了个链接），再把问题列清楚。
-
-**硬性约束，违反了会给主人惹麻烦：**
-1. 只能陈述上面清单里的内容。清单之外的任何问题都不许提，一个字都不行
-2. **不许推测原因。** 你只知道它打不开，不知道为什么。
-   禁止说「地址写错了」「应该是 xxx」「服务器抽风」「少了文件名」这类猜测 ——
-   你没有依据，说了就是编
-3. 不许评论文章内容本身有什么毛病，那不是这次巡逻的范围
-4. 别啰嗦，别道歉，也别假装很严重
-
-这条评论会公开发在主人的博客上，读者都看得到。说错了是他丢人。`, 400, { label: '巡逻' })
 
     const body = (said || `[抖了抖耳朵] 窝路过这篇，顺手点了几个链接，有东西坏了喵：\n\n${list}`)
       + `\n\n<details><summary>具体是这些</summary>\n\n${list}\n\n</details>`

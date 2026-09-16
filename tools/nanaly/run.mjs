@@ -17,6 +17,7 @@ import { buildNotes, commitNotes } from './notes.mjs'
 import { buildNews, commitNews } from './news.mjs'
 import { writeColumn, commitAndPush } from './column.mjs'
 import { getComments } from '../daily-report/sources.mjs'
+import { tokenSummary } from '../daily-report/narrate.mjs'
 
 const DRY = process.argv.includes('--dry')
 const what = (process.argv[2] || 'all').replace(/^-+/, '')
@@ -79,6 +80,9 @@ const main = async () => {
       process.exitCode = 1
     }
   }
+  // 每次跑完报一次账。命中率低的时候，这一行是最先能看出问题的地方
+  const cost = tokenSummary()
+  if (cost) console.log(`\n本次 token：${cost}`)
 }
 
 main().catch(e => { console.error('致命错误：', e); process.exit(1) })

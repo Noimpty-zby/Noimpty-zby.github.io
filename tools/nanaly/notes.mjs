@@ -194,7 +194,7 @@ export const buildNotes = async () => {
 {"notes":[{"i":段落编号,"text":"旁注内容"}]}
 
 正文段落：
-${listed}`, 900)
+${listed}`, 900, { label: '批注' })
 
     if (!out) { console.log(`  ${title.trim()} 没能调用模型，跳过`); continue }
     let parsed

@@ -399,6 +399,41 @@ export const checkLinks = async (crawl) => {
   return out
 }
 
+// ---------------- 6. 娜娜莉还叫得动吗 ----------------
+
+/* 前面五项开工时就能查完，这一项必须等她把今天要说的话都说完 ——
+ * 它数的不是「接口现在通不通」，而是「今晚这几次真实调用有没有挂」。
+ *
+ * 专门探一针当然更简单，但探针通过、真正那一次挂掉的报告照样是全绿的：
+ * 2026-09-14 丢掉的那篇读后反馈正是这种挂法 —— 模型活得好好的，
+ * 十一个小时后还给同一篇文章写了批注，就是日报那一次没答上来。
+ * 而当时整封邮件唯一的痕迹，是读后反馈那一格里的一句降级文案。
+ *
+ * 所以这一项由 run.mjs 在所有 ask() 之后追加，见那边的调用点。
+ */
+export const checkModel = state => {
+  const out = { name: '娜娜莉的模型', level: LEVEL.ok, detail: '', items: [] }
+  if (state.keyless) {
+    out.level = LEVEL.warn
+    out.detail = '没有配置 DEEPSEEK_API_KEY —— 这封邮件里她说的每一句都是模板文字'
+    return out
+  }
+  if (!state.calls) { out.detail = '今天没有需要她开口的地方'; return out }
+  if (!state.fails) { out.detail = `${state.calls} 次调用全部成功`; return out }
+  // 挂一次就报 bad 会变成天天喊狼来了（见上面 Dependabot 那一段）：
+  // 重试之后仍然失败的单次调用只是少了一格内容，站点本身没事。
+  // 几次调用全挂才是真的哑了 —— 那种情况下整封邮件的「人话」都是模板。
+  out.level = state.calls > 1 && state.fails >= state.calls ? LEVEL.bad : LEVEL.warn
+  out.detail = `${state.calls} 次调用挂了 ${state.fails} 次（重试之后仍然失败）`
+  out.items.push({ where: '最后一次失败', note: state.why || '未知原因' })
+  return out
+}
+
+// 一张表里最难看的那一项决定整体颜色。
+// runHealth 和「跑完之后才追加进来的检查」共用这一份，别再各写一套。
+export const worstOf = checks => checks.some(c => c.level === LEVEL.bad) ? 'bad'
+  : checks.some(c => c.level === LEVEL.warn) ? 'warn' : 'ok'
+
 export const runHealth = async () => {
   // 顺序是有讲究的，别改回并行。
   //
@@ -418,7 +453,5 @@ export const runHealth = async () => {
     : { name: '死链与坏图', level: LEVEL.ok, detail: '这次连首页都取不到，是本次运行的网络问题，跳过不误报', items: [] }
 
   const checks = [leak, site, build, deps, links]
-  const worst = checks.some(c => c.level === 'bad') ? 'bad'
-    : checks.some(c => c.level === 'warn') ? 'warn' : 'ok'
-  return { checks, worst }
+  return { checks, worst: worstOf(checks) }
 }

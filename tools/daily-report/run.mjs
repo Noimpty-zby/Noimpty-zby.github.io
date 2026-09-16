@@ -8,8 +8,8 @@
 
 import { writeFileSync } from 'node:fs'
 import { CFG, WINDOW, WINDOW_LABEL, getTraffic, getComments, getNewPosts, getOwnerHeartbeat, getSchedule } from './sources.mjs'
-import { runHealth } from './health.mjs'
-import { writeOpening, reviewPost, screenComments, writeMissYou, draftReplies } from './narrate.mjs'
+import { runHealth, checkModel, worstOf } from './health.mjs'
+import { writeOpening, reviewPost, screenComments, writeMissYou, draftReplies, MODEL_STATE } from './narrate.mjs'
 import { renderEmail, renderSubject, renderMissYou } from './render.mjs'
 import { autoComplete, commitSchedule } from './schedule-auto.mjs'
 
@@ -97,6 +97,17 @@ const main = async () => {
   const opening = await step('写小结',
     () => writeOpening({ traffic, comments, newPosts, health, schedule }),
     '（小结生成失败，下面是原始数据）')
+
+  /* 健康检查的最后一项要等她把话说完才能拼上去 —— 它数的是今晚这几次真实调用。
+   *
+   * 为什么非有不可：模型整晚调不通的时候，工作流全绿、邮件照发，
+   * 里面每一句「人话」都悄悄换成了模板，除非你逐字去认那几句降级文案，
+   * 否则根本发现不了。2026-09-14 就是这样过去的。
+   *
+   * 拿原来的 worst 当下限：runHealth 自己挂掉时 step() 给的兜底是 warn，
+   * 那时 checks 是空的，不垫一下会被这一项冲淡成 ok。 */
+  health.checks.push(checkModel(MODEL_STATE))
+  health.worst = worstOf([{ level: health.worst }, ...health.checks])
 
   const noteworthy =
     health.worst !== 'ok' ||

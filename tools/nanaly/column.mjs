@@ -194,7 +194,7 @@ export const writeColumn = async ({ comments = [], patrolNote = '' } = {}) => {
 5. 不要在文章里自我介绍，读者知道你是谁
 
 材料：
-${ctx || '（这段时间站上很安静，没什么事发生。那就写「安静」本身。）'}`, 1600)
+${ctx || '（这段时间站上很安静，没什么事发生。那就写「安静」本身。）'}`, 1600, { label: '随笔' })
 
   if (!raw) { console.log('  没能调用模型，这周跳过'); return null }
 

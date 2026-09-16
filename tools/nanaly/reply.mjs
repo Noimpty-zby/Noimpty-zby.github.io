@@ -1,7 +1,7 @@
 // 自动回评：读者提了问题、主人一时没顾上，她替主人先答。
 //
 // 三条规矩，缺一不可才会开口：
-//   1. 这条评论已经满了冷静期（默认 6 小时）—— 让主人有机会自己先回
+//   1. 这条评论已经满了冷静期（默认 4 小时）—— 让主人有机会自己先回
 //   2. 主人还没回过它
 //   3. 她自己也没回过它（靠隐藏标记判重）
 //
@@ -14,7 +14,9 @@ import { stripAngles, stripOutboundLinks } from './git.mjs'
 
 const SITE = (process.env.SITE_URL || 'https://noimpty-zby.github.io').replace(/\/$/, '')
 const DRY = process.argv.includes('--dry')
-const GRACE_HOURS = Number(process.env.NANALY_REPLY_GRACE_HOURS ?? 6)
+// 默认值要和 nanaly.yml 里配的那个一致 —— 不一致的话，本地跑出来的
+// 「该接手几条」和线上不是一回事。那边还记着这个数怎么和班次一起算。
+const GRACE_HOURS = Number(process.env.NANALY_REPLY_GRACE_HOURS ?? 4)
 const MAX_PER_RUN = Number(process.env.NANALY_REPLY_MAX ?? 5)
 const OWNER_LOGIN = String(process.env.OWNER_LOGIN || OWNER).toLowerCase()
 

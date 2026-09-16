@@ -10,9 +10,11 @@
  * 这个文件同时守住那道筛子和后面三关。
  */
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 process.env.OWNER_LOGIN = 'noimpty-zby'
-process.env.NANALY_REPLY_GRACE_HOURS = '6'
+process.env.NANALY_REPLY_GRACE_HOURS = '4'
 const { isReplyable, collect } = await import('../nanaly/reply.mjs')
 const { SIGN, marker } = await import('../nanaly/github.mjs')
 
@@ -54,9 +56,9 @@ check('没有评论区的页面不归她管', () => {
 
 console.log('\n回评 · 开口前的三关')
 
-check('冷静期没过 → 先让主人有机会自己回', () => {
-  assert.equal(collect([disc('2026/09/14/x/', [comment('读者甲', 2)])]).length, 0)
-  assert.equal(collect([disc('2026/09/14/x/', [comment('读者甲', 7)])]).length, 1)
+check('冷静期没过 → 先让主人有机会自己回（这里按 4 小时跑）', () => {
+  assert.equal(collect([disc('2026/09/14/x/', [comment('读者甲', 3)])]).length, 0)
+  assert.equal(collect([disc('2026/09/14/x/', [comment('读者甲', 5)])]).length, 1)
 })
 
 check('主人自己发的评论不用回', () => {
@@ -89,6 +91,39 @@ check('多条一起来时，按时间从旧到新排（挂得最久的先答）'
     comment('读者甲', 30, { id: 'old' })
   ])])
   assert.deepEqual(got.map(g => g.comment.id), ['old', 'new'])
+})
+
+console.log('\n回评 · 班次和冷静期是一起算的')
+
+/* 这一节守的是一笔账，不是一段逻辑。
+ *
+ * 一条评论等的是「冷静期结束之后的第一班」，所以最坏等待 = 冷静期 + 一班间隔。
+ * 上一版把班次调成和冷静期同步（都是 6 小时），理由是「同步之后就没有空跑」——
+ * 那恰恰是最差的搭配，最坏要等 12 小时才有人理，而省下的不过是几次
+ * 几十秒的空跑。两个数分别写在工作流和代码里，谁也看不见谁，很容易再走回去。 */
+const yml = readFileSync(join(process.cwd(), '.github/workflows/nanaly.yml'), 'utf8')
+const code = readFileSync(join(process.cwd(), 'tools/nanaly/reply.mjs'), 'utf8')
+const every = Number((yml.match(/- cron: '(?:\d+) \*\/(\d+) \* \* \*'/) || [])[1])
+const minute = Number((yml.match(/- cron: '(\d+) \*\/\d+ \* \* \*'/) || [])[1])
+const grace = Number((yml.match(/NANALY_REPLY_GRACE_HOURS: '(\d+)'/) || [])[1])
+const dflt = Number((code.match(/NANALY_REPLY_GRACE_HOURS \?\? (\d+)/) || [])[1])
+
+check('★★ 最坏等待 = 冷静期 + 一班间隔，不许超过 8 小时', () => {
+  assert.ok(every > 0 && grace > 0, `没从工作流里读出班次(${every})和冷静期(${grace})`)
+  assert.ok(grace + every <= 8,
+    `最坏要等 ${grace + every} 小时（冷静期 ${grace} + 班次 ${every}）—— 调一个就得重算另一个`)
+})
+
+check('冷静期别压到没有，那是留给主人自己先回的时间', () => {
+  assert.ok(grace >= 2, `冷静期只剩 ${grace} 小时，主人还没看见就被她抢答了`)
+})
+
+check('★ 代码里的默认值和工作流里配的是同一个数', () => {
+  assert.equal(dflt, grace, '不一致的话，本地演练算出来的「该接手几条」和线上不是一回事')
+})
+
+check('回评的班次错开整点 —— 整点最挤，这个仓库实测迟过 3 到 5 小时', () => {
+  assert.ok(minute > 0, '又排回整点了')
 })
 
 console.log(`\n${pass} 项通过`)

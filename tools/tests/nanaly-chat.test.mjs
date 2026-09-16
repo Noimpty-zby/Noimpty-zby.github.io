@@ -41,11 +41,14 @@ const ctx = vm.createContext({
 vm.runInContext(
   cut('  const HISTORY_SEND', '  // 送进模型之前就到这里为止') + '\n' +
   cut('  const wantsBrainRe', '  const BRAIN_LABEL') + '\n' +
-  'globalThis.__x = { humanGap, withGaps, wantsBrain, HISTORY_SEND }', ctx)
-const { humanGap, withGaps, wantsBrain, HISTORY_SEND } = ctx.__x
+  'globalThis.__x = { humanGap, withTimeMarks, wantsBrain, HISTORY_SEND }', ctx)
+const { humanGap, withTimeMarks, wantsBrain, HISTORY_SEND } = ctx.__x
 const setBrain = v => vm.runInContext(`brain = ${JSON.stringify(v)}`, ctx)
 
 const MIN = 60000, HOUR = 60 * MIN, DAY = 24 * HOUR
+// 钉死一个时刻：2026-09-17 12:00（北京）。用 Date.now() 的话，
+// 凌晨跑这个文件时「三小时前」会掉到前一天去，测试就成了看时辰的。
+const NOON = Date.parse('2026-09-17T04:00:00Z')
 
 console.log('\n对话窗口 · 这句话值不值得动脑子')
 
@@ -87,40 +90,54 @@ check('时间差说人话', () => {
   assert.equal(humanGap(90 * DAY), '3 个月')
 })
 
-check('★★ 隔了很久的那条会被标出来，模型才知道中间断过', () => {
-  const now = Date.now()
-  const out = withGaps([
+check('★★ 换了一天就打日期分隔线 —— 她串的就是这个', () => {
+  const now = NOON
+  const out = withTimeMarks([
     { role: 'user', content: '上周问的那句', at: now - 6 * DAY },
-    { role: 'assistant', content: '窝当时答的', at: now - 6 * DAY },
+    { role: 'assistant', content: '窝当时答的，还说了「今天」', at: now - 6 * DAY },
     { role: 'user', content: '今天又来了', at: now }
-  ])
-  assert.match(out[2].content, /（这里隔了 6 天）/)
-  assert.ok(!out[1].content.includes('这里隔了'), '同一段对话里不该插标记')
+  ], NOON)
+  assert.match(out[0].content, /（以下是 \d{4}-\d{2}-\d{2} 说的）/, '旧那天没标日期')
+  assert.ok(!out[1].content.includes('以下是'), '同一天里只标一次')
+  assert.match(out[2].content, /（以下是今天 2026-09-17 说的）/, '今天这轮没跟旧对话分开，或者没写出日期')
 })
 
-check('同一段对话里不打标记（三刻钟以内）', () => {
-  const now = Date.now()
-  const out = withGaps([
+check('★★ 没有 at 的老历史标成「哪天不详」，而且不许编一个日期', () => {
+  const out = withTimeMarks([
+    { role: 'user', content: '很久以前存下的' },
+    { role: 'assistant', content: '里面可能写着「今天」' },
+    { role: 'user', content: '也没有时间' }
+  ])
+  assert.match(out[0].content, /（以前的对话，具体哪天不详）/)
+  assert.ok(!/\d{4}-\d{2}-\d{2}/.test(out[0].content), '给不知道时间的对话编了个日期')
+  assert.ok(!out[1].content.includes('以前的对话'), '这一句只标一次就够')
+})
+
+check('同一天里隔太久，补一条间隔标记', () => {
+  const now = NOON
+  const out = withTimeMarks([
+    { role: 'user', content: '早上说的', at: now - 3 * HOUR },
+    { role: 'assistant', content: '窝答的', at: now - 3 * HOUR },
+    { role: 'user', content: '下午又来', at: now }
+  ], NOON)
+  assert.match(out[2].content, /（这里隔了 3 小时）/)
+})
+
+check('同一段对话里不打任何标记（三刻钟以内）', () => {
+  const now = NOON
+  const out = withTimeMarks([
     { role: 'user', content: '第一句', at: now - 5 * MIN },
     { role: 'assistant', content: '第二句', at: now }
-  ])
-  assert.ok(out.every(m => !m.content.includes('这里隔了')))
-})
-
-check('★ 老历史没有 at → 不标。不知道就别瞎标', () => {
-  const out = withGaps([
-    { role: 'user', content: '很久以前存下的' },
-    { role: 'assistant', content: '也没有时间' }
-  ])
-  assert.ok(out.every(m => !m.content.includes('这里隔了')))
+  ], NOON)
+  assert.ok(!out[1].content.includes('（'), '同一段对话里不该插标记')
 })
 
 check('★ at 不能跟着发给接口，原始历史也不许被改写', () => {
   const now = Date.now()
-  const src2 = [{ role: 'user', content: '原文', at: now }]
-  const out = withGaps(src2)
+  const src2 = [{ role: 'user', content: '原文', at: NOON }]
+  const out = withTimeMarks(src2, NOON)
   assert.deepEqual(Object.keys(out[0]).sort(), ['content', 'role'])
-  assert.equal(src2[0].content, '原文', 'withGaps 把存着的历史改掉了')
+  assert.equal(src2[0].content, '原文', 'withTimeMarks 把存着的历史改掉了')
 })
 
 check('送进模型的条数不许再缩回 8 条（长对话会失忆）', () => {
@@ -132,10 +149,10 @@ console.log('\n对话窗口 · 系统消息的顺序（决定能不能命中缓�
 check('★★ 「现在几点」要排在正文后面 —— 它每分钟都变，排前面会把整篇正文的缓存踩掉', () => {
   const body = cut('const buildMessages', 'return msgs')
   const art = body.indexOf('对方正在读这篇文章')
-  const now = body.indexOf('await nowContext()')
-  const hist = body.indexOf('withGaps(')
+  const now = body.indexOf('nowLine()')
+  const hist = body.indexOf('withTimeMarks(')
   assert.ok(art > 0, '找不到「正在读这篇文章」那条')
-  assert.ok(now > art, 'nowContext 又排到正文前面去了 —— 最多 12000 字的正文会每轮重发')
+  assert.ok(now > art, '「现在几点」又排到正文前面去了 —— 最多 12000 字的正文会每轮重发')
   assert.ok(now < hist, '时间应该紧挨在历史前面')
 })
 
@@ -144,9 +161,22 @@ check('人设永远是第一条（它一个字都不变，是最该被缓存的�
   assert.match(body, /const msgs = \[\{ role: 'system', content: PERSONA \}\]/)
 })
 
+console.log('\n对话窗口 · 读时间的规矩')
+
+check('★★ 「历史里的今天不是现在的今天」这条必须写死在提示词里（错过三次）', () => {
+  const rules = cut('const TIME_RULES', 'const nowLine')
+  assert.match(rules, /历史里出现的「今天」/)
+  assert.match(rules, /不是现在的今天/)
+  assert.match(rules, /以前的对话，具体哪天不详/)
+  // 防止再被「今天提交的」污染下一轮历史
+  assert.match(rules, /尽量写出具体日期/)
+})
+
 console.log('\n对话窗口 · 人设')
 
-const persona = cut('const PERSONA = `', '【技术问题上的铁律')
+// 切整段人设，不是只切到技术铁律为止 —— 少切一截，就漏掉了藏在后面那半段里的
+// 「限字令」（第一版就漏了，那行还在引用一个已经被删掉的规矩）
+const persona = cut('const PERSONA = `', '【你能操控这个博客】')
 
 check('★★ 「限字令」那类叠加的少说话命令已经拿掉', () => {
   assert.ok(!/限字令/.test(persona), '限字令又回来了 —— 电报体就是这么来的')

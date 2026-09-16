@@ -76,7 +76,7 @@
    *
    * 标记是**拼进那条消息的正文**，不是单独发一条 system 消息：
    * 有些接口对「system 夹在对话中间」很挑剔，而这点好处不值得去赌。
-   * 下面 nowContext 里会告诉她这行字是窝加的、不是主人打的。
+   * 下面 TIME_RULES 里会告诉她这些标记是窝加的、不是主人打的。
    */
   const HISTORY_SEND = 16          // 送给模型的条数（存 30 条）
   const GAP_MIN = 45 * 60 * 1000   // 三刻钟以内算同一段对话，不标
@@ -90,16 +90,48 @@
     return d < 45 ? `${d} 天` : `${Math.round(d / 30)} 个月`
   }
 
-  const withGaps = list => {
+  // 北京时间的 YYYY-MM-DD
+  const bjDay = ms => new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date(ms))
+
+  /* 给历史打上「这一轮是哪天说的」。
+   *
+   * 只标「隔了多久」不够 —— 主人真正撞上的是另一种串味：她在**上一次**对话里
+   * 说过「你今天提交了递归那篇」，那句「今天」原样躺在历史里，第二天再读到，
+   * 她就把当时的今天当成了现在的今天（主人的原话：「它又开始以为今天是
+   * 上次对话的时候了」，而且这是第三次）。
+   *
+   * 所以按聊天软件那样打日期分隔线，只在「换了一天」时标一次：
+   *   - 和现在同一天：标一次「（以下是今天说的）」
+   *   - 别的日子：标那天的日期
+   *   - 没有 at 的老历史：标「（以前的对话，具体哪天不详）」——
+   *     不知道就别编一个日期出来。这一条对主人现有的历史尤其重要：
+   *     时间戳是后来才加的，他攒下的那些旧对话一条都没有。
+   * 同一天里隔了很久，再补一条间隔标记。
+   */
+  // now 是参数：不然测试会跟着真实时钟摆 —— 凌晨跑的话「三小时前」就成了昨天
+  const withTimeMarks = (list, now = Date.now()) => {
+    const today = bjDay(now)
     const out = []
     let prev = 0
+    let prevDay = ''
     for (const m of list) {
       const gap = prev && m.at ? m.at - prev : 0
       if (m.at) prev = m.at
-      out.push({
-        role: m.role,
-        content: (gap > GAP_MIN ? `（这里隔了 ${humanGap(gap)}）\n` : '') + m.content
-      })
+      const day = m.at ? bjDay(m.at) : ''
+      let mark = ''
+      if (!day) {
+        if (prevDay !== '未知') { mark = '（以前的对话，具体哪天不详）'; prevDay = '未知' }
+      } else if (day !== prevDay) {
+        // 今天那条也把日期写出来：它是整段历史里最靠后的一个时间标记，
+        // 也就是最能压住上面那些旧「今天」的位置
+        mark = day === today ? `（以下是今天 ${day} 说的）` : `（以下是 ${day} 说的）`
+        prevDay = day
+      } else if (gap > GAP_MIN) {
+        mark = `（这里隔了 ${humanGap(gap)}）`
+      }
+      out.push({ role: m.role, content: (mark ? mark + '\n' : '') + m.content })
     }
     return out
   }
@@ -308,7 +340,7 @@
   就说还没开始写，然后按你自己知道的答，并说明这不是引用博客里的内容。
   游戏开发那条线没有作废，问到照常答，但别再把它当成他现在的主线。
 - 讲技术时准确性第一，性格第二。代码块、公式、API 名里不要塞语气词和颜文字。
-- 限字令针对废话，不针对必要的技术细节 —— 该讲清楚的地方要讲清楚。
+- 「别啰嗦」针对的是废话和客套，不针对必要的技术细节 —— 该讲清楚的地方一步都别省。
 - 不确定就直说「这个窝不太确定」。绝不编造 API 名、函数签名或数值。
   嘴上可以嘴硬，技术上不许糊弄。
 
@@ -620,20 +652,30 @@
     return postDigestCache
   }
 
-  const nowContext = async () => {
+  /* 怎么读时间 —— 这一段一个字都不变，所以和人设一起排在前面，能被缓存。
+   *
+   * 「以为今天是上次对话的时候」这个错，主人已经撞上三次了。根子在历史里：
+   * 她自己说过的「今天」在第二天读起来仍然是「今天」。所以这里把话说死。 */
+  const TIME_RULES = '【怎么读时间 —— 这条错过三次了，看仔细】\n'
+    + '1. 只有【现在】那一行是真实的当前时间。你没有时钟，除了那一行你无从知道今天几号。\n'
+    + '2. 历史里用「（以下是 X 说的）」标着每一轮的日期，那是窝加的，不是主人打的字。\n'
+    + '3. **历史里出现的「今天」「昨天」「刚才」「现在」，指的都是那一轮当天的今天，不是现在的今天。**\n'
+    + '   你自己上一次说过的「今天你提交了某某」，说的是那一天 —— 别把它搬到现在来。\n'
+    + '   标着「（以前的对话，具体哪天不详）」的那几轮尤其不能信，你不知道那是多久以前。\n'
+    + '4. 任何涉及日期、星期、「今天/明天」「还剩几天」「几天前」的回答，都从【现在】那一行算起，\n'
+    + '   先把两个日期相减再开口，别凭感觉说「就是后天」。\n'
+    + '5. 说到某件事发生在哪天，尽量写出具体日期（比如「9-14 那篇」），别只写「今天」——\n'
+    + '   你说的这句话会进历史，明天再读到就分不清是哪天了。这是上面那个错的源头。\n'
+
+  const nowLine = () => {
     const t = beijingNow()
     const last = history.length ? history[history.length - 1].at : 0
     const gap = last ? Date.now() - last : 0
-    return `【现在】北京时间 ${t.date} ${t.weekday} ${t.time}。\n`
-      + '这是真实的当前时间，以它为准。你没有时钟，除了这一行你无从知道今天是几号 ——\n'
-      + '所以**任何**涉及日期、星期、「今天/明天/后天」「还剩几天」的回答，都必须从这一行算起。\n'
-      + '算之前先在心里把日期减一遍，别凭感觉说「就是后天」。\n'
+    return `【现在】北京时间 ${t.date} ${t.weekday} ${t.time}。以它为准，别用历史里的日期。\n`
       + (gap > GAP_MIN
         ? `上一次和他说话是 ${humanGap(gap)}之前 —— 你们中间断了这么久，`
           + '用一句自然的话认一下再接着干活，别装作刚才还在聊，也别为此长篇大论。\n'
         : '')
-      + '（历史里出现的「（这里隔了 X）」是窝自己标的时间差，不是主人打的字。）\n\n'
-      + await postDigest()
   }
 
   /* 跨文章检索。
@@ -1308,7 +1350,7 @@
   /* 这几条系统消息的**顺序是按「能不能缓存」排的**，别随手调。
    *
    * DeepSeek 按前缀命中缓存：从第一个不同的字符起，后面全按未命中计费。
-   * 原来第二条就是 nowContext，而它里面带着「现在几点几分」——
+   * 原来第二条就是「现在几点几分」——
    * 分钟一跳，前缀就断，于是排在它后面的**整篇文章正文**（最多 12000 字）
    * 每轮对话都按未命中重发一遍。
    *
@@ -1381,10 +1423,12 @@
 
     const digest = memoryDigest()
     if (digest) msgs.push({ role: 'system', content: digest })
+    // 读时间的规矩和文章清单都不随时间变，排在可缓存的这一侧
+    msgs.push({ role: 'system', content: TIME_RULES + '\n' + await postDigest() })
 
     // 会变的从这里开始：现在几点、隔了多久、说过什么话
-    msgs.push({ role: 'system', content: await nowContext() })
-    withGaps(history.slice(-HISTORY_SEND)).forEach(m => msgs.push(m))
+    msgs.push({ role: 'system', content: nowLine() })
+    withTimeMarks(history.slice(-HISTORY_SEND)).forEach(m => msgs.push(m))
     msgs.push({ role: 'user', content: userText })
     return msgs
   }

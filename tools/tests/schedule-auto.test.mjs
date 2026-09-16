@@ -154,7 +154,7 @@ await acheck('已经勾上的不会被重写 autoWhy', async () => {
 })
 
 // ---------- git.mjs ----------
-const { yamlString, sanitizeMd, stripAngles, pushWithRetry } = await import('file://' + join(REPO, 'tools/nanaly/git.mjs'))
+const { yamlString, sanitizeMd, stripAngles, pushWithRetry, useNanalyIdentity } = await import('file://' + join(REPO, 'tools/nanaly/git.mjs'))
 const yaml = await import('file://' + join(REPO, 'node_modules/js-yaml/index.js')).catch(() => null)
 
 console.log('\nfront-matter 标题安全')
@@ -245,6 +245,31 @@ check('rebase 本身失败 → 立刻放弃，不空转', () => {
     throw new Error('conflict')
   }, '测试'))
   assert.equal(pushes, 1, '真冲突时不该反复重推')
+})
+
+console.log('\n提交身份')
+
+/* 这段规则以前在 notes.mjs 和 column.mjs 里各有一份副本（共三份），
+ * 改一处就得记得改三处 —— 而它错了的后果是把一个陌生人挂进仓库的
+ * Contributors 里。现在只剩 git.mjs 这一份，测也只测这一份。 */
+check('★ 没有数字 ID 前缀的 noreply 邮箱会指向同名真人 → 必须拦下来', () => {
+  const calls = []
+  const saved = process.env.NANALY_GIT_EMAIL
+  process.env.NANALY_GIT_EMAIL = 'nanaly@users.noreply.github.com'
+  try { useNanalyIdentity((...a) => { calls.push(a); return '' }) }
+  finally { saved === undefined ? delete process.env.NANALY_GIT_EMAIL : (process.env.NANALY_GIT_EMAIL = saved) }
+  const email = calls.find(a => a[1] === 'user.email')[2]
+  assert.ok(!/users\.noreply\.github\.com/.test(email), '这个地址会关联到用户名为 nanaly 的真人账号')
+})
+
+check('带数字 ID 前缀的（小号自己的）照常用', () => {
+  const calls = []
+  const saved = process.env.NANALY_GIT_EMAIL
+  process.env.NANALY_GIT_EMAIL = '261574371+z21198925-collab@users.noreply.github.com'
+  try { useNanalyIdentity((...a) => { calls.push(a); return '' }) }
+  finally { saved === undefined ? delete process.env.NANALY_GIT_EMAIL : (process.env.NANALY_GIT_EMAIL = saved) }
+  assert.equal(calls.find(a => a[1] === 'user.email')[2], '261574371+z21198925-collab@users.noreply.github.com')
+  assert.ok(calls.find(a => a[1] === 'user.name'), '名字也要配，不然提交会用 runner 的默认身份')
 })
 
 rmSync(box, { recursive: true, force: true })

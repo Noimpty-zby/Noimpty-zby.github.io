@@ -61,11 +61,22 @@ const fetchArticle = async path => {
 
 // ---------------- 挑出该她接手的评论 ----------------
 
+/* 哪些讨论归她管。
+ *
+ * 文章页（/2026/09/14/xxx/）自然算 —— 她自己的随笔也是文章。
+ * 资讯页（/news/2026-09-16/）以前不算：那几页是开着 comments: true 的，
+ * 于是读者在那儿留言她永远不接手，而日报里却看得见那条评论
+ * （getComments 不按路径过滤），两边对不上。现在一并算进来 ——
+ * 那几页的正文她也读得到（有 #article-container），fetchArticle 照样能取。
+ *
+ * 剩下的页面（首页、关于、分类归档）压根没有评论区，不会出现在讨论列表里。 */
+export const isReplyable = title => /^\/?(\d{4}\/|news\/)/.test(String(title || ''))
+
 export const collect = discussions => {
   const now = Date.now()
   const out = []
   for (const d of discussions) {
-    if (!/^\/?\d{4}\//.test(d.title)) continue         // 只管文章下面的讨论（标题可能带也可能不带开头的斜杠）
+    if (!isReplyable(d.title)) continue                 // 只管文章和资讯页下面的讨论（标题可能带也可能不带开头的斜杠）
     for (const c of d.comments?.nodes || []) {
       const who = String(c.author?.login || '').toLowerCase()
       if (!who) continue

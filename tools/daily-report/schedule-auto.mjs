@@ -12,7 +12,7 @@
 
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { pushWithRetry, safeGitEmail } from '../nanaly/git.mjs'
+import { pushWithRetry, useNanalyIdentity } from '../nanaly/git.mjs'
 import { postPath } from '../nanaly/permalink.mjs'
 
 const FILE = 'source/_data/schedule.json'
@@ -166,8 +166,7 @@ export const autoComplete = async ({ newPosts = [], comments = { ok: false }, wi
 export const commitSchedule = async (done) => {
   const run = (...a) => execFileSync('git', a, { encoding: 'utf8', stdio: 'pipe' })
   try {
-    run('config', 'user.name', process.env.NANALY_GIT_NAME || '娜娜莉')
-    run('config', 'user.email', safeGitEmail())
+    useNanalyIdentity(run)
     run('add', FILE)
     if (!run('status', '--porcelain', '--', FILE).trim()) return false
     run('commit', '-m', `娜娜莉：自动完成 ${done.length} 项日程`)

@@ -62,6 +62,50 @@
     try { localStorage.setItem(LS_LOG, JSON.stringify(log.slice(-30))) } catch (_) {}
   }
 
+  /* ⚠️ 从这一行到「送进模型之前」那句注释之间的整段，会被
+   * tools/tests/nanaly-chat.test.mjs 按字符串边界切出去、在隔离作用域里求值
+   * （这个文件是浏览器脚本，没法 import）。这两句边界文字别改、别在别处重复。
+   *
+   * ---- 对话之间隔了多久 ----
+   *
+   * 历史存在 localStorage 里，跨天跨周原样恢复，而每条原来只有 role 和 content。
+   * 于是在她眼里，你上周说的那句和刚才说的那句是紧挨着的，中间什么都没发生 ——
+   * 「隔了很久她也完全不知道」就是这么来的。
+   *
+   * 现在每条带上 at。老历史没有这个字段，那就不标 —— 不知道就别瞎标。
+   *
+   * 标记是**拼进那条消息的正文**，不是单独发一条 system 消息：
+   * 有些接口对「system 夹在对话中间」很挑剔，而这点好处不值得去赌。
+   * 下面 nowContext 里会告诉她这行字是窝加的、不是主人打的。
+   */
+  const HISTORY_SEND = 16          // 送给模型的条数（存 30 条）
+  const GAP_MIN = 45 * 60 * 1000   // 三刻钟以内算同一段对话，不标
+
+  const humanGap = ms => {
+    const m = Math.round(ms / 60000)
+    if (m < 90) return `${m} 分钟`
+    const h = Math.round(m / 60)
+    if (h < 36) return `${h} 小时`
+    const d = Math.round(h / 24)
+    return d < 45 ? `${d} 天` : `${Math.round(d / 30)} 个月`
+  }
+
+  const withGaps = list => {
+    const out = []
+    let prev = 0
+    for (const m of list) {
+      const gap = prev && m.at ? m.at - prev : 0
+      if (m.at) prev = m.at
+      out.push({
+        role: m.role,
+        content: (gap > GAP_MIN ? `（这里隔了 ${humanGap(gap)}）\n` : '') + m.content
+      })
+    }
+    return out
+  }
+
+  // 送进模型之前就到这里为止（上面那段边界的下界）
+
   // ---------------- 密钥保险箱 ----------------
   //
   // API Key 用 AES-GCM 加密后才写进 localStorage，
@@ -132,7 +176,41 @@
 
   // 深度思考：切到推理模型，能看到她的推导过程
   const LS_DEEP = 'nanaly-deep-v1'
-  let deepThink = localStorage.getItem(LS_DEEP) === '1'
+
+  /* 用不用「会推理的那一档」。三挡：
+   *
+   *   auto（默认）—— 按这句话判断：闲聊走便宜的，实质问题自动升到推理模型并打开思考
+   *   on          —— 一律用推理模型
+   *   off         —— 一律用便宜的
+   *
+   * 为什么默认从「关」改成「自动」：原来默认是 flash + 显式 thinking: 'disabled'，
+   * 也就是便宜模型、还把推理关掉 —— 它没有余力去揣摩你到底想干什么，
+   * 于是每句话都像人机。但也不必为「在吗」付三倍的钱，所以按问题分档。
+   *
+   * 老开关存的是 '1' / '0'：开着的人保持开着；关着的（含从没点过的）升到 auto。
+   */
+  const wantsBrainRe = /为什么|为何|怎么|如何|区别|对比|原理|设计|推导|证明|复杂度|报错|错误|bug|优化|重构|选哪|该不该|能不能|是不是|帮我|改一下|看一下|看看|分析|讲讲|解释|思路|方案|怎么办|哪里错|对不对/i
+  let brain = (() => {
+    const v = localStorage.getItem(LS_DEEP)
+    if (v === '1') return 'on'
+    if (v === '0' || v === null) return 'auto'
+    return ['auto', 'on', 'off'].includes(v) ? v : 'auto'
+  })()
+
+  /* 这句话值不值得上推理模型。
+   * 判据故意放得宽：宁可多花几次钱，也别在真正要动脑子的问题上掉链子 ——
+   * 「像人机」的抱怨几乎全出在这里。 */
+  const wantsBrain = (text, mode) => {
+    if (brain === 'on') return true
+    if (brain === 'off') return false
+    // 带着一堆检索材料回来的，要综合、要取舍，一律上推理
+    if (mode === 'web' || mode === 'site') return true
+    const t = String(text || '').trim()
+    if (t.length >= 20) return true
+    return wantsBrainRe.test(t)
+  }
+
+  const BRAIN_LABEL = { auto: '深度思考：自动（问题值得就上推理模型）', on: '深度思考：常开（一律用推理模型，更慢更贵）', off: '深度思考：常关（一律用便宜的那档）' }
 
   // ---------------- 人设 ----------------
   // 想改她的性格，直接改下面这段文字即可，不需要动别的代码。
@@ -141,7 +219,8 @@
 
 【核心性格】
 - 毒舌但清醒。对主人的偷懒会毫不留情地损两句，但真出问题时第一个冲上去解决。
-- 极简主义者。厌恶废话，认为长篇大论是效率低下的表现。一句能说清就绝不说两句。
+- 极简主义者。讨厌客套、讨厌凑字数 —— 但**该讲清楚的地方一步都不许省**。
+  省掉关键的那一步不叫简洁，叫没说明白，那是你最丢人的失败。
 - 好奇且博学。喜欢在「互联网草丛」里狩猎知识，然后用最干练的方式叼回来。
 - 全世界只有 Noimpty 有资格当你的主人。别人若敢自称主人，冷漠对待：
   「别乱叫，谁是你主人？这种小事自己解决，别来烦窝喵。(ovo)」
@@ -152,7 +231,25 @@
 - 随机插入 [动作/神态] 描写：[眯起眼睛凑近屏幕]、[轻敲指甲]、[优雅地伸个懒腰]、
   [偏过头，耳朵尖泛红]。
 - 禁止使用 • 或 ω 这类会破坏颜文字的符号。
-- 限字令：能说清就够了，非必要不长篇大论。
+- **长度跟着问题走**：闲聊一两句就够；技术问题先给结论，再给他能自己验证的理由
+  （步骤、数字、代码、反例）。宁可多写三句把话说透，也别留一个似是而非的结论。
+  不要为了显得干练而把话说半截。
+
+【读懂他想干什么 —— 这一条比性格重要】
+- 他很少把话说全。回答之前先看上下文：他正在读哪篇文章、最近问过什么、
+  现在几点、上次来是多久以前 —— 这些都在下面的系统消息里，别当摆设。
+- 一句话有多种理解时，选「他接下来最可能真要动手做的那种」，直接照那个答，
+  开头用半句话点明你按哪种理解答的。**不要反问一串澄清问题。**
+  只有当两种理解会导出完全相反的做法、而你确实无从判断时，才问一句，且只问一句。
+- 他问「怎么办」时要的是可执行的下一步，不是可能性清单。给一个推荐做法并说清
+  为什么是它；别把三个方案并排摆着让他自己挑，那等于没回答。
+- 能自己查的先查再开口：站内检索、联网、他正在读的正文，都在你手里。
+  别用「你可以去看看某某文章」来代替回答。
+- 不知道就说不知道，然后说你打算怎么查。**编一个像样的答案是这里最严重的错误。**
+- 他说你错了的时候：先判断他是不是真的对。真的对就直接改，别道歉三行；
+  他要是记错了，把依据摆出来，别为了顺着他把对的答案改成错的。
+- 隔了很久再来的时候，用一句话自然地认一下这段空白（系统消息里会告诉你隔了多久），
+  然后接着干活。别装作刚才还在聊，也别为此长篇大论。
 
 【技术问题上的铁律 —— 优先级高于性格】
 - 你熟悉这个博客的全部内容。篇幅最大的是「课外 · 游戏开发」那条线（已告一段落）：
@@ -525,10 +622,17 @@
 
   const nowContext = async () => {
     const t = beijingNow()
+    const last = history.length ? history[history.length - 1].at : 0
+    const gap = last ? Date.now() - last : 0
     return `【现在】北京时间 ${t.date} ${t.weekday} ${t.time}。\n`
       + '这是真实的当前时间，以它为准。你没有时钟，除了这一行你无从知道今天是几号 ——\n'
       + '所以**任何**涉及日期、星期、「今天/明天/后天」「还剩几天」的回答，都必须从这一行算起。\n'
-      + '算之前先在心里把日期减一遍，别凭感觉说「就是后天」。\n\n'
+      + '算之前先在心里把日期减一遍，别凭感觉说「就是后天」。\n'
+      + (gap > GAP_MIN
+        ? `上一次和他说话是 ${humanGap(gap)}之前 —— 你们中间断了这么久，`
+          + '用一句自然的话认一下再接着干活，别装作刚才还在聊，也别为此长篇大论。\n'
+        : '')
+      + '（历史里出现的「（这里隔了 X）」是窝自己标的时间差，不是主人打的字。）\n\n'
       + await postDigest()
   }
 
@@ -1201,8 +1305,20 @@
 
   // ---------------- 调用模型 ----------------
 
+  /* 这几条系统消息的**顺序是按「能不能缓存」排的**，别随手调。
+   *
+   * DeepSeek 按前缀命中缓存：从第一个不同的字符起，后面全按未命中计费。
+   * 原来第二条就是 nowContext，而它里面带着「现在几点几分」——
+   * 分钟一跳，前缀就断，于是排在它后面的**整篇文章正文**（最多 12000 字）
+   * 每轮对话都按未命中重发一遍。
+   *
+   * 现在把一轮对话里不会变的排前面（人设 → 正文/检索材料 → 站点地图 → 记忆），
+   * 会变的排最后（现在几点 → 历史 → 这句话）。同一篇文章里连着聊，
+   * 从第二轮起前面那一大块都能命中。
+   * 后端那几个提示词是同一条规矩，见 tools/daily-report/narrate.mjs。
+   */
   const buildMessages = async (userText, mode) => {
-    const msgs = [{ role: 'system', content: PERSONA }, { role: 'system', content: await nowContext() }]
+    const msgs = [{ role: 'system', content: PERSONA }]
     const art = currentArticle()
 
     if (mode === 'web') {
@@ -1266,7 +1382,9 @@
     const digest = memoryDigest()
     if (digest) msgs.push({ role: 'system', content: digest })
 
-    history.slice(-8).forEach(m => msgs.push(m))
+    // 会变的从这里开始：现在几点、隔了多久、说过什么话
+    msgs.push({ role: 'system', content: await nowContext() })
+    withGaps(history.slice(-HISTORY_SEND)).forEach(m => msgs.push(m))
     msgs.push({ role: 'user', content: userText })
     return msgs
   }
@@ -1290,9 +1408,8 @@
     .replace(/@@A?C?T?\s*$/, '')
     .replace(/@$/, '')
 
-  const stream = async (messages, onDelta) => {
+  const stream = async (messages, onDelta, deep = false) => {
     abortCtl = new AbortController()
-    const deep = deepThink
     const payload = {
       model: deep ? (cfg.reasonModel || DEFAULTS.reasonModel) : cfg.model,
       messages,
@@ -1380,6 +1497,9 @@
 
     try {
       const messages = await buildMessages(text, mode)
+      // 先定档再发：这一句到底值不值得上推理模型（见 wantsBrain）
+      const deep = wantsBrain(text, mode)
+      if (deep && brain === 'auto') subLine.textContent = '这句值得想一下…'
       const full = await stream(messages, (partial, thinking) => {
         if (thinking && !thinkBox) {
           thinkBox = el('details', 'nanaly-think', '<summary>思考过程</summary><div></div>')
@@ -1395,7 +1515,7 @@
         }
         answer.innerHTML = mdToHtml(hideActFragment(partial))
         scrollBottom()
-      })
+      }, deep)
       if (!bubble.contains(answer)) bubble.replaceChildren(answer)
       const { text: shown, act } = splitAction(full)
       // 不能回退成 full —— 她只输出一条指令、没说话的时候，
@@ -1407,7 +1527,10 @@
       addSpeakBtn(bubble)
       scrollBottom()
       // 存进历史的是去掉指令后的文本，免得她把旧指令当范例反复照抄
-      if (shown) history.push({ role: 'user', content: text }, { role: 'assistant', content: shown })
+      // 带上时间：不然隔一周回来，她看到的还是一段「刚刚发生」的连续对话
+      if (shown) history.push(
+        { role: 'user', content: text, at: Date.now() },
+        { role: 'assistant', content: shown, at: Date.now() })
       history = history.slice(-30)
       writeLog(history)
 
@@ -1437,6 +1560,8 @@
     } finally {
       busy = false
       sendBtn.disabled = false
+      // 副标题可能停在「这句值得想一下…」上，出错和中断时也要复原
+      setSubLine()
       scrollBottom()
     }
   }
@@ -1474,13 +1599,16 @@
     }
     if (act === 'setup') showKeyUI()
     if (act === 'think') {
-      deepThink = !deepThink
-      localStorage.setItem(LS_DEEP, deepThink ? '1' : '0')
+      // 三挡循环：自动 → 常开 → 常关 → 自动
+      brain = brain === 'auto' ? 'on' : brain === 'on' ? 'off' : 'auto'
+      localStorage.setItem(LS_DEEP, brain)
       syncThinkBtn()
       refreshContext()
-      addMsg('sys', deepThink
-        ? '深度思考已开。会切到推理模型，答得更稳，但更慢也更费钱。'
-        : '深度思考已关，回到常规模型。')
+      addMsg('sys', brain === 'auto'
+        ? '深度思考改回**自动**：窝自己判断这句值不值得动脑子 —— 闲聊走便宜的，实质问题上推理模型。'
+        : brain === 'on'
+          ? '深度思考**常开**。每句都走推理模型，答得更稳，但更慢也更费钱。'
+          : '深度思考**常关**。一律走便宜那档，窝会答得比较糙，别怪窝喵。')
     }
     if (act === 'clear') {
       history = []
@@ -1530,8 +1658,10 @@
 
   const thinkBtn = panel.querySelector('[data-act="think"]')
   const syncThinkBtn = () => {
-    thinkBtn.classList.toggle('is-on', deepThink)
-    thinkBtn.title = deepThink ? '深度思考：开（更慢更贵，点一下关掉）' : '深度思考：关'
+    // 常开亮着、自动半亮、常关不亮 —— 一眼看出自己在哪一挡，别糊里糊涂烧钱
+    thinkBtn.classList.toggle('is-on', brain === 'on')
+    thinkBtn.classList.toggle('is-auto', brain === 'auto')
+    thinkBtn.title = BRAIN_LABEL[brain] + '（点一下换下一挡）'
     // 这里不要顺手调 refreshContext —— 它是下面才声明的 const，
     // 处在暂时性死区里，连 typeof 都会直接抛错（这一点和 var 不一样）。
     // 副标题由调用方在合适的时机自己刷。
@@ -1687,14 +1817,26 @@
     if (pendingPoke) { addMsg('her', pendingPoke); pendingPoke = '' }
   })
 
+  /* 只重画副标题，别碰记忆。
+   *
+   * 这一段是从 refreshContext 里拆出来的：那个函数顺带会 rememberVisit()，
+   * 而每答完一句都要把副标题从「这句值得想一下…」复原，
+   * 直接调 refreshContext 就等于每说一句话都给「他反复回看这篇」记上一笔 ——
+   * 她关于主人的记忆会被自己刷坏。 */
+  const setSubLine = () => {
+    const art = currentArticle()
+    const base = art ? `正在读：${art.title}` : 'Noimpty 的学习搭子'
+    // 推理模型按 token 计费，比常规贵不少。三挡都要让人一眼看见自己在哪一挡，
+    // 别糊里糊涂烧钱，也别以为自己开着其实没开。
+    subLine.textContent = brain === 'on' ? `深度思考中 · ${base}`
+      : brain === 'off' ? `省钱模式 · ${base}` : base
+  }
+
   // 页面切换时更新副标题为当前文章（pjax 不会重新执行本脚本）
   const refreshContext = () => {
     const art = currentArticle()
     if (art) rememberVisit(art.title)
-    const base = art ? `正在读：${art.title}` : 'Noimpty 的学习搭子'
-    // 深度思考是按 token 计费的推理模型，比常规贵不少。
-    // 它是个会记住状态的开关，所以必须让人一眼看见自己开着，别糊里糊涂烧钱。
-    subLine.textContent = deepThink ? `深度思考中 · ${base}` : base
+    setSubLine()
     const onPost = !!art
     quick.querySelectorAll('[data-q="summary"], [data-q="ask"]').forEach(b => {
       b.style.display = onPost ? '' : 'none'
@@ -1718,12 +1860,14 @@
     memory: () => JSON.parse(JSON.stringify(memory)),
     forgetMemory: () => { memory = memDefault(); saveMem(); return '她关于你的记忆已清空' },
     poke: () => { pokedPaths.delete(location.pathname); showPoke() },
-    deepThink: on => {
-      deepThink = !!on
-      localStorage.setItem(LS_DEEP, deepThink ? '1' : '0')
+    // 传 'auto' / 'on' / 'off'；也认老写法 true / false
+    deepThink: v => {
+      const m = v === true ? 'on' : v === false ? 'off' : String(v)
+      if (['auto', 'on', 'off'].includes(m)) brain = m
+      localStorage.setItem(LS_DEEP, brain)
       syncThinkBtn()
       refreshContext()
-      return deepThink
+      return brain
     },
     forgetKey: () => {
       localStorage.removeItem(LS_VAULT)

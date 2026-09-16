@@ -607,10 +607,15 @@
   .nanaly-speak { opacity: 0.75; }
 }
 
-/* 头部按钮的开启态（深度思考） */
+/* 头部按钮的开启态（深度思考）。
+   三挡：常开亮着、自动半亮、常关不亮 —— 一眼看出自己在哪一挡，别糊里糊涂烧钱。 */
 .nanaly-head__btn.is-on {
   color: var(--noimpty-accent, #e95978);
   background: rgba(233, 89, 120, 0.16);
+}
+.nanaly-head__btn.is-auto {
+  color: var(--noimpty-accent, #e95978);
+  background: rgba(233, 89, 120, 0.07);
 }
 
 /* 划词提问的浮动小按钮 */

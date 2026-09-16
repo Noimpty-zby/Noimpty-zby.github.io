@@ -57,7 +57,42 @@ export const MODEL_STATE = {
   keyless: !KEY,   // 压根没配 key，一个请求都不会发出去
   calls: 0,
   fails: 0,
-  why: ''          // 最近一次失败的原因
+  why: '',         // 最近一次失败的原因
+  /* 这一轮烧了多少 token。
+   *
+   * 以前响应里的 usage 被整个丢掉，于是「这个月的钱花在哪一步」查不出来 ——
+   * 主人看着账单上「输入（未命中缓存）」高得离谱，却没有任何数据能说明是谁烧的，
+   * 只能靠在本地搭探针去猜。命中和未命中是两个价钱，所以分开记。 */
+  tokens: { hit: 0, miss: 0, out: 0, detail: true }
+}
+
+const num = v => { const n = Number(v); return Number.isFinite(n) ? n : null }
+
+/* 记一笔账，并在日志里留一行。
+ * 字段名按接口给的来；给不出缓存明细就整笔算未命中，不猜 —— 宁可账面难看，
+ * 也不要编一个好看的命中率出来。 */
+const countUsage = (usage, tag) => {
+  if (!usage) { MODEL_STATE.tokens.detail = false; return }
+  const all = num(usage.prompt_tokens) || 0
+  const hit = num(usage.prompt_cache_hit_tokens ?? usage.prompt_cached_tokens)
+  const miss = num(usage.prompt_cache_miss_tokens) ?? (hit == null ? all : Math.max(0, all - hit))
+  const out = num(usage.completion_tokens) || 0
+  if (hit == null) MODEL_STATE.tokens.detail = false
+  MODEL_STATE.tokens.hit += hit || 0
+  MODEL_STATE.tokens.miss += miss
+  MODEL_STATE.tokens.out += out
+  console.log(`  [${tag}] 输入 ${all}${hit == null ? '（这次没给缓存明细）' : `（命中缓存 ${hit}）`}，输出 ${out}`)
+}
+
+const kilo = n => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n)
+
+/** 一行话的 token 小结，给日报的健康检查和她自己的日志用。没调用过就返回空串。 */
+export const tokenSummary = () => {
+  const t = MODEL_STATE.tokens
+  const input = t.hit + t.miss
+  if (!input && !t.out) return ''
+  const rate = input ? Math.round(t.hit / input * 100) : 0
+  return `输入 ${kilo(input)}${t.detail ? `（命中缓存 ${rate}%）` : '（没有缓存明细）'}、输出 ${kilo(t.out)}`
 }
 
 /* 给降级文案用：这一格为什么是空的。
@@ -122,6 +157,7 @@ export const ask = async (system, user, maxTokens = 700, opts = {}) => {
         throw new Error(`${res.status} ${body}`)
       }
       const data = await res.json()
+      countUsage(data.usage, tag)
       const choice = data.choices?.[0] || {}
       const out = String(choice.message?.content || '').trim()
       if (out) return out
@@ -183,9 +219,16 @@ ${facts.join('\n')}`, 400, { label: '小结' })
 
 // ---------------- 新文章读后反馈 ----------------
 
-export const reviewPost = async post => {
-  const out = await ask(PERSONA,
-    `主人刚发了一篇新文章，你读完之后给他一段反馈。要求：
+/* 提示词里**固定的部分必须排在变量前面**。
+ *
+ * DeepSeek 按前缀命中缓存：前缀一岔开，后面再怎么重复也算未命中。
+ * 实测过一轮（2026-09-16）：资讯 1%、回评 4%、批注 8% 的可缓存比例 ——
+ * 全都是因为标题、挂了几小时、主题名这类变量被写在了第一行，
+ * 把后面几百上千 token 的固定内容整片踩脏。
+ * 这一条对所有提示词都成立，tools/tests/prompt-cache.test.mjs 盯着。
+ *
+ * 这一条的顺序本来就是对的（要求在前、文章在后），抽成函数是为了能被测到。 */
+export const reviewPrompt = post => `主人刚发了一篇新文章，你读完之后给他一段反馈。要求：
 1. 先一句话说清这篇讲了什么（证明你真读了）
 2. 指出一到两个最值得改进的地方 —— 讲不清楚的段落、缺失的前提、可能有误的说法
 3. 如果有技术上的疑点，明确指出来。技术准确性优先于人设
@@ -193,7 +236,10 @@ export const reviewPost = async post => {
 
 标题：${post.title}
 ${post.series ? '所属系列：' + post.series + '\n' : ''}正文（可能截断）：
-${post.body}`, 700, { label: '读后反馈' })
+${post.body}`
+
+export const reviewPost = async post => {
+  const out = await ask(PERSONA, reviewPrompt(post), 700, { label: '读后反馈' })
   return out || `（${whyNoModel()}，这次跳过反馈）`
 }
 
@@ -251,19 +297,23 @@ ${ctx}`, 400, { label: '想念' })
 // 默认只出草稿放进邮件，不自动发。理由：她在你的博客上公开说话，
 // 说错了是你的名声。想让她直接回，把 workflow 里 NANALY_AUTO_REPLY 设成 true。
 
-export const draftReplies = async (items, articleHint = '') => {
-  const out = []
-  for (const c of items.slice(0, 5)) {
-    const r = await ask(PERSONA,
-      `有人在《${c.on}》下面留言了。替主人拟一条回复。要求：
+// 同样：要求在前，哪篇文章、谁说的、说了什么全挪到后面（见 reviewPrompt 上面那段）
+export const draftPrompt = (c, articleHint = '') => `替主人拟一条读者留言的回复。要求：
 1. 先判断这条留言是提问、指正、还是单纯打招呼，回复方式要对得上
 2. 如果是技术问题，答案要准确。不确定就写「这个我不确定，我回去查一下」，绝对不许编
 3. 三到五句话。别客套，别写「感谢您的宝贵意见」这种话
 4. 你是代表博客主人的助手在回复，可以保留一点你的语气，但别喧宾夺主
 5. 只输出回复正文本身，不要加任何前缀说明
 
-${articleHint ? '这篇文章讲的是：' + articleHint + '\n\n' : ''}留言人：${c.who}
-留言内容：${c.body.slice(0, 800)}`, 600, { label: '回评草稿' })
+━━━ 要回的是这一条 ━━━
+留言在：《${c.on}》
+${articleHint ? '这篇文章讲的是：' + articleHint + '\n' : ''}留言人：${c.who}
+留言内容：${c.body.slice(0, 800)}`
+
+export const draftReplies = async (items, articleHint = '') => {
+  const out = []
+  for (const c of items.slice(0, 5)) {
+    const r = await ask(PERSONA, draftPrompt(c, articleHint), 600, { label: '回评草稿' })
     out.push({ ...c, draft: r || '' })
   }
   return out

@@ -411,20 +411,22 @@ export const checkLinks = async (crawl) => {
  *
  * 所以这一项由 run.mjs 在所有 ask() 之后追加，见那边的调用点。
  */
-export const checkModel = state => {
+export const checkModel = (state, tokens = '') => {
   const out = { name: '娜娜莉的模型', level: LEVEL.ok, detail: '', items: [] }
+  // 花了多少 token 挂在这一行后面：命中率低的时候，这是唯一看得见的地方
+  const cost = tokens ? ' · ' + tokens : ''
   if (state.keyless) {
     out.level = LEVEL.warn
     out.detail = '没有配置 DEEPSEEK_API_KEY —— 这封邮件里她说的每一句都是模板文字'
     return out
   }
   if (!state.calls) { out.detail = '今天没有需要她开口的地方'; return out }
-  if (!state.fails) { out.detail = `${state.calls} 次调用全部成功`; return out }
+  if (!state.fails) { out.detail = `${state.calls} 次调用全部成功` + cost; return out }
   // 挂一次就报 bad 会变成天天喊狼来了（见上面 Dependabot 那一段）：
   // 重试之后仍然失败的单次调用只是少了一格内容，站点本身没事。
   // 几次调用全挂才是真的哑了 —— 那种情况下整封邮件的「人话」都是模板。
   out.level = state.calls > 1 && state.fails >= state.calls ? LEVEL.bad : LEVEL.warn
-  out.detail = `${state.calls} 次调用挂了 ${state.fails} 次（重试之后仍然失败）`
+  out.detail = `${state.calls} 次调用挂了 ${state.fails} 次（重试之后仍然失败）` + cost
   out.items.push({ where: '最后一次失败', note: state.why || '未知原因' })
   return out
 }

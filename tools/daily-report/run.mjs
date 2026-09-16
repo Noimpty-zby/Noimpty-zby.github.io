@@ -9,7 +9,7 @@
 import { writeFileSync } from 'node:fs'
 import { CFG, WINDOW, WINDOW_LABEL, getTraffic, getComments, getNewPosts, getOwnerHeartbeat, getSchedule } from './sources.mjs'
 import { runHealth, checkModel, worstOf } from './health.mjs'
-import { writeOpening, reviewPost, screenComments, writeMissYou, draftReplies, MODEL_STATE } from './narrate.mjs'
+import { writeOpening, reviewPost, screenComments, writeMissYou, draftReplies, MODEL_STATE, tokenSummary } from './narrate.mjs'
 import { renderEmail, renderSubject, renderMissYou } from './render.mjs'
 import { autoComplete, commitSchedule } from './schedule-auto.mjs'
 
@@ -106,7 +106,7 @@ const main = async () => {
    *
    * 拿原来的 worst 当下限：runHealth 自己挂掉时 step() 给的兜底是 warn，
    * 那时 checks 是空的，不垫一下会被这一项冲淡成 ok。 */
-  health.checks.push(checkModel(MODEL_STATE))
+  health.checks.push(checkModel(MODEL_STATE, tokenSummary()))
   health.worst = worstOf([{ level: health.worst }, ...health.checks])
 
   const noteworthy =

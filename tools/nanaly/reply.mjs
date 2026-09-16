@@ -107,6 +107,28 @@ export const collect = discussions => {
   return out.sort((a, b) => Date.parse(a.comment.createdAt) - Date.parse(b.comment.createdAt))
 }
 
+// 固定的排前面，变量排后面 —— 规矩和原因见 narrate.mjs 里 reviewPrompt 上面那段。
+/* 这一条的收益最大：同一篇文章下的每条评论都要把 3,950 token 的正文发一遍，
+ * 而原来第一行写着「已经 ${ageHours} 小时没人回」—— 一个会变的数字排在最前面，
+ * 后面连同整篇正文全部按未命中计费（实测可缓存比例 4%）。
+ * 现在正文排在变量前面：同一篇下的第二条评论起，几乎整个前缀都能命中。 */
+export const replyPrompt = ({ title, ageHours, who, body, article }) => `你替主人回一条读者留言。要求：
+1. 先判断这是提问、指正、还是打招呼，回复方式要对得上
+2. 技术问题就正面答，答案要基于下面这篇文章的内容。文章里没写到的，明说没写到
+3. 三到五句话。别客套，别写「感谢您的宝贵意见」
+4. 开头自然地表明是你在代答，别假装是主人本人
+5. 只输出回复正文，不要任何前缀说明
+
+━━━ 留言所在文章的正文（可能截断）━━━
+${article || '（正文没取到，这种情况下只能就事论事，别硬答技术细节）'}
+
+━━━ 要回的就是下面这一条 ━━━
+文章：《${title}》
+留言人：${who}
+这条已经挂了 ${ageHours} 小时没人回，主人大概是忙别的去了。
+留言内容：
+${body}`
+
 // ---------------- 发出去 ----------------
 
 const postReply = async (discussionId, replyToId, body) =>
@@ -133,22 +155,13 @@ export const autoReply = async () => {
     // DNS 直接失败 —— 而失败被静默吞掉，于是她每一条回复其实都是没读文章瞎答的。
     const article = await fetchArticle('/' + String(disc.title || '').replace(/^\/+/, ''))
 
-    const said = await ask(PERSONA,
-      `读者在《${disc.title}》下面留言，已经 ${ageHours} 小时没人回了，主人大概是忙别的去了。你替他回一下。
-
-要求：
-1. 先判断这是提问、指正、还是打招呼，回复方式要对得上
-2. 技术问题就正面答，答案要基于下面这篇文章的内容。文章里没写到的，明说没写到
-3. 三到五句话。别客套，别写「感谢您的宝贵意见」
-4. 开头自然地表明是你在代答，别假装是主人本人
-5. 只输出回复正文，不要任何前缀说明
-
-留言人：${comment.author?.login}
-留言内容：
-${stripAngles(String(comment.body || '')).slice(0, 1500)}
-
-这篇文章的正文（可能截断）：
-${article || '（正文没取到，这种情况下只能就事论事，别硬答技术细节）'}`, 800, { label: '回评' })
+    const said = await ask(PERSONA, replyPrompt({
+      title: disc.title,
+      ageHours,
+      who: comment.author?.login,
+      body: stripAngles(String(comment.body || '')).slice(0, 1500),
+      article
+    }), 800, { label: '回评' })
 
     if (!said) { console.log('  模型没返回，跳过这条'); continue }
     // 她的回复会公开发在主人的博客下面、署主人博客的名。

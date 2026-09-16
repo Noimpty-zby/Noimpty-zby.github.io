@@ -140,6 +140,28 @@ export const pruneOrphans = (store, live) => {
   return orphans
 }
 
+// 固定的排前面，变量排后面 —— 规矩和原因见 narrate.mjs 里 reviewPrompt 上面那段。
+// 原来第一行就是《标题》，把下面整块要求（约 300 token）全踩脏了：实测可缓存比例 8%。
+export const notePrompt = (title, listed) => `主人写了一篇文章，下面会把它的正文段落给你，每段前面有编号。
+
+请挑 2 到 3 个段落，各留一句旁注。要求：
+
+1. 每条旁注 **不超过 60 字**，一句话说完
+2. 内容必须是这几种之一：
+   - 补一个原文没交代的前提或坑（最有价值）
+   - 指出这里讲得不清楚、容易误解
+   - 接一句你自己的观察，要具体，不许是「写得真好」这种空话
+3. **不许编造技术细节**。不确定就别写那一条
+4. 挑的段落要分散开，别都挤在开头
+5. 严格只输出 JSON，不要任何解释文字：
+
+{"notes":[{"i":段落编号,"text":"旁注内容"}]}
+
+━━━ 这一篇 ━━━
+标题：《${title}》
+正文段落：
+${listed}`
+
 export const buildNotes = async () => {
   const store = readStore()
   const files = readdirSync(POSTS)
@@ -175,24 +197,8 @@ export const buildNotes = async () => {
     if (paras.length < 3) { console.log(`  ${title.trim()} 段落太少，跳过`); continue }
 
     const listed = paras.slice(0, 40).map((p, i) => `[${i}] ${p.slice(0, 260)}`).join('\n\n')
-    const out = await ask(PERSONA,
-      `这是主人写的文章《${title.trim()}》，下面是它的正文段落，每段前面有编号。
+    const out = await ask(PERSONA, notePrompt(title.trim(), listed), 900, { label: '批注' })
 
-请挑 2 到 3 个段落，各留一句旁注。要求：
-
-1. 每条旁注 **不超过 60 字**，一句话说完
-2. 内容必须是这几种之一：
-   - 补一个原文没交代的前提或坑（最有价值）
-   - 指出这里讲得不清楚、容易误解
-   - 接一句你自己的观察，要具体，不许是「写得真好」这种空话
-3. **不许编造技术细节**。不确定就别写那一条
-4. 挑的段落要分散开，别都挤在开头
-5. 严格只输出 JSON，不要任何解释文字：
-
-{"notes":[{"i":段落编号,"text":"旁注内容"}]}
-
-正文段落：
-${listed}`, 900, { label: '批注' })
 
     if (!out) { console.log(`  ${title.trim()} 没能调用模型，跳过`); continue }
     let parsed

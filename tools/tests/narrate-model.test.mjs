@@ -82,6 +82,39 @@ await check('calls / fails 数的是逻辑调用：重试两次只算挂了一�
   assert.equal(N.MODEL_STATE.fails - was.fails, 1)
 })
 
+console.log('\n娜娜莉的模型 · 记账')
+
+/* 响应里的 usage 以前被整个丢掉，于是「这个月的钱花在哪一步」查不出来 ——
+ * 账单上「输入（未命中缓存）」高得离谱时，只能在本地搭探针去猜。 */
+const usage = (o) => () => ({ ok: true, status: 200, json: async () => ({
+  choices: [{ message: { content: '写好了' }, finish_reason: 'stop' }], usage: o }) })
+
+await check('★★ 命中和未命中分开记（两个价钱）', async () => {
+  // 用一份干净的模块实例：上面那些故意失败的调用已经把账本弄脏了
+  const fresh = await import('../daily-report/narrate.mjs?usage-detail')
+  globalThis.fetch = async () => usage({
+    prompt_tokens: 1000, prompt_cache_hit_tokens: 800, prompt_cache_miss_tokens: 200, completion_tokens: 50 })()
+  await fresh.ask('sys', 'user', 100)
+  assert.equal(fresh.MODEL_STATE.tokens.hit, 800)
+  assert.equal(fresh.MODEL_STATE.tokens.miss, 200)
+  assert.equal(fresh.MODEL_STATE.tokens.out, 50)
+  assert.match(fresh.tokenSummary(), /命中缓存 80%/)
+})
+
+await check('★ 接口没给缓存明细时整笔算未命中，不编一个好看的命中率', async () => {
+  const fresh = await import('../daily-report/narrate.mjs?usage-nodetail')
+  globalThis.fetch = async () => usage({ prompt_tokens: 500, completion_tokens: 20 })()
+  await fresh.ask('sys', 'user', 100)
+  assert.equal(fresh.MODEL_STATE.tokens.hit, 0)
+  assert.equal(fresh.MODEL_STATE.tokens.miss, 500)
+  assert.match(fresh.tokenSummary(), /没有缓存明细/)
+})
+
+await check('一次都没调用过 → 不出这一行', async () => {
+  const fresh = await import('../daily-report/narrate.mjs?usage-empty')
+  assert.equal(fresh.tokenSummary(), '')
+})
+
 console.log('\n娜娜莉的模型 · 降级文案要说清是哪一种失败')
 
 await check('★★ 读后反馈的降级文案带上真实原因，不再是一句笼统的「没能调用模型」', async () => {

@@ -32,27 +32,68 @@ const PERSONA = `你是娜娜莉，住在 Noimpty 个人博客里的猫娘助手
 // 日报、批注、回评这些照旧走便宜的 flash。
 const PRO_MODEL = process.env.DEEPSEEK_PRO_MODEL || 'deepseek-v4-pro'
 
+/* 默认允许重试一次。
+ *
+ * 这个仓库里没有一个调用是「跑得勤、这次挂了下次补上」的：日报一天一份、
+ * 批注一天一轮、随笔一周一篇 —— 每一格都是一天只有一次机会，一个超时或者
+ * 一个 502 就等于这一格今天空着。2026-09-14 那篇递归文章的读后反馈就是这么
+ * 丢的：tries=1，邮件里只剩一句「没能调用模型」，而同一把 key、同一个模型
+ * 十一个小时后给同一篇文章写批注时好好的。
+ *
+ * 以前只有资讯那一步显式写了 retries: 1，现在这是所有人的默认值。
+ * key 错、余额空这类 4xx 照旧一次就放弃（见下面的 retryable），重试没有意义；
+ * 代价是接口真的挂了的时候每一格的耗时翻倍（90 秒超时 ×2，中间退避 5 秒）。
+ */
+const DEFAULT_RETRIES = 1
+
+/* 这一轮她被调用的情况。日报末尾那项「娜娜莉的模型」健康检查读它，
+ * 降级文案也读它 —— 以前失败原因只打在 Actions 日志里，邮件上只有一句
+ * 笼统的「没能调用模型」，事后想知道到底是 401 还是 429 还是超时，
+ * 只能回去翻 CI 日志，而日志三个月就过期了。
+ *
+ * calls / fails 数的都是**逻辑调用**：重试全用光才算失败一次。
+ */
+export const MODEL_STATE = {
+  keyless: !KEY,   // 压根没配 key，一个请求都不会发出去
+  calls: 0,
+  fails: 0,
+  why: ''          // 最近一次失败的原因
+}
+
+/* 给降级文案用：这一格为什么是空的。
+ *
+ * 只在 ask() 刚返回 null 之后调用。那时 why 必然是这一次留下的 ——
+ * 两条返回 null 的路径（没配 key、重试用尽）都会先写 why，
+ * 所以调用方不会读到上一次调用留下的陈值。
+ */
+export const whyNoModel = () => MODEL_STATE.keyless
+  ? '没有配置 DEEPSEEK_API_KEY'
+  : '调用模型失败：' + String(MODEL_STATE.why || '未知原因').slice(0, 160)
+
 /**
  * @param {string} system 人设 / 角色
  * @param {string} user   正文提示
  * @param {number} maxTokens
  * @param {{deep?: boolean, effort?: string, timeout?: number, retries?: number, label?: string}} opts
  *        deep=true  → 换 pro 模型并打开思考。慢很多，也贵很多。
- *        retries=N  → 失败后再试 N 次（默认 0）。
+ *        retries=N  → 失败后再试 N 次（默认 1，传 0 才是真的只试一次）。
+ *        label=xxx  → 写进日志的标签，出事时一眼看出是哪一格挂的。
  *
- * 为什么要有 retries：点子那一步一晚上只跑一次，一次 pro + 深度思考。
- * 主人跑了两次只成功一次，失败那次日志上只有「模型没返回」——
- * 这种一次性的活儿，一个超时或者一个 502 就等于这一天白跑了。
- * 所以那一步显式要重试，而且失败原因要写清楚，不能只留一句「没返回」。
+ * 为什么默认要重试：这里每一个调用都是一晚上只跑一次的活儿，
+ * 一个超时或者一个 502 就等于这一格白跑了 —— 点子那一步栽过一次，
+ * 读后反馈 2026-09-14 又栽了一次。失败原因也要写清楚，不能只留一句「没返回」。
  */
 export const ask = async (system, user, maxTokens = 700, opts = {}) => {
-  if (!KEY) return null
+  // 没 key 时也要留下原因：否则调用方读到的是上一次调用留下的陈值，
+  // 而这条路径一个请求都不发，日志上什么都不会出现。
+  if (!KEY) { MODEL_STATE.why = '没有配置 DEEPSEEK_API_KEY'; return null }
+  MODEL_STATE.calls++
   const deep = !!opts.deep
   const thinking = deep ? 'enabled' : THINKING
   const model = deep ? PRO_MODEL : MODEL
   // 深度思考要留出推理的 token，也要给更长的超时 —— 不然刚想到一半就被掐了
   const timeout = opts.timeout || (deep ? 300000 : 90000)
-  const tries = Math.max(1, 1 + (Number(opts.retries) || 0))
+  const tries = Math.max(1, 1 + (Number(opts.retries ?? DEFAULT_RETRIES) || 0))
   const tag = `narrate${deep ? '/pro' : ''}${opts.label ? '/' + opts.label : ''}`
 
   let lastWhy = '未知原因'
@@ -100,8 +141,9 @@ export const ask = async (system, user, maxTokens = 700, opts = {}) => {
       await new Promise(r => setTimeout(r, 5000 * 2 ** (attempt - 1)))
     }
   }
-  // 让调用方能把真实原因写进日志，而不是只报一句「没返回」
-  ask.lastError = lastWhy
+  // 让调用方能把真实原因写进邮件，而不是只报一句「没返回」
+  MODEL_STATE.fails++
+  MODEL_STATE.why = lastWhy
   return null
 }
 
@@ -131,7 +173,7 @@ export const writeOpening = async ({ traffic, comments, newPosts, health, schedu
 如果有需要留意的问题，把它放在最前面。
 如果他今天的任务没做完、或者有过期的，可以催一句 —— 但只催一句，别唠叨。
 
-${facts.join('\n')}`, 400)
+${facts.join('\n')}`, 400, { label: '小结' })
 
   if (out) return out
   return bad.length
@@ -151,8 +193,8 @@ export const reviewPost = async post => {
 
 标题：${post.title}
 ${post.series ? '所属系列：' + post.series + '\n' : ''}正文（可能截断）：
-${post.body}`, 700)
-  return out || '（没能调用模型，这次跳过反馈）'
+${post.body}`, 700, { label: '读后反馈' })
+  return out || `（${whyNoModel()}，这次跳过反馈）`
 }
 
 // ---------------- 评论安全筛查 ----------------
@@ -167,9 +209,9 @@ export const screenComments = async items => {
 输出格式（严格 JSON）：{"flagged":[{"i":序号,"why":"原因"}]}
 没有可疑的就输出 {"flagged":[]}
 
-${items.map((c, i) => `[${i}] ${c.who}：${c.body.slice(0, 400)}`).join('\n')}`, 500)
+${items.map((c, i) => `[${i}] ${c.who}：${c.body.slice(0, 400)}`).join('\n')}`, 500, { label: '评论筛查' })
 
-  if (!out) return { flagged: [], note: '没能调用模型，本次未做筛查' }
+  if (!out) return { flagged: [], note: whyNoModel() + '，本次未做筛查' }
   try {
     const m = out.match(/\{[\s\S]*\}/)
     const parsed = JSON.parse(m ? m[0] : out)
@@ -200,7 +242,7 @@ export const writeMissYou = async ({ days, recentPosts, pendingComments, traffic
 4. 不要卖惨，不要道德绑架，不要说「你是不是把窝忘了」这种话
 5. 结尾留一个轻的钩子，比如「窝把某某整理好了，你回来看看对不对」
 
-${ctx}`, 400)
+${ctx}`, 400, { label: '想念' })
 
   return out || `[趴在窗台上，尾巴一甩一甩] ${days} 天了喵。\n\n窝不是在等你，只是刚好路过这个页面而已。(ovo)\n\n……新写的那几篇窝都读过了，有几个地方想跟你说。你什么时候回来？`
 }
@@ -221,7 +263,7 @@ export const draftReplies = async (items, articleHint = '') => {
 5. 只输出回复正文本身，不要加任何前缀说明
 
 ${articleHint ? '这篇文章讲的是：' + articleHint + '\n\n' : ''}留言人：${c.who}
-留言内容：${c.body.slice(0, 800)}`, 600)
+留言内容：${c.body.slice(0, 800)}`, 600, { label: '回评草稿' })
     out.push({ ...c, draft: r || '' })
   }
   return out

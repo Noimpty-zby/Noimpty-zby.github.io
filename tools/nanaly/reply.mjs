@@ -135,7 +135,7 @@ export const autoReply = async () => {
 ${stripAngles(String(comment.body || '')).slice(0, 1500)}
 
 这篇文章的正文（可能截断）：
-${article || '（正文没取到，这种情况下只能就事论事，别硬答技术细节）'}`, 800)
+${article || '（正文没取到，这种情况下只能就事论事，别硬答技术细节）'}`, 800, { label: '回评' })
 
     if (!said) { console.log('  模型没返回，跳过这条'); continue }
     // 她的回复会公开发在主人的博客下面、署主人博客的名。

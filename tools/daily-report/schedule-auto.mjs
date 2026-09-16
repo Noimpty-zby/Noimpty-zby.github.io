@@ -13,6 +13,7 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { pushWithRetry, safeGitEmail } from '../nanaly/git.mjs'
+import { postPath } from '../nanaly/permalink.mjs'
 
 const FILE = 'source/_data/schedule.json'
 const POSTS = 'source/_posts'
@@ -62,18 +63,20 @@ const titleOf = file => {
   } catch (_) { return '' }
 }
 
-// url 路径 → 文章标题。和 _config.yml 的 :year/:month/:day/:title/ 规则保持一致。
+/* url 路径 → 文章标题。
+ *
+ * 路径一律走 permalink.mjs 推 —— 别在这里自己抠年月日：
+ * date 是北京挂钟，永久链接是 UTC 日期，凌晨发的文章两者差一天，
+ * 那样这张表会对不上，「回复了某篇下面的评论」这类条件永远勾不上。 */
 const pathTitleMap = () => {
   const map = new Map()
   try {
     readdirSync(POSTS).filter(f => f.endsWith('.md')).forEach(f => {
       const file = `${POSTS}/${f}`
       const raw = readFileSync(file, 'utf8')
-      const d = (raw.match(/^date:\s*(.+)$/m) || [])[1]
-      const m = d && String(d).trim().match(/^(\d{4})-(\d{2})-(\d{2})/)
-      if (!m) return
-      const slug = f.replace(/\.md$/, '')
-      map.set(`${m[1]}/${m[2]}/${m[3]}/${slug}`, titleOf(file) || slug)
+      const p = postPath(file, raw)
+      if (!p) return
+      map.set(p.replace(/^\/+|\/+$/g, ''), titleOf(file) || f.replace(/\.md$/, ''))
     })
   } catch (_) {}
   return map
@@ -173,12 +176,23 @@ export const commitSchedule = async (done) => {
     // 拒了要 rebase 之后重试，不能默默算了，不然这几个勾就永远消失了
     // （那天的信号已经过去，下次跑也不会再判出来）。
     pushWithRetry(run, '日程')
-
-    const { triggerDeploy } = await import('../nanaly/github.mjs')
-    await triggerDeploy()
-    return true
   } catch (e) {
     console.log('  日程提交失败：' + String(e.message || e).slice(0, 200))
     return false
   }
+
+  /* 推上去了，这几个勾已经安全落地。
+   *
+   * 下面这步失败**不等于**提交失败，所以不能混进上面那个 catch ——
+   * 那样日报会报「自动勾的结果没能提交到仓库，这几项会丢失」，而事实是
+   * 提交好好的，只是线上的日程页还没更新。报错报得不对比不报更麻烦。
+   * 但也不能默默算了：不触发部署，你在页面上会看到「明明勾了却没变」。 */
+  try {
+    const { triggerDeploy } = await import('../nanaly/github.mjs')
+    await triggerDeploy()
+  } catch (e) {
+    console.error('  ⚠️ 日程已提交，但' + String(e.message || e).slice(0, 200))
+    process.exitCode = 1
+  }
+  return true
 }

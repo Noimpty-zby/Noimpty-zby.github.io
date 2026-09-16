@@ -10,7 +10,7 @@
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { ask } from '../daily-report/narrate.mjs'
+import { ask, whyNoModel } from '../daily-report/narrate.mjs'
 import { triggerDeploy } from './github.mjs'
 import { pushWithRetry, safeGitEmail, sanitizeMd, stripAngles } from './git.mjs'
 
@@ -154,7 +154,12 @@ const dedupe = items => {
   })
 }
 
-/* 把「[3]」换成真正的来源链接。
+/* ⚠️ 从下面这一行到「最近几期写过什么」那句注释之间的整段，会被
+ * tools/tests/news-links.test.mjs 按字符串边界切出去、在隔离作用域里求值
+ * （attachSources 没有 export）。所以这两行之间**别塞带 export 的东西**，
+ * 塞了那个测试会直接语法错误；那两句边界文字本身也别改动、别在别处重复。
+ *
+ * 把「[3]」换成真正的来源链接。
  *
  * 以前是让模型自己写 `[来源](URL)`。上线之后链接点不开 —— 因为中文模型写
  * markdown 时经常用全角括号 `（）`、把 URL 后面的句号吞进去、或者干脆把网址
@@ -307,6 +312,27 @@ const beijingNow = () => new Intl.DateTimeFormat('sv-SE', {
   hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
 }).format(new Date())
 
+/* 一栏的结局。抽出来是为了能单独测 ——
+ * 它以前是一串 if/else，把「模型没答上来」和「她觉得没什么值得写的」
+ * 归进了同一个分支：最贵的那次调用（pro 模型 + 深度思考）挂掉时，
+ * 日志上写的是「她觉得没什么值得写的，跳过」。
+ * 这两件事的含义正好相反 —— 一个是合格的输出，一个是这一栏白跑了。 */
+export const outcomeOf = (out, body) =>
+  !out ? 'failed'
+    : /^（?这几天没什么/.test(String(out).trim()) ? 'none'
+      : body ? 'ok' : 'nosource'
+
+/* 整期一条都没生成时，这是「真没什么可写」还是「这一轮坏了」？
+ * 返回空串表示前者；返回一句话表示后者，调用方拿它抛异常。
+ *
+ * 为什么非分不可：资讯三天一期，这一期没生成就是没生成，下一期不会补。
+ * 十四次搜索加两次 pro 模型全白跑，而日志上只有一句「没什么值得写的」、
+ * 工作流全绿 —— 那一期就这么无声蒸发了。 */
+export const issueFailure = (modelFailed, searchFailed) =>
+  (modelFailed || searchFailed)
+    ? `这一期一条都没生成，而且过程中有失败：模型失败 ${modelFailed} 次、搜索失败 ${searchFailed} 次（原因见上面的日志）`
+    : ''
+
 export const buildNews = async () => {
   const stamp = beijingNow()
   const date = stamp.slice(0, 10)
@@ -335,19 +361,29 @@ export const buildNews = async () => {
   // 否则她今天写过的链接全被滤掉，重写出来是空的
   const old = recentUrls(already ? date : null)
   const sections = []
+  // 记账：最后整期空了的时候，靠这两个数区分「她没话说」和「这一轮坏了」
+  let modelFailed = 0
+  let searchFailed = 0
 
   for (const t of TOPICS) {
     let hits = []
     for (const q of t.queries) {
       try { hits = hits.concat(await searchWeb(q)) }
-      catch (e) { console.log(`  搜「${q.slice(0, 20)}…」失败：${String(e.message).slice(0, 80)}`) }
+      catch (e) {
+        searchFailed++
+        console.log(`  搜「${q.slice(0, 20)}…」失败：${String(e.message).slice(0, 80)}`)
+      }
     }
     hits = dedupe(hits).filter(h => !old.has(h.url.replace(/[?#].*$/, '').replace(/\/$/, '').toLowerCase()))
     console.log(`  ${t.title}：搜到 ${hits.length} 条可用`)
     if (!hits.length) continue
 
+    // 这个切片既是喂给她看的素材表，也是 attachSources 按编号回查的那张表。
+    // 以前两边各写了一遍 `t.deep ? 20 : 14`，改一边不改另一边就是全篇来源错位 ——
+    // 而 attachSources 的「改挂」还会把其中一部分静默地纠正回来，更难看出来。
     const POOL = t.deep ? 20 : 14
-    const listed = hits.slice(0, POOL).map((h, i) =>
+    const pool = hits.slice(0, POOL)
+    const listed = pool.map((h, i) =>
       `[${i}] ${h.title}\n    来源：${h.url}\n    ${h.date ? '日期：' + h.date + '\n    ' : ''}${h.excerpt}`).join('\n\n')
 
     const out = await ask(
@@ -389,24 +425,35 @@ ${t.angle || ''}`,
 素材：
 ${listed}`, t.deep ? 5000 : 1600, { deep: !!t.deep, retries: 1, label: t.key })
 
-    const body = out ? attachSources(out.trim(), hits.slice(0, t.deep ? 20 : 14)) : ''
-    if (body && !/^（?这几天没什么/.test(out.trim())) {
-      sections.push({ title: t.title, body })
-    } else if (out && !/^（?这几天没什么/.test(out.trim())) {
-      console.log(`  ${t.title}：她写的条目一条都没挂上来源，整段丢弃`)
-    } else {
-      console.log(`  ${t.title}：她觉得没什么值得写的，跳过`)
+    const body = out ? attachSources(out.trim(), pool) : ''
+    switch (outcomeOf(out, body)) {
+      case 'ok':
+        sections.push({ title: t.title, body })
+        break
+      case 'failed':
+        modelFailed++
+        console.log(`  ${t.title}：${whyNoModel()} —— 这一栏空着`)
+        break
+      case 'nosource':
+        console.log(`  ${t.title}：她写的条目一条都没挂上来源，整段丢弃`)
+        break
+      default:
+        console.log(`  ${t.title}：她觉得没什么值得写的，跳过`)
     }
   }
 
   if (!sections.length) {
+    // 「她觉得没什么可写」是合格的结果，「搜不到 + 模型挂了」不是。
+    // 后者必须抛出去让工作流变红，否则这一期就无声地没了。
+    const broke = issueFailure(modelFailed, searchFailed)
+    if (broke) throw new Error(broke)
     console.log('  这一期没有值得写的内容，不生成')
     return null
   }
 
   const intro = await ask(
     '你是娜娜莉，猫娘助手。自称「窝」，简短，禁止使用 • 和 ω。',
-    `给这期资讯写一句开场白，一句话就够，别超过 40 字。这期包含这些板块：${sections.map(s => s.title).join('、')}。`, 200)
+    `给这期资讯写一句开场白，一句话就够，别超过 40 字。这期包含这些板块：${sections.map(s => s.title).join('、')}。`, 200, { label: '资讯开场白' })
 
   // 注意：**绝对不要给这里加 layout: post**。
   // 这是 Hexo 的 page 不是 post，而 Butterfly 的 post 头部模板会去读

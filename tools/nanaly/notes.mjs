@@ -12,6 +12,7 @@ import { execFileSync } from 'node:child_process'
 import { ask } from '../daily-report/narrate.mjs'
 import { triggerDeploy } from './github.mjs'
 import { pushWithRetry } from './git.mjs'
+import { postPath } from './permalink.mjs'
 
 const DATA = 'source/_data/nanaly-notes.json'
 const POSTS = 'source/_posts'
@@ -76,16 +77,13 @@ export const anchorOf = p => p
   .trim()
   .slice(0, 30)
 
-// source/_posts/homework-three.md → 它最终的 url path
-// 直接从 front-matter 的 date 和文件名推，和 _config.yml 的 permalink 规则保持一致
-export const pathOf = (file, raw) => {
-  const d = (raw.match(/^date:\s*(.+)$/m) || [])[1]
-  if (!d) return null
-  const m = String(d).trim().match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (!m) return null
-  const slug = file.split('/').pop().replace(/\.md$/, '')
-  return `/${m[1]}/${m[2]}/${m[3]}/${slug}/`
-}
+/* source/_posts/homework-three.md → 它最终的 url path。
+ *
+ * 这里曾经是「把 front-matter 的 date 前十个字符抠出来拼上」。那是错的：
+ * 永久链接用的是那一刻的 UTC 日期，而 date 写的是北京挂钟，
+ * 北京时间 00:00–07:59 发的文章两者差一天 —— 她自己的 w35 随笔就这么
+ * 丢了三条批注。换算规则和它踩过的坑都在 permalink.mjs 里。 */
+export const pathOf = (file, raw) => postPath(file, raw)
 
 /* 扫一遍文章，同时得出两件事：哪些路径还活着，以及哪几篇需要新写批注。
  *

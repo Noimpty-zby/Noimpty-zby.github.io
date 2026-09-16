@@ -22,7 +22,11 @@ on:
     # 00:00 的班 03:07 才跑、01:00 的 05:50、02:00 的 07:09、06:00 的 10:46，
     # 迟 3 到 5 小时。错到 :17 不保证准时，但总比守着整点排队强。
     - cron: '17 */3 * * *'
-    # 巡逻：每天北京时间早上 9 点（UTC 01:00）
+    # 巡逻 + 批注 + 贴表情：每天北京时间早上 9 点（UTC 01:00）
+    #
+    # 贴表情以前不在任何班次上，只有手动 dispatch 才会跑 —— 也就是从来没跑过。
+    # 它和巡逻、批注是一路的（都是「她把站上的东西读一遍」），塞进同一班就够，
+    # 不值得为三次 API 调用单开一个 cron。
     - cron: '0 1 * * *'
     # 资讯：每三天一期，北京时间上午 10 点（UTC 02:00）
     # 注：*/3 是按「几号」算的，所以跨月那次间隔会短一点，属正常
@@ -85,7 +89,7 @@ jobs:
             echo "what=news" >> $GITHUB_OUTPUT
             echo "dry=" >> $GITHUB_OUTPUT
           elif [ "${{ github.event.schedule }}" = "0 1 * * *" ]; then
-            echo "what=patrol-notes" >> $GITHUB_OUTPUT
+            echo "what=daily-round" >> $GITHUB_OUTPUT
             echo "dry=" >> $GITHUB_OUTPUT
           else
             echo "what=reply" >> $GITHUB_OUTPUT
@@ -120,9 +124,12 @@ jobs:
           NANALY_GIT_NAME: ${{ secrets.NANALY_GIT_NAME }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: |
-          if [ "${{ steps.pick.outputs.what }}" = "patrol-notes" ]; then
+          if [ "${{ steps.pick.outputs.what }}" = "daily-round" ]; then
+            # 一步失败不该连累后面两步，所以分三次调用而不是 run.mjs all：
+            # 每一步自己会把退出码染红（见 run.mjs 的 catch）
             node tools/nanaly/run.mjs patrol ${{ steps.pick.outputs.dry }}
             node tools/nanaly/run.mjs notes  ${{ steps.pick.outputs.dry }}
+            node tools/nanaly/run.mjs react  ${{ steps.pick.outputs.dry }}
           else
             node tools/nanaly/run.mjs ${{ steps.pick.outputs.what }} ${{ steps.pick.outputs.dry }}
           fi

@@ -48,6 +48,15 @@ export const safeGitEmail = () => {
   return v
 }
 
+/* 配一遍提交身份。批注、随笔、资讯、日程四处都要做这件事，
+ * 而 notes.mjs 和 column.mjs 曾经各自把上面那段 safeGitEmail 的逻辑
+ * 原样抄了一份在本地 —— 三份副本，规则改一处就得记得改三处，
+ * 而这条规则错了的后果是把陌生人挂进仓库的 Contributors。 */
+export const useNanalyIdentity = run => {
+  run('config', 'user.name', process.env.NANALY_GIT_NAME || '娜娜莉')
+  run('config', 'user.email', safeGitEmail())
+}
+
 // YAML 标量的安全写法。
 //
 // 模型写出来的标题里出现 `:` `#` `[` `-` `"` 都很正常，

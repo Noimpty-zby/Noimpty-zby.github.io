@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 
 import { execFileSync } from 'node:child_process'
 import { ask, whyNoModel } from '../daily-report/narrate.mjs'
 import { triggerDeploy } from './github.mjs'
-import { pushWithRetry, safeGitEmail, sanitizeMd, stripAngles } from './git.mjs'
+import { pushWithRetry, useNanalyIdentity, sanitizeMd, stripAngles } from './git.mjs'
 
 const DIR = 'source/news'
 const DRY = process.argv.includes('--dry')
@@ -501,8 +501,7 @@ ${sections.map(s => `## ${s.title}\n\n${s.body}`).join('\n\n')}
  */
 export const commitNews = async (label) => {
   const run = (...a) => execFileSync('git', a, { encoding: 'utf8', stdio: 'pipe' })
-  run('config', 'user.name', process.env.NANALY_GIT_NAME || '娜娜莉')
-  run('config', 'user.email', safeGitEmail())
+  useNanalyIdentity(run)
   run('add', DIR)
   if (!run('status', '--porcelain', '--', DIR).trim()) { console.log('  没有变化，不提交'); return false }
   run('commit', '-m', `娜娜莉：资讯速览 ${label}`)

@@ -6,21 +6,12 @@
 
 import { listDiscussions, createDiscussion, addComment, addReaction, marker, hasMarker, SIGN, findDiscussion, giscusTitle } from './github.mjs'
 import { ask } from '../daily-report/narrate.mjs'
-import { sitePages, PAGE_RE } from './probe.mjs'
+import { hit, probeUrl, mapLimit, sleep, looksThrottled, sitePages, PAGE_RE } from './probe.mjs'
 import { createHash } from 'node:crypto'
 
 const SITE = (process.env.SITE_URL || 'https://noimpty-zby.github.io').replace(/\/$/, '')
 const T = (ms = 15000) => AbortSignal.timeout(ms)
 const DRY = process.argv.includes('--dry')
-
-const mapLimit = async (items, limit, fn) => {
-  const out = []
-  let i = 0
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (i < items.length) { const k = i++; out[k] = await fn(items[k]) }
-  }))
-  return out
-}
 
 const getText = async url => {
   const res = await fetch(url, { signal: T(20000), redirect: 'follow' })
@@ -30,55 +21,31 @@ const getText = async url => {
 // ---------------- 逐篇体检 ----------------
 
 const isInternal = u => u.startsWith(SITE)
-const sleep = ms => new Promise(r => setTimeout(r, ms))
 
-const hit = async (u, ms) => {
-  try {
-    let res = await fetch(u, { method: 'HEAD', signal: T(ms) })
-    if (res.status === 405 || res.status === 501) res = await fetch(u, { signal: T(ms) })
-    return { status: res.status, err: null }
-  } catch (e) {
-    return { status: 0, err: String(e.message || e).slice(0, 60) }
-  }
-}
-
-// 什么算「有问题」：
-//   站内：任何 4xx/5xx，或者连不上
-//   站外：只认 404 / 410。403/429/超时都是反爬和抖动，不是坏了
-const verdictOf = (r, inside) => {
-  if (r.err) return inside ? 'unreachable' : null
-  if (inside) return r.status >= 400 ? 'http' : null
-  return (r.status === 404 || r.status === 410) ? 'http' : null
-}
-
-// 两段式判定。第一遍只用来「怀疑」，定罪必须靠串行复核。
-//
-// 上一版就是死在这儿：并发扫自己的站会被 GitHub Pages 限流，
-// 一大片请求直接连接失败，代码把它当成死链报了出去 ——
-// 结果连首页 / 都被报成打不开。一次误报就够让人再也不信这个巡逻了。
-const probe = async (u, kind) => {
+/* 探测结果 → 一句人话。
+ *
+ * 「怎么判一个地址是不是真坏了」那四道关在 probe.mjs 里，日报的健康检查
+ * 用的是同一份 —— 这里曾经把整套（hit / verdictOf / 两段式复核 / 限流闸门）
+ * 又抄了一遍，probe.mjs 开头那句「别再各写一套」就是为此写的。
+ * 两份当时行为一致，但下次只会有一份被修。现在这里只剩措辞。
+ *
+ * 措辞值得单独抽出来测：它会原样出现在她公开发的评论里，
+ * 而那条评论署的是主人博客的名。 */
+export const issueOf = (u, kind, inside, bad) => {
+  if (!bad) return null
   const label = kind === 'img' ? '图片' : '链接'
-  const inside = isInternal(u)
-
-  let r = await hit(u, 15000)
-  let v = verdictOf(r, inside)
-  if (!v) return null
-
-  // 复核两次：串行、加延迟、超时放宽。任何一次通过就判无罪。
-  for (let i = 0; i < 2; i++) {
-    await sleep(1500 + i * 2000)
-    r = await hit(u, 25000)
-    v = verdictOf(r, inside)
-    if (!v) return null
-  }
-
   const shown = inside ? (u.replace(SITE, '') || '/') : u
-  if (v === 'unreachable') {
+  if (bad.verdict === 'unreachable') {
     return { kind, what: `${label} ${shown} 连续三次都连不上`, url: u }
   }
   return inside
-    ? { kind, what: `${label} ${shown} 返回 ${r.status}`, url: u }
-    : { kind, what: `站外${label} ${u} 已经失效了（${r.status}）`, url: u }
+    ? { kind, what: `${label} ${shown} 返回 ${bad.status}`, url: u }
+    : { kind, what: `站外${label} ${u} 已经失效了（${bad.status}）`, url: u }
+}
+
+const probe = async (u, kind) => {
+  const inside = isInternal(u)
+  return issueOf(u, kind, inside, await probeUrl(u, inside))
 }
 
 // 并发压到很低。慢一点没关系，误报一次就没人信了。
@@ -163,9 +130,8 @@ export const patrol = async () => {
   const broken = results.filter(r => r.issues.length)
 
   // 闸门：坏掉的比例太高，几乎肯定是我们这边被限流，而不是主人一夜之间写坏了半个站。
-  // 宁可这次什么都不说，也不要在他的博客上公开发一堆假警报。
-  const RATE_LIMIT_SUSPECT = 0.35
-  if (pages.length >= 4 && broken.length / pages.length > RATE_LIMIT_SUSPECT) {
+  // 宁可这次什么都不说，也不要在他的博客上公开发一堆假警报。（阈值同样在 probe.mjs）
+  if (looksThrottled(broken.length, pages.length)) {
     console.log(`  ${pages.length} 篇里有 ${broken.length} 篇报错（${Math.round(broken.length / pages.length * 100)}%）`)
     console.log('  比例高得不正常，判定为扫描把自己打限流了，不是真故障。本次不发言。')
     broken.forEach(b => console.log(`     （跳过）${b.pageUrl.replace(SITE, '')}：${b.issues.map(i => i.what).join('；')}`))
@@ -253,11 +219,30 @@ ${list}
 
 const MOODS = ['HEART', 'HOORAY', 'ROCKET', 'EYES']
 
+/* 挑谁贴表情。
+ *
+ * 判据必须是「**她**贴过没有」，而不是「有没有人贴过」—— 老代码是后者：
+ * 读者随手点一个 ❤️，她就永远不会再给那篇贴了。讨论的查询里本来就
+ * 取了 user{login}，只是没用上。
+ *
+ * NANALY_LOGIN 没配时分不清谁贴的，那就退回旧行为（有人贴过就不碰）：
+ * 宁可少贴一个，也不要在同一篇下面重复堆表情。 */
+export const reactTargets = (discussions, limit = 3, login = process.env.NANALY_LOGIN) => {
+  const her = String(login || '').toLowerCase()
+  const hersAlready = d => {
+    const rs = d.reactions?.nodes || []
+    if (!rs.length) return false
+    return her ? rs.some(r => String(r.user?.login || '').toLowerCase() === her) : true
+  }
+  return (discussions || [])
+    .filter(d => /^\/?\d{4}\//.test(d.title) && !hersAlready(d))
+    .slice(0, limit)
+}
+
 export const react = async (limit = 3) => {
   const discussions = await listDiscussions().catch(() => null)
   if (!discussions) return 0
-  const mine = d => (d.reactions?.nodes || []).length > 0
-  const targets = discussions.filter(d => /^\/?\d{4}\//.test(d.title) && !mine(d)).slice(0, limit)
+  const targets = reactTargets(discussions, limit)
   let n = 0
   for (const d of targets) {
     // 用标题算出固定的表情，避免每次跑结果都不一样

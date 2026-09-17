@@ -53,6 +53,38 @@ for (const f of readdirSync('scripts').filter(f => f.endsWith('.js')).sort()) {
   })
 }
 
+console.log('\n浏览器脚本 · 解析得过、跑起来会炸的那几种写法')
+
+check('★★ 关键字后面不许直接粘中文（const活 会被当成一个标识符）', () => {
+  /* 2026-09-17 日程页整个白屏过一次，就死在一行 `const活 = …`：
+   * CJK 是合法的标识符字符，所以 `const` 和后面那个字连成了**一个** token，
+   * 整句成了「给未声明变量赋值」—— 解析期完全合法，
+   * 只有在 'use strict' 下运行时才抛 ReferenceError。
+   * 上面那圈 new vm.Script 全部照过，构建过，部署过，
+   * 只有打开页面才看得见。所以这里按字面量扫一遍。 */
+  const KW = 'const|let|var|return|typeof|new|delete|void|await|yield|case|instanceof'
+  const re = new RegExp(`\\b(?:${KW})[\\u3400-\\u9fff\\u3040-\\u30ff]`, 'g')
+  /* 注释里不算 —— 讲这个坑的注释本身就会写出 `const活` 当例子。
+   * 粗略地砍掉 // 之后的部分、跳过块注释的行就够了：
+   * 这几个文件里没有「字符串里含 //」又同时关键字粘中文的写法。 */
+  const codeOf = line => {
+    const t = line.trim()
+    if (t.startsWith('*') || t.startsWith('/*') || t.startsWith('//')) return ''
+    const i = line.indexOf('//')
+    return i === -1 ? line : line.slice(0, i)
+  }
+  const bad = []
+  for (const f of files) {
+    readFileSync(join(DIR, f), 'utf8').split('\n').forEach((line, i) => {
+      const code = codeOf(line)
+      if (code && re.test(code)) bad.push(`${f}:${i + 1}  ${line.trim().slice(0, 60)}`)
+      re.lastIndex = 0
+    })
+  }
+  assert.deepEqual(bad, [],
+    '关键字和中文标识符黏在一起了（中间漏了空格）：\n      ' + bad.join('\n      '))
+})
+
 console.log('\n娜娜莉的人设 · 模板字符串里的反引号')
 
 const AI = join(DIR, 'noimpty-ai.js')

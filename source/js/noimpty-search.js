@@ -62,23 +62,36 @@
     })).filter(p => p.title)
   }
 
-  let cache = null
-  let pending = null
+  const INDEX_PATH = () => `${ROOT()}search.xml`.replace(/\/{2,}/g, '/')
 
-  const loadCorpus = async () => {
-    if (cache) return cache
-    if (pending) return pending
+  /** 这个地址是不是那份索引。给下面接管主题搜索用。 */
+  const isIndexUrl = url => {
+    try { return new URL(String(url || ''), window.location.origin).pathname === INDEX_PATH() }
+    catch (_) { return false }
+  }
 
-    pending = (async () => {
-      const res = await fetch(`${ROOT()}search.xml`.replace(/\/{2,}/g, '/'))
+  /* 原生 fetch 必须在打补丁之前抓住。
+   * 下面会把 window.fetch 换掉，而解密自己也要 fetch 那个文件 ——
+   * 用换过的那个就是无限递归。 */
+  const nativeFetch = window.fetch.bind(window)
+
+  let xml = null
+  let xmlPending = null
+
+  /** 解密后的 search.xml 原文。主题的搜索要的是这个，loadCorpus 也从它来。 */
+  const loadXml = async () => {
+    if (xml != null) return xml
+    if (xmlPending) return xmlPending
+
+    xmlPending = (async () => {
+      const res = await nativeFetch(INDEX_PATH())
       if (!res.ok) throw new Error(`SEARCH_HTTP_${res.status}`)
       const body = (await res.text()).trim()
 
-      // 没配 NOIMPTY_PASSPHRASE 构建出来的是空壳
+      // 没配 NOIMPTY_PASSPHRASE 构建出来的是空壳，也可能是还没加密的旧产物
       if (body.startsWith('<')) {
-        const posts = parse(body)
-        if (!posts.length) throw new Error('SEARCH_EMPTY')
-        return (cache = posts)     // 兼容还没加密的旧产物
+        if (!parse(body).length) throw new Error('SEARCH_EMPTY')
+        return (xml = body)
       }
 
       let envelope
@@ -88,14 +101,48 @@
       const pass = passphrase()
       if (!pass) throw new Error('SEARCH_LOCKED')
 
-      let xml
-      try { xml = await decrypt(envelope.data, pass) }
+      try { return (xml = await decrypt(envelope.data, pass)) }
       catch (_) { throw new Error('SEARCH_BAD_KEY') }
-
-      return (cache = parse(xml))
     })()
 
-    try { return await pending } finally { pending = null }
+    try { return await xmlPending } finally { xmlPending = null }
+  }
+
+  let cache = null
+  const loadCorpus = async () => {
+    if (cache) return cache
+    return (cache = parse(await loadXml()))
+  }
+
+  /* ---------------- 接管主题自带的那个搜索 ----------------
+   *
+   * 导航栏那个放大镜到今天为止是**死的**：theme 的 local-search.js 直接
+   *   DOMParser().parseFromString(res, 'text/xml').querySelectorAll('entry')
+   * 而全站上锁之后 /search.xml 已经是密文信封（{"v":1,"alg":"AES-GCM",…}）。
+   * 拿 JSON 当 XML 解析得到的是 parsererror 文档，entry 数为 0 —— 于是
+   * this.datas = []，搜什么都是「没有找到」。整条路径不抛异常，
+   * 所以控制台干净、catch 不到，没有任何人会发现。
+   * 娜娜莉的 @@ACT{"do":"search"} 驱动的也是同一个框，同样搜不出东西。
+   *
+   * 修法是把它那一次 fetch 接管过来，还给它解密后的 XML。
+   * 为什么不去改 local-search.js：那是主题文件，重装依赖就被覆盖
+   * （README 第一节就写着别动 node_modules/hexo-theme-butterfly）。
+   *
+   * 只认那一个地址，别的一律原样放行 —— 娜娜莉调 DeepSeek/Tavily、
+   * 日程页调 GitHub API 走的都是同一个 fetch。 */
+  if (!window.__NOIMPTY_SEARCH_PATCHED__) {
+    window.__NOIMPTY_SEARCH_PATCHED__ = true
+    const EMPTY = '<?xml version="1.0" encoding="utf-8"?>\n<search></search>\n'
+    const asXml = text => new Response(text, {
+      status: 200, headers: { 'Content-Type': 'application/xml' }
+    })
+    window.fetch = function (input, init) {
+      const url = typeof input === 'string' ? input : (input && input.url) || ''
+      if (!isIndexUrl(url)) return nativeFetch(input, init)
+      // 解不开（还没解锁、暗号不对、构建时没给暗号）就给一份合法但空的 XML。
+      // 比把密文塞给它强：至少 DOMParser 不会产出 parsererror。
+      return loadXml().then(asXml, () => asXml(EMPTY))
+    }
   }
 
   /* 行动日志。
@@ -137,7 +184,8 @@
   window.NOIMPTY_SEARCH = Object.freeze({
     loadCorpus,
     loadJournal,
+    isIndexUrl,
     explain: code => MESSAGES[code] || '站内索引读不出来。',
-    reset: () => { cache = null; journal = null }
+    reset: () => { cache = null; xml = null; journal = null }
   })
 })()

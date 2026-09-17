@@ -35,10 +35,11 @@ const main = async () => {
 
   // 先按客观信号自动勾一遍，再读日程 —— 这样邮件里看到的是最新状态，
   // 而不是「明明发了文章却还显示没做」
+  // newPosts / windowStart 不用再传了：判据改成「任务日期之后有没有这个信号」，
+  // 它自己从仓库里数文章，不依赖这一次的 24 小时窗口（见 schedule-auto.mjs 顶部）。
+  // comments 仍然要传 —— 只有 reply 那一类条件用得上，而评论只能从 GitHub 拉。
   const auto = await step('日程自动完成', () => autoComplete({
-    newPosts: newPosts.ok ? newPosts.items : [],
     comments,
-    windowStart: WINDOW.start,
     ownerLogin: process.env.OWNER_LOGIN || (CFG.repo.split('/')[0]),
     dry: DRY
   }), { changed: 0, done: [] })

@@ -321,6 +321,13 @@
 .nanaly-send:hover { transform: translateY(-1px); }
 .nanaly-send:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
+/* 正在回话时，发送键就是「停」键 */
+.nanaly-send.is-stop {
+  background: rgba(233, 89, 120, 0.18);
+  color: var(--noimpty-accent, #e95978);
+  box-shadow: inset 0 0 0 1px var(--noimpty-border, rgba(233, 89, 120, 0.3));
+}
+
 /* ---------- 设置 / 首次配置 ---------- */
 
 .nanaly-setup {
@@ -337,7 +344,10 @@
   color: var(--text-highlight-color, #fff7fa);
 }
 
-.nanaly-setup .nanaly-note {
+/* 面板里的说明框叫 .nanaly-tip，不叫 .nanaly-note ——
+   正文里那些长在文章中间的批注才是 .nanaly-note（见 nanaly-notes.css），
+   两个不相干的东西共用一个类名的话，那边的 display:flex 会漏进这里来。 */
+.nanaly-setup .nanaly-tip {
   margin: 0 0 14px;
   padding: 10px 12px;
   border-left: 3px solid var(--noimpty-accent, #e95978);
@@ -712,3 +722,24 @@
     max-width: calc(100vw - 90px);
   }
 }
+
+/* ============================================================
+ * Token 账
+ *
+ * 她说完一句，把这一轮的入/出和缓存命中率贴在气泡底下。
+ * 压得很淡：平时不该抢注意力，想看账的时候一眼能找到就行。
+ * 悬停能看到这台浏览器的累计，控制台里是 NANALY.tokens()。
+ * ============================================================ */
+
+.nanaly-usage {
+  margin-top: 6px;
+  color: var(--card-meta, #9b9098);
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  opacity: 0.5;
+  transition: opacity 0.18s ease;
+  cursor: default;
+}
+
+.nanaly-msg--her:hover .nanaly-usage { opacity: 0.8; }

@@ -24,7 +24,7 @@ description: 课表之外自己挑的课：AI Infra 后端开发，以及此前�
     <h3>AI Infra 后端开发</h3>
     <span class="noimpty-track-card__by">Linux · Git · Go · MySQL · Docker · Python · Transformer</span>
     <p>现在在走的方向。从每天都要用的工具（命令行、版本控制）打底，再学语言、数据层、容器化部署，外加一块专门啃 Transformer 推理原理。</p>
-    <span class="noimpty-track-card__stat">7 门课 · 已写 5 篇</span>
+    <span class="noimpty-track-card__stat">7 门课 · {% section_stat Linux入门|Linux深入|Git|Go|MySQL|Docker|Transformer 推理机制|Python %}</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--gamedev" href="/extra/gamedev/">
     <span class="noimpty-track-card__index">02</span>
@@ -32,6 +32,6 @@ description: 课表之外自己挑的课：AI Infra 后端开发，以及此前�
     <h3>游戏开发</h3>
     <span class="noimpty-track-card__by">GAMES101 · UE5 C++ · Tom Looman</span>
     <p>之前那条线。图形学解决「画面怎么来的」，Unreal 解决「游戏怎么跑起来」，两门课加起来 16 篇复盘。</p>
-    <span class="noimpty-track-card__stat">已写 16 篇 · 告一段落</span>
+    <span class="noimpty-track-card__stat">{% section_stat GAMES101|UE5-Looman %} · 告一段落</span>
   </a>
 </div>

@@ -21,7 +21,7 @@ description: Tom Looman《Professional Game Development in C++ and Unreal Engine
   <div><b>讲师</b><span>Tom Looman · 前 Epic Games</span></div>
   <div><b>项目</b><span>ActionRoguelike（第三人称动作 Roguelike）</span></div>
   <div><b>课程主页</b><span><a href="https://courses.tomlooman.com/p/unrealengine-cpp" target="_blank" rel="noopener">courses.tomlooman.com</a></span></div>
-  <div><b>进度</b><span>第一至第六章 + 作业一、作业二 · 告一段落</span></div>
+  <div><b>进度</b><span>第一至第六章 + 作业一、作业二 · 告一段落 · {% section_progress UE5-Looman %}</span></div>
 </div>
 
 {% section_posts UE5-Looman %}

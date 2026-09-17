@@ -98,6 +98,66 @@ const EMPTY_STATE = {
   }
 }
 
+/* ---------------- 每一栏实际有几篇 ----------------
+ *
+ * 这个数字以前是**手写**的，而且同一份事实在四个地方各写了一遍：
+ * hub 卡片的 stat 行、track 页的「进度」、noimpty-ai.js 的 PERSONA、
+ * 还有 noimpty-profile.md。发一篇文章要记得同步四处，漏了不报错、
+ * 构建全绿、测试也全过 —— 只有人去看页面才会发现。
+ *
+ * 真出过事：2026-08-28 发 DSA 开篇那次，首页卡片还写着「还没开始」，
+ * 而娜娜莉的人设里硬编码着「AI Infra 一栏一篇都没有」，
+ * 她当面否认了刚发布的文章，Linux 第一章也被否认了好几周。
+ *
+ * 所以数字这部分交给构建时现数。**语义那部分不动** ——
+ * 「递归」「第三章已完成」「告一段落」是他学到哪了，数不出来，还得手写。
+ */
+
+const statsOf = section => {
+  const posts = toArray(hexo.locals.get('posts'))
+    .filter(post => taxonomyNames(post.categories).includes(String(section || '').trim()))
+    .sort((left, right) => Number(right.date || 0) - Number(left.date || 0))
+  const latest = posts[0]
+  return {
+    n: posts.length,
+    latest: latest && latest.date && typeof latest.date.format === 'function'
+      ? latest.date.format('MM-DD') : ''
+  }
+}
+
+/* {% section_stat 分类 %} —— hub 卡片上那一行，短。
+ *
+ * 分隔符用 | 不用空格：叶子名里本来就有空格（「Transformer 推理机制」）。
+ *   {% section_stat Git %}                        → 已写 2 篇
+ *   {% section_stat 入门=Linux入门|深入=Linux深入 %}  → 入门 3 篇 · 深入还没开始
+ *   {% section_stat GAMES101|UE5-Looman %}         → 已写 16 篇（不带标签就是求和）
+ */
+hexo.extend.tag.register('section_stat', args => {
+  const parts = args.join(' ').split('|').map(x => x.trim()).filter(Boolean)
+  const labeled = parts.some(p => p.includes('='))
+
+  if (!labeled) {
+    const n = parts.reduce((sum, leaf) => sum + statsOf(leaf).n, 0)
+    return escapeHtml(n ? `已写 ${n} 篇` : '还没开始')
+  }
+  return escapeHtml(parts.map(part => {
+    const i = part.indexOf('=')
+    const label = i > -1 ? part.slice(0, i).trim() : ''
+    const leaf = i > -1 ? part.slice(i + 1).trim() : part
+    const { n } = statsOf(leaf)
+    if (!n) return label ? `${label}还没开始` : '还没开始'
+    return label ? `${label} ${n} 篇` : `已写 ${n} 篇`
+  }).join(' · '))
+})
+
+/* {% section_progress 分类 %} —— track 页「进度」那一格，可以长一点。
+ * 前面的语义照旧手写：<span>递归 · {% section_progress DSA %}</span> */
+hexo.extend.tag.register('section_progress', args => {
+  const { n, latest } = statsOf(args.join(' '))
+  if (!n) return '还没开始'
+  return escapeHtml(`已写 ${n} 篇${latest ? `，最近一篇 ${latest}` : ''}`)
+})
+
 hexo.extend.tag.register('section_posts', args => {
   const section = args.join(' ').trim()
   const posts = toArray(hexo.locals.get('posts'))

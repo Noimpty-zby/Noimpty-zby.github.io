@@ -69,6 +69,29 @@ private_section: 课外        # 课外 / 课内 / Life，决定解锁框上显�
 分类的 slug 映射在 `_config.yml` 的 `category_map` 里 —— 加新分类记得同步，
 否则 URL 会变成一长串百分号编码。
 
+### 「这一栏有几篇」不要手写
+
+板块页上的篇数由两个标签在构建时现数，别再写死数字（`scripts/noimpty-sections.js`）：
+
+```
+{% section_stat Git %}                         → 已写 2 篇 / 还没开始
+{% section_stat 入门=Linux入门|深入=Linux深入 %}   → 入门 3 篇 · 深入还没开始
+{% section_stat GAMES101|UE5-Looman %}          → 已写 16 篇（不带标签就是求和）
+{% section_progress DSA %}                      → 已写 2 篇，最近一篇 09-14
+```
+
+分隔符用 `|` 不用空格 —— 叶子名里本来就带空格（`Transformer 推理机制`）。
+
+**语义那半仍然要手写**：「递归」「第三章已完成」「告一段落」说的是学到哪了，
+数不出来。写法是 `<span>递归 · {% section_progress DSA %}</span>`。
+
+为什么非要这样：这个数字以前在四个地方各写一遍（hub 卡片、track 页进度、
+娜娜莉的 `PERSONA`、`noimpty-profile.md`），发一篇文章要记得同步四处，
+漏了**不报错、构建全绿、测试也全过**。2026-08-28 发 DSA 开篇那次就漏了 ——
+首页还写着「还没开始」，而娜娜莉当面否认了刚发布的文章。
+现在前三处自动，profile 那处在 `news.mjs` 读取时自动追加一份真实清单。
+`tools/tests/section-stats.test.mjs` 拦着，不许再写回去。
+
 ### 首页分区图片来源
 
 首页三张分区背景图片均来自 Pixiv（P站）：

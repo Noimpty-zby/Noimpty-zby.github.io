@@ -19,7 +19,7 @@ description: 系统调用、进程与内存、性能排查这一层。等入门�
 
 <div class="noimpty-course-meta">
   <div><b>资料</b><span>还没定</span></div>
-  <div><b>进度</b><span>还没开始</span></div>
+  <div><b>进度</b><span>{% section_progress Linux深入 %}</span></div>
 </div>
 
 <div class="noimpty-plan">

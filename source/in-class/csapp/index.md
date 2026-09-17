@@ -22,7 +22,7 @@ description: CMU 15-213 Introduction to Computer Systems 的学习记录与 Lab 
   <div><b>教材</b><span>Computer Systems: A Programmer's Perspective, 3rd Edition</span></div>
   <div><b>课程主页</b><span><a href="http://csapp.cs.cmu.edu/" target="_blank" rel="noopener">csapp.cs.cmu.edu</a></span></div>
   <div><b>投入</b><span>约 150 小时 · 难度 5/5</span></div>
-  <div><b>进度</b><span>还没开始</span></div>
+  <div><b>进度</b><span>{% section_progress CSAPP %}</span></div>
 </div>
 
 <div class="noimpty-plan">

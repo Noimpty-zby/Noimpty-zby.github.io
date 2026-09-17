@@ -20,7 +20,7 @@ description: 容器化：镜像、容器、Dockerfile、网络与卷。学习资
 <div class="noimpty-course-meta">
   <div><b>资料</b><span>还没定</span></div>
   <div><b>环境</b><span>Linux · Docker Engine</span></div>
-  <div><b>进度</b><span>还没开始</span></div>
+  <div><b>进度</b><span>{% section_progress Docker %}</span></div>
 </div>
 
 <div class="noimpty-plan">

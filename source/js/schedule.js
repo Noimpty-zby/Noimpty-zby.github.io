@@ -458,8 +458,16 @@
    *
    * 这一块回答的是「我学到哪了」，下面的日程回答「接下来做什么」。
    * 以前这两个问题的数据散在四个地方，没有任何一页能一起回答。 */
-  const STUDY = (window.NOIMPTY_STUDY && typeof window.NOIMPTY_STUDY === 'object')
-    ? window.NOIMPTY_STUDY : { courses: [], posts: [] }
+  /* 两个字段都**逐个**兜底，不是整块兜底。
+   * 只判「是不是对象」的话，一份缺了 posts 的数据照样进得来，
+   * 然后 STUDY.posts.forEach 当场抛 —— 整页白屏，而日程那半和它根本无关。
+   * 这一页的数据是构建时拼的，拼歪了不该让整页陪葬。 */
+  const STUDY = {
+    courses: Array.isArray(window.NOIMPTY_STUDY && window.NOIMPTY_STUDY.courses)
+      ? window.NOIMPTY_STUDY.courses : [],
+    posts: Array.isArray(window.NOIMPTY_STUDY && window.NOIMPTY_STUDY.posts)
+      ? window.NOIMPTY_STUDY.posts : []
+  }
 
   const HEAT_DAYS = 91          // 十三周，一屏放得下
   const dayShift = (key, n) => {
@@ -501,12 +509,15 @@
       if (v.tasks) bits.push(`${v.tasks} 件做完`)
       cells.push(`<i class="sch-heat__c" data-lv="${lv}" title="${key}${bits.length ? ' · ' + bits.join('、') : ' · 什么都没发生'}"></i>`)
     }
-    const活 = [...map.keys()].filter(k => k >= start && k <= end).length
+    // 变量名一律用 ASCII。`const活` 这种写法里 CJK 是合法的标识符字符，
+    // 整段会被当成一个 token `const活` —— 解析期完全合法（给未声明变量赋值），
+    // 只有在 'use strict' 下运行时才抛，node --check 和语法测试都看不见。
+    const activeDays = [...map.keys()].filter(k => k >= start && k <= end).length
     return `
       <div class="sch-heat">
         <div class="sch-heat__grid">${cells.join('')}</div>
         <div class="sch-heat__foot">
-          <span>最近 ${HEAT_DAYS} 天里有 <b>${活}</b> 天动过手</span>
+          <span>最近 ${HEAT_DAYS} 天里有 <b>${activeDays}</b> 天动过手</span>
           <span class="sch-heat__key">少 <i data-lv="0"></i><i data-lv="1"></i><i data-lv="2"></i><i data-lv="3"></i> 多</span>
         </div>
       </div>`

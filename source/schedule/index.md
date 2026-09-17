@@ -9,6 +9,8 @@ private_section: schedule
 sitemap: false
 ---
 
+{% study_data %}
+
 <div id="noimpty-schedule" data-role="root">
   <noscript>这个页面需要 JavaScript 才能用。</noscript>
 </div>

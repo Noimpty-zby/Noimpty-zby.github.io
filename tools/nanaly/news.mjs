@@ -14,6 +14,7 @@ import { ask, whyNoModel } from '../daily-report/narrate.mjs'
 import { triggerDeploy } from './github.mjs'
 import { pushWithRetry, useNanalyIdentity, sanitizeMd, stripAngles } from './git.mjs'
 import { note, digest } from './journal.mjs'
+import { listPosts, countByLeaf, POSTS_DIR } from './posts.mjs'
 
 const DIR = 'source/news'
 const DRY = process.argv.includes('--dry')
@@ -114,52 +115,16 @@ Go 一行没写过，数据结构刚开篇。
 
 // 主人自己维护的方向说明。她搜之前先读一遍，按上面写的标准筛。
 const PROFILE_FILE = 'source/_data/noimpty-profile.md'
-const POSTS_DIR = 'source/_posts'
-
 /* 每一栏实际写了几篇 —— 现数，不看 profile 里怎么写。
  *
  * profile 是手写的，里面「Git 写了头两篇」「Go 一行没写过」这类话会过期，
  * 而它过期的时候不会报错，只会让她按一份旧的水平去筛资讯。
  * 手写那段不能删 —— 它说的是「每门课学到哪了」（权限和管道还没到、
- * 分支合并还没碰），那个数不出来。所以不替换，在后面**接**一份真的。 */
-export const postCounts = (dir = POSTS_DIR) => {
-  const byLeaf = new Map()
-  let files = []
-  /* 下划线和点开头的跳过 —— Hexo 本来就不收录这种文件（草稿的惯用写法）。
-   * 不跳的话又是一次「站上没有、娜娜莉却说有」。和下面那条 future 判断同理。 */
-  try {
-    files = readdirSync(dir).filter(f => f.endsWith('.md') && !/^[_.]/.test(f))
-  } catch (_) { return byLeaf }
-  for (const f of files) {
-    let raw
-    try { raw = readFileSync(`${dir}/${f}`, 'utf8') } catch (_) { continue }
-    const block = raw.match(/^categories:\s*\n((?:[ \t]+-.*\n)+)/m)
-    if (!block) continue
-    /* 两种写法都要认，而且语义不一样（Hexo 的规矩）：
-     *   - [课外, AI Infra, Git]     一行 = 一条完整的层级路径，叶子是 Git
-     *   - Life
-     *     - 娜娜莉                   多行纯量 = 一条路径的各层，叶子是「娜娜莉」
-     * 她自己的随笔用的是后一种（见 column.mjs 生成的 front-matter）——
-     * 按前一种去解会把 5 篇随笔算进「Life」，和站上的分类对不上。 */
-    const items = block[1].split('\n').map(l => l.trim()).filter(Boolean)
-    const first = items[0].match(/^-\s*\[(.+)\]\s*$/)
-    const leaf = first
-      ? first[1].split(',').map(x => x.trim()).filter(Boolean).pop()
-      : items[items.length - 1].replace(/^-\s*/, '').trim()
-    if (!leaf) continue
-    const date = (raw.match(/^date:\s*(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?|\d{4}-\d{2}-\d{2})/m) || [])[1] || ''
-    /* 日期还没到的不算。
-     *
-     * _config.yml 里 future: false —— Hexo 压根不会生成这种文章，站上看不到它。
-     * 而这里是直接扫 source/_posts 的文件系统，不跟着那条规矩走的话就会出现
-     * 「站上写着『Go 还没开始』，娜娜莉却说『Go 已有 1 篇』」这种自相矛盾，
-     * 而且只在他提前写好、把日期排到明天的时候才出现 —— 最难查的那种。 */
-    if (date && Date.parse(date.replace(' ', 'T')) > Date.now()) continue
-    const cur = byLeaf.get(leaf) || { n: 0, latest: '' }
-    byLeaf.set(leaf, { n: cur.n + 1, latest: date > cur.latest ? date : cur.latest })
-  }
-  return byLeaf
-}
+ * 分支合并还没碰），那个数不出来。所以不替换，在后面**接**一份真的。
+ *
+ * 解析本身搬去了 tools/nanaly/posts.mjs —— 日程的自动完成也要数文章，
+ * 两边各写一份的话下次只会有一份被修。 */
+export const postCounts = (dir = POSTS_DIR, now = Date.now()) => countByLeaf(listPosts(dir, now))
 
 export const postSummary = (counts = postCounts()) => {
   if (!counts.size) return ''

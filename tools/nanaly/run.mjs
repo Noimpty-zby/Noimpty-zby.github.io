@@ -19,6 +19,7 @@ import { writeColumn, commitAndPush } from './column.mjs'
 import { getComments } from '../daily-report/sources.mjs'
 import { tokenSummary } from '../daily-report/narrate.mjs'
 import { commitJournal } from './journal.mjs'
+import { autoComplete, commitSchedule } from '../daily-report/schedule-auto.mjs'
 import { triggerDeploy } from './github.mjs'
 
 const DRY = process.argv.includes('--dry')
@@ -82,6 +83,26 @@ const main = async () => {
       process.exitCode = 1
     }
   }
+  /* 日程的自动完成。
+   *
+   * 以前只有每晚十点的日报会跑它，一天一次 —— 你下午发了文章，要等到晚上
+   * 才看到那个勾。现在每一班都判一次（回评每三小时一班），下午就勾上了。
+   *
+   * 判据是幂等的（见 schedule-auto.mjs 顶部），多跑几次不会重复勾，也不会
+   * 因为某一班挂了就永远错过。这里不传 comments —— reply 那一类条件要从
+   * GitHub 拉评论，留给日报那一班去判。
+   *
+   * 失败只记一行，不染红工作流：下一班会重试，而且什么都没丢。 */
+  try {
+    const auto = await autoComplete({ dry: DRY })
+    if (auto.changed) {
+      auto.done.forEach(d => console.log(`  ${DRY ? '[演练] 会勾上' : '自动勾上'}「${d.text}」 —— ${d.why}`))
+      if (!DRY) await commitSchedule(auto.done)
+    }
+  } catch (e) {
+    console.log('  日程自动完成没跑成：' + String(e.message || e).slice(0, 160))
+  }
+
   /* 行动日志统一在这里提交一次，不是每个分身各提交一次。
    *
    * 回评每三小时一班，一天最多八次；各自提交就是一天八个提交、八次部署。

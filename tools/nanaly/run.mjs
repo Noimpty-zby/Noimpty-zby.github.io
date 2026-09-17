@@ -19,6 +19,7 @@ import { writeColumn, commitAndPush } from './column.mjs'
 import { getComments } from '../daily-report/sources.mjs'
 import { tokenSummary } from '../daily-report/narrate.mjs'
 import { commitJournal } from './journal.mjs'
+import { triggerDeploy } from './github.mjs'
 
 const DRY = process.argv.includes('--dry')
 const what = (process.argv[2] || 'all').replace(/^-+/, '')
@@ -87,10 +88,21 @@ const main = async () => {
    * 那几个本来就要提交东西的分身（批注、资讯、随笔）只 add 自己那个路径，
    * 所以日志不会被它们顺手带走，留到这里一起走。
    *
-   * 也不单独触发部署。日志晚几个小时才出现在线上完全可以接受，而且这一班里
-   * 但凡有分身真提交了东西（批注 / 资讯 / 随笔），它自己已经叫过部署了，
-   * 日志会搭那一趟车一起上线。 */
-  await commitJournal()
+   * 提交完自己叫一次部署。用 GITHUB_TOKEN 推的提交不触发 on:push（防递归），
+   * 而这一班里常常没有别人提交东西 —— 巡逻和回评都只发评论、不碰仓库。
+   * 不叫的话日志就一直躺在仓库里：她后台干的活，右下角对话窗口里的她要等到
+   * 下一期资讯（三天）甚至下一篇随笔（一周）才知道，那这本日志就废了一半。 */
+  if (await commitJournal()) {
+    /* 叫不动部署只记一笔，不染红工作流。
+     *
+     * 和批注 / 资讯 / 随笔那几处不一样：它们不部署等于文章进了仓库但线上看不见，
+     * 那是真要红的。日志这边没丢任何东西 —— 它已经安全地在仓库里了，
+     * 下一次部署自然会把它带上线，代价只是她晚几个小时才知道自己干过什么。 */
+    try { await triggerDeploy() } catch (e) {
+      console.log('  日志提交了，但没叫动部署：' + String(e.message || e).slice(0, 160))
+      console.log('  记录本身没事，下一次部署会把它带上线')
+    }
+  }
 
   // 每次跑完报一次账。命中率低的时候，这一行是最先能看出问题的地方
   const cost = tokenSummary()

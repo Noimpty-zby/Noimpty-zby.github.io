@@ -113,4 +113,16 @@ check('★★ 对话窗口只读不写：前端不许存在任何往日志里写
     '读日志的地方附近出现了 GitHub token，像是要往回写')
 })
 
+console.log('\n行动日志 · 记完要让对话窗口看得见')
+
+check('★★ 提交之后必须自己叫一次部署，否则她后台干的活要等三天才上线', () => {
+  const run = readFileSync(join(process.cwd(), 'tools/nanaly/run.mjs'), 'utf8')
+  // 用 GITHUB_TOKEN 推的提交不触发 on:push（防递归），而巡逻和回评
+  // 都只发评论、不碰仓库 —— 没人叫部署的话日志就一直躺在仓库里。
+  assert.match(run, /if \(await commitJournal\(\)\)[\s\S]{0,600}triggerDeploy\(\)/,
+    'commitJournal 之后没有跟着 triggerDeploy —— 对话窗口里的她会一直读到旧日志')
+  assert.match(run, /catch[\s\S]{0,200}没叫动部署/,
+    '叫不动部署时应该只记一笔，不该把整个工作流染红（日志本身没丢）')
+})
+
 console.log(`\n${pass} 项通过`)

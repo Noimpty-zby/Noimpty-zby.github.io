@@ -41,8 +41,8 @@ const ctx = vm.createContext({
 vm.runInContext(
   cut('  const HISTORY_SEND', '  // 送进模型之前就到这里为止') + '\n' +
   cut('  const wantsBrainRe', '  const BRAIN_LABEL') + '\n' +
-  'globalThis.__x = { humanGap, withTimeMarks, wantsBrain, HISTORY_SEND }', ctx)
-const { humanGap, withTimeMarks, wantsBrain, HISTORY_SEND } = ctx.__x
+  'globalThis.__x = { humanGap, withTimeMarks, wantsBrain, HISTORY_SEND, historyWindow }', ctx)
+const { humanGap, withTimeMarks, wantsBrain, HISTORY_SEND, historyWindow } = ctx.__x
 const setBrain = v => vm.runInContext(`brain = ${JSON.stringify(v)}`, ctx)
 
 const MIN = 60000, HOUR = 60 * MIN, DAY = 24 * HOUR
@@ -144,21 +144,80 @@ check('送进模型的条数不许再缩回 8 条（长对话会失忆）', () =
   assert.ok(HISTORY_SEND >= 12, `现在只送 ${HISTORY_SEND} 条`)
 })
 
-console.log('\n对话窗口 · 系统消息的顺序（决定能不能命中缓存）')
+console.log('\n对话窗口 · 消息的顺序（决定能不能命中缓存）')
 
-check('★★ 「现在几点」要排在正文后面 —— 它每分钟都变，排前面会把整篇正文的缓存踩掉', () => {
-  const body = cut('const buildMessages', 'return msgs')
-  const art = body.indexOf('对方正在读这篇文章')
-  const now = body.indexOf('nowLine()')
-  const hist = body.indexOf('withTimeMarks(')
-  assert.ok(art > 0, '找不到「正在读这篇文章」那条')
-  assert.ok(now > art, '「现在几点」又排到正文前面去了 —— 最多 12000 字的正文会每轮重发')
-  assert.ok(now < hist, '时间应该紧挨在历史前面')
-})
+/* 一条规矩：越不变的越往前排。谁排在「变的东西」后面，谁就每轮按未命中重发。
+ *
+ *   人设 → 读时间的规矩+文章清单 → 正文/检索材料 → 站点地图 → 历史 → 现在几点+记忆
+ *
+ * 这四条各钉住其中一段。 */
 
 check('人设永远是第一条（它一个字都不变，是最该被缓存的那块）', () => {
   const body = cut('const buildMessages', 'return msgs')
   assert.match(body, /const msgs = \[\{ role: 'system', content: PERSONA \}\]/)
+})
+
+check('★★ 读时间的规矩 + 文章清单紧跟人设，排在正文和检索材料前面', () => {
+  const body = cut('const buildMessages', 'return msgs')
+  const rules = body.indexOf('TIME_RULES')
+  const art = body.indexOf('对方正在读这篇文章')
+  const web = body.indexOf('刚从互联网上搜到的资料')
+  assert.ok(rules > 0 && art > 0 && web > 0, '切片里少了东西')
+  assert.ok(rules < web && rules < art,
+    '规矩和文章清单又被挪到正文/检索材料后面了 —— 那 1800 字会每轮按未命中重发')
+})
+
+check('★★ 站点地图是条件插入的，必须压在正文后面', () => {
+  const body = cut('const buildMessages', 'return msgs')
+  const art = body.indexOf('对方正在读这篇文章')
+  const map = body.indexOf('站点地图（url 只能从这里挑')
+  assert.ok(map > art,
+    '地图挪到正文前面了 —— 一句带「去」「找」的闲话就会把最多 12000 字的正文缓存踩掉')
+})
+
+check('★★ 每轮都变的排最后：历史在前，「现在几点」和「他最近问过」在后', () => {
+  const body = cut('const buildMessages', 'return msgs')
+  const hist = body.indexOf('withTimeMarks(')
+  const now = body.indexOf('nowLine()')
+  const mem = body.indexOf('memoryDigest()')
+  assert.ok(hist > 0 && now > 0 && mem > 0, '切片里少了东西')
+  assert.ok(now > hist, '「现在几点」又排到历史前面了 —— 它每分钟都变，整段历史会跟着重发')
+  assert.ok(mem > hist, '「他最近问过」每说一句就变一次，不能排在历史前面')
+})
+
+console.log('\n对话窗口 · 送哪一段历史')
+
+const turns = n => Array.from({ length: n }, (_, i) => ({
+  role: i % 2 ? 'assistant' : 'user', content: '第 ' + i + ' 条', at: NOON + i * MIN
+}))
+
+check('短对话原样全送', () => {
+  const list = turns(6)
+  const out = historyWindow(list)
+  assert.equal(out.list.length, 6)
+  assert.equal(out.anchorAt, list[0].at)
+})
+
+check('★★ 起点钉住：又说了两句，送出去那一段的起点不变（前缀才接得上）', () => {
+  const first = historyWindow(turns(18))
+  const next = historyWindow(turns(20), first.anchorAt)
+  assert.equal(next.anchorAt, first.anchorAt,
+    '窗口每轮往前挪了一条 —— 整段历史（十几条、几千 token）每轮都会按未命中重发')
+  assert.equal(next.list[0].content, first.list[0].content)
+})
+
+check('长到上限才重新取一段，一次挪一整段', () => {
+  const first = historyWindow(turns(18))
+  const over = historyWindow(turns(30), first.anchorAt)
+  assert.notEqual(over.anchorAt, first.anchorAt, '超过上限了还不重新取')
+  assert.equal(over.list.length, HISTORY_SEND, '重新取的时候应该正好取最近 HISTORY_SEND 条')
+})
+
+check('锚找不着（老历史没有 at、或者那条已经被挤出去了）退回最近那一段，不炸', () => {
+  const old = Array.from({ length: 25 }, (_, i) => ({ role: 'user', content: '旧的 ' + i }))
+  const out = historyWindow(old, 12345)
+  assert.equal(out.list.length, HISTORY_SEND)
+  assert.equal(out.anchorAt, 0, '没有 at 的历史不该编一个锚出来')
 })
 
 console.log('\n对话窗口 · 读时间的规矩')
@@ -188,6 +247,102 @@ check('★ 「读懂他想干什么」那一段还在，而且明确不许反问
   assert.match(persona, /读懂他想干什么/)
   assert.match(persona, /不要反问一串澄清问题/)
   assert.match(persona, /编一个像样的答案是这里最严重的错误/)
+})
+
+console.log('\n对话窗口 · 本地快速通道（别把真问题当成导航吞掉）')
+
+const navCtx = vm.createContext({})
+vm.runInContext(
+  cut('  const SECTIONS = [', '  const absUrl') +
+  cut('  const norm = t =>', '  // 站点地图') +
+  cut('  const NAV_RE =', '  const tryLocalCommand') +
+  '\nglobalThis.__n = { SECTIONS, norm, similarity, NAV_RE }', navCtx)
+const { SECTIONS, norm, similarity, NAV_RE } = navCtx.__n
+
+// tryLocalCommand 那段带 DOM，切不出来直接跑，所以这里照抄它的两道门槛。
+// 线上的地图还会带上全部文章，extra 就是用来补那几条的。
+const decide = (t, extra = []) => {
+  const m = t.match(NAV_RE)
+  if (!m) return 'model'
+  const q = norm(m[2])
+  const scored = [...SECTIONS, ...extra].map(item => {
+    let best = similarity(q, norm(item.label))
+    item.alias.forEach(a => { best = Math.max(best, similarity(q, norm(a))) })
+    return { item, score: best }
+  }).sort((a, b) => b.score - a.score)
+  const [first, second] = scored
+  if (first.score >= 0.62 && (!second || first.score - second.score >= 0.12)) return 'goto:' + first.item.label
+  const cands = first.score >= 0.6 ? scored.filter(x => x.score >= 0.5).slice(0, 4) : []
+  return cands.length >= 2 ? 'choose' : 'model'
+}
+
+check('★★ 别名藏在问句里，不许当成导航 —— 那等于把问题整句吞掉', () => {
+  assert.equal(decide('看一下我的 Git 笔记里有没有写 amend'), 'model')
+  assert.equal(decide('看看 Linux 那篇讲的 man -k 是什么意思'), 'model')
+  assert.equal(decide('看看这段递归为什么会栈溢出'), 'model')
+  assert.equal(decide('去掉这个循环会怎么样'), 'model')
+})
+
+check('★ 真要跳转的还是照跳', () => {
+  assert.equal(decide('打开资讯'), 'goto:资讯')
+  assert.equal(decide('去日程'), 'goto:日程')
+  assert.equal(decide('看看 GAMES101'), 'goto:GAMES101')
+})
+
+check('★★ 两个方向的「包含」不是一回事：打简称要跳，蹭到别名不跳', () => {
+  // 真文章标题长这样，别名 git 只占它很小一截
+  const post = [{ label: 'Git 第一章：工作区、暂存区、仓库 —— 一次改动的三段路', alias: [] }]
+  // 查询 ⊂ 页面名 = 打了个简称
+  assert.equal(decide('去 Git 第一章', post), 'goto:Git 第一章：工作区、暂存区、仓库 —— 一次改动的三段路',
+    '按简称跳文章又跳不动了')
+  // 页面名 ⊂ 查询 = 一句真问题恰好蹭到别名
+  assert.equal(decide('看一下我的 Git 笔记里有没有写 amend', post), 'model')
+})
+
+check('★ 本地自己办掉的那几件事要进历史，不能只画在屏幕上', () => {
+  assert.match(src, /const say = \(mine, hers\) => \{ addMsg\('me', mine\); addMsg\('her', hers\); logTurn\(mine, hers\)/,
+    'tryLocalCommand 里的 say 不见了')
+  assert.match(cut('  const afterNav = ()', '  // 本地快速通道'), /logHer\(line\)/,
+    '跳转之后那句话又只画在屏幕上了')
+})
+
+console.log('\n对话窗口 · 「上网搜」「全站搜」两个前缀')
+
+const modeCtx = vm.createContext({})
+vm.runInContext(
+  cut('  const WEB_PREFIX', '  /* 这几条消息的') +
+  cut('  const modeOf = t =>', '  const submit') +
+  '\nglobalThis.__m = { modeOf, WEB_PREFIX, SITE_PREFIX }', modeCtx)
+const { modeOf, WEB_PREFIX, SITE_PREFIX } = modeCtx.__m
+
+check('★★ 冒号是必须的：「上网搜索是怎么实现的」不许真花钱去联网搜', () => {
+  assert.equal(modeOf('上网搜索是怎么实现的'), 'article')
+  assert.equal(modeOf('上网搜功能用不了'), 'article')
+  assert.equal(modeOf('上网搜：DeepSeek 最新价格'), 'web')
+})
+
+check('★ 判断模式和剥前缀用同一份正则（以前「全站搜：」剥得掉却认不出）', () => {
+  assert.equal(modeOf('全站搜：递归'), 'site')
+  assert.equal(modeOf('全站搜一下：递归'), 'site')
+  assert.equal('全站搜：递归'.replace(SITE_PREFIX, ''), '递归')
+  assert.equal('全站搜一下：递归'.replace(SITE_PREFIX, ''), '递归')
+  assert.equal('上网搜：今天的新闻'.replace(WEB_PREFIX, ''), '今天的新闻')
+})
+
+console.log('\n对话窗口 · 中断')
+
+check('★★ full 必须声明在 try 外面 —— catch 里那句清理要读它', () => {
+  const send = cut('  const send = async (text, mode) => {', '  // ---------------- 事件')
+  const decl = send.indexOf('let full')
+  const tryAt = send.indexOf('    try {')
+  assert.ok(decl > 0, '找不到 full 的声明')
+  assert.ok(decl < tryAt, 'full 又被挪回 try 里面了 —— 一中断就 ReferenceError，空气泡永远删不掉')
+  assert.ok(!/const full = await stream/.test(send), 'full 不能再用 const 声明在 try 里')
+  assert.match(send, /logTurn\(text, part \+/, '说了一半被打断的，也要进历史')
+})
+
+check('★ 忙的时候发送键是「停」键', () => {
+  assert.match(src, /busy \? stopStream\(\) : submit\(\)/, '没有叫停的办法了')
 })
 
 console.log(`\n${pass} 项通过`)

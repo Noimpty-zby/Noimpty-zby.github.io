@@ -446,3 +446,208 @@
   .sch-savebar { flex-direction: column; align-items: stretch; gap: 8px; text-align: center; }
   .sch-overdue__row { flex-wrap: wrap; }
 }
+
+/* ============================================================
+ * 学习总览（2026-09-17 加）
+ *
+ * 这一页以前只是个「月历 + 打勾」，回答不了「我学到哪了」——
+ * 那些数据散在四处（日程、文章、娜娜莉的日志、日报邮件），没有一页能一起说。
+ * 现在上半是回顾、下半是计划，月历退到一个折叠里。
+ * ============================================================ */
+
+.sch-h {
+  margin: 0 0 12px;
+  font-size: 1.02em;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.sch-h--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.sch-h--row h2 { margin: 0; font-size: 1em; font-weight: 600; }
+
+.sch-review { margin: 0 0 26px; }
+.sch-plan { margin: 0 0 22px; }
+
+/* ---------- 热图 ---------- */
+
+.sch-heat { margin: 0 0 18px; }
+
+.sch-heat__grid {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 1fr);
+  gap: 3px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.sch-heat__c,
+.sch-heat__key i {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: var(--noimpty-border, rgba(233, 89, 120, 0.14));
+}
+
+/* 发一篇文章算两分、勾一个任务算一分，所以最深的那一档是真的动过手 */
+.sch-heat__c[data-lv="1"], .sch-heat__key i[data-lv="1"] { background: rgba(233, 89, 120, 0.3); }
+.sch-heat__c[data-lv="2"], .sch-heat__key i[data-lv="2"] { background: rgba(233, 89, 120, 0.58); }
+.sch-heat__c[data-lv="3"], .sch-heat__key i[data-lv="3"] { background: var(--noimpty-accent, #e95978); }
+
+.sch-heat__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  font-size: 0.8em;
+  color: var(--card-meta, #9b9098);
+}
+
+.sch-heat__key { display: inline-flex; align-items: center; gap: 3px; }
+
+/* ---------- 每门课的进度 ---------- */
+
+.sch-courses { display: grid; gap: 6px; }
+
+.sch-course {
+  display: grid;
+  grid-template-columns: minmax(6em, 10em) 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 7px 10px;
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.14));
+  border-radius: 9px;
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.86em;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.sch-course:hover {
+  background: rgba(233, 89, 120, 0.07);
+  border-color: var(--noimpty-border, rgba(233, 89, 120, 0.3));
+}
+
+.sch-course__name { font-weight: 600; }
+
+.sch-course__bar {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--noimpty-border, rgba(233, 89, 120, 0.14));
+  overflow: hidden;
+}
+
+.sch-course__bar i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--noimpty-accent, #e95978), var(--noimpty-accent-soft, #ff91a8));
+}
+
+.sch-course__n { font-variant-numeric: tabular-nums; color: var(--card-meta, #9b9098); }
+
+.sch-course__last,
+.sch-course__cold {
+  min-width: 5.5em;
+  text-align: right;
+  font-size: 0.92em;
+  color: var(--card-meta, #9b9098);
+}
+
+/* 三周没碰过的那一栏要看得见 —— 这一页最该告诉你的就是这个 */
+.sch-course__last.is-stale { color: var(--noimpty-accent, #e95978); }
+
+/* ---------- 接下来 ---------- */
+
+.sch-nextlist { display: grid; gap: 5px; }
+
+.sch-next {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.14));
+  border-radius: 9px;
+  font-size: 0.88em;
+}
+
+.sch-next.is-late { border-color: var(--noimpty-accent, #e95978); }
+
+.sch-next__day {
+  flex: none;
+  padding: 1px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--noimpty-border, rgba(233, 89, 120, 0.14));
+  color: inherit;
+  font-size: 0.86em;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.sch-next.is-late .sch-next__day { background: rgba(233, 89, 120, 0.24); }
+
+.sch-next__text { flex: 1 1 auto; min-width: 0; }
+
+.sch-next__cond {
+  flex: none;
+  font-size: 0.82em;
+  color: var(--card-meta, #9b9098);
+  white-space: nowrap;
+}
+
+/* ---------- 从课程铺任务 ---------- */
+
+.sch-seed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.26));
+  border-radius: 10px;
+}
+
+.sch-seed label { font-size: 0.86em; font-weight: 600; }
+.sch-seed select { max-width: 18em; }
+.sch-seed .sch-condtip { flex: 1 0 100%; }
+
+/* ---------- 月历收进折叠里 ---------- */
+
+.sch-cal {
+  margin: 0 0 16px;
+  border-top: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.14));
+  padding-top: 12px;
+}
+
+.sch-cal > summary {
+  cursor: pointer;
+  font-size: 0.88em;
+  color: var(--card-meta, #9b9098);
+  margin-bottom: 12px;
+  outline: none;
+}
+
+.sch-cal > summary:hover { color: var(--noimpty-accent, #e95978); }
+
+@media screen and (max-width: 560px) {
+  .sch-course {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "name n" "bar bar" "last last";
+    gap: 5px 10px;
+  }
+  .sch-course__name { grid-area: name; }
+  .sch-course__bar { grid-area: bar; }
+  .sch-course__n { grid-area: n; }
+  .sch-course__last, .sch-course__cold { grid-area: last; text-align: left; }
+  .sch-next__cond { display: none; }
+}

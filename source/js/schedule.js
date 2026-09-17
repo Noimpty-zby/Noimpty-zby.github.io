@@ -52,6 +52,10 @@
   // 像「复习光栅化」这种，世界上没有任何数据能证明你复习了，只能自己勾。
   const COND_TYPES = [
     { v: '', label: '手动勾（默认）', hint: '' },
+    // section 排在最前面，因为它是唯一不用猜词的：选一栏就行。
+    // post 那种要你猜中标题里会出现哪个词，猜错了永远不命中 ——
+    // 线上真有一条「提交第六章博客」挂的是「优化」，而那篇标题里根本没这两个字。
+    { v: 'section', label: '某一栏多了一篇（最可靠）', hint: '', need: true, pick: true },
     { v: 'post', label: '发布了文章', hint: '标题或文件名里包含…', need: true },
     { v: 'edit', label: '改动了文章', hint: '标题或文件名里包含…', need: true },
     { v: 'reply', label: '回复了评论', hint: '哪篇文章下的（留空 = 任意）', need: false }
@@ -60,6 +64,10 @@
     if (!w || !w.type) return ''
     const t = COND_TYPES.find(x => x.v === w.type)
     if (!t) return ''
+    if (w.type === 'section') {
+      const c = (window.NOIMPTY_STUDY && window.NOIMPTY_STUDY.courses || []).find(x => x.leaf === w.match)
+      return `${c ? c.title : w.match} 多一篇`
+    }
     return w.match ? `${t.label}：${w.match}` : t.label
   }
 
@@ -76,6 +84,8 @@
   let picked = today.key
   let pickedByHand = false
   let condFor = null         // 正在编辑完成条件的任务 id
+  let seedFor = false        // 「从课程铺任务」的表单开着没有
+  let calOpen = false        // 月历那一折展开没有（render 会重建 DOM，得自己记）
   let editFor = null         // 正在行内改文字的任务 id
   let changeCount = 0        // 这次打开页面之后改了几处（保存条上显示）
   let focusInput = false     // 下次 render 之后要不要把光标放进输入框
@@ -391,12 +401,18 @@
       <select data-role="ctype">
         ${COND_TYPES.map(x => `<option value="${esc(x.v)}"${x.v === w.type ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}
       </select>
-      <input type="text" data-role="cmatch" value="${esc(w.match || '')}"
-             placeholder="${esc(cur.hint || '不需要填')}" ${cur.v ? '' : 'disabled'} maxlength="40">
+      ${cur.pick
+        ? `<select data-role="cmatch">
+             ${(STUDY.courses || []).map(c =>
+               `<option value="${esc(c.leaf)}"${c.leaf === w.match ? ' selected' : ''}>${esc(c.title)}</option>`).join('')}
+           </select>`
+        : `<input type="text" data-role="cmatch" value="${esc(w.match || '')}"
+                  placeholder="${esc(cur.hint || '不需要填')}" ${cur.v ? '' : 'disabled'} maxlength="40">`}
       <button type="submit">确定</button>
       <button type="button" data-act="condcancel">取消</button>
       <div class="sch-condtip">
-        满足条件时，每晚的定时任务会自动勾上它，并在邮件里说明依据。勾错了你去掉就行。
+        满足条件时，娜娜莉每一班（约三小时一次）都会判一次，勾上并说明依据。勾错了你去掉就行。
+        <br>挑「某一栏多了一篇」最省事 —— 它不用你猜标题里会出现哪个词。
       </div>
     </form>`
   }
@@ -435,6 +451,139 @@
     return out
   }
 
+  /* ---------------- 学习总览 ----------------
+   *
+   * 数据由 scripts/noimpty-study.js 内联进这一页（不是另发一个 json —— 那会是
+   * 又一个「不用打开页面就能知道这站上有什么」的口子，理由同娜娜莉的行动日志）。
+   *
+   * 这一块回答的是「我学到哪了」，下面的日程回答「接下来做什么」。
+   * 以前这两个问题的数据散在四个地方，没有任何一页能一起回答。 */
+  const STUDY = (window.NOIMPTY_STUDY && typeof window.NOIMPTY_STUDY === 'object')
+    ? window.NOIMPTY_STUDY : { courses: [], posts: [] }
+
+  const HEAT_DAYS = 91          // 十三周，一屏放得下
+  const dayShift = (key, n) => {
+    const [y, m, d] = key.split('-').map(Number)
+    return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' })
+      .format(new Date(Date.UTC(y, m - 1, d + n, 4)))   // 4 点：离两边零点都远，不会因时区滑一天
+  }
+
+  /* 每天干了什么 —— 发文算，勾掉的任务也算。
+   * 手动勾的任务没有完成时间，只能按它挂在哪天算；自动勾的有 autoAt，
+   * 但那是「她发现的时间」不是「你做完的时间」，所以一律按任务那天算，口径统一。 */
+  const heatData = () => {
+    const map = new Map()
+    const bump = (day, kind) => {
+      if (!day) return
+      const cur = map.get(day) || { posts: 0, tasks: 0 }
+      cur[kind]++
+      map.set(day, cur)
+    }
+    STUDY.posts.forEach(p => bump(p.day, 'posts'))
+    Object.keys(data.days || {}).forEach(k => {
+      (data.days[k] || []).forEach(t => { if (t && t.done) bump(k, 'tasks') })
+    })
+    return map
+  }
+
+  const heatmap = () => {
+    const map = heatData()
+    const end = today.key
+    const start = dayShift(end, -(HEAT_DAYS - 1))
+    const cells = []
+    for (let i = 0; i < HEAT_DAYS; i++) {
+      const key = dayShift(start, i)
+      const v = map.get(key) || { posts: 0, tasks: 0 }
+      const score = v.posts * 2 + v.tasks           // 发一篇文章比勾一个任务重
+      const lv = score === 0 ? 0 : score === 1 ? 1 : score <= 3 ? 2 : 3
+      const bits = []
+      if (v.posts) bits.push(`${v.posts} 篇文章`)
+      if (v.tasks) bits.push(`${v.tasks} 件做完`)
+      cells.push(`<i class="sch-heat__c" data-lv="${lv}" title="${key}${bits.length ? ' · ' + bits.join('、') : ' · 什么都没发生'}"></i>`)
+    }
+    const活 = [...map.keys()].filter(k => k >= start && k <= end).length
+    return `
+      <div class="sch-heat">
+        <div class="sch-heat__grid">${cells.join('')}</div>
+        <div class="sch-heat__foot">
+          <span>最近 ${HEAT_DAYS} 天里有 <b>${活}</b> 天动过手</span>
+          <span class="sch-heat__key">少 <i data-lv="0"></i><i data-lv="1"></i><i data-lv="2"></i><i data-lv="3"></i> 多</span>
+        </div>
+      </div>`
+  }
+
+  const daysSince = day => {
+    if (!day) return null
+    const a = Date.parse(day + 'T00:00:00Z')
+    const b = Date.parse(today.key + 'T00:00:00Z')
+    return Math.max(0, Math.round((b - a) / 86400000))
+  }
+
+  const courseBars = () => {
+    // 一篇都没写、连章节清单也没有的（比如已告一段落的那两条线）不占版面
+    const list = STUDY.courses.filter(c => c.n > 0 || c.chapters.length > 0)
+    if (!list.length) return ''
+    return `<div class="sch-courses">${list.map(c => {
+      const total = c.chapters.length
+      const pct = total ? Math.min(100, Math.round(c.n / total * 100)) : (c.n ? 100 : 0)
+      const gap = daysSince(c.latest)
+      const stale = c.n > 0 && gap !== null && gap >= 21
+      const right = c.n === 0
+        ? '<span class="sch-course__cold">还没开始</span>'
+        : `<span class="sch-course__last${stale ? ' is-stale' : ''}">${gap === 0 ? '今天刚写' : `${gap} 天没动`}</span>`
+      return `
+        <a class="sch-course" href="${esc(c.url)}">
+          <span class="sch-course__name">${esc(c.title)}</span>
+          <span class="sch-course__bar"><i style="width:${pct}%"></i></span>
+          <span class="sch-course__n">${c.n}${total ? ' / ' + total + ' 章' : ' 篇'}</span>
+          ${right}
+        </a>`
+    }).join('')}</div>`
+  }
+
+  /* 接下来：跨天的待办，不按月历分格。
+   * 月历适合「安排」，但回答不了「我现在该干什么」—— 那要把所有还没做的
+   * 摊平了按日期排，逾期的排最前面。 */
+  const nextUp = () => {
+    const rows = []
+    Object.keys(data.days || {}).sort().forEach(day => {
+      (data.days[day] || []).forEach(t => { if (t && !t.done) rows.push({ day, t }) })
+    })
+    if (!rows.length) return '<div class="sch-empty">没有待办了。要不要从课程铺几条？</div>'
+    return rows.slice(0, 12).map(({ day, t }) => {
+      const late = day < today.key
+      const w = t.when && t.when.type ? condLabel(t.when) : ''
+      return `
+        <div class="sch-next${late ? ' is-late' : ''}">
+          <button class="sch-tick" data-act="toggle" data-id="${esc(t.id)}" data-day="${esc(day)}" aria-label="标记完成"></button>
+          <button class="sch-next__day" data-act="jump" data-day="${esc(day)}">${esc(day.slice(5))}</button>
+          <span class="sch-next__text">${esc(t.text)}</span>
+          ${w ? `<span class="sch-next__cond" title="满足时窝会自动勾上">⛭ ${esc(w)}</span>` : ''}
+        </div>`
+    }).join('') + (rows.length > 12 ? `<div class="sch-overdue__more">还有 ${rows.length - 12} 件…</div>` : '')
+  }
+
+  /* 从课程铺任务：track 页上已经列好了每门课的章节，没必要再手打一遍。
+   * 每条自带 section 条件 —— 那一栏多一篇就自动勾，不用猜标题里有哪个词。
+   * 一周一章从选中那天排开；顺序不合适就用 → 往后推。 */
+  const seedForm = () => {
+    const list = STUDY.courses.filter(c => c.chapters.length)
+    if (!list.length) return ''
+    return `
+      <form class="sch-seed" data-role="seed">
+        <label>从课程铺任务</label>
+        <select data-role="seedcourse">
+          ${list.map(c => `<option value="${esc(c.leaf)}">${esc(c.title)}（${c.chapters.length} 章，已写 ${c.n}）</option>`).join('')}
+        </select>
+        <button type="submit">铺开</button>
+        <button type="button" data-act="seedcancel">取消</button>
+        <div class="sch-condtip">
+          从 ${esc(picked)} 起一周一章，每条自带「这一栏多一篇就自动勾」的条件。
+          已经写过的章节会跳过。
+        </div>
+      </form>`
+  }
+
   const render = () => {
     if (!root) return
     refreshToday()
@@ -447,6 +596,23 @@
 
     root.innerHTML = `
       <div class="sch-wrap">
+        <section class="sch-review">
+          <h2 class="sch-h">这三个月</h2>
+          ${heatmap()}
+          ${courseBars()}
+        </section>
+
+        <section class="sch-plan">
+          <div class="sch-h sch-h--row">
+            <h2>接下来</h2>
+            ${seedFor ? '' : '<button class="sch-mini" data-act="seed">＋ 从课程铺任务</button>'}
+          </div>
+          ${seedFor ? seedForm() : ''}
+          <div class="sch-nextlist">${nextUp()}</div>
+        </section>
+
+        <details class="sch-cal"${calOpen ? ' open' : ''}>
+          <summary>按月看 / 改某一天的安排</summary>
         <div class="sch-head">
           <div class="sch-title">
             <button class="sch-nav" data-act="prev" title="上个月">‹</button>
@@ -535,6 +701,8 @@
             ${overdue.length > 6 ? `<div class="sch-overdue__more">还有 ${overdue.length - 6} 件…</div>` : ''}
           </div>` : ''}
 
+        </details>
+
         <div class="sch-status" data-role="status"></div>
 
         ${dirty || saving ? `
@@ -548,6 +716,11 @@
           当晚娜娜莉的邮件里就会带上当天的任务提醒。
         </div>
       </div>`
+
+    // <details> 的展开状态不是点击事件能捕到的，而 render 会重建整个 DOM ——
+    // 不记住的话，你一改任务月历就自己合上了
+    const cal = root.querySelector('.sch-cal')
+    if (cal) cal.addEventListener('toggle', () => { calOpen = cal.open })
 
     // render 会重建 DOM，状态条得补回去，否则提示一闪就没
     if (pendingStatus) {
@@ -614,13 +787,18 @@
       if (act === 'save') { save(); return }
 
       if (act === 'toggle') {
-        setTasks(picked, tasksOf(picked).map(t => t.id === btn.dataset.id ? { ...t, done: !t.done } : t))
+        // 「接下来」那个列表是跨天的，所以按钮上会带 data-day；
+        // 月历下面那块没带，就还是当前选中那天
+        const day = btn.dataset.day || picked
+        setTasks(day, tasksOf(day).map(t => t.id === btn.dataset.id ? { ...t, done: !t.done } : t))
         return
       }
       if (act === 'del') {
         setTasks(picked, tasksOf(picked).filter(t => t.id !== btn.dataset.id))
         return
       }
+      if (act === 'seed') { seedFor = true; render(); return }
+      if (act === 'seedcancel') { seedFor = false; render(); return }
       if (act === 'cond') { condFor = btn.dataset.id; render(); return }
       if (act === 'condcancel') { condFor = null; render(); return }
 
@@ -691,6 +869,20 @@
           status('这个条件需要填一个关键词，不然没法判断。', 'warn')
           return
         }
+        /* 关键词现在对不上任何一篇 → 当场说。
+         *
+         * 这是「我设了条件却一直没生效」最常见的死法，而且以前完全没有反馈：
+         * 线上那条「提交第六章博客」挂的是「优化」，全站没有任何一篇标题含这两个字，
+         * 从设下去那天起就是死的，而界面上什么都不会说。
+         *
+         * 只是提醒，不拦着 —— 将来发的文章照样算，这是完全合理的用法。 */
+        if ((type === 'post' || type === 'edit') && match) {
+          const k = match.toLowerCase().replace(/\s+/g, '')
+          const hit = (STUDY.posts || []).some(p => String(p.title).toLowerCase().replace(/\s+/g, '').includes(k))
+          if (!hit) {
+            status(`现在没有任何文章标题含「${match}」—— 将来发的才算数。如果你指的是已经发过的那篇，换个词。`, 'warn')
+          }
+        }
         condFor = null
         setTasks(picked, tasksOf(picked).map(t => {
           if (t.id !== id) return t
@@ -699,6 +891,37 @@
           else delete next.when
           return next
         }))
+        return
+      }
+      if (e.target.matches('[data-role="seed"]')) {
+        e.preventDefault()
+        const leaf = e.target.querySelector('[data-role="seedcourse"]').value
+        const course = STUDY.courses.find(c => c.leaf === leaf)
+        seedFor = false
+        if (!course || !course.chapters.length) { render(); return }
+
+        /* 已经写过的章节跳过。判据是「章节名出现在某篇已发文章的标题里」——
+         * 粗糙，但错了也只是多铺一条，你删掉就行；漏铺一条反而更烦。 */
+        const written = course.posts.map(p => String(p.title))
+        const todo = course.chapters.filter(ch => !written.some(t => t.includes(ch)))
+        if (!todo.length) {
+          status(`「${course.title}」的章节都写过了，没什么可铺的。`, 'ok')
+          render()
+          return
+        }
+
+        // 一周一章，从当前选中那天排开。每条自带 section 条件：
+        // 那一栏多一篇就自动勾，不用猜标题里会出现哪个词
+        todo.forEach((ch, i) => {
+          const day = dayShift(picked, i * 7)
+          setTasks(day, tasksOf(day).concat([{
+            id: uid(),
+            text: `${course.title}：${ch}`.slice(0, 120),
+            done: false,
+            when: { type: 'section', match: course.leaf }
+          }]))
+        })
+        status(`铺了 ${todo.length} 条，从 ${picked} 起一周一章。顺序不对就用 → 往后推。`, 'ok')
         return
       }
       if (!e.target.matches('[data-role="add"]')) return

@@ -11,6 +11,7 @@ import { execFileSync } from 'node:child_process'
 import { ask } from '../daily-report/narrate.mjs'
 import { triggerDeploy } from './github.mjs'
 import { pushWithRetry, useNanalyIdentity, sanitizeMd, yamlString, stripAngles, stripOutboundLinks } from './git.mjs'
+import { note, digest } from './journal.mjs'
 
 // 注意：不要放进 source/_posts 的子目录。
 // Hexo 的 :title 会把子目录名带进永久链接，变成 /2026/08/13/nanaly/xxx/ 这种怪样子。
@@ -138,7 +139,13 @@ export const parseColumn = raw => {
   return { title, content }
 }
 
-export const writeColumn = async ({ comments = [], patrolNote = '' } = {}) => {
+/* patrolNote 这个参数已经去掉了。
+ *
+ * 它在签名里挂了很久，而 run.mjs 从来没传过 —— 巡逻和写随笔根本不在
+ * 同一次运行里，调用方手上压根没有那个东西。现在这件事交给行动日志：
+ * 巡逻那个分身自己把「今天看到什么」记下来，她周日写随笔时读得到，
+ * 而且连回评、批注、资讯一起读到了。 */
+export const writeColumn = async ({ comments = [] } = {}) => {
   const now = new Date()
   if (!existsSync(DIR)) mkdirSync(DIR, { recursive: true })
 
@@ -161,14 +168,16 @@ export const writeColumn = async ({ comments = [], patrolNote = '' } = {}) => {
 
   const ctx = [
     recentContext(),
+    // 她自己这一周干了什么。以前这里只有 git log —— 于是她写随笔时
+    // 只能看见「主人提交了什么」，看不见自己回过谁的评论、给谁写过批注。
+    digest({ sinceDays: 8, limit: 40 }),
     // 读者评论是完全的外部输入，而这篇随笔会自动发布、无人复核。
     // 所以：限量（别让人用 50 条评论把提示词淹掉）、去尖括号、去链接。
     comments.length
       ? '这段时间读者说了什么：\n' + comments.slice(0, 10)
         .map(c => `- ${stripAngles(c.who)}：${stripAngles(String(c.body || '')).replace(/https?:\/\/\S+/g, '[链接]').slice(0, 120)}`)
         .join('\n')
-      : '',
-    patrolNote ? '你巡逻时看到的：\n' + patrolNote : ''
+      : ''
   ].filter(Boolean).join('\n\n')
 
   const raw = await ask(
@@ -188,7 +197,9 @@ export const writeColumn = async ({ comments = [], patrolNote = '' } = {}) => {
 
 1. **不许编造**。只写下面材料里真实出现过的事，没发生的别写
 2. 正文 400 到 700 字，分三到五段
-3. 写你自己的观察和想法 —— 你看着主人在学什么、卡在哪、读者在问什么。
+3. 写你自己的观察和想法 —— 你看着主人在学什么、卡在哪、读者在问什么，
+   还有**你自己这一周干了什么**（上面那份「窝最近做过的事」就是你自己的行动记录，
+   回评、巡逻、批注、资讯都是你做的，写的时候用「窝」）。
    可以吐槽，可以有情绪，但要具体，别写「今天也是充实的一天」这种空话
 4. 正文可以有小标题、列表。别放代码块和公式
 5. 不要在文章里自我介绍，读者知道你是谁
@@ -232,6 +243,7 @@ ${stripOutboundLinks(sanitizeMd(content))}
 
   writeFileSync(file, md)
   console.log(`  已写入 ${file}（${title}）`)
+  note('column', `写了一篇自己的随笔《${title}》`)
   return { file, title }
 }
 

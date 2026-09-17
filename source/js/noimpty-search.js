@@ -8,8 +8,11 @@
  *   PBKDF2-SHA256，salt = 'noimpty-search-v1'，120000 轮，256 位
  *   AES-256-GCM，前 12 字节是 IV，最后 16 字节是认证标签
  *
- * 对外只暴露 loadCorpus()：拿到解密后的文章数组，失败就抛。
- * 娜娜莉的全站搜索用它，站点地图也用它数文章篇数。
+ * 对外暴露两个：
+ *   loadCorpus()   解密后的文章数组。娜娜莉的全站搜索用它，站点地图也用它数篇数。
+ *   loadJournal()  她那几个分身共用的行动日志（谁在什么时候干了什么）。
+ *                  同一把暗号、同一套派生参数，只是另一个文件。
+ * 都是失败就抛，由调用方决定怎么跟主人解释。
  */
 (() => {
   'use strict'
@@ -95,6 +98,35 @@
     try { return await pending } finally { pending = null }
   }
 
+  /* 行动日志。
+   *
+   * 和 search.xml 唯一的区别是：**取不到不算错**。
+   * 没配暗号构建出来的站上压根没有这个文件（见 lockdown 第 3 节末尾），
+   * 那时候 404 的正确含义是「她还没有日志」，不是「出故障了」——
+   * 所以这里返回空数组，让对话窗口照常说话，而不是抛给主人一句看不懂的错。 */
+  let journal = null
+  const loadJournal = async () => {
+    if (journal) return journal
+    const res = await fetch(`${ROOT()}nanaly-journal.json`.replace(/\/{2,}/g, '/'))
+    if (res.status === 404) return (journal = [])
+    if (!res.ok) throw new Error(`SEARCH_HTTP_${res.status}`)
+
+    let envelope
+    try { envelope = JSON.parse((await res.text()).trim()) } catch (_) { throw new Error('SEARCH_BAD_FORMAT') }
+    // 没加密的产物（本地不带暗号手工放的）也认，省得调试时一头雾水
+    if (Array.isArray(envelope)) return (journal = envelope)
+    if (Array.isArray(envelope.entries)) return (journal = envelope.entries)
+    if (!envelope.data) throw new Error('SEARCH_BAD_FORMAT')
+
+    const pass = passphrase()
+    if (!pass) throw new Error('SEARCH_LOCKED')
+    let text
+    try { text = await decrypt(envelope.data, pass) }
+    catch (_) { throw new Error('SEARCH_BAD_KEY') }
+    try { return (journal = (JSON.parse(text).entries || [])) }
+    catch (_) { throw new Error('SEARCH_BAD_FORMAT') }
+  }
+
   const MESSAGES = {
     SEARCH_LOCKED: '还没解锁 —— 站内搜索要用暗号解密索引，先在任意一个板块页输一次暗号。',
     SEARCH_BAD_KEY: '索引解不开。多半是暗号改过、但站点还没重新构建（改暗号后必须重新部署一次）。',
@@ -104,7 +136,8 @@
 
   window.NOIMPTY_SEARCH = Object.freeze({
     loadCorpus,
+    loadJournal,
     explain: code => MESSAGES[code] || '站内索引读不出来。',
-    reset: () => { cache = null }
+    reset: () => { cache = null; journal = null }
   })
 })()

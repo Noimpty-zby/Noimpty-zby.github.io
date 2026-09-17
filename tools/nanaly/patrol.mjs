@@ -7,6 +7,7 @@
 import { listDiscussions, createDiscussion, addComment, addReaction, marker, hasMarker, SIGN, findDiscussion, giscusTitle } from './github.mjs'
 import { ask } from '../daily-report/narrate.mjs'
 import { hit, probeUrl, mapLimit, sleep, looksThrottled, sitePages, PAGE_RE } from './probe.mjs'
+import { note, digest } from './journal.mjs'
 import { createHash } from 'node:crypto'
 
 const SITE = (process.env.SITE_URL || 'https://noimpty-zby.github.io').replace(/\/$/, '')
@@ -107,7 +108,7 @@ const PATROL_PERSONA = '你是娜娜莉，住在这个博客里的猫娘。毒�
 
 // 固定的排前面，变量排后面 —— 规矩和原因见 narrate.mjs 里 reviewPrompt 上面那段。
 // 原来第一行是《文章标题》，把下面那整块硬性约束（约 250 token）全踩脏了。
-export const patrolPrompt = (title, list) => `你在博客里闲逛时，发现有一篇文章出了问题。
+export const patrolPrompt = (title, list, recent = '') => `你在博客里闲逛时，发现有一篇文章出了问题。
 
 写一条评论提醒主人。两三句话，先说你是怎么发现的（比如顺手点了个链接），再把问题列清楚。
 
@@ -120,7 +121,12 @@ export const patrolPrompt = (title, list) => `你在博客里闲逛时，发现�
 4. 别啰嗦，别道歉，也别假装很严重
 
 这条评论会公开发在主人的博客上，读者都看得到。说错了是他丢人。
-
+${recent ? `
+━━━ 你最近干过的事（只为了让你知道自己是谁、别把自己说成外人）━━━
+${recent}
+⚠️ 上面这些**一条都不是这次发现的问题**。最多自然地带一句「窝昨天也路过这篇」，
+把它们当成故障写进去就是编。
+` : ''}
 ━━━ 这一篇 ━━━
 《${title}》
 
@@ -137,6 +143,8 @@ export const patrol = async () => {
   if (canary.err || canary.status >= 400) {
     console.log(`  首页都取不到（${canary.err || 'HTTP ' + canary.status}）`)
     console.log('  这说明是本次运行的网络问题，不是站点故障。本次不发言。')
+    // 没做成的事也要记：她自己得知道「今天不是没巡逻，是巡逻不成」
+    note('patrol', '想去巡逻，可连首页都取不到 —— 判断是这次运行的网络有问题，没敢在站上说话')
     return { checked: 0, reported: 0, aborted: true }
   }
 
@@ -159,6 +167,7 @@ export const patrol = async () => {
     console.log(`  ${pages.length} 篇里有 ${broken.length} 篇报错（${Math.round(broken.length / pages.length * 100)}%）`)
     console.log('  比例高得不正常，判定为扫描把自己打限流了，不是真故障。本次不发言。')
     broken.forEach(b => console.log(`     （跳过）${b.pageUrl.replace(SITE, '')}：${b.issues.map(i => i.what).join('；')}`))
+    note('patrol', `巡逻 ${pages.length} 篇时有 ${broken.length} 篇报错，比例高得不正常，判定是自己把自己打限流了，一句话都没说`)
     return { checked: pages.length, reported: 0, throttled: true }
   }
 
@@ -172,6 +181,7 @@ export const patrol = async () => {
   if (!discussions) return { checked: pages.length, reported: 0 }
 
   let reported = 0
+  const toldAbout = []
   for (const item of broken) {
     const path = new URL(item.pageUrl).pathname
     // 同一篇文章的同一组问题只提醒一次
@@ -186,7 +196,7 @@ export const patrol = async () => {
     const shown = item.issues.slice(0, 8)
     const list = shown.map(i => `- ${i.what}`).join('\n')
       + (item.issues.length > shown.length ? `\n- …另外还有 ${item.issues.length - shown.length} 处` : '')
-    const said = await ask(PATROL_PERSONA, patrolPrompt(item.title, list), 400, { label: '巡逻' })
+    const said = await ask(PATROL_PERSONA, patrolPrompt(item.title, list, digest({ limit: 8 })), 400, { label: '巡逻' })
 
 
     const body = (said || `[抖了抖耳朵] 窝路过这篇，顺手点了几个链接，有东西坏了喵：\n\n${list}`)
@@ -196,6 +206,7 @@ export const patrol = async () => {
     if (DRY) {
       console.log(`\n  [演练] 会在 ${path} 评论：\n${body.split('\n').map(l => '    ' + l).join('\n')}\n`)
       reported++
+      toldAbout.push(item.title)
       continue
     }
     try {
@@ -213,11 +224,15 @@ export const patrol = async () => {
       }
       await addComment(disc.id, body)
       reported++
+      toldAbout.push(item.title)
       console.log(`  已在 ${path} 留言`)
     } catch (e) {
       console.log(`  在 ${path} 留言失败：${e.message}`)
     }
   }
+  note('patrol', reported
+    ? `巡逻了 ${pages.length} 篇，在 ${toldAbout.slice(0, 3).map(t => `《${t}》`).join('、')}${toldAbout.length > 3 ? ` 等 ${toldAbout.length} 篇` : ''} 留言提醒了坏掉的链接或图片`
+    : `巡逻了 ${pages.length} 篇，${broken.length ? '有问题的之前都提醒过了，这次没有新的要说' : '一切正常，没什么要说的'}`)
   return { checked: pages.length, reported }
 }
 
@@ -259,5 +274,6 @@ export const react = async (limit = 3) => {
     try { if (await addReaction(d.id, MOODS[idx])) { n++; console.log(`  给 ${d.title} 贴了 ${MOODS[idx]}`) } }
     catch (e) { console.log(`  贴表情失败：${e.message}`) }
   }
+  if (n) note('react', `顺手给 ${n} 篇文章贴了表情`)
   return n
 }

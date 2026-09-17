@@ -106,7 +106,14 @@ jobs:
             echo "::error::search.xml 是明文，里面是全站正文 —— 没配 SITE_PASSPHRASE"; fail=1
           fi
 
-          # 5. 首页是唯一对外的页面，上面不能出现任何文章链接
+          # 5. 娜娜莉的行动日志要么是密文、要么压根不存在。
+          #    它里面是「在《XXX》留言说有两个链接坏了」这种句子 —— 一整串文章标题。
+          #    摊成明文的话，不用打开任何页面，一个 GET 就知道这站上有什么。
+          if [ -f public/nanaly-journal.json ] && ! grep -q '"alg":"AES-GCM"' public/nanaly-journal.json; then
+            echo "::error::nanaly-journal.json 不是密文 —— 那等于把文章清单直接推出去"; fail=1
+          fi
+
+          # 6. 首页是唯一对外的页面，上面不能出现任何文章链接
           if grep -oE 'href="/[0-9]{4}/[0-9]{2}/[0-9]{2}/' public/index.html 2>/dev/null | head -1 | grep -q .; then
             echo "::error::首页上挂着文章链接 —— 首页不上锁，等于公开"; fail=1
           fi

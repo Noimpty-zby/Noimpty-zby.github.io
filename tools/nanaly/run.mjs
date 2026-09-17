@@ -18,6 +18,7 @@ import { buildNews, commitNews } from './news.mjs'
 import { writeColumn, commitAndPush } from './column.mjs'
 import { getComments } from '../daily-report/sources.mjs'
 import { tokenSummary } from '../daily-report/narrate.mjs'
+import { commitJournal } from './journal.mjs'
 
 const DRY = process.argv.includes('--dry')
 const what = (process.argv[2] || 'all').replace(/^-+/, '')
@@ -80,6 +81,17 @@ const main = async () => {
       process.exitCode = 1
     }
   }
+  /* 行动日志统一在这里提交一次，不是每个分身各提交一次。
+   *
+   * 回评每三小时一班，一天最多八次；各自提交就是一天八个提交、八次部署。
+   * 那几个本来就要提交东西的分身（批注、资讯、随笔）只 add 自己那个路径，
+   * 所以日志不会被它们顺手带走，留到这里一起走。
+   *
+   * 也不单独触发部署。日志晚几个小时才出现在线上完全可以接受，而且这一班里
+   * 但凡有分身真提交了东西（批注 / 资讯 / 随笔），它自己已经叫过部署了，
+   * 日志会搭那一趟车一起上线。 */
+  await commitJournal()
+
   // 每次跑完报一次账。命中率低的时候，这一行是最先能看出问题的地方
   const cost = tokenSummary()
   if (cost) console.log(`\n本次 token：${cost}`)

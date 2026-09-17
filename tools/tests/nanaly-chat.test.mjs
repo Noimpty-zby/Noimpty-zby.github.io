@@ -185,6 +185,24 @@ check('★★ 每轮都变的排最后：历史在前，「现在几点」和「
   assert.ok(mem > hist, '「他最近问过」每说一句就变一次，不能排在历史前面')
 })
 
+check('★★ 她在别处干的活，和文章清单一起排在正文前面（整个会话都不变）', () => {
+  const body = cut('const buildMessages', 'return msgs')
+  const self = body.indexOf('selfLog()')
+  const art = body.indexOf('对方正在读这篇文章')
+  const now = body.indexOf('nowLine()')
+  assert.ok(self > 0, '行动日志没进提示词 —— 她又不知道自己今天干了什么了')
+  assert.ok(self < art, '行动日志排到正文后面了，它一个会话里根本不变，该排在可缓存那一侧')
+  assert.ok(self < now, '行动日志不该排在「现在几点」后面')
+})
+
+check('★★ 人设里要写死「你不只是这个聊天框」', () => {
+  const p = cut('const PERSONA = `', '【被夸奖时】')
+  assert.match(p, /你不只是这个聊天框/, '这一节没了 —— 她会答成「窝只是个聊天助手」')
+  assert.match(p, /窝只是个聊天助手/, '缺少那条明确的反例')
+  assert.match(p, /巡逻/, '没告诉她自己还会巡逻')
+  assert.match(p, /随笔/, '没告诉她自己还会写随笔')
+})
+
 console.log('\n对话窗口 · 送哪一段历史')
 
 const turns = n => Array.from({ length: n }, (_, i) => ({

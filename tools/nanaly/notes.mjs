@@ -13,6 +13,7 @@ import { ask } from '../daily-report/narrate.mjs'
 import { triggerDeploy } from './github.mjs'
 import { pushWithRetry, useNanalyIdentity } from './git.mjs'
 import { postPath } from './permalink.mjs'
+import { note, digest } from './journal.mjs'
 
 const DATA = 'source/_data/nanaly-notes.json'
 const POSTS = 'source/_posts'
@@ -142,7 +143,7 @@ export const pruneOrphans = (store, live) => {
 
 // 固定的排前面，变量排后面 —— 规矩和原因见 narrate.mjs 里 reviewPrompt 上面那段。
 // 原来第一行就是《标题》，把下面整块要求（约 300 token）全踩脏了：实测可缓存比例 8%。
-export const notePrompt = (title, listed) => `主人写了一篇文章，下面会把它的正文段落给你，每段前面有编号。
+export const notePrompt = (title, listed, recent = '') => `主人写了一篇文章，下面会把它的正文段落给你，每段前面有编号。
 
 请挑 2 到 3 个段落，各留一句旁注。要求：
 
@@ -156,7 +157,9 @@ export const notePrompt = (title, listed) => `主人写了一篇文章，下面�
 5. 严格只输出 JSON，不要任何解释文字：
 
 {"notes":[{"i":段落编号,"text":"旁注内容"}]}
-
+${recent ? `
+━━━ 你最近干过的事（你自己做的。旁注里提到「窝上次…」时才用得上，别硬塞）━━━
+${recent}` : ''}
 ━━━ 这一篇 ━━━
 标题：《${title}》
 正文段落：
@@ -191,13 +194,15 @@ export const buildNotes = async () => {
   }
 
   let wrote = 0
+  let notesCount = 0
+  const written = []
   for (const item of batch) {
     const title = (item.raw.match(/^title:\s*(.+)$/m) || [])[1] || item.path
     const paras = paragraphsOf(item.raw)
     if (paras.length < 3) { console.log(`  ${title.trim()} 段落太少，跳过`); continue }
 
     const listed = paras.slice(0, 40).map((p, i) => `[${i}] ${p.slice(0, 260)}`).join('\n\n')
-    const out = await ask(PERSONA, notePrompt(title.trim(), listed), 900, { label: '批注' })
+    const out = await ask(PERSONA, notePrompt(title.trim(), listed, digest({ limit: 8 })), 900, { label: '批注' })
 
 
     if (!out) { console.log(`  ${title.trim()} 没能调用模型，跳过`); continue }
@@ -219,6 +224,8 @@ export const buildNotes = async () => {
 
     store[item.path] = { hash: item.hash, title: title.trim(), notes }
     wrote++
+    notesCount += notes.length
+    written.push(title.trim())
     console.log(`  ${title.trim()} → ${notes.length} 条`)
     notes.forEach(n => console.log(`      「${n.anchor}…」→ ${n.text}`))
   }
@@ -230,6 +237,10 @@ export const buildNotes = async () => {
   if (!existsSync('source/_data')) mkdirSync('source/_data', { recursive: true })
   writeFileSync(DATA, JSON.stringify(store, null, 2) + '\n')
   console.log(`  已写入 ${DATA}`)
+  const done = []
+  if (wrote) done.push(`给 ${written.slice(0, 3).map(t => `《${t}》`).join('、')}${written.length > 3 ? ` 等 ${written.length} 篇` : ''} 写了 ${notesCount} 条旁注`)
+  if (orphans.length) done.push(`清掉 ${orphans.length} 条贴不回去的旧批注`)
+  note('notes', done.join('，'))
   return { wrote, pruned: orphans.length }
 }
 

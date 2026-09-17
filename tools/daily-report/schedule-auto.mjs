@@ -14,6 +14,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { pushWithRetry, useNanalyIdentity } from '../nanaly/git.mjs'
 import { postPath } from '../nanaly/permalink.mjs'
+import { note, FILE as JOURNAL } from '../nanaly/journal.mjs'
 
 const FILE = 'source/_data/schedule.json'
 const POSTS = 'source/_posts'
@@ -166,9 +167,12 @@ export const autoComplete = async ({ newPosts = [], comments = { ok: false }, wi
 export const commitSchedule = async (done) => {
   const run = (...a) => execFileSync('git', a, { encoding: 'utf8', stdio: 'pipe' })
   try {
+    // 她替主人勾掉了任务，这也是「她今天干了什么」的一部分 ——
+    // 周日那篇随笔和右下角对话窗口的她都读得到
+    note('schedule', `替主人自动勾掉了 ${done.length} 项日程：${done.slice(0, 3).map(d => `「${d.text}」`).join('、')}`)
     useNanalyIdentity(run)
-    run('add', FILE)
-    if (!run('status', '--porcelain', '--', FILE).trim()) return false
+    run('add', FILE, JOURNAL)
+    if (!run('status', '--porcelain', '--', FILE, JOURNAL).trim()) return false
     run('commit', '-m', `娜娜莉：自动完成 ${done.length} 项日程`)
 
     // 你可能正好在网页上按了保存 —— 那边直接往 main 提交，这边就会被拒。

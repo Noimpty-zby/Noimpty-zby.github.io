@@ -30,6 +30,8 @@
  */
 
 const crypto = require('crypto')
+const fs = require('fs')
+const path = require('path')
 
 // ---------------- 小工具 ----------------
 
@@ -268,6 +270,46 @@ hexo.extend.filter.register('after_generate', async () => {
     data: encrypt(xml, pass)
   }))
   hexo.log.info(`search.xml 已加密（原文 ${(xml.length / 1024).toFixed(0)} KB）`)
+})
+
+/* 娜娜莉的行动日志，同样加密之后才发出去。
+ *
+ * 这是她那几个分身共用的记事本（tools/nanaly/journal.mjs），里面写的是
+ * 「9-17 巡逻：在《XXX》留言说有两个链接坏了」这类句子 —— 一整串文章标题。
+ * 右下角对话窗口里的她要读它，才知道自己今天干了什么；
+ * 可**直接摊成一个明文的 nanaly-journal.json 就是一个新的口子**：
+ * 不用打开任何页面，一个 GET 就能知道这个站上有哪些文章、主人最近在写什么。
+ * 这正是当初把 /about/ 从白名单里收回去的那条理由。
+ *
+ * 所以走和 search.xml 一模一样的一套：同一个暗号、同一份派生参数、同一个信封。
+ * 浏览器侧的解密也复用 noimpty-search.js 里那一份，不另写。
+ *
+ * 没有暗号就**根本不发这个文件**（而不是发一份明文）。对话窗口拿到 404
+ * 就当她没有日志，照常说话 —— 少一段上下文，不至于泄漏。 */
+hexo.extend.filter.register('after_generate', () => {
+  const src = path.join(hexo.source_dir, '_data', 'nanaly-journal.json')
+  let raw
+  try { raw = fs.readFileSync(src, 'utf8') } catch (_) { return }
+
+  // 先解析一次：坏掉的 JSON 不值得发出去，那只会让浏览器侧抛一个看不懂的错
+  try { JSON.parse(raw) } catch (_) {
+    hexo.log.warn('nanaly-journal.json 不是合法 JSON，这次不发布')
+    return
+  }
+
+  const pass = process.env.NOIMPTY_PASSPHRASE || ''
+  if (!pass) {
+    hexo.log.warn('没有 NOIMPTY_PASSPHRASE，娜娜莉的行动日志不发布（对话窗口里她会不知道自己干过什么）')
+    return
+  }
+
+  hexo.route.set('nanaly-journal.json', JSON.stringify({
+    v: 1,
+    alg: 'AES-GCM',
+    kdf: `PBKDF2-SHA256/${ITER}`,
+    data: encrypt(raw, pass)
+  }))
+  hexo.log.info('娜娜莉的行动日志已加密发布')
 })
 
 // ---------------- 4. feed / sitemap 兜底 ----------------

@@ -81,6 +81,49 @@ check('回评草稿：两条留言之间，要求那一段要落在公共前缀�
   assert.ok(prefix(p('2026/09/14/a/', '问题一'), p('2026/09/13/b/', '问题二')) >= 200)
 })
 
+console.log('\n提示词 · 行动日志插在哪（它每跑一次就变一次）')
+
+/* 行动日志是她那几个分身共用的记事本，每跑一班就变一次。
+ * 所以它在每个提示词里都必须排在**固定段后面**：
+ * 排到前面去，后面几百上千 token 的固定内容就全按未命中计费，
+ * 那正是 2026-09-16 那轮实测里 1% / 4% / 8% 的成因。 */
+const RECENT = '【窝最近做过的事】\n- 9-17 09:12 巡逻：看了 29 篇\n'
+
+check('★★ 回评：日志排在正文后面 —— 正文最大，不能被它踩脏', () => {
+  const article = '（正文）'.repeat(2000)
+  const base = { title: 'T', article, recent: RECENT }
+  const a = replyPrompt({ ...base, ageHours: 26, who: '甲', body: '问题一' })
+  const b = replyPrompt({ ...base, ageHours: 9, who: '乙', body: '问题二' })
+  assert.ok(prefix(a, b) > article.length, '带上日志之后正文不在公共前缀里了')
+  assert.ok(a.indexOf(RECENT) > a.indexOf(article), '日志排到正文前面去了')
+})
+
+check('★★ 批注 / 资讯 / 巡逻：日志都排在整块要求后面', () => {
+  const n = notePrompt('标题', '[0] 段落', RECENT)
+  assert.ok(n.indexOf(RECENT) > n.indexOf('严格只输出 JSON'), '批注：日志排到格式要求前面了')
+
+  const w = newsPrompt(TOPICS[0], '素材', RECENT)
+  assert.ok(w.indexOf(RECENT) > w.indexOf('宁缺毋滥'), '资讯：日志排到写作要求前面了')
+
+  const p = patrolPrompt('标题', '- 坏了', RECENT)
+  assert.ok(p.indexOf(RECENT) > p.indexOf('硬性约束'), '巡逻：日志排到硬性约束前面了')
+  assert.ok(p.indexOf(RECENT) < p.indexOf('问题清单'), '巡逻：日志应该在问题清单之前')
+})
+
+check('★★ 巡逻：必须写死「日志里的事不是这次发现的问题」', () => {
+  const p = patrolPrompt('标题', '- 链接 /a/ 返回 404', RECENT)
+  assert.match(p, /一条都不是这次发现的问题/,
+    '少了这句，她会把「昨天回了三条评论」当成这篇文章的故障写进公开评论里')
+})
+
+check('★ 不传日志时，四个提示词和以前一模一样（默认值必须是空串）', () => {
+  assert.equal(notePrompt('t', 'l'), notePrompt('t', 'l', ''))
+  assert.equal(patrolPrompt('t', 'l'), patrolPrompt('t', 'l', ''))
+  assert.equal(newsPrompt(TOPICS[0], 'l'), newsPrompt(TOPICS[0], 'l', ''))
+  const c = { title: 'T', ageHours: 5, who: 'W', body: 'B', article: 'A' }
+  assert.equal(replyPrompt(c), replyPrompt({ ...c, recent: '' }))
+})
+
 console.log('\n提示词 · 内容没在搬家时搬丢')
 
 check('每个提示词都还带着它该带的东西', () => {

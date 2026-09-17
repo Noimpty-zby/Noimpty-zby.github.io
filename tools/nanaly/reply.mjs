@@ -11,6 +11,7 @@
 import { listDiscussions, gql, marker, hasMarker, SIGN, OWNER } from './github.mjs'
 import { ask } from '../daily-report/narrate.mjs'
 import { stripAngles, stripOutboundLinks } from './git.mjs'
+import { note, digest } from './journal.mjs'
 
 const SITE = (process.env.SITE_URL || 'https://noimpty-zby.github.io').replace(/\/$/, '')
 const DRY = process.argv.includes('--dry')
@@ -112,7 +113,7 @@ export const collect = discussions => {
  * 而原来第一行写着「已经 ${ageHours} 小时没人回」—— 一个会变的数字排在最前面，
  * 后面连同整篇正文全部按未命中计费（实测可缓存比例 4%）。
  * 现在正文排在变量前面：同一篇下的第二条评论起，几乎整个前缀都能命中。 */
-export const replyPrompt = ({ title, ageHours, who, body, article }) => `你替主人回一条读者留言。要求：
+export const replyPrompt = ({ title, ageHours, who, body, article, recent = '' }) => `你替主人回一条读者留言。要求：
 1. 先判断这是提问、指正、还是打招呼，回复方式要对得上
 2. 技术问题就正面答，答案要基于下面这篇文章的内容。文章里没写到的，明说没写到
 3. 三到五句话。别客套，别写「感谢您的宝贵意见」
@@ -121,7 +122,9 @@ export const replyPrompt = ({ title, ageHours, who, body, article }) => `你替�
 
 ━━━ 留言所在文章的正文（可能截断）━━━
 ${article || '（正文没取到，这种情况下只能就事论事，别硬答技术细节）'}
-
+${recent ? `
+━━━ 你最近干过的事（你自己做的，别说成别人）━━━
+${recent}` : ''}
 ━━━ 要回的就是下面这一条 ━━━
 文章：《${title}》
 留言人：${who}
@@ -148,6 +151,7 @@ export const autoReply = async () => {
   console.log(`  该接手的评论：${todo.length} 条（冷静期 ${GRACE_HOURS} 小时）`)
 
   let replied = 0
+  const answered = []
   for (const item of todo) {
     const { disc, comment, ageHours } = item
     // giscus 的讨论标题按约定是没有前导斜杠的（2026/08/13/xxx/），
@@ -160,7 +164,8 @@ export const autoReply = async () => {
       ageHours,
       who: comment.author?.login,
       body: stripAngles(String(comment.body || '')).slice(0, 1500),
-      article
+      article,
+      recent: digest({ limit: 8 })
     }), 800, { label: '回评' })
 
     if (!said) { console.log('  模型没返回，跳过这条'); continue }
@@ -173,15 +178,22 @@ export const autoReply = async () => {
       console.log(`\n  [演练] 会回复 ${disc.title} 里 ${comment.author?.login} 的评论（已挂 ${ageHours} 小时）：`)
       console.log(body.split('\n').map(l => '    ' + l).join('\n') + '\n')
       replied++
+      answered.push(disc.title)
       continue
     }
     try {
       const r = await postReply(disc.id, comment.id, body)
       console.log(`  已回复：${r.addDiscussionComment.comment.url}`)
       replied++
+      answered.push(disc.title)
     } catch (e) {
       console.log(`  回复失败：${e.message}`)
     }
+  }
+  // 只记「回了哪几篇下面的留言」，不记留言原文 —— 那是外部输入，
+  // 而这本日志会被原样拼进她别处的提示词里（journal.mjs 第 4 条规矩）
+  if (replied) {
+    note('reply', `替主人回了 ${replied} 条读者留言，在 ${[...new Set(answered)].slice(0, 3).map(t => `/${String(t).replace(/^\/+/, '')}`).join('、')}`)
   }
   return { candidates: todo.length, replied }
 }

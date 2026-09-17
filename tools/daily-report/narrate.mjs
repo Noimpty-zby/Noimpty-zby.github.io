@@ -1,6 +1,8 @@
 // 让娜娜莉来写这份报告的「人话部分」：当天小结、新文章读后反馈、评论是否可疑。
 // 没有 DEEPSEEK_API_KEY 时全部降级成模板文字，报告照发。
 
+import { digest } from '../nanaly/journal.mjs'
+
 const KEY = process.env.DEEPSEEK_API_KEY || ''
 const BASE = (process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com').replace(/\/$/, '')
 // deepseek-chat / deepseek-reasoner 这两个老名字已于 2026-07-24 停用。
@@ -187,6 +189,10 @@ export const ask = async (system, user, maxTokens = 700, opts = {}) => {
 
 export const writeOpening = async ({ traffic, comments, newPosts, health, schedule }) => {
   const facts = []
+  /* 她自己今天干了什么。以前这份开场白只有「站上发生了什么」——
+   * 于是主人晚上收到的信里，她像个从没出过门的观察员，
+   * 而实际上早上九点巡逻的、下午回评论的都是她。 */
+  const mine = digest({ limit: 10, sinceDays: 2 })
   if (traffic.ok) {
     facts.push(traffic.visitors != null
       ? `访问：${traffic.visitors} 个访客、${traffic.pageviews} 次浏览`
@@ -208,8 +214,10 @@ export const writeOpening = async ({ traffic, comments, newPosts, health, schedu
 只说事实和你的判断，不要罗列数字（下面的表格会列）。如果一切平静就直说平静，别硬找话讲。
 如果有需要留意的问题，把它放在最前面。
 如果他今天的任务没做完、或者有过期的，可以催一句 —— 但只催一句，别唠叨。
+如果下面列了「窝最近做过的事」，可以自然地带一句你今天干了什么，
+但别变成汇报流水账 —— 一句就够，主人关心的是他的站，不是你的考勤。
 
-${facts.join('\n')}`, 400, { label: '小结' })
+${facts.join('\n')}${mine ? '\n\n' + mine : ''}`, 400, { label: '小结' })
 
   if (out) return out
   return bad.length

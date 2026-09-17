@@ -13,6 +13,7 @@ import { execFileSync } from 'node:child_process'
 import { ask, whyNoModel } from '../daily-report/narrate.mjs'
 import { triggerDeploy } from './github.mjs'
 import { pushWithRetry, useNanalyIdentity, sanitizeMd, stripAngles } from './git.mjs'
+import { note, digest } from './journal.mjs'
 
 const DIR = 'source/news'
 const DRY = process.argv.includes('--dry')
@@ -349,7 +350,7 @@ export const newsSystem = profile => `你是娜娜莉，住在 Noimpty 个人博
 ${profile || '（他是在补 Linux / Git / Go / MySQL、准备找 AI Infra 或后端实习的学生，水平还很低。）'}`
 
 // 这一栏是哪一栏、角度是什么、素材有哪些 —— 全是随栏目变的，所以都在这边
-export const newsPrompt = (t, listed) => `【这一栏：${t.title}】
+export const newsPrompt = (t, listed, recent = '') => `【这一栏：${t.title}】
 ${t.angle || ''}
 
 下面是刚搜到的素材，每条前面有个编号。挑出**最多 ${t.want} 条**真正值得他知道的，写成简报。
@@ -376,7 +377,9 @@ ${t.angle || ''}
 实在没有值得写的就只输出「（这几天没什么值得说的）」，那也是合格的输出。
 
 别写导语和总结，直接列条目。只输出 markdown 列表本身。
-
+${recent ? `
+【你最近干过的事】（你自己做的，写「窝的看法」时可以自然带上，比如你刚给某篇写过批注）
+${recent}` : ''}
 素材：
 ${listed}`
 
@@ -502,6 +505,7 @@ ${sections.map(s => `## ${s.title}\n\n${s.body}`).join('\n\n')}
   writeFileSync(`${dir}/index.md`, md)
   console.log(`  已写入 ${dir}/index.md（${sections.length} 个板块）`)
   console.log('  /news/ 列表页会在构建时自动带上这一期，不需要额外提交')
+  note('news', `发了 ${date} 那期资讯速览，${sections.length} 栏（${sections.map(s => s.title).join('、')}）`)
   return { dir, date }
 }
 

@@ -32,7 +32,7 @@ description: 现在在走的方向：Linux、Git、Go、MySQL 打底，外加 Do
     <h3>Linux</h3>
     <span class="noimpty-track-card__by">Colt Steele · Beginner To Power User</span>
     <p>文件系统、权限、管道与重定向、grep/find、vim、shell 脚本。服务器上没有图形界面，这就是唯一的界面。拆成入门和深入两部分。</p>
-    <span class="noimpty-track-card__stat">入门已写 3 篇 · 深入还没开始</span>
+    <span class="noimpty-track-card__stat">{% section_stat 入门=Linux入门|深入=Linux深入 %}</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--git" href="/extra/ai-infra/git/">
     <span class="noimpty-track-card__index">02</span>
@@ -40,7 +40,7 @@ description: 现在在走的方向：Linux、Git、Go、MySQL 打底，外加 Do
     <h3>Git &amp; GitHub</h3>
     <span class="noimpty-track-card__by">Colt Steele · The Git &amp; Github Bootcamp</span>
     <p>提交、分支、合并、撤销、变基，以及 Git 底层到底存了什么。重点是「改崩了怎么回去」。</p>
-    <span class="noimpty-track-card__stat">已写 2 篇</span>
+    <span class="noimpty-track-card__stat">{% section_stat Git %}</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--go" href="/extra/ai-infra/go/">
     <span class="noimpty-track-card__index">03</span>
@@ -48,7 +48,7 @@ description: 现在在走的方向：Linux、Git、Go、MySQL 打底，外加 Do
     <h3>Go</h3>
     <span class="noimpty-track-card__by">Stephen Grider · The Complete Developer's Guide</span>
     <p>类型、切片、结构体、接口，以及 goroutine 与 channel。后端和基础设施那一层的主力语言。</p>
-    <span class="noimpty-track-card__stat">还没开始</span>
+    <span class="noimpty-track-card__stat">{% section_stat Go %}</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--mysql" href="/extra/ai-infra/mysql/">
     <span class="noimpty-track-card__index">04</span>
@@ -56,7 +56,7 @@ description: 现在在走的方向：Linux、Git、Go、MySQL 打底，外加 Do
     <h3>MySQL</h3>
     <span class="noimpty-track-card__by">Colt Steele · SQL Beginner to Expert</span>
     <p>建表与数据类型、CRUD、聚合、多表连接、索引。从「查得出来」到「查得快」。</p>
-    <span class="noimpty-track-card__stat">还没开始</span>
+    <span class="noimpty-track-card__stat">{% section_stat MySQL %}</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--docker" href="/extra/ai-infra/docker/">
     <span class="noimpty-track-card__index">05</span>
@@ -64,7 +64,7 @@ description: 现在在走的方向：Linux、Git、Go、MySQL 打底，外加 Do
     <h3>Docker</h3>
     <span class="noimpty-track-card__by">具体教材还没定</span>
     <p>把服务从「装在我的机器上」变成「装在镜像里」。镜像、容器、Dockerfile、网络与卷，AI Infra 部署绕不开它。</p>
-    <span class="noimpty-track-card__stat">还没开始</span>
+    <span class="noimpty-track-card__stat">{% section_stat Docker %}</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--transformer" href="/extra/ai-infra/transformer/">
     <span class="noimpty-track-card__index">06</span>
@@ -72,7 +72,7 @@ description: 现在在走的方向：Linux、Git、Go、MySQL 打底，外加 Do
     <h3>Transformer 推理机制</h3>
     <span class="noimpty-track-card__by">具体资料还没定</span>
     <p>推理时到底在算什么：attention 的计算量、KV cache、批处理与量化怎么影响速度，不停在调 API 的层面。</p>
-    <span class="noimpty-track-card__stat">还没开始</span>
+    <span class="noimpty-track-card__stat">{% section_stat Transformer 推理机制 %}</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--python" href="/extra/ai-infra/python/">
     <span class="noimpty-track-card__index">07</span>
@@ -80,6 +80,6 @@ description: 现在在走的方向：Linux、Git、Go、MySQL 打底，外加 Do
     <h3>Python</h3>
     <span class="noimpty-track-card__by">具体教材还没定</span>
     <p>前面几门课的脚本、AI Infra 相关的小工具大多会用它写，重点预计落在标准库和常用第三方库的使用习惯上。</p>
-    <span class="noimpty-track-card__stat">还没开始</span>
+    <span class="noimpty-track-card__stat">{% section_stat Python %}</span>
   </a>
 </div>

@@ -19,7 +19,7 @@ description: 推理时到底在算什么——attention、KV cache、批处理�
 
 <div class="noimpty-course-meta">
   <div><b>资料</b><span>还没定</span></div>
-  <div><b>进度</b><span>还没开始</span></div>
+  <div><b>进度</b><span>{% section_progress Transformer 推理机制 %}</span></div>
 </div>
 
 <div class="noimpty-plan">

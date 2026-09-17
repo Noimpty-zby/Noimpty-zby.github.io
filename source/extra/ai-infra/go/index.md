@@ -21,7 +21,7 @@ description: "Stephen Grider《Go: The Complete Developer's Guide (Golang)》的
   <div><b>讲师</b><span>Stephen Grider</span></div>
   <div><b>平台</b><span>Udemy · 英文授课</span></div>
   <div><b>形式</b><span>边讲边写 · 每章一个可运行的小程序</span></div>
-  <div><b>进度</b><span>还没开始</span></div>
+  <div><b>进度</b><span>{% section_progress Go %}</span></div>
 </div>
 
 <div class="noimpty-plan">

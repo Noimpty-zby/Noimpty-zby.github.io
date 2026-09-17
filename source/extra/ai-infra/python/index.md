@@ -19,7 +19,7 @@ description: 标准库与常用第三方库的使用习惯。学习资料还没�
 
 <div class="noimpty-course-meta">
   <div><b>资料</b><span>还没定</span></div>
-  <div><b>进度</b><span>还没开始</span></div>
+  <div><b>进度</b><span>{% section_progress Python %}</span></div>
 </div>
 
 <div class="noimpty-plan">

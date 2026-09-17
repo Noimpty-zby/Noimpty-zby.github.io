@@ -21,7 +21,7 @@ description: "Colt Steele《The Ultimate MySQL Bootcamp: Go from SQL Beginner to
   <div><b>讲师</b><span>Colt Steele</span></div>
   <div><b>平台</b><span>Udemy · 英文授课</span></div>
   <div><b>形式</b><span>大量练习 · 一个完整的数据库案例贯穿全课</span></div>
-  <div><b>进度</b><span>还没开始</span></div>
+  <div><b>进度</b><span>{% section_progress MySQL %}</span></div>
 </div>
 
 <div class="noimpty-plan">

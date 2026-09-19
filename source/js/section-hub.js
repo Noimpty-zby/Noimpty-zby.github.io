@@ -81,6 +81,18 @@
     scene.innerHTML = '<div class="sakura-scene__art"></div>' + Array.from({ length: 10 }, (_, i) =>
       `<span class="sakura-petal" style="--petal-x:${6 + i * 10}%;--petal-delay:-${i * 2.7}s;--petal-duration:${15 + i % 4 * 3}s;--petal-size:${8 + i % 3 * 3}px"></span>`
     ).join('')
+    // Fixed, sparse positions keep the atmosphere around the illustration, away from the title.
+    // A separate layer preserves the petals' existing mobile nth-of-type limit.
+    const romance = document.createElement('div')
+    romance.className = 'sakura-romance'
+    const lights = [[5, 78], [39, 88], [53, 38], [63, 17], [73, 77], [85, 25], [92, 66], [97, 45]]
+    const hearts = [[55, 79], [86, 68], [94, 37]]
+    romance.innerHTML = lights.map(([x, y], i) =>
+      `<span class="sakura-glow" style="--romance-x:${x}%;--romance-y:${y}%;--romance-duration:${7 + i % 4 * 2}s;--romance-delay:-${i * 1.9}s;--glow-size:${3 + i % 3}px"></span>`
+    ).join('') + hearts.map(([x, y], i) =>
+      `<span class="sakura-heart sakura-heart--${i + 1}" style="--romance-x:${x}%;--romance-y:${y}%;--romance-duration:${12 + i * 3}s;--romance-delay:-${i * 4 + 2}s">♡</span>`
+    ).join('') + '<span class="sakura-shooting-star"></span>'
+    scene.appendChild(romance)
     header.appendChild(scene)
   }
 

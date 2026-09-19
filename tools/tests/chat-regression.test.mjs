@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 
+const providerSource = readFileSync(new URL('../../source/js/nanaly-provider.js', import.meta.url), 'utf8')
 const source = readFileSync(new URL('../../source/js/noimpty-ai.js', import.meta.url), 'utf8')
 const cut = (start, end) => {
   const from = source.indexOf(start)
@@ -12,7 +13,7 @@ const cut = (start, end) => {
 }
 const run = (code, globals = {}, names = []) => {
   const context = vm.createContext({ TextEncoder, TextDecoder, AbortController, DOMException,
-    setTimeout, clearTimeout, URL, ...globals })
+    setTimeout, clearTimeout, URL, workspace: null, vision: null, research: null, history: [], HISTORY_MAX: 22, window: {}, ...globals })
   vm.runInContext(code + '\nglobalThis.subject = {' + names.join(',') + '}', context)
   return context.subject
 }
@@ -31,7 +32,7 @@ const abortableCode = cut('  const abortable =', '  /* 忙的时候')
 const streamCode = cut('  const stream =', '  const send =')
 const sse = (content, eol = '\n') => 'data: ' + JSON.stringify({ choices: [{ delta: { content } }] }) + eol + eol
 
-const streamHarness = fetch => run(abortableCode + '\n' + streamCode, {
+const streamHarness = fetch => run(providerSource + '\n' + abortableCode + '\n' + streamCode, {
   fetch, lastUsage: null,
   cfg: { model: 'mock', reasonModel: 'mock-reason', baseURL: 'https://example.invalid' },
   DEFAULTS: { reasonModel: 'mock-reason', reasonEffort: 'high' },
@@ -123,7 +124,7 @@ await test('Storage access denied still allows defaults and empty history', () =
 })
 
 await test('Memory tolerates corrupt arrays and reserved object keys', () => {
-  const value = '{"asks":{},"posts":{"__proto__":{"n":4,"at":1},"bad":null},"since":"bad"}'
+  const value = '{"asks":{},"posts":{"__proto__":{"n":4,"at":' + Date.now() + '},"bad":null},"since":"bad"}'
   const { readMem, memoryDigest } = run(cut('  const isRecord', '  const readCfg') + '\n' +
     cut('  const LS_MEM', '  // ---------------- 操控页面'), {
     EMPTY_SECRETS: {}, localStorage: { getItem: () => value, setItem() {} }
@@ -155,6 +156,7 @@ const sendHarness = (buildMessages, stream) => {
   const controller = run(abortableCode + '\n' + cut('  const stopStream =', '  const addMsg =') + '\n' +
     cut('  const send =', '  // ---------------- 事件'), {
     busy: false, view: 'chat', activeTurn: null, abortCtl: null, uiRevision: 0,
+    writeLog() {}, renderSources() {}, panel: { classList: { contains: () => true } }, launcher: { classList: { add() {} } },
     secrets: { apiKey: 'test-placeholder' }, input: { value: 'question', style: {} },
     brain: 'off', subLine: {}, followScroll: false, currentArticle: () => null,
     rememberAsk() {}, addMsg: () => { const node = new Bubble(); bubbles.push(node); return node },
@@ -213,11 +215,14 @@ await test('Reset/lock discards an active partial reply instead of restoring cle
 })
 
 await test('Lookup failure does not also tell the model that the subject was never written', async () => {
-  const { buildMessages } = run(cut('  const WEB_PREFIX', '  /* 这几条消息的') + '\n' +
+  const { buildMessages } = run(abortableCode + '\n' + cut('  const WEB_PREFIX', '  /* 这几条消息的') + '\n' +
     cut('  const buildMessages', '  // 模型把指令'), {
     PERSONA: 'persona', TIME_RULES: 'time', currentArticle: () => null, postDigest: async () => 'posts', selfLog: async () => 'journal',
-    searchCorpus: async () => { throw new Error('SEARCH_LOCKED') }, window: { NOIMPTY_SEARCH: { explain: () => '还没有解锁' } },
-    getSiteMap: async () => [], location: { pathname: '/' }, history: [], historyAnchor: 0,
+    research: { prepare: async ({ query, mode, signal }) => {
+      assert.equal(query, '递归'); assert.equal(mode, 'site'); assert.equal(signal.aborted, false)
+      return { context: '站内索引读不出来：还没有解锁；这不是没有检索到。', sources: [] }
+    } }, activeTurn: null, secrets: {}, window: {},
+    getSiteMap: async () => [], location: { pathname: '/' }, history: [], HISTORY_MAX: 22, historyAnchor: 0,
     historyWindow: () => ({ list: [], anchorAt: 0 }), withTimeMarks: () => [], memoryDigest: () => '', nowLine: () => 'now'
   }, ['buildMessages'])
   const messages = await buildMessages('全站搜：递归', 'site', new AbortController().signal)
@@ -227,12 +232,12 @@ await test('Lookup failure does not also tell the model that the subject was nev
 })
 
 await test('Wrong vault password never replaces the current in-memory keys or settings', async () => {
-  const fields = Object.fromEntries(['apiKey', 'tavilyKey', 'ghToken', 'pass', 'baseURL', 'model', 'reasonModel', 'reasonEffort']
+  const fields = Object.fromEntries(['apiKey', 'tavilyKey', 'ghToken', 'visionKey', 'pass', 'baseURL', 'model', 'reasonModel', 'reasonEffort', 'visionBaseURL', 'visionModel', 'proactive']
     .map(name => [name, { value: '' }]))
   let click
   const box = { isConnected: true, querySelector: selector => fields[selector.match(/"([^"]+)"/)[1]],
     querySelectorAll: () => [], addEventListener: (_, fn) => { click = fn } }
-  const originalCfg = { baseURL: 'https://api.example.test', model: 'old-model', reasonModel: 'old-reason', reasonEffort: 'high' }
+  const originalCfg = { baseURL: 'https://api.example.test', model: 'old-model', reasonModel: 'old-reason', reasonEffort: 'high', visionBaseURL: 'https://api.siliconflow.cn/v1', visionModel: 'vision-test' }
   const originalSecrets = { apiKey: 'original', tavilyKey: '', ghToken: '' }
   let error = ''
   let sealed = 0
@@ -272,12 +277,12 @@ await test('Double submit during local navigation lookup cannot issue duplicate 
 
 await test('Locking while vault encryption is pending cannot save or unlock keys afterward', async () => {
   const pending = deferred(), started = deferred()
-  const fields = Object.fromEntries(['apiKey', 'tavilyKey', 'ghToken', 'pass', 'baseURL', 'model', 'reasonModel', 'reasonEffort']
+  const fields = Object.fromEntries(['apiKey', 'tavilyKey', 'ghToken', 'visionKey', 'pass', 'baseURL', 'model', 'reasonModel', 'reasonEffort', 'visionBaseURL', 'visionModel', 'proactive']
     .map(name => [name, { value: '' }]))
   let click, writes = 0
   const box = { isConnected: true, querySelector: selector => fields[selector.match(/"([^"]+)"/)[1]],
     querySelectorAll: () => [], addEventListener: (_, fn) => { click = fn } }
-  const cfg = { baseURL: 'https://api.example.test', model: 'old-model', reasonModel: 'old-reason', reasonEffort: 'high' }
+  const cfg = { baseURL: 'https://api.example.test', model: 'old-model', reasonModel: 'old-reason', reasonEffort: 'high', visionBaseURL: 'https://api.siliconflow.cn/v1', visionModel: 'vision-test' }
   const secrets = { apiKey: 'original', tavilyKey: '', ghToken: '' }
   const { showSetup, leave, getState } = run(cut('  const showSetup =', '  const addSetupError') +
     '\nconst leave = () => { uiRevision++ }; const getState = () => ({ cfg, secrets })', {
@@ -363,7 +368,7 @@ await test('Journal loader drops malformed rows before caching', async () => {
 
 await test('Search reset also invalidates chat article, map and journal summaries', () => {
   const h = searchHarness(async () => new Response('<search>valid</search>'))
-  Object.assign(h.context, { searchRevision: 0, postDigestCache: 'old posts', selfLogCache: 'old journal', siteMap: ['old url'], stopStream: discard => { assert.equal(discard, undefined) } })
+  Object.assign(h.context, { searchRevision: 0, postDigestCache: 'old posts', selfLogCache: 'old journal', siteMap: ['old url'], research: null, stopStream: discard => { assert.equal(discard, undefined) } })
   vm.runInContext(cut("  window.addEventListener('noimpty:search-reset'", '  // 供控制台'), h.context)
   h.window.NOIMPTY_SEARCH.reset()
   assert.equal(h.context.postDigestCache, null)
@@ -396,7 +401,7 @@ const pageContextCode = cut('  const canReadPageContext =', '  /* --------------
 const pageContextHarness = (gate, pageLocked = false) => {
   const state = { locked: pageLocked, reads: 0, visits: [], subLine: {}, buttons: [{ style: {} }, { style: {} }] }
   const text = '可读取的文章正文。'.repeat(8)
-  const clone = { querySelectorAll: () => [], innerText: text }
+  const clone = { nodeType: 1, tagName: 'DIV', childNodes: [{ nodeType: 3, textContent: text }], querySelectorAll: () => [], innerText: text }
   const box = {
     cloneNode: () => clone,
     querySelectorAll: () => [{ getBoundingClientRect: () => ({ top: 10 }), textContent: '1. 当前小节' }]
@@ -407,9 +412,9 @@ const pageContextHarness = (gate, pageLocked = false) => {
     querySelector() { state.reads++; return { textContent: '当前文章标题' } },
     get title() { state.reads++; return '页面标题 | 站点' }
   }
-  const window = { NOIMPTY_GATE: gate, innerHeight: 800 }
-  const functions = run(pageContextCode + '\n' + cut('  const setSubLine =', '  refreshContext()\n  resetDwell()'), {
-    window, document, subLine: state.subLine, brain: 'off',
+  const window = { NOIMPTY_GATE: gate, innerHeight: 800, getSelection: () => null }
+  const functions = run(pageContextCode + '\n' + cut('  const setSubLine =', '  if (window.NANALY_VISION) vision ='), {
+    window, document, subLine: state.subLine, brain: 'off', location: { href: 'https://example.test/post/' },
     quick: { querySelectorAll: () => state.buttons }, rememberVisit: title => state.visits.push(title)
   }, ['currentArticle', 'currentHeading', 'refreshContext'])
   return { ...functions, state, window, text }
@@ -526,6 +531,35 @@ await test('Default greeting has no private categories and saved chat history is
       assert.doesNotMatch(messages[0].text, /课内|课外|AI Infra|数据结构|Linux|Git|UE5|图形学/)
     }
   }
+})
+
+
+await test('Closing the panel hides it without cancelling the active answer', () => {
+  const controller = new AbortController()
+  let stopped = 0, spoken = 0, closed = 0
+  const attributes = new Map()
+  const panel = { contains: () => false, classList: { remove: name => { assert.equal(name, 'is-open'); closed++ } }, setAttribute: (name, value) => attributes.set(name, value), inert: false }
+  const { closePanel } = run(cut('  const closePanel =', "  launcher.addEventListener('click'"), {
+    uiRevision: 0, view: 'chat', activeTurn: { controller }, panel,
+    document: { activeElement: null }, launcher: { setAttribute() {}, focus() {} }, delight: { close() {} },
+    stopStream: () => { stopped++; controller.abort() }, stopSpeak: () => { spoken++ }
+  }, ['closePanel'])
+  closePanel()
+  assert.equal(controller.signal.aborted, false)
+  assert.equal(stopped, 0)
+  assert.equal(closed, 1)
+  assert.equal(spoken, 1)
+  assert.equal(panel.inert, true)
+  assert.equal(attributes.get('aria-hidden'), 'true')
+})
+
+await test('Old behavioral memory expires from the prompt without diagnosing the user as stuck', () => {
+  const old = Date.now() - 40 * 86400000
+  const value = JSON.stringify({ asks: Array.from({ length: 5 }, () => ({ t: '旧问题', on: '旧文章', at: old })), posts: { '旧文章': { n: 8, at: old } } })
+  const { memoryDigest } = run(cut('  const isRecord', '  const readCfg') + '\n' + cut('  const LS_MEM', '  // ---------------- 操控页面'), {
+    EMPTY_SECRETS: {}, localStorage: { getItem: () => value, setItem() {} }
+  }, ['memoryDigest'])
+  assert.equal(memoryDigest(), '')
 })
 
 console.log(`\n${passed} chat regression checks passed`)

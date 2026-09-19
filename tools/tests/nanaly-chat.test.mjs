@@ -57,7 +57,8 @@ check('★★ 实质问题自动上推理模型（「像人机」的头号原因
   assert.equal(wantsBrain('这段递归为什么会栈溢出'), true)
   assert.equal(wantsBrain('尾递归和头递归的区别'), true)
   assert.equal(wantsBrain('帮我看看这个报错'), true)
-  assert.equal(wantsBrain('我想把第三章那部分重写一下，你觉得从哪儿动手比较好'), true, '二十个字以上应该一律算实质问题')
+  assert.equal(wantsBrain('帮我分析第三章那部分应该怎样重新组织'), true)
+  assert.equal(wantsBrain('今天散步看到很多可爱的小猫，回来想和你说说这些轻松的小事'), false, '不能只因超过二十字就强制升档')
 })
 
 check('闲聊不必花三倍的钱', () => {
@@ -160,17 +161,18 @@ check('人设永远是第一条（它一个字都不变，是最该被缓存的�
 check('★★ 读时间的规矩 + 文章清单紧跟人设，排在正文和检索材料前面', () => {
   const body = cut('const buildMessages', 'return msgs')
   const rules = body.indexOf('TIME_RULES')
-  const art = body.indexOf('对方正在读这篇文章')
-  const web = body.indexOf('刚从互联网上搜到的资料')
-  assert.ok(rules > 0 && art > 0 && web > 0, '切片里少了东西')
-  assert.ok(rules < web && rules < art,
+  const metadata = body.indexOf('Promise.all([postDigest(), selfLog()])')
+  const research = body.indexOf('research.prepare(')
+  const evidence = body.indexOf('content: result.context')
+  assert.ok(metadata > 0 && rules > metadata && research > rules && evidence > research, '元数据或真实检索材料顺序不完整')
+  assert.ok(rules < evidence,
     '规矩和文章清单又被挪到正文/检索材料后面了 —— 那 1800 字会每轮按未命中重发')
 })
 
 check('★★ 站点地图是条件插入的，必须压在正文后面', () => {
   const body = cut('const buildMessages', 'return msgs')
-  const art = body.indexOf('对方正在读这篇文章')
-  const map = body.indexOf('站点地图（url 只能从这里挑')
+  const art = body.indexOf('content: result.context')
+  const map = body.indexOf('站点地图（操作URL只能从这里挑')
   assert.ok(map > art,
     '地图挪到正文前面了 —— 一句带「去」「找」的闲话就会把最多 12000 字的正文缓存踩掉')
 })
@@ -185,13 +187,13 @@ check('★★ 每轮都变的排最后：历史在前，「现在几点」和「
   assert.ok(mem > hist, '「他最近问过」每说一句就变一次，不能排在历史前面')
 })
 
-check('★★ 她在别处干的活，和文章清单一起排在正文前面（整个会话都不变）', () => {
+check('★★ 行动日志与文章清单并行读取，快照排在检索材料和当前时间前', () => {
   const body = cut('const buildMessages', 'return msgs')
   const self = body.indexOf('selfLog()')
-  const art = body.indexOf('对方正在读这篇文章')
+  const art = body.indexOf('content: result.context')
   const now = body.indexOf('nowLine()')
   assert.ok(self > 0, '行动日志没进提示词 —— 她又不知道自己今天干了什么了')
-  assert.ok(self < art, '行动日志排到正文后面了，它一个会话里根本不变，该排在可缓存那一侧')
+  assert.ok(self < art, '行动日志快照应与元数据一起排在动态检索材料前')
   assert.ok(self < now, '行动日志不该排在「现在几点」后面')
 })
 
@@ -350,7 +352,7 @@ check('★ 判断模式和剥前缀用同一份正则（以前「全站搜：」
 console.log('\n对话窗口 · 中断')
 
 check('★★ full 必须声明在 try 外面 —— catch 里那句清理要读它', () => {
-  const send = cut('  const send = async (text, mode) => {', '  // ---------------- 事件')
+  const send = cut('  const send = async (', '  // ---------------- 事件')
   const decl = send.indexOf('let full')
   const tryAt = send.indexOf('    try {')
   assert.ok(decl > 0, '找不到 full 的声明')
@@ -361,6 +363,34 @@ check('★★ full 必须声明在 try 外面 —— catch 里那句清理要读
 
 check('★ 忙的时候发送键是「停」键', () => {
   assert.match(src, /busy \? stopStream\(\) : submit\(\)/, '没有叫停的办法了')
+})
+
+
+const checkAsync = async (name, fn) => {
+  try { await fn(); console.log('  ✓ ' + name); pass++ }
+  catch (error) { console.log('  ✗ ' + name + '\n      ' + error.message); process.exitCode = 1 }
+}
+const journalHarness = () => {
+  let clock = NOON, reads = 0, fails = false
+  class FakeDate extends Date { constructor(...args) { super(...(args.length ? args : [clock])) } static now() { return clock } }
+  const context = vm.createContext({ Date: FakeDate, searchRevision: 0, window: { NOIMPTY_SEARCH: {
+    async loadJournal() { reads++; if (fails) throw new Error('LOCKED'); return [{ at: '2026-09-17T04:00:00Z', who: 'patrol', what: '已记录的巡检 ' + reads }] },
+    explain: value => value
+  } } })
+  vm.runInContext(cut('  const JOURNAL_WHO', '  /* 怎么读时间') + '\nglobalThis.selfLog = selfLog', context)
+  return { selfLog: context.selfLog, reads: () => reads, advance: ms => { clock += ms }, fail: value => { fails = value } }
+}
+await checkAsync('行动日志只缓存一分钟，过期重读并明确它是已发布快照', async () => {
+  const h = journalHarness(), initial = await h.selfLog()
+  assert.match(initial, /已发布的日志快照，不是实时运行状态/)
+  h.advance(59999); assert.equal(await h.selfLog(), initial); assert.equal(h.reads(), 1)
+  h.advance(2); assert.notEqual(await h.selfLog(), initial); assert.equal(h.reads(), 2)
+})
+await checkAsync('锁定时读不到的日志不缓存，解锁后下一次读取会恢复', async () => {
+  const h = journalHarness(); h.fail(true)
+  assert.match(await h.selfLog(), /现在读不出来/)
+  h.fail(false); assert.match(await h.selfLog(), /已记录的巡检 2/)
+  assert.equal(h.reads(), 2)
 })
 
 console.log(`\n${pass} 项通过`)

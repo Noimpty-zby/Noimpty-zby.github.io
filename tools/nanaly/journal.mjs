@@ -29,6 +29,7 @@ export const KEEP = 150
 export const KEEP_DAYS = 45
 
 const DRY = process.argv.includes('--dry')
+let pendingWriteError = null
 
 export const WHO = {
   reply: '回评',
@@ -68,9 +69,13 @@ export const pruneEntries = (entries, now = Date.now()) => {
 export const readJournal = () => {
   try {
     const raw = JSON.parse(readFileSync(FILE, 'utf8'))
-    const list = Array.isArray(raw) ? raw : (raw.entries || [])
+    const list = Array.isArray(raw) ? raw : raw?.entries
+    if (!Array.isArray(list)) throw new Error('日志缺少 entries 数组')
     return pruneEntries(list)
-  } catch (_) { return [] }
+  } catch (error) {
+    if (error.code === 'ENOENT') return []
+    throw new Error('行动日志读取失败，保留原文件：' + String(error.message).slice(0, 100))
+  }
 }
 
 const writeJournal = entries => {
@@ -94,7 +99,9 @@ export const note = (who, what) => {
     writeJournal(pruneEntries([...readJournal(), entry]))
     console.log(`  记了一笔：${WHO[who] || who} — ${text}`)
   } catch (e) {
-    // 日志记不上不该让正事失败 —— 她已经把评论发出去了
+    // The comment may already be sent; let the remaining work continue, but
+    // surface this failure when the entry point flushes the journal.
+    pendingWriteError = e
     console.log(`  日志写不进去（${String(e.message || e).slice(0, 80)}），不影响刚才那件事`)
   }
   return entry
@@ -126,9 +133,9 @@ export const digest = opts => journalDigest(readJournal(), opts)
  * 回评每三小时一班，一天最多八次，各自提交就是一天八个提交八次部署。
  * 那几个本来就要提交东西的分身（批注、资讯、随笔）只 add 自己那个路径，
  * 所以日志不会被它们顺手带走，留到这里一起走。 */
-export const commitJournal = async () => {
+export const commitJournal = async ({ run = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: 'pipe' }) } = {}) => {
   if (DRY) { console.log('  [演练] 不提交行动日志'); return false }
-  const run = (...a) => execFileSync('git', a, { encoding: 'utf8', stdio: 'pipe' })
+  if (pendingWriteError) throw new Error('行动日志未能保存：' + String(pendingWriteError.message).slice(0, 140))
   try {
     if (!existsSync(FILE)) return false
     /* 先看有没有变化，**再**动 git 身份。
@@ -145,8 +152,8 @@ export const commitJournal = async () => {
     console.log('  行动日志已提交并推送')
     return true
   } catch (e) {
-    // 日志没推上去，下次运行会重新记 —— 不值得让整个工作流变红
-    console.log('  行动日志提交失败：' + String(e.message || e).slice(0, 160))
-    return false
+    // An ephemeral runner cannot promise to recreate these records next time:
+    // completed comments are de-duplicated. Surface the failure to the workflow.
+    throw new Error('行动日志提交失败：' + String(e.message || e).slice(0, 160))
   }
 }

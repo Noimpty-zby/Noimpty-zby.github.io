@@ -54,15 +54,57 @@
     return new TextDecoder().decode(plain)
   }
 
+  // The search index retains rendered heading IDs. Preserve those actual IDs
+  // for citations; deriving slugs from titles would break duplicate/CJK headings.
+  const parseSections = html => {
+    // Parse inside an inert template: index images/iframes must not trigger
+    // network loads merely because the assistant builds a section index.
+    const doc = new DOMParser().parseFromString('', 'text/html')
+    let body = doc.body
+    if (typeof doc.createElement === 'function') {
+      const template = doc.createElement('template')
+      template.innerHTML = html
+      body = template.content
+    }
+    if (!body || !body.childNodes) return []
+    const sections = []
+    let current = { title: '', id: '', parts: [] }
+    const flush = () => {
+      const text = current.parts.join('').replace(/\s+/g, ' ').trim()
+      if (text) sections.push({ title: current.title, id: current.id, text })
+    }
+    const visit = node => {
+      if (node.nodeType === 3) { current.parts.push(node.textContent || ''); return }
+      if (node.nodeType !== 1) return
+      const tag = String(node.tagName || '').toUpperCase()
+      if (['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE'].includes(tag)) return
+      if (/^H[1-6]$/.test(tag)) {
+        flush()
+        current = { title: String(node.textContent || '').replace(/\s+/g, ' ').trim(), id: node.getAttribute('id') || '', parts: [node.textContent || '', ' '] }
+        return
+      }
+      const block = /^(P|DIV|SECTION|ARTICLE|PRE|LI|UL|OL|BLOCKQUOTE|TABLE|TR|TD|TH|BR|HR)$/.test(tag)
+      if (block) current.parts.push(' ')
+      for (const child of node.childNodes || []) visit(child)
+      if (block) current.parts.push(' ')
+    }
+    for (const child of body.childNodes) visit(child)
+    flush()
+    return sections
+  }
+
   const parse = xml => {
     const doc = new DOMParser().parseFromString(xml, 'text/xml')
     if (doc.querySelector?.('parsererror')) throw new Error('SEARCH_BAD_FORMAT')
-    return [...doc.querySelectorAll('entry')].map(e => ({
-      title: (e.querySelector('title') || {}).textContent || '',
-      url: (e.querySelector('url') || {}).textContent || '',
-      text: ((e.querySelector('content') || {}).textContent || '')
-        .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
-    })).filter(p => p.title)
+    return [...doc.querySelectorAll('entry')].map(e => {
+      const content = (e.querySelector('content') || {}).textContent || ''
+      return {
+        title: (e.querySelector('title') || {}).textContent || '',
+        url: (e.querySelector('url') || {}).textContent || '',
+        text: content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
+        sections: parseSections(content)
+      }
+    }).filter(p => p.title)
   }
 
   const INDEX_PATH = () => `${ROOT()}search.xml`.replace(/\/{2,}/g, '/')
@@ -83,7 +125,7 @@
 
   // 共享请求有自己的期限；任何一个调用者取消，都不应影响其他正在等索引的人。
   // 期限覆盖响应正文读取，防止只收到 headers 后连接悬挂，pending 永久不能重试。
-  const fetchResource = async url => {
+  const fetchResource = async (url, cache) => {
     const controller = new AbortController()
     let timer
     const deadline = new Promise((_, reject) => {
@@ -95,7 +137,7 @@
     })
     try {
       return await Promise.race([(async () => {
-        const res = await nativeFetch(url, { signal: controller.signal })
+        const res = await nativeFetch(url, { signal: controller.signal, ...(cache ? { cache } : {}) })
         return { ok: res.ok, status: res.status, body: await res.text() }
       })(), deadline])
     } finally { clearTimeout(timer) }
@@ -203,13 +245,14 @@
    * 那时候 404 的正确含义是「她还没有日志」，不是「出故障了」——
    * 所以这里返回空数组，让对话窗口照常说话，而不是抛给主人一句看不懂的错。 */
   let journal = null
+  let journalAt = 0
   let journalPending = null
   const loadJournal = async () => {
-    if (journal) return journal
+    if (journal && Date.now() >= journalAt && Date.now() - journalAt < 60000) return journal
     if (journalPending) return journalPending
     const revision = generation
     const pending = (async () => {
-      const res = await fetchResource(`${ROOT()}nanaly-journal.json`.replace(/\/{2,}/g, '/'))
+      const res = await fetchResource(`${ROOT()}nanaly-journal.json`.replace(/\/{2,}/g, '/'), 'no-cache')
       if (res.status === 404) return []
       if (!res.ok) throw new Error(`SEARCH_HTTP_${res.status}`)
       let envelope
@@ -223,6 +266,7 @@
       return decoded.entries
     })().then(entries => {
       if (revision !== generation) throw new Error('SEARCH_RESET')
+      journalAt = Date.now()
       return (journal = entries.filter(e => e && typeof e === 'object'
         && typeof e.at === 'string' && typeof e.who === 'string' && typeof e.what === 'string'))
     })
@@ -246,7 +290,7 @@
     isIndexUrl,
     explain: code => MESSAGES[code] || '站内索引读不出来。',
     reset: () => {
-      generation++; cache = null; xml = null; journal = null; xmlPending = null; journalPending = null
+      generation++; cache = null; xml = null; journal = null; journalAt = 0; xmlPending = null; journalPending = null
       window.dispatchEvent?.(new Event('noimpty:search-reset'))
     }
   })

@@ -6,6 +6,8 @@ import test from 'node:test'
 import postcss from 'postcss'
 
 const source = readFileSync(new URL('../../source/js/noimpty-ai.js', import.meta.url), 'utf8')
+const providerSource = readFileSync(new URL('../../source/js/nanaly-provider.js', import.meta.url), 'utf8')
+const workspaceSource = readFileSync(new URL('../../source/js/nanaly-workspace.js', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../../source/css/nanaly-delight.css', import.meta.url), 'utf8')
 const cut = (start, end) => {
   const from = source.indexOf(start), to = source.indexOf(end, from)
@@ -150,9 +152,17 @@ const sse = (text, reason = null) => 'data: ' + JSON.stringify({ choices: [{ del
 const sendHarness = (fetch, action) => {
   const h = boot(), logs = [], bubbles = []
   h.open(); h.advance(1100)
-  const subject = run(abortableCode + busyCode + cut('  const stream =', '  const send =') +
-    cut('  const send =', '  // ---------------- 事件'), {
-    delight: h.delight, fetch, busy: false, view: 'chat', activeTurn: null, abortCtl: null, uiRevision: 0,
+  run(providerSource, { window: h.window })
+  const store = new Map(), workspaceWindow = { localStorage: { getItem: key => store.get(key) ?? null, setItem: (key, value) => store.set(key, value) } }
+  run(workspaceSource, { window: workspaceWindow })
+  const workspace = { ...workspaceWindow.NANALY_WORKSPACE.create(), refresh() {}, decorateMessage() {} }
+  h.panel.contains = () => false
+  const logCode = cut('  const logTurn =', '  const locked =').replace('const at = Date.now()', 'logs.push([userText, herText]); const at = Date.now()')
+  const subject = run(abortableCode + logCode + busyCode + cut('  const stream =', '  const send =') +
+    cut('  const send =', '  // ---------------- 事件') + cut('  const closePanel =', '  launcher.addEventListener'), {
+    delight: h.delight, window: h.window, document: h.document, panel: h.panel, launcher: h.launcher,
+    workspace, vision: null, history: [], HISTORY_MAX: 22, logs, writeLog: log => workspace.writeLog(log), stopSpeak() {}, backToChat() {},
+    fetch, busy: false, view: 'chat', activeTurn: null, abortCtl: null, uiRevision: 0,
     cfg: { baseURL: 'https://example.invalid', model: 'mock' }, DEFAULTS: {}, lastUsage: null,
     secrets: { apiKey: 'offline-placeholder' }, input: { value: 'question', style: {} },
     sendBtn: { ...element(), innerHTML: '' }, body: element(), brain: 'off', subLine: {}, followScroll: false,
@@ -161,9 +171,9 @@ const sendHarness = (fetch, action) => {
     buildMessages: async () => [], wantsBrain: () => false, mdToHtml: text => text, escapeHtml: text => text,
     enhance: async () => {}, hideActFragment: text => text, splitAction: text => ({ text, act: action ? { do: 'music', op: 'play' } : null }),
     runAction: action,
-    showUsage() {}, addSpeakBtn() {}, scrollBottom() {}, logTurn: (...args) => logs.push(args), setSubLine() {}
-  }, ['send', 'stopStream'])
-  return { ...h, ...subject, logs, bubbles }
+    showUsage() {}, addSpeakBtn() {}, scrollBottom() {}, renderSources() {}, setSubLine() {}
+  }, ['send', 'stopStream', 'closePanel'])
+  return { ...h, ...subject, logs, bubbles, workspace }
 }
 
 await test('the actual send path celebrates a completed offline SSE reply exactly once', async () => {
@@ -205,7 +215,7 @@ const localHarness = (player, text = '暂停音乐') => {
   h.open(); h.advance(1100); h.window.NOIMPTY_MUSIC_PLAYER = player
   const subject = run(abortableCode + busyCode + cut('  const runAction =', '  // 跳转之后') +
     cut('  const NAV_RE =', '  // ---------------- 界面') + cut('  const submit =', '  sendBtn.addEventListener'), {
-    delight: h.delight, window: h.window, document: h.document,
+    delight: h.delight, window: h.window, document: h.document, workspace: null, vision: null,
     busy: false, view: 'chat', activeTurn: null, abortCtl: null, uiRevision: 0,
     input: { value: text, style: {} }, sendBtn: { ...element(), innerHTML: '' }, body: element(),
     WEB_PREFIX: /^上网搜[：:]/, SITE_PREFIX: /^全站搜[：:]/,
@@ -267,11 +277,44 @@ await test('restoring history never invokes success feedback or replaces stored 
   h.open(); h.advance(1100)
   const history = [{ role: 'user', content: '之前的问题' }, { role: 'assistant', content: '之前的回答' }]
   const { renderHistory } = run(cut('  const renderHistory =', '  // ---------------- 设置界面'), {
-    delight: h.delight, stopSpeak() {}, followScroll: false, quick: { style: {} }, body: {}, history,
+    delight: h.delight, workspace: null, stopSpeak() {}, followScroll: false, quick: { style: {} }, body: {}, history,
     addMsg: (role, text) => messages.push(text)
   }, ['renderHistory'])
   renderHistory()
   assert.deepEqual(messages, history.map(m => m.content)); assert.equal(h.mood(), 'idle'); assert.equal(h.timers.size, 0)
+})
+
+
+await test('collapsing the real panel keeps the stream alive and marks the completed reply unread', async () => {
+  let output
+  const h = sendHarness(async () => new Response(new ReadableStream({ start(controller) {
+    output = controller; controller.enqueue(new TextEncoder().encode(sse('前半句')))
+  } })))
+  const pending = h.send('question', 'article')
+  await tick(); h.closePanel()
+  assert.equal(h.panel.classList.contains('is-open'), false)
+  assert.equal(h.workspace.snapshot().sessions[0].pending.status, 'pending')
+  output.enqueue(new TextEncoder().encode(sse('后半句') + 'data: [DONE]\n\n')); output.close()
+  await pending
+  assert.equal(h.logs.length, 1)
+  assert.equal(h.logs[0][1], '前半句后半句')
+  assert.equal(h.workspace.snapshot().sessions[0].pending, null)
+  assert.equal(h.launcher.classList.contains('has-news'), true)
+  assert.equal(h.mood(), 'idle')
+})
+
+await test('clear during a pending stream cannot be undone by its late finally callback', async () => {
+  const h = sendHarness(async () => new Response(new ReadableStream({ start(controller) {
+    controller.enqueue(new TextEncoder().encode(sse('旧的半句')))
+  } })))
+  const pending = h.send('question', 'article')
+  await tick(); h.stopStream(true); h.workspace.clear()
+  await pending
+  assert.equal(h.workspace.readLog().length, 0)
+  assert.equal(h.workspace.snapshot().sessions[0].pending, null)
+  assert.equal(h.logs.length, 0)
+  assert.equal(h.workspace.undoClear(), true)
+  assert.equal(h.workspace.readLog()[0].content, 'question')
 })
 
 await test('the reusable face is decorative, has no external resources or duplicate IDs, and animations are bounded', () => {

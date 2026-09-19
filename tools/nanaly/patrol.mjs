@@ -135,6 +135,15 @@ ${recent}
 问题清单（这是你**唯一**知道的事实）：
 ${list}`
 
+export const patrolSummary = ({ checked, reported, alreadyReported, failed, broken, titles = [] }) => {
+  const parts = [`巡逻了 ${checked} 篇`]
+  if (!broken) parts.push('未发现本次检查范围内的问题')
+  if (reported) parts.push(`成功留言 ${reported} 条${titles.length ? '，涉及' + titles.slice(0, 3).map(title => `《${title}》`).join('、') : ''}`)
+  if (alreadyReported) parts.push(`${alreadyReported} 篇的问题此前已提醒，本次未重复留言`)
+  if (failed) parts.push(`${failed} 篇的问题未能送达提醒，请查看运行日志重试`)
+  return parts.join('；')
+}
+
 // ---------------- 主流程 ----------------
 
 export const patrol = async () => {
@@ -183,6 +192,8 @@ export const patrol = async () => {
   if (!discussions) return { checked: pages.length, reported: 0 }
 
   let reported = 0
+  let alreadyReported = 0
+  let failed = 0
   const toldAbout = []
   for (const item of broken) {
     const path = new URL(item.pageUrl).pathname
@@ -193,7 +204,7 @@ export const patrol = async () => {
     const key = createHash('sha256').update(item.issues.map(i => i.what).join('|')).digest('base64url').slice(0, 24)
 
     let disc = findDiscussion(discussions, path)
-    if (disc && hasMarker(disc, 'patrol', key)) { continue }
+    if (disc && hasMarker(disc, 'patrol', key)) { alreadyReported++; continue }
 
     const shown = item.issues.slice(0, 8)
     const list = shown.map(i => `- ${i.what}`).join('\n')
@@ -221,6 +232,7 @@ export const patrol = async () => {
           console.log(`  ${path} 还没有讨论区，且建不出来（${String(e.message).slice(0, 80)}）`)
           console.log('     这篇的问题会出现在每晚日报的健康检查里，不会漏掉：')
           shown.forEach(i => console.log(`       - ${i.what}`))
+          failed++
           continue
         }
       }
@@ -229,13 +241,12 @@ export const patrol = async () => {
       toldAbout.push(item.title)
       console.log(`  已在 ${path} 留言`)
     } catch (e) {
+      failed++
       console.log(`  在 ${path} 留言失败：${e.message}`)
     }
   }
-  note('patrol', reported
-    ? `巡逻了 ${pages.length} 篇，在 ${toldAbout.slice(0, 3).map(t => `《${t}》`).join('、')}${toldAbout.length > 3 ? ` 等 ${toldAbout.length} 篇` : ''} 留言提醒了坏掉的链接或图片`
-    : `巡逻了 ${pages.length} 篇，${broken.length ? '有问题的之前都提醒过了，这次没有新的要说' : '一切正常，没什么要说的'}`)
-  return { checked: pages.length, reported }
+  note('patrol', patrolSummary({ checked: pages.length, reported, alreadyReported, failed, broken: broken.length, titles: toldAbout }))
+  return { checked: pages.length, reported, alreadyReported, failed }
 }
 
 // ---------------- 贴表情 ----------------

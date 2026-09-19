@@ -129,8 +129,86 @@ html.noimpty-home-hub #page-header #scroll-down .scroll-down-effects { color: va
   animation: sakura-fall var(--petal-duration) var(--petal-delay) linear infinite;
   animation-play-state: paused;
 }
+/* Small, slow accents share the existing scene lifecycle. Only opacity and transform animate. */
+.sakura-romance {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.sakura-glow,
+.sakura-heart {
+  position: absolute;
+  left: var(--romance-x);
+  top: var(--romance-y);
+  opacity: 0;
+}
+.sakura-glow {
+  width: var(--glow-size);
+  height: var(--glow-size);
+  border-radius: 50%;
+  color: #fff7fa;
+  background: currentColor;
+  box-shadow: 0 0 9px 2px var(--sakura-soft);
+  animation: sakura-firefly var(--romance-duration) var(--romance-delay) ease-in-out infinite;
+  animation-play-state: paused;
+}
+.sakura-glow:nth-child(even) { color: var(--sakura-soft); }
+.sakura-heart {
+  color: var(--sakura-soft);
+  font: 24px / 1 Georgia, serif;
+  text-shadow: 0 0 12px rgba(255, 145, 168, .3);
+  animation: sakura-heart-drift var(--romance-duration) var(--romance-delay) ease-in-out infinite;
+  animation-play-state: paused;
+}
+.sakura-heart--2 { font-size: 19px; }
+.sakura-heart--3 { font-size: 15px; }
+.sakura-shooting-star {
+  position: absolute;
+  top: 12%;
+  right: 7%;
+  width: 130px;
+  height: 1px;
+  opacity: 0;
+  background: linear-gradient(90deg, #fff7fa, rgba(255, 145, 168, .5) 25%, transparent);
+  transform-origin: left center;
+  animation: sakura-wish 22s -19s linear infinite;
+  animation-play-state: paused;
+}
+.sakura-shooting-star::before {
+  position: absolute;
+  content: '';
+  left: 0;
+  top: -1px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #fff7fa;
+  box-shadow: 0 0 8px var(--sakura-soft);
+}
 html[data-sakura-ambient] .sakura-petal,
-html[data-sakura-ambient] .sakura-scene__art { animation-play-state: running; }
+html[data-sakura-ambient] .sakura-scene__art,
+html[data-sakura-ambient] .sakura-glow,
+html[data-sakura-ambient] .sakura-heart,
+html[data-sakura-ambient] .sakura-shooting-star { animation-play-state: running; }
+@keyframes sakura-firefly {
+  0%, 100% { opacity: .12; transform: translate3d(0, 0, 0) scale(.75); }
+  45% { opacity: .65; transform: translate3d(12px, -18px, 0) scale(1.1); }
+  75% { opacity: .25; transform: translate3d(-5px, -8px, 0) scale(.85); }
+}
+@keyframes sakura-heart-drift {
+  0%, 100% { opacity: 0; transform: translate3d(0, 12px, 0) rotate(-12deg) scale(.85); }
+  24% { opacity: .5; }
+  70% { opacity: .3; }
+  90% { opacity: 0; transform: translate3d(16px, -42px, 0) rotate(10deg) scale(1); }
+}
+@keyframes sakura-wish {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) rotate(-35deg); }
+  3% { opacity: .65; }
+  13% { opacity: 0; transform: translate3d(-210px, 147px, 0) rotate(-35deg); }
+  100% { opacity: 0; transform: translate3d(-210px, 147px, 0) rotate(-35deg); }
+}
+
 @keyframes sakura-breathe { from { transform: scale(1); } to { transform: scale(1.045) translateY(-.5%); } }
 @keyframes sakura-fall {
   0% { transform: translate3d(-25px, -20px, 0) rotate(0deg); opacity: 0; }
@@ -198,6 +276,11 @@ html.noimpty-home-hub #content-inner.layout { padding-top: 52px; padding-bottom:
   .sakura-hero-actions { justify-content: center; margin-top: 22px; gap: 12px; }
   .sakura-enter { min-height: 44px; padding: 0 20px; border-radius: 16px; font-size: 13px; }
   .sakura-petal:nth-of-type(n+7) { display: none; }
+  .sakura-romance { bottom: 38%; }
+  .sakura-glow:nth-child(n+6), .sakura-heart--3 { display: none; }
+  .sakura-heart { font-size: 18px; }
+  .sakura-shooting-star { width: 85px; right: 4%; }
+
   #nav { padding-inline: 20px; }
   #nav .site-name { font-size: 17px; }
   html.noimpty-home-hub #content-inner.layout { padding-top: 28px; padding-bottom: 32px; }
@@ -214,6 +297,9 @@ html.noimpty-home-hub #content-inner.layout { padding-top: 52px; padding-bottom:
 @media (prefers-reduced-motion: reduce) {
   .sakura-scene__art, .sakura-petal { animation: none !important; }
   .sakura-petal { display: none; }
+  .sakura-romance { display: none; }
+  .sakura-glow, .sakura-heart, .sakura-shooting-star { animation: none !important; }
+
   .sakura-enter, .noimpty-section-card, .noimpty-section-card__image { transition: none; }
 }
 
@@ -221,3 +307,5 @@ html.noimpty-home-hub #content-inner.layout { padding-top: 52px; padding-bottom:
 html.noimpty-private-locked #body-wrap,
 html.noimpty-private-locked #sidebar,
 html.noimpty-private-locked #rightside { visibility: hidden !important; }
+
+html.noimpty-private-locked .sakura-romance { display: none; }

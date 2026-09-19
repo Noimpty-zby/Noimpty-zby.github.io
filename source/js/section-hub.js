@@ -19,6 +19,9 @@
     return path.replace(/\/{2,}/g, '/')
   }
 
+  // Set the scene before the body paints; PJAX updates it again below.
+  document.documentElement.classList.toggle('noimpty-home-hub', normalizePath(window.location.pathname) === '/')
+
   /* 卡片上**只有一个英文单词**，没有任何介绍文字。
    *
    * 这是有意的：首页是全站唯一不上锁的页面，它的每一个字都是对外公开的。
@@ -47,26 +50,63 @@
       </span>
     </a>`
 
+  // Decorative elements never include private titles or change the gateways.
+  const renderHero = () => {
+    const header = document.getElementById('page-header')
+    const info = document.getElementById('site-info')
+    if (!header || !info || info.querySelector('.sakura-greeting')) return
+    const title = document.getElementById('site-title')
+    if (title && title.textContent.trim() === 'Noimpty 的个人空间') {
+      title.innerHTML = '<span class="sakura-title-name">Noimpty<span aria-hidden="true"> ♡</span></span><span class="sakura-title-cn">的个人空间</span>'
+    }
+    const greeting = document.createElement('p')
+    greeting.className = 'sakura-greeting'
+    greeting.innerHTML = '<span aria-hidden="true">✿</span> 很高兴在这里遇见你'
+    info.prepend(greeting)
+    if (!document.getElementById('site-subtitle')) {
+      const subtitle = document.createElement('p')
+      subtitle.id = 'site-subtitle'
+      subtitle.textContent = '把问题写清楚，也把生活慢慢记下'
+      info.appendChild(subtitle)
+    }
+    const actions = document.createElement('div')
+    actions.className = 'sakura-hero-actions'
+    actions.innerHTML = '<a class="sakura-enter" href="#private-sections">翻开我的小世界 <span aria-hidden="true">↓</span></a>'
+    const social = document.getElementById('site_social_icons')
+    if (social) actions.appendChild(social)
+    info.appendChild(actions)
+    const scene = document.createElement('div')
+    scene.className = 'sakura-scene'
+    scene.setAttribute('aria-hidden', 'true')
+    scene.innerHTML = '<div class="sakura-scene__art"></div>' + Array.from({ length: 10 }, (_, i) =>
+      `<span class="sakura-petal" style="--petal-x:${6 + i * 10}%;--petal-delay:-${i * 2.7}s;--petal-duration:${15 + i % 4 * 3}s;--petal-size:${8 + i % 3 * 3}px"></span>`
+    ).join('')
+    header.appendChild(scene)
+  }
+
   const renderHub = () => {
     const isHome = normalizePath(window.location.pathname) === '/'
     document.documentElement.classList.toggle('noimpty-home-hub', isHome)
     if (!isHome) return
+    renderHero()
 
     const host = document.getElementById('recent-posts') || document.querySelector('#content-inner')
     if (!host || host.querySelector('.noimpty-home-sections')) return
 
     const hub = document.createElement('section')
     hub.className = 'noimpty-home-sections'
+    hub.id = 'private-sections'
     hub.setAttribute('aria-label', '博客内容分区')
     hub.innerHTML = `
       <header class="noimpty-home-sections__intro">
-        <p class="noimpty-home-sections__eyebrow">Private</p>
+        <p class="noimpty-home-sections__eyebrow">藏在这里的小日常</p>
         <h2>这里是私人记录</h2>
         <p>三块内容都在锁后面。不是给人看的，只是需要一个放东西的地方。</p>
       </header>
       ${CARDS.map(card).join('')}`
 
     host.prepend(hub)
+    window.dispatchEvent(new Event('noimpty:hub-ready'))
   }
 
   if (document.readyState === 'loading') {

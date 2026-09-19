@@ -458,29 +458,226 @@ await check('无基准的离线草稿在恢复联网后只增加任务，不删�
   assert.equal(b.api.dirty(), true)
 })
 
-await check('目录滚动使用可视位置，嵌套定位容器不会把目录滚到错误位置', async () => {
-  const article = new Element(), toc = new Element(), link = new Element()
-  let scroll, scheduled
-  article.querySelectorAll = selector => selector === 'img' ? [] : [{ id: 'heading', getBoundingClientRect: () => ({ top: 0 }) }]
-  toc.querySelectorAll = selector => selector === '.toc-link' || selector === '.toc-link.active' ? [link] : []
-  toc.getBoundingClientRect = () => ({ top: 100, bottom: 300 })
-  toc.scrollTop = 100
-  toc.clientHeight = 200
-  toc.scrollTo = value => { scroll = value.top }
-  link.getAttribute = () => '#heading'
-  link.getBoundingClientRect = () => ({ top: 400, bottom: 420 })
-  link.offsetTop = 5 // relative to a nested positioned ancestor, not the TOC
-  const win = {
-    innerHeight: 900, addEventListener: noop, removeEventListener: noop,
-    requestAnimationFrame: fn => { scheduled = fn; return 1 }, cancelAnimationFrame: noop,
-    clearTimeout: noop, setTimeout: () => 0
+const bootToc = ({ reduce = false, withScrollTo = true } = {}) => {
+  const frames = new Map(), timers = new Map(), observers = [], scrolls = []
+  let sequence = 0
+  const events = () => {
+    const handlers = new Map()
+    return {
+      handlers,
+      addEventListener(type, fn) { if (!handlers.has(type)) handlers.set(type, new Set()); handlers.get(type).add(fn) },
+      removeEventListener(type, fn) { handlers.get(type)?.delete(fn) },
+      emit(type) { for (const fn of [...handlers.get(type) || []]) fn() },
+      count(type) { return handlers.get(type)?.size || 0 }
+    }
   }
-  vm.runInNewContext(source('toc-sync'), {
-    window: win,
-    document: { readyState: 'complete', getElementById: () => article, querySelector: () => toc }
+  const motion = Object.assign(events(), { matches: reduce })
+  const win = Object.assign(events(), {
+    innerHeight: 900,
+    matchMedia: () => motion,
+    requestAnimationFrame: fn => { const id = ++sequence; frames.set(id, fn); return id },
+    cancelAnimationFrame: id => frames.delete(id),
+    setTimeout: (fn, delay) => { const id = ++sequence; timers.set(id, { fn, delay }); return id },
+    clearTimeout: id => timers.delete(id)
   })
-  scheduled()
-  assert.equal(scroll, 316)
+  const page = () => {
+    const article = new Element(), toc = new Element(), image = new Element()
+    const headings = [0, 500].map((top, index) => ({ id: `标题-${index}`, top, getBoundingClientRect() { return { top: this.top } } }))
+    const parents = headings.map(() => Object.assign(new Element('li'), { parentElement: toc, matches: selector => selector === 'li' }))
+    const links = headings.map((heading, index) => {
+      const link = new Element('a')
+      link.parentElement = parents[index]
+      link.getAttribute = () => '#' + encodeURIComponent(heading.id)
+      link.contentTop = 400 + index * 80
+      link.getBoundingClientRect = () => ({ top: 100 + link.contentTop - toc.scrollTop, bottom: 120 + link.contentTop - toc.scrollTop })
+      link.offsetTop = 5 // relative to a positioned nested ancestor, not the TOC
+      return link
+    })
+    article.querySelectorAll = selector => selector === 'img' ? [image] : headings
+    toc.querySelectorAll = selector => selector === '.toc-link' ? links
+      : (selector === '.toc-link.active' ? links : [...links, ...parents]).filter(node => node.classes.has('active'))
+    toc.getBoundingClientRect = () => ({ top: 100, bottom: 300 })
+    toc.scrollTop = 100
+    toc.clientHeight = 200
+    toc.scrollHeight = 1000
+    if (withScrollTo) toc.scrollTo = value => scrolls.push({ ...value })
+    return { article, toc, links, headings, image, parents }
+  }
+  let current = page()
+  const document = Object.assign(events(), {
+    readyState: 'complete',
+    getElementById: () => current?.article,
+    querySelector: () => current?.toc
+  })
+  const ctx = vm.createContext({ window: win, document, ResizeObserver: class {
+    constructor(fn) { this.fn = fn; this.disconnected = false; observers.push(this) }
+    observe() {}
+    disconnect() { this.disconnected = true }
+  } })
+  const execute = () => vm.runInContext(source('toc-sync'), ctx)
+  execute()
+  return {
+    win, motion, frames, timers, observers, scrolls, execute,
+    get page() { return current },
+    nextPage() { current = page(); return current },
+    noArticle() { current = null },
+    frame() { const callbacks = [...frames.values()]; frames.clear(); callbacks.forEach(fn => fn()) },
+    timer(delay) { const callbacks = [...timers].filter(([, item]) => item.delay === delay); callbacks.forEach(([id, item]) => { timers.delete(id); item.fn() }) }
+  }
+}
+
+await check('目录使用可视位置，原生平滑滚动途中不会被同一目标反复重启', async () => {
+  const b = bootToc()
+  b.frame()
+  assert.equal(b.scrolls[0].top, 316)
+  assert.equal(b.scrolls[0].behavior, 'smooth')
+  for (const position of [105, 125, 150, 170]) {
+    b.page.toc.scrollTop = position
+    for (let i = 0; i < 8; i++) b.win.emit('scroll')
+    assert.equal(b.frames.size, 1)
+    b.frame()
+  }
+  b.timer(140); b.frame()
+  assert.equal(b.scrolls.length, 1, 'the stable destination must not restart the browser animation')
+  assert.equal(b.page.links[0].classes.has('active'), true)
+  assert.equal(b.page.parents[0].classes.has('active'), true)
+})
+
+await check('目录目标变化仍高亮并滚动，主题延迟改写后恢复正确目录', async () => {
+  const b = bootToc()
+  b.frame()
+  b.page.headings[1].top = 30
+  b.win.emit('scroll'); b.frame()
+  assert.equal(b.scrolls.length, 2)
+  assert.equal(b.scrolls[1].top, 396)
+  assert.equal(b.page.links[1].classes.has('active'), true)
+  assert.equal(b.page.parents[1].classes.has('active'), true)
+  assert.equal(b.page.links[0].classes.has('active'), false)
+  // Simulate Butterfly's asynchronous IntersectionObserver selecting an older heading.
+  b.page.links[1].classes.delete('active')
+  b.page.links[0].classes.add('active')
+  b.timer(140); b.frame()
+  assert.equal(b.page.links[1].classes.has('active'), true)
+  assert.equal(b.page.links[0].classes.has('active'), false)
+  assert.equal(b.scrolls.length, 2)
+  b.page.headings.forEach(heading => { heading.top = 500 })
+  b.win.emit('scroll'); b.frame()
+  assert.equal(b.page.toc.querySelectorAll('.active').length, 0)
+})
+
+await check('手机点击目录停在约 70px 时高亮目标章节，不停留在上一节', async () => {
+  const b = bootToc()
+  b.win.innerHeight = 844
+  b.frame()
+  assert.equal(b.page.links[0].classes.has('active'), true)
+  // Actual final heading position from the 390 x 844 mobile browser.
+  b.page.headings[1].top = 69.927
+  b.win.emit('scroll'); b.frame()
+  b.timer(140); b.frame()
+  assert.equal(b.page.links[1].classes.has('active'), true)
+  assert.equal(b.page.parents[1].classes.has('active'), true)
+  assert.equal(b.page.links[0].classes.has('active'), false)
+})
+
+await check('减少动态效果使用即时目录滚动，动态改动偏好会终止正在进行的滚动', async () => {
+  const b = bootToc({ reduce: true })
+  b.frame()
+  assert.equal(b.scrolls[0].behavior, 'instant')
+  const c = bootToc()
+  c.frame()
+  c.page.toc.scrollTop = 250 // the active link is already in view while the trip is unfinished
+  c.motion.matches = true
+  c.motion.emit('change'); c.frame()
+  assert.equal(c.scrolls.length, 2)
+  assert.deepEqual(c.scrolls[1], { top: 250, behavior: 'instant' })
+  const d = bootToc({ withScrollTo: false })
+  d.frame()
+  assert.equal(d.page.toc.scrollTop, 316)
+})
+
+await check('PJAX 开始即清理旧目录，重复完成和过期回调不会恢复旧监听', async () => {
+  const b = bootToc()
+  const old = b.page
+  const oldFrame = [...b.frames.values()][0]
+  b.win.emit('scroll')
+  b.win.emit('pjax:send')
+  assert.equal(b.win.count('scroll'), 0)
+  assert.equal(b.frames.size, 0)
+  assert.equal(b.timers.size, 1, 'only the coalesced refresh of the current article remains')
+  assert.equal([...b.timers.values()][0].delay, 0)
+  assert.equal(old.image.events.has('load'), false)
+  assert.equal(b.motion.count('change'), 0)
+  assert.equal(b.observers[0].disconnected, true)
+  oldFrame(); b.observers[0].fn()
+  assert.equal(b.scrolls.length, 0)
+  assert.equal(b.frames.size, 0)
+  b.nextPage()
+  b.win.emit('pjax:complete')
+  const staleInitialize = [...b.timers.values()][0].fn
+  b.win.emit('pjax:complete')
+  assert.equal(b.timers.size, 1)
+  b.win.emit('pjax:send')
+  staleInitialize()
+  assert.equal(b.frames.size, 0)
+  assert.equal(b.win.count('scroll'), 0)
+  b.win.emit('pjax:complete'); b.timer(0); b.frame()
+  assert.equal(b.win.count('scroll'), 1)
+  assert.equal(b.observers.length, 2)
+  assert.equal(b.page.links[0].classes.has('active'), true)
+  assert.equal(old.links[0].classes.has('active'), false)
+  b.win.emit('pjax:send'); b.noArticle()
+  b.win.emit('pjax:complete'); b.timer(0)
+  assert.equal(b.win.count('scroll'), 0)
+})
+
+await check('PJAX 失败、取消或没有终止事件时仍恢复当前文章，迟到完成可安全换页', async () => {
+  for (const ending of [null, 'pjax:error', 'pjax:abort', 'pjax:cancel']) {
+    const b = bootToc()
+    b.frame()
+    const oldPage = b.page
+    const oldObserver = b.observers[0]
+    b.win.emit('pjax:send')
+    if (ending) b.win.emit(ending)
+    // A canceled request is allowed to have no complete event at all.
+    b.timer(0); b.frame()
+    assert.equal(b.win.count('scroll'), 1, String(ending))
+    assert.equal(b.motion.count('change'), 1)
+    assert.equal(b.observers.length, 2)
+    assert.equal(oldObserver.disconnected, true)
+    oldPage.headings[1].top = 30
+    b.win.emit('scroll'); b.frame()
+    assert.equal(oldPage.links[1].classes.has('active'), true, String(ending))
+    assert.equal(oldPage.links[0].classes.has('active'), false)
+    oldObserver.fn()
+    assert.equal(b.frames.size, 0, 'an observer from before send must remain disposed')
+
+    const resumedObserver = b.observers[1]
+    b.nextPage()
+    b.win.emit('pjax:complete'); b.timer(0); b.frame()
+    assert.equal(resumedObserver.disconnected, true)
+    assert.equal(b.win.count('scroll'), 1)
+    assert.equal(b.observers.length, 3)
+    assert.equal(b.page.links[0].classes.has('active'), true)
+    resumedObserver.fn()
+    assert.equal(b.frames.size, 0)
+  }
+})
+
+await check('晚加载布局可重新定位目录，隐藏移动目录不滚动，脚本重复执行不叠监听', async () => {
+  const b = bootToc()
+  b.frame()
+  b.page.links[0].contentTop += 40
+  b.page.image.emit('load'); b.frame()
+  assert.equal(b.scrolls[1].top, 356)
+  b.execute()
+  assert.equal(b.win.count('scroll'), 1)
+  assert.equal(b.win.count('pjax:send'), 1)
+  assert.equal(b.win.count('pjax:complete'), 1)
+  b.page.toc.getBoundingClientRect = () => ({ top: 300, bottom: 300 })
+  b.page.headings[1].top = 30
+  b.win.emit('scroll'); b.frame()
+  assert.equal(b.scrolls.length, 2)
+  assert.equal(b.page.links[1].classes.has('active'), true)
 })
 
 console.log('\n' + passed + ' frontend regression cases passed')

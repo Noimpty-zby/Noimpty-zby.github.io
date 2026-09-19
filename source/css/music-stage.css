@@ -1,0 +1,107 @@
+/* A tiny headphone stage. The bars move only when real audio is measured. */
+#noimpty-music-player .noimpty-music-stage {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  overflow: visible;
+  border-radius: 19px;
+  background: linear-gradient(145deg, var(--sc-paper), var(--sc-blush));
+  box-shadow: inset 0 1px 0 var(--sc-edge), 0 5px 14px rgba(161, 72, 106, .09);
+  animation: none;
+}
+#noimpty-music-player.is-playing .noimpty-music-stage { animation: none; }
+#noimpty-music-player .noimpty-music-stage::before {
+  position: absolute;
+  content: '';
+  top: 7px;
+  left: 7px;
+  width: 34px;
+  height: 24px;
+  border: 2px solid var(--sc-rose);
+  border-bottom: 0;
+  border-radius: 24px 24px 0 0;
+  opacity: .75;
+  pointer-events: none;
+}
+#noimpty-music-player .noimpty-music-stage::after {
+  z-index: 2;
+  font-size: 9px;
+  box-shadow: 0 2px 5px rgba(132, 53, 83, .12);
+}
+.noimpty-music-stage__bars {
+  position: absolute;
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  inset: 14px 9px 12px;
+  pointer-events: none;
+}
+.noimpty-music-stage__bar {
+  display: block;
+  flex: 1 1 0;
+  min-width: 1px;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--sc-rose);
+  opacity: .82;
+  transform: scaleY(var(--level, .12));
+  transform-origin: center bottom;
+  transition: transform .075s linear;
+}
+.noimpty-music-stage__bar:nth-child(3n) { background: var(--sakura-soft, #ef9fbb); }
+.noimpty-music-stage__bars::before,
+.noimpty-music-stage__bars::after {
+  position: absolute;
+  content: '';
+  bottom: 0;
+  width: 5px;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--sc-rose);
+}
+.noimpty-music-stage__bars::before { left: -5px; }
+.noimpty-music-stage__bars::after { right: -5px; }
+.noimpty-music-stage__note {
+  position: absolute;
+  z-index: 1;
+  color: var(--sc-rose);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1;
+  pointer-events: none;
+}
+.noimpty-music-stage__note--one { top: -3px; left: -4px; transform: rotate(-14deg); }
+.noimpty-music-stage__note--two { top: 1px; right: -5px; color: var(--sakura-accent); transform: rotate(15deg); font-size: 12px; }
+#noimpty-music-player[data-stage-running] .noimpty-music-stage__note--one {
+  animation: music-note-hop 2.4s ease-in-out infinite;
+}
+#noimpty-music-player[data-stage-running] .noimpty-music-stage__note--two {
+  animation: music-note-hop 2.8s -.8s ease-in-out infinite reverse;
+}
+#noimpty-music-player .noimpty-music-launcher::after {
+  position: absolute;
+  content: '♡';
+  top: 5px;
+  right: 7px;
+  color: var(--sc-rose);
+  font-size: 12px;
+  line-height: 1;
+  transform: rotate(12deg);
+  pointer-events: none;
+}
+/* The collapsed player is quiet; opening it reveals the live little stage. */
+#noimpty-music-player.is-playing.is-collapsed .noimpty-music-launcher i { animation: none; }
+#noimpty-music-player .noimpty-music-kicker { font-size: 10px; letter-spacing: .05em; }
+#noimpty-music-player .noimpty-music-title { transform-origin: left center; }
+#noimpty-music-player .noimpty-music-collapse { background: var(--sc-blush); }
+@keyframes music-note-hop {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-12deg); opacity: .8; }
+  50% { transform: translate3d(2px, -5px, 0) rotate(10deg); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #noimpty-music-player .noimpty-music-stage *,
+  #noimpty-music-player .noimpty-music-launcher::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process'
 import { ask } from '../daily-report/narrate.mjs'
 import { triggerDeploy } from './github.mjs'
 import { pushWithRetry, useNanalyIdentity } from './git.mjs'
-import { postPath } from './permalink.mjs'
+import { postPath, wallClockMs } from './permalink.mjs'
 import { note, digest } from './journal.mjs'
 
 const DATA = 'source/_data/nanaly-notes.json'
@@ -36,7 +36,14 @@ const hashOf = s => createHash('sha256').update(s).digest('hex').slice(0, 16)
 const bodyOf = raw => String(raw).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/, '')
 
 const readStore = () => {
-  try { return JSON.parse(readFileSync(DATA, 'utf8')) } catch (_) { return {} }
+  try {
+    const value = JSON.parse(readFileSync(DATA, 'utf8'))
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('批注表必须是对象')
+    return value
+  } catch (error) {
+    if (error.code === 'ENOENT') return {}
+    throw new Error('无法读取现有批注表，停止生成以免覆盖：' + error.message)
+  }
 }
 
 // 从 md 里切出正文段落（跳过代码块、公式块、front-matter、引用、标题、列表）
@@ -90,7 +97,7 @@ export const pathOf = (file, raw) => postPath(file, raw)
  *
  * 这两件事必须在同一个循环里、按这个顺序算出来，原因见下面 live.add 那一行。
  */
-export const planNotes = (files, store) => {
+export const planNotes = (files, store, now = Date.now()) => {
   const live = new Set()
   const todo = []
   let unresolved = 0
@@ -105,6 +112,12 @@ export const planNotes = (files, store) => {
      * 要是把它提到 live.add 前面，全站上锁之后每篇文章都带 privacy: protected，
      * live 就成了空集，接着 pruneOrphans 会把整张批注表当成孤儿清掉。 */
     live.add(p)
+    // Keep existing anchors, but do not send unpublished drafts/future posts to
+    // the model. Hexo omits these pages while future: false is configured.
+    if (/^[_.]/.test(String(file).split('/').pop())) continue
+    const date = (String(raw).match(/^date:\s*(.+)$/m) || [])[1]
+    const publishedAt = wallClockMs(date)
+    if (publishedAt == null || publishedAt > now) continue
 
     /* 这里曾经有一行 `if (privacy: protected) continue`。
      *
@@ -165,6 +178,20 @@ ${recent}` : ''}
 正文段落：
 ${listed}`
 
+// Treat model output as untrusted data, including its JSON shape and indices.
+export const parseNotes = (value, paragraphs) => {
+  if (!Array.isArray(value?.notes)) return []
+  const seen = new Set()
+  return value.notes.flatMap(item => {
+    if (!item || !Number.isInteger(item.i) || item.i < 0 || item.i >= Math.min(40, paragraphs.length)
+        || typeof item.text !== 'string' || !item.text.trim()) return []
+    const anchor = anchorOf(paragraphs[item.i])
+    if (anchor.length < 6 || seen.has(anchor)) return []
+    seen.add(anchor)
+    return [{ anchor, text: [...item.text.trim()].slice(0, 60).join('') }]
+  }).slice(0, 3)
+}
+
 export const buildNotes = async () => {
   const store = readStore()
   const files = readdirSync(POSTS)
@@ -188,7 +215,7 @@ export const buildNotes = async () => {
     }
   }
 
-  const batch = todo.slice(0, MAX_POSTS_PER_RUN)
+  const batch = todo.filter(item => paragraphsOf(item.raw).length >= 3).slice(0, MAX_POSTS_PER_RUN)
   if (todo.length > batch.length) {
     console.log(`  单次最多处理 ${MAX_POSTS_PER_RUN} 篇，剩下 ${todo.length - batch.length} 篇下次再说`)
   }
@@ -215,10 +242,7 @@ export const buildNotes = async () => {
       continue
     }
 
-    const notes = (parsed.notes || [])
-      .filter(n => paras[n.i] && String(n.text || '').trim())
-      .map(n => ({ anchor: anchorOf(paras[n.i]), text: String(n.text).trim().slice(0, 120) }))
-      .filter(n => n.anchor.length >= 6)
+    const notes = parseNotes(parsed, paras)
 
     if (!notes.length) { console.log(`  ${title.trim()} 没产出有效批注`); continue }
 

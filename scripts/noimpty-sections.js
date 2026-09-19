@@ -28,10 +28,19 @@ const escapeHtml = value => String(value == null ? '' : value)
   .replace(/'/g, '&#39;')
 
 const withRoot = value => {
+  // A CDN URL already has its root. Collapsing its slashes turns https:// into
+  // a relative /https:/ path and breaks otherwise valid Hexo cover metadata.
+  if (/^(?:https?:)?\/\//i.test(String(value || ''))) return String(value)
   const root = hexo.config.root || '/'
   const base = root.endsWith('/') ? root : `${root}/`
   return `${base}${String(value || '').replace(/^\/+/, '')}`.replace(/\/{2,}/g, '/')
 }
+
+// HTML escaping alone does not escape the CSS string inside style="...":
+// the browser decodes &#39; back to a quote before parsing url('...').
+const cssString = value => String(value)
+  .replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+  .replace(/\r/g, '\\d ').replace(/\n/g, '\\a ')
 
 const normalizeWebPath = value => {
   let path = withRoot(value)
@@ -172,12 +181,12 @@ hexo.extend.tag.register('section_posts', args => {
   const cards = posts.map(post => {
     const title = escapeHtml(post.title || '未命名文章')
     const href = normalizeWebPath(post.path)
-    const cover = post.cover ? withRoot(post.cover) : '/img/cover-blue.svg'
+    const cover = withRoot(post.cover || '/img/cover-blue.svg')
     const date = post.date && typeof post.date.format === 'function' ? post.date.format('YYYY-MM-DD') : ''
     const description = escapeHtml(post.description || '')
 
     return `<article class="noimpty-post-card">
-      <a class="noimpty-post-card__cover" href="${escapeHtml(href)}" style="background-image:url('${escapeHtml(cover)}')" aria-label="阅读：${title}"></a>
+      <a class="noimpty-post-card__cover" href="${escapeHtml(href)}" style="background-image:url('${escapeHtml(cssString(cover))}')" aria-label="阅读：${title}"></a>
       <div class="noimpty-post-card__body">
         <div class="noimpty-post-card__meta"><time>${escapeHtml(date)}</time></div>
         <h3><a href="${escapeHtml(href)}">${title}</a></h3>

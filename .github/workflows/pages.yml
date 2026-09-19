@@ -47,7 +47,7 @@ jobs:
           # 没配这个 secret 的话构建照样成功，只是 search.xml 会被清空（站内搜索用不了）。
           # 改了暗号必须重新部署一次，否则旧密文解不开。
           NOIMPTY_PASSPHRASE: ${{ secrets.SITE_PASSPHRASE }}
-        run: npm run clean && npm run build
+        run: npm run build
 
       # 构建「成功」但页面是空的，这种事真发生过：
       # 给 Hexo 的 page 加了 layout: post，Butterfly 的模板去读 page.categories.data
@@ -111,6 +111,11 @@ jobs:
           #    摊成明文的话，不用打开任何页面，一个 GET 就知道这站上有什么。
           if [ -f public/nanaly-journal.json ] && ! grep -q '"alg":"AES-GCM"' public/nanaly-journal.json; then
             echo "::error::nanaly-journal.json 不是密文 —— 那等于把文章清单直接推出去"; fail=1
+          fi
+
+          # 日程也包含私密内容；缺暗号时不发布，存在时必须为加密信封。
+          if [ -f public/schedule/data.json ] && ! grep -q '"alg":"AES-GCM"' public/schedule/data.json; then
+            echo "::error::schedule/data.json 不是密文"; fail=1
           fi
 
           # 6. 首页是唯一对外的页面，上面不能出现任何文章链接

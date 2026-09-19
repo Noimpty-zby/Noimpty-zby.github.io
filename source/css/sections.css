@@ -768,7 +768,14 @@ html.noimpty-private-locked #rightside {
 .noimpty-plan li { margin: 5px 0; }
 .noimpty-plan b { color: var(--text-highlight-color); }
 
+@media (max-width: 900px) {
+  .noimpty-track-grid--seven {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 768px) {
+  .noimpty-track-grid--seven,
   .noimpty-track-grid--four,
   .noimpty-track-grid--two { grid-template-columns: minmax(0, 1fr); }
   .noimpty-course-meta { grid-template-columns: minmax(0, 1fr); padding: 15px 17px; }

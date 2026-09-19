@@ -38,15 +38,15 @@ const bjKey = (d = new Date()) => new Intl.DateTimeFormat('sv-SE', {
 const editedSince = since => {
   let out
   try {
-    out = execFileSync('git', ['log', `--since=${since}`, '--name-only',
-      '--pretty=format:@%ad', '--date=short', '--', POSTS_DIR], { encoding: 'utf8' })
+    out = execFileSync('git', ['log', `--since=${since}T00:00:00+08:00`, '--name-only', '-z',
+      '--pretty=format:%x00@%ct%x00', '--', POSTS_DIR], { encoding: 'utf8' })
   } catch (_) { return [] }
   const rows = []
   let day = ''
-  out.split('\n').forEach(line => {
-    const t = line.trim()
+  out.split('\0').forEach(line => {
+    const t = line.replace(/^\n+|\n+$/g, '')
     if (!t) return
-    if (t.startsWith('@')) { day = t.slice(1); return }
+    if (/^@\d+$/.test(t)) { day = bjKey(new Date(Number(t.slice(1)) * 1000)); return }
     if (t.endsWith('.md')) rows.push({ file: t, day })
   })
   return rows
@@ -86,7 +86,7 @@ const MATCHERS = {
   section: (cond, ctx, taskDay) => {
     const leaf = String(cond.match || '').trim()
     if (!leaf) return null
-    const hit = ctx.posts.find(p => p.leaf === leaf && p.day >= taskDay)
+    const hit = ctx.posts.find(p => p.leaf === leaf && p.day >= taskDay && !ctx.isHers(p))
     return hit ? `「${leaf}」多了一篇：《${hit.title}》（${hit.day}）` : null
   },
 
@@ -107,9 +107,10 @@ const MATCHERS = {
   //
   // 这一条没法像上面几条那样自愈：评论要从 GitHub 拉，而拉回来的是一个
   // 时间窗口内的。窗口外的评论这里看不见，所以它仍然依赖「那一班跑到了」。
-  reply: (cond, ctx) => {
+  reply: (cond, ctx, taskDay) => {
     const k = norm(cond.match)
-    const hit = ctx.ownerReplies.find(r => !k || norm(r.on).includes(k) || norm(r.title).includes(k))
+    const hit = ctx.ownerReplies.find(r => r.day >= taskDay
+      && (!k || norm(r.on).includes(k) || norm(r.title).includes(k)))
     return hit ? `你回了《${hit.title || hit.on}》下面的评论` : null
   }
 }
@@ -144,18 +145,21 @@ export const autoComplete = async ({ comments = { ok: false }, ownerLogin, dry =
 
   let data
   try { data = JSON.parse(readFileSync(FILE, 'utf8')) } catch (_) { return { changed: 0, done: [] } }
-  const days = data.days || {}
+  if (!data || typeof data !== 'object' || !data.days || Array.isArray(data.days)) return { changed: 0, done: [] }
+  const days = data.days
   const todayKey = bjKey()
 
   // 还开着、日期已到、而且挂了条件的任务 —— 只有这些需要判
   const pending = []
   const skippedFuture = new Set()
   Object.keys(days).forEach(dayKey => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return
     const list = days[dayKey]
     if (!Array.isArray(list)) return
     list.forEach(task => {
-      if (!task || task.done) return
-      if (!task.when || !task.when.type || !MATCHERS[task.when.type]) return
+      // 撤销过自动完成的任务保留 autoAt，尊重用户的手动选择。
+      if (!task || task.done || task.autoAt) return
+      if (!task.when || !task.when.type || !Object.hasOwn(MATCHERS, task.when.type)) return
       if (dayKey > todayKey) { skippedFuture.add(dayKey); return }
       pending.push({ dayKey, task })
     })
@@ -172,10 +176,12 @@ export const autoComplete = async ({ comments = { ok: false }, ownerLogin, dry =
   const titles = pathTitleMap(posts)
   const owner = String(ownerLogin || '').toLowerCase()
   const ownerReplies = []
-  if (comments && comments.ok) {
-    comments.items.forEach(c => {
-      if (String(c.who || '').toLowerCase() === owner) {
-        ownerReplies.push({ on: c.on, title: lookupTitle(titles, c.on) })
+  if (owner && comments && comments.ok && Array.isArray(comments.items)) {
+    comments.items.filter(Boolean).forEach(c => {
+      const at = typeof c.at === 'string' ? Date.parse(c.at) : NaN
+      // 没有可靠时间就无法证明发生在任务当天之后；未来时间同样不能当成成果。
+      if (String(c.who || '').toLowerCase() === owner && Number.isFinite(at) && at <= Date.now()) {
+        ownerReplies.push({ on: c.on, title: lookupTitle(titles, c.on), day: bjKey(new Date(at)) })
       }
     })
   }

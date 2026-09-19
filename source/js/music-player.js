@@ -16,7 +16,10 @@
 
   const storageKey = 'noimpty-music-player-v1'
   const readState = () => {
-    try { return JSON.parse(window.localStorage.getItem(storageKey) || '{}') } catch (_) { return {} }
+    try {
+      const value = JSON.parse(window.localStorage.getItem(storageKey) || '{}')
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+    } catch (_) { return {} }
   }
 
   const saved = readState()
@@ -34,6 +37,7 @@
   let history = [currentIndex]
   let historyCursor = 0
   let lastPersistAt = 0
+  let playbackRequest = 0
 
   const player = document.createElement('aside')
   player.id = 'noimpty-music-player'
@@ -116,11 +120,11 @@
     try {
       window.localStorage.setItem(storageKey, JSON.stringify({
         index: currentIndex,
-        currentTime: Number.isFinite(audio.currentTime) ? audio.currentTime : 0,
+        currentTime: pendingTime || (Number.isFinite(audio.currentTime) ? audio.currentTime : 0),
         volume: audio.volume,
         shuffle: shuffleEnabled,
         collapsed,
-        playing: !audio.paused && !audio.ended
+        playing: resumeRequested || (!audio.paused && !audio.ended)
       }))
     } catch (_) {}
   }
@@ -171,10 +175,15 @@
   }
 
   const tryPlay = async () => {
+    const request = ++playbackRequest
+    resumeRequested = true
     try {
       await audio.play()
+      if (request !== playbackRequest) return
+      resumeRequested = false
       setStatus(`${shuffleEnabled ? '随机播放' : '顺序播放'} · ${currentIndex + 1}/${tracks.length}`)
     } catch (_) {
+      if (request !== playbackRequest) return
       resumeRequested = false
       setStatus('点击播放键开始播放')
     }
@@ -184,6 +193,7 @@
 
   const loadTrack = (index, options = {}) => {
     const { autoplay = false, recordHistory = true, restoreTime = 0 } = options
+    playbackRequest++
     currentIndex = (index + tracks.length) % tracks.length
     pendingTime = Math.max(0, Number(restoreTime) || 0)
     resumeRequested = autoplay
@@ -208,7 +218,7 @@
     // 注意：一曲自然播完时，audio.paused 已经变成 true 了。
     // 所以不能只靠它判断「刚才是不是在放」—— 那样自动续播永远是 false，
     // 表现就是「切到了下一首但不响」。ended 触发时必须显式要求继续播。
-    const autoplay = opts.forcePlay === true || !audio.paused
+    const autoplay = opts.forcePlay === true || resumeRequested || !audio.paused
     if (historyCursor < history.length - 1) {
       historyCursor += 1
       loadTrack(history[historyCursor], { autoplay, recordHistory: false })
@@ -220,7 +230,7 @@
   }
 
   const previousTrack = (opts = {}) => {
-    const autoplay = opts.forcePlay === true || !audio.paused
+    const autoplay = opts.forcePlay === true || resumeRequested || !audio.paused
     if (historyCursor > 0) {
       historyCursor -= 1
       loadTrack(history[historyCursor], { autoplay, recordHistory: false })
@@ -229,6 +239,14 @@
 
     const previousIndex = shuffleEnabled ? takeRandomIndex() : (currentIndex - 1 + tracks.length) % tracks.length
     loadTrack(previousIndex, { autoplay })
+  }
+
+  const pause = () => {
+    playbackRequest++
+    resumeRequested = false
+    audio.pause()
+    updatePlayState()
+    persist()
   }
 
   player.addEventListener('click', event => {
@@ -247,8 +265,8 @@
         persist()
         break
       case 'play':
-        if (audio.paused) tryPlay()
-        else audio.pause()
+        if (audio.paused && !resumeRequested) tryPlay()
+        else pause()
         break
       case 'previous':
         previousTrack()
@@ -318,7 +336,7 @@
   if ('mediaSession' in navigator) {
     const handlers = {
       play: tryPlay,
-      pause: () => audio.pause(),
+      pause,
       previoustrack: () => previousTrack(),
       nexttrack: () => nextTrack()
     }
@@ -335,7 +353,7 @@
     tracks,
     audio,
     play: tryPlay,
-    pause: () => audio.pause(),
+    pause,
     previous: () => previousTrack(),
     next: () => nextTrack()
   })

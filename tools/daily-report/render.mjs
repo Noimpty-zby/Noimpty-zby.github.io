@@ -36,7 +36,9 @@ const trafficCard = t => {
   // （_config.butterfly.yml 里的 NOIMPTY_GC_CODE 留空的话整个脚本直接返回）。
   // 把这两件事说成同一件，就是在拿一句自信的假话糊弄自己。
   if (!t.pageviews) {
-    return card('访问情况', empty(t.everRecorded
+    return card('访问情况', empty(t.everRecorded == null
+      ? '过去 24 小时没有访问记录，历史统计未取得，无法判断是否为首次记录。'
+      : t.everRecorded
       ? '过去 24 小时没有访问记录。（你自己的浏览已被排除，所以这代表确实没有别人来）'
       : '一条访问记录都没有 —— 连历史数据也没有，多半是前端埋点没装上：检查 _config.butterfly.yml 里的 NOIMPTY_GC_CODE 是不是还空着。'))
   }

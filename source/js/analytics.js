@@ -20,6 +20,8 @@
 (() => {
   'use strict'
 
+  if (window.NOIMPTY_ANALYTICS) return
+
   const CODE = String(window.NOIMPTY_GC_CODE || '').trim()
   if (!CODE) return
 
@@ -56,7 +58,7 @@
     if (isOwner()) {
       const now = Date.now()
       const last = Number(ls.get(BEAT_AT) || 0)
-      if (now - last < 3600 * 1000) return
+      if (Number.isFinite(last) && last <= now && now - last < 3600 * 1000) return
       ls.set(BEAT_AT, String(now))
       gc.count({ path: HEARTBEAT, title: '主人来过', event: true })
       return

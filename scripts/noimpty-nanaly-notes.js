@@ -62,6 +62,7 @@ hexo.extend.filter.register('after_post_render', data => {
 
   const entry = table[normalizePath(data.path)] || null
   if (!entry || !Array.isArray(entry.notes) || !entry.notes.length) return data
+  const notes = entry.notes.filter(n => n && typeof n.anchor === 'string' && typeof n.text === 'string')
 
   let html = String(data.content || '')
   if (!html) return data
@@ -70,19 +71,19 @@ hexo.extend.filter.register('after_post_render', data => {
   let inserted = 0
 
   html = html.replace(/<p(?:\s[^>]*)?>[\s\S]*?<\/p>/g, block => {
-    if (inserted >= entry.notes.length) return block
+    if (inserted >= notes.length) return block
     const text = stripTags(block)
     if (text.length < 12) return block
 
-    for (let i = 0; i < entry.notes.length; i++) {
+    for (let i = 0; i < notes.length; i++) {
       if (used.has(i)) continue
-      const anchor = stripTags(entry.notes[i].anchor || '')
+      const anchor = stripTags(notes[i].anchor || '')
       if (!anchor || anchor.length < 6) continue
       const head = anchor.slice(0, Math.min(anchor.length, 24))
       if (text.startsWith(head) || text.includes(anchor)) {
         used.add(i)
         inserted++
-        return block + renderNote(entry.notes[i].text)
+        return block + renderNote(notes[i].text)
       }
     }
     return block

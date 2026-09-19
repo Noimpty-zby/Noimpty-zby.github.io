@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       dry:
-        description: '只生成不发送（勾上就不会发邮件，报告会作为构建产物上传）'
+        description: '只生成不发送（私有仓库可下载报告产物）'
         type: boolean
         default: false
 
@@ -26,6 +26,7 @@ concurrency:
 jobs:
   report:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -39,8 +40,8 @@ jobs:
         with:
           node-version: 24
 
-      - name: 安装发信依赖
-        run: npm install nodemailer@9 --no-save --no-audit --no-fund
+      - name: 安装锁定的依赖
+        run: npm ci --no-audit --no-fund
 
       - name: 生成并发送日报
         env:
@@ -73,10 +74,9 @@ jobs:
             node tools/daily-report/run.mjs
           fi
 
-      # 只在失败时上传。这个仓库是公开的 —— Actions 的产物任何人都能下载，
-      # 而 report.html 里有访问量、来源、每一条日程，这些都不该公开。
-      - name: 上传报告备份（仅失败时，便于排查）
-        if: failure()
+      # 报告含私密日程。失败也不能把它作为公开仓库产物上传。
+      - name: 上传报告备份（仅私有仓库）
+        if: ${{ always() && github.event.repository.private && (failure() || inputs.dry) }}
         uses: actions/upload-artifact@v4
         with:
           name: report-${{ github.run_number }}

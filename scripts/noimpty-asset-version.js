@@ -21,10 +21,7 @@
  * 只管 source/ 下我们自己写的那些。主题的（/js/search/…）在 source/ 里找不到
  * 对应文件，原样放过 —— 它本来就带 ?v=5.7.0。
  *
- * ⚠️ /js/protected-manifest.js 也不带版本号，因为它是构建时生成的、没有源文件。
- * 已知代价：**换暗号之后**，抱着旧 manifest 的浏览器拿到的还是旧的 passHash，
- * 新暗号会开不了门，得硬刷新一次。换暗号本来就要重新部署，所以这条能接受；
- * 真要修的话得让 lockdown 把生成出来的内容哈希传过来。
+ * 构建生成的锁清单也用实际内容指纹，换暗号后不会误用旧清单。
  */
 
 const crypto = require('crypto')
@@ -33,8 +30,10 @@ const path = require('path')
 
 // 一次构建里同一个文件只读一次
 const cache = new Map()
+hexo.extend.filter.register('before_generate', () => cache.clear())
 
 const hashOf = rel => {
+  if (rel === 'js/protected-manifest.js') return hexo.__noimptyPrivacyVersion || ''
   if (cache.has(rel)) return cache.get(rel)
   let h = ''
   try {

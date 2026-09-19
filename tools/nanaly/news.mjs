@@ -254,7 +254,7 @@ const attachSources = (md, hits) => {
     const m = line.match(/^(\s*[-*+]\s*)[[［【]\s*(\d+)\s*[\]］】]\s*(.*)$/)
     if (!m) {
       // 非条目行（空行、她多写的一句话）保留，但不允许出现裸网址
-      out.push(line.replace(/https?:\/\/\S+/g, '').replace(/[（(]\s*来源\s*[）)]/g, ''))
+      out.push(sanitizeMd(line).replace(/https?:\/\/\S+/g, '').replace(/[（(]\s*来源\s*[）)]/g, ''))
       continue
     }
     // 她正文里若还是自己写了链接或网址，一律清掉，只留窝拼的这一个
@@ -270,7 +270,12 @@ const attachSources = (md, hits) => {
       .trim()
     if (!text) continue
 
-    const usable = h => h && /^https?:\/\//i.test(h.url)
+    const usable = h => {
+      try {
+        const u = new URL(h?.url)
+        return /^https?:$/.test(u.protocol) && !u.username && !u.password
+      } catch (_) { return false }
+    }
     let hit = usable(hits[Number(m[2])]) ? hits[Number(m[2])] : null
 
     // 编号本身就对不上（她编了一个超出范围的号）→ 直接丢，不留半截无源条目
@@ -306,7 +311,7 @@ const attachSources = (md, hits) => {
     // 域名写进链接文字：万一还有漏网的，一眼能看出不对劲
     let host = ''
     try { host = new URL(hit.url).hostname.replace(/^www\./, '') } catch (_) {}
-    out.push(`${m[1]}${text} [来源${host ? ' · ' + host : ''}](${encodeURI(hit.url)})`)
+    out.push(`${m[1]}${text} [来源${host ? ' · ' + host : ''}](${new URL(hit.url).href.replace(/[()]/g, c => c === '(' ? '%28' : '%29')})`)
     kept++
   }
 

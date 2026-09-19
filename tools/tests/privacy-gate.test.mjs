@@ -28,6 +28,7 @@ const check = (name, fn) => {
 const read = p => readFileSync(join(process.cwd(), p), 'utf8')
 const GATE = read('source/js/privacy-gate.js')
 const LOCKDOWN = read('scripts/noimpty-lockdown.js')
+const CRYPTO = read('tools/site-crypto.cjs')
 const SEARCH = read('source/js/noimpty-search.js')
 
 /* 切出「判哪些路径要锁」那一段：从读清单开始，到 unlocked() 为止。
@@ -161,7 +162,7 @@ check('★★ PBKDF2 的参数：lockdown（加密侧）和 noimpty-search（解
    * 就再也解不开了，而构建和测试全绿 —— 只有打开网站搜一下才会发现。 */
   const pick = (src, name) => (src.match(new RegExp(`const ${name} = ([^\\n]+)`)) || [])[1]
   ;['SALT', 'ITER'].forEach(k => {
-    const a = pick(LOCKDOWN, k)
+    const a = pick(CRYPTO, k)
     const b = pick(SEARCH, k)
     assert.ok(a && b, `找不到 ${k}`)
     assert.equal(a.trim(), b.trim(), `${k} 两边对不上：加密用 ${a}，解密用 ${b}`)

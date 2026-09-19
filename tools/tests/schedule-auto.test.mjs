@@ -197,7 +197,7 @@ await acheck('★ edit 条件能用中文标题匹配（文件名是英文 slug�
 await acheck('★ reply 条件能用中文标题匹配（giscus 标题是 url 路径）', async () => {
   writeSchedule({ [TODAY]: [T('a', '回一下读者提问', { type: 'reply', match: '抗锯齿' })] })
   const r = await run({
-    comments: { ok: true, items: [{ who: 'Noimpty-zby', on: '2026/08/01/rasterization-antialiasing/' }] }
+    comments: { ok: true, items: [{ who: 'Noimpty-zby', at: new Date().toISOString(), on: '2026/08/01/rasterization-antialiasing/' }] }
   })
   assert.equal(r.changed, 1, '中文关键词没能匹配到文章标题')
   assert.match(r.done[0].why, /光栅化与抗锯齿/)
@@ -205,7 +205,23 @@ await acheck('★ reply 条件能用中文标题匹配（giscus 标题是 url �
 
 await acheck('reply 留空 = 任意一条回复都算', async () => {
   writeSchedule({ [TODAY]: [T('a', '回评论', { type: 'reply', match: '' })] })
-  const r = await run({ comments: { ok: true, items: [{ who: 'Noimpty-zby', on: '2026/08/01/whatever/' }] } })
+  const r = await run({ comments: { ok: true, items: [{ who: 'Noimpty-zby', at: new Date().toISOString(), on: '2026/08/01/whatever/' }] } })
+  assert.equal(r.changed, 1)
+})
+
+await acheck('reply 只认任务日期当天或之后的有效回复时间', async () => {
+  for (const at of [undefined, 'invalid', `${YESTERDAY}T23:59:59+08:00`, `${TOMORROW}T00:00:00+08:00`]) {
+    writeSchedule({ [TODAY]: [T('a', '回评论', { type: 'reply', match: '' })] })
+    const r = await run({ comments: { ok: true, items: [{ who: 'Noimpty-zby', at, on: 'post/' }] } })
+    assert.equal(r.changed, 0, `不可靠或过早/未来的时间不应勾选：${at}`)
+  }
+})
+
+await acheck('reply 按北京时间跨零点，UTC 日期落在前一天仍可完成任务', async () => {
+  writeSchedule({ [YESTERDAY]: [T('a', '回评论', { type: 'reply', match: '' })] })
+  const at = new Date(Date.parse(`${YESTERDAY}T00:30:00+08:00`)).toISOString()
+  assert.notEqual(at.slice(0, 10), YESTERDAY)
+  const r = await run({ comments: { ok: true, items: [{ who: 'Noimpty-zby', at, on: 'post/' }] } })
   assert.equal(r.changed, 1)
 })
 

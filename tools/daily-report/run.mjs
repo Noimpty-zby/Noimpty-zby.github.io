@@ -12,6 +12,7 @@ import { runHealth, checkModel, worstOf } from './health.mjs'
 import { writeOpening, reviewPost, screenComments, writeMissYou, draftReplies, MODEL_STATE, tokenSummary } from './narrate.mjs'
 import { renderEmail, renderSubject, renderMissYou } from './render.mjs'
 import { autoComplete, commitSchedule } from './schedule-auto.mjs'
+import { postPath } from '../nanaly/permalink.mjs'
 
 const DRY = process.argv.includes('--dry')
 const QUIET = process.env.REPORT_ONLY_WHEN_NOTEWORTHY === 'true'
@@ -143,7 +144,8 @@ const sendMail = async (subject, html) => {
   if (!user || !pass) { console.log('没有配置 Gmail 凭据，跳过发送。'); return }
 
   const { createTransport } = await import('nodemailer')
-  const tx = createTransport({ service: 'gmail', auth: { user, pass } })
+  const tx = createTransport({ service: 'gmail', auth: { user, pass },
+    connectionTimeout: 20000, greetingTimeout: 20000, socketTimeout: 60000 })
   const info = await tx.sendMail({
     from: `娜娜莉 <${user}>`, to, subject, html,
     text: '这封邮件是 HTML 格式的，请用支持 HTML 的客户端查看。'
@@ -156,17 +158,17 @@ const sendMissYou = async ({ days, traffic, comments, newPosts }) => {
   // 最近写的三篇，作为「回来接着看」的钩子
   let recent = []
   try {
-    const out = execFileSync('git', ['log', '-n', '40', '--diff-filter=AM', '--name-only',
+    const out = execFileSync('git', ['log', '-n', '40', '--diff-filter=AM', '--name-only', '-z',
       '--pretty=format:', '--', 'source/_posts/'], { encoding: 'utf8' })
     const { readFileSync, existsSync } = await import('node:fs')
-    recent = [...new Set(out.split('\n').map(x => x.trim()).filter(f => f.endsWith('.md')))]
+    recent = [...new Set(out.split('\0').map(x => x.replace(/^\n+|\n+$/g, '')).filter(f => f.endsWith('.md')))]
       .filter(existsSync).slice(0, 3)
       .map(f => {
         const raw = readFileSync(f, 'utf8')
         const g = k => (raw.match(new RegExp(`^${k}:\\s*(.+)$`, 'm')) || [])[1]
         return {
           title: (g('title') || f.split('/').pop()).trim().replace(/^['"]|['"]$/g, ''),
-          url: CFG.site + '/'
+          url: CFG.site + (postPath(f, raw) || '/')
         }
       })
   } catch (_) {}

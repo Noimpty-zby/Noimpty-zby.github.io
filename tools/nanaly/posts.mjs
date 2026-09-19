@@ -8,8 +8,15 @@
 // 「站上说还没开始、娜娜莉说已有一篇」这种自相矛盾：
 //   1. _config.yml 里 future: false —— 日期还没到的文章 Hexo 压根不生成
 //   2. Hexo 忽略 _ 和 . 开头的文件（草稿的惯用写法）
+//
+// 第 1 条里的「日期到了没有」要按**北京挂钟**算，不能直接 Date.parse ——
+// front-matter 里那串时间不带时区，Date.parse 会按运行机器的本地时区解释它。
+// 开发机是 UTC+8，碰巧对；GitHub Actions 是 UTC，于是「今天下午发的文章」
+// 在 CI 眼里成了未来，被这一条滤掉，篇数比 Hexo 少一篇、测试红在 CI 上而本地全绿。
+// 换算走 permalink.mjs 的 wallClockMs，那边有完整的来龙去脉。
 
 import { readFileSync, readdirSync } from 'node:fs'
+import { wallClockMs } from './permalink.mjs'
 
 export const POSTS_DIR = 'source/_posts'
 
@@ -58,7 +65,11 @@ export const listPosts = (dir = POSTS_DIR, now = Date.now()) => {
     }
   })
     .filter(Boolean)
-    .filter(p => !p.date || Date.parse(p.date.replace(' ', 'T')) <= now)   // future: false
+    .filter(p => {                          // future: false
+      if (!p.date) return true
+      const ms = wallClockMs(p.date)
+      return ms != null && ms <= now        // 日期读不出来的也不算，免得和 Hexo 各算各的
+    })
     .sort((a, b) => String(a.date).localeCompare(String(b.date)))
 }
 

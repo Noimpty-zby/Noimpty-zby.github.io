@@ -101,6 +101,32 @@ check('★★ 跟 Hexo 收录规则保持一致：未来日期的、下划线开
   assert.equal(counts.get('正常')?.n, 1, '正常的那篇反而没数到')
 })
 
+check('★★ 「日期到了没有」按北京挂钟算，不按跑测试那台机器的时区', () => {
+  /* 2026-09-19 就是栽在这一条上：本地（UTC+8）全绿，CI（UTC）红。
+   * 当天 14:46 发的文章，在 UTC 机器上被 Date.parse 读成 14:46Z，
+   * 而那会儿 CI 的钟是 07:05Z —— 于是这篇被当成「未来」滤掉，
+   * 数出来比 source/_posts 里少一篇，上面那条断言直接炸。
+   * Hexo 自己按 _config.yml 的 timezone: 'Asia/Shanghai' 算，它是照常生成的。 */
+  const dir = 'tools/tests/fixtures/posts-tz'          // 里面那篇是 2026-09-19 14:46:00
+  const 北京十五点 = Date.parse('2026-09-19T07:00:00Z')
+  const 北京十四点 = Date.parse('2026-09-19T06:00:00Z')
+
+  /* 把测试自己搬到 CI 的时区上跑 —— 否则这条在 UTC+8 的开发机上永远是绿的，
+   * 而它要拦的恰恰是「只在 UTC 上红」。Node 支持运行时改 TZ。 */
+  const tz = process.env.TZ
+  try {
+    for (const z of ['UTC', 'Asia/Shanghai', 'America/New_York']) {
+      process.env.TZ = z
+      assert.equal(postCounts(dir, 北京十五点).get('时区')?.n, 1,
+        `TZ=${z} 时，当天下午发的文章被当成未来滤掉了 —— 多半是哪里又用回了 Date.parse`)
+      assert.equal(postCounts(dir, 北京十四点).size, 0,
+        `TZ=${z} 时，时间真没到的文章反而算进去了`)
+    }
+  } finally {
+    if (tz == null) delete process.env.TZ; else process.env.TZ = tz
+  }
+})
+
 check('空的也不炸', () => {
   const c = postCounts('source/_data')   // 里面没有 md
   assert.equal(c.size, 0)

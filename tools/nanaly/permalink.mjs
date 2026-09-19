@@ -30,24 +30,37 @@ const BJ_OFFSET_MS = 8 * 3600 * 1000
 const pad = n => String(n).padStart(2, '0')
 
 /**
- * front-matter 的 date 值 → 'YYYY/MM/DD'（UTC，也就是永久链接里的那一段）。
- * 推不出来返回 null —— 调用方靠这个区分「这篇没日期」和「这篇在某天」。
+ * front-matter 的 date 值 → 那一刻的毫秒时间戳。推不出来返回 null。
+ *
+ * **不要用 `Date.parse('2026-09-19T14:46:00')` 代替它。** 不带时区的字符串
+ * 按 ECMAScript 的规矩是按**运行机器的本地时区**解析的，而这串值是北京挂钟：
+ * 在开发机（UTC+8）上两者碰巧一样，在 GitHub Actions（UTC）上差 8 小时。
+ * 这就是「本地全绿、CI 红」的那类问题，2026-09-19 因为它掉过一次链子。
  */
-export const utcDay = value => {
+export const wallClockMs = value => {
   const s = String(value == null ? '' : value).trim()
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?\s*(Z|[+-]\d{2}:?\d{2})?/)
   if (!m) return null
   const [, y, mo, d, hh, mi, ss, zone] = m
 
-  // 只有日期没有时间：YAML 把这种值按 UTC 零点解析，本来就不是挂钟值，别再减 8 小时
-  if (hh == null) return `${y}/${mo}/${d}`
+  const ms = hh == null
+    // 只有日期没有时间：YAML 把这种值按 UTC 零点解析，本来就不是挂钟值，别再减 8 小时
+    ? Date.UTC(+y, +mo - 1, +d)
+    // 自己写了时区（Z 或 +08:00）的，交给标准解析 —— 那种写法里的时间也不是挂钟值
+    : zone
+      ? Date.parse(s)
+      : Date.UTC(+y, +mo - 1, +d, +hh, +mi, +(ss || 0)) - BJ_OFFSET_MS
 
-  // 自己写了时区（Z 或 +08:00）的，交给标准解析 —— 那种写法里的时间也不是挂钟值
-  const ms = zone
-    ? Date.parse(s)
-    : Date.UTC(+y, +mo - 1, +d, +hh, +mi, +(ss || 0)) - BJ_OFFSET_MS
-  if (!Number.isFinite(ms)) return null
+  return Number.isFinite(ms) ? ms : null
+}
 
+/**
+ * front-matter 的 date 值 → 'YYYY/MM/DD'（UTC，也就是永久链接里的那一段）。
+ * 推不出来返回 null —— 调用方靠这个区分「这篇没日期」和「这篇在某天」。
+ */
+export const utcDay = value => {
+  const ms = wallClockMs(value)
+  if (ms == null) return null
   const t = new Date(ms)
   return `${t.getUTCFullYear()}/${pad(t.getUTCMonth() + 1)}/${pad(t.getUTCDate())}`
 }

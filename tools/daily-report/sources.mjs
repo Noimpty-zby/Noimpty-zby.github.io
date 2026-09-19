@@ -2,6 +2,8 @@
 // 每一项都自带兜底 —— 取不到就返回 { ok:false, why }，不让整份报告因为一个接口挂掉而失败。
 
 import { execFileSync } from 'node:child_process'
+import { wallClockMs } from '../nanaly/permalink.mjs'
+import { listDiscussions } from '../nanaly/github.mjs'
 
 export const CFG = {
   site: (process.env.SITE_URL || 'https://noimpty-zby.github.io').replace(/\/$/, ''),
@@ -13,7 +15,10 @@ export const CFG = {
   // GoatCounter：免费且开放 API。GC_CODE 是你注册时选的站点代号（<code>.goatcounter.com）
   gcCode: process.env.GOATCOUNTER_CODE || '',
   gcToken: process.env.GOATCOUNTER_TOKEN || '',
-  windowHours: Number(process.env.REPORT_WINDOW_HOURS || 24)
+  windowHours: (() => {
+    const n = Number(process.env.REPORT_WINDOW_HOURS || 24)
+    return Number.isFinite(n) && n > 0 && n <= 720 ? n : 24
+  })()
 }
 
 export const WINDOW = (() => {
@@ -144,40 +149,16 @@ export const getTrafficUmami = async () => {
 
 export const getComments = async () => {
   if (!CFG.ghToken) return { ok: false, why: '没有 GITHUB_TOKEN' }
-  const [owner, name] = CFG.repo.split('/')
-  const query = `
-    query($owner:String!,$name:String!){
-      repository(owner:$owner,name:$name){
-        discussions(first:30, orderBy:{field:UPDATED_AT, direction:DESC}){
-          nodes{
-            title url
-            comments(last:30){
-              nodes{
-                body createdAt url
-                author{ login url }
-                replies(last:20){ nodes{ body createdAt url author{ login url } } }
-              }
-            }
-          }
-        }
-      }
-    }`
   try {
-    const res = await fetch('https://api.github.com/graphql', {
-      method: 'POST',
-      headers: { Authorization: `bearer ${CFG.ghToken}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ query, variables: { owner, name } }),
-      signal: timeout(25000)
-    })
-    const data = await res.json()
-    if (data.errors) throw new Error(data.errors.map(e => e.message).join('; '))
+    // 和回评共用完整分页；固定 last:N 会漏掉繁忙讨论里的新回复。
+    const discussions = await listDiscussions()
     const fresh = []
-    for (const d of data.data?.repository?.discussions?.nodes || []) {
+    for (const d of discussions) {
       const push = c => {
         const t = Date.parse(c.createdAt)
         if (t >= WINDOW.start && t <= WINDOW.end) {
           fresh.push({
-            on: d.title, onUrl: d.url, url: c.url,
+            on: d.title, onUrl: d.url, url: c.url || d.url,
             who: c.author?.login || '（已注销）', whoUrl: c.author?.url || '',
             at: c.createdAt, body: String(c.body || '').trim()
           })
@@ -201,10 +182,10 @@ export const getNewPosts = async () => {
   try {
     const since = new Date(WINDOW.start).toISOString()
     const out = execFileSync('git', [
-      'log', `--since=${since}`, '--diff-filter=AM', '--name-only',
+      'log', `--since=${since}`, '--diff-filter=AM', '--name-only', '-z',
       '--pretty=format:', '--', 'source/_posts/'
     ], { encoding: 'utf8' })
-    const files = [...new Set(out.split('\n').map(s => s.trim()).filter(f => f.endsWith('.md')))]
+    const files = [...new Set(out.split('\0').map(s => s.replace(/^\n+|\n+$/g, '')).filter(f => f.endsWith('.md') && !f.slice('source/_posts/'.length).split('/').some(x => /^[_.]/.test(x))))]
     // 光看 git 改动不够：一次批量重构会把所有文章都算成「新文章」。
     // 真正的判据是 front-matter 里的发布日期落在最近两天内。
     const DATE_GRACE = 2 * 86400 * 1000
@@ -223,7 +204,7 @@ export const getNewPosts = async () => {
         privacy: field('privacy'),
         author: field('author'),
         series: field('series'),
-        date: Date.parse(field('date')) || 0,
+        date: wallClockMs(field('date')) || 0,
         words: body.replace(/\s/g, '').length,
         body: body.slice(0, 9000)
       }
@@ -243,7 +224,7 @@ export const getNewPosts = async () => {
       // 标题栏写「1 篇新文章」、烧一次模型让她给自己的随笔写读后感、
       // 日程里关键词恰好命中的任务还会被自动勾上。
       .filter(p => !/(^|\/)nanaly-/.test(p.file) && p.author !== '娜娜莉')
-      .filter(p => !p.date || p.date >= WINDOW.start - DATE_GRACE)
+      .filter(p => !p.date || (p.date >= WINDOW.start - DATE_GRACE && p.date <= WINDOW.end))
       .sort((a, b) => b.date - a.date)
 
     // 单次最多点评 3 篇，避免一次批量提交把邮件撑爆、也避免烧太多 token
@@ -311,7 +292,9 @@ export const getSchedule = async () => {
     if (!existsSync(F)) return { ok: true, today: [], tomorrow: [], overdue: [], empty: true }
 
     const data = JSON.parse(readFileSync(F, 'utf8'))
-    const days = data.days || {}
+    const { default: { validateScheduleData } } = await import('../schedule-data.cjs')
+    validateScheduleData(data)
+    const days = data.days
 
     const cnKey = offset => {
       const d = new Date(WINDOW.end + offset * 86400000)
@@ -322,7 +305,7 @@ export const getSchedule = async () => {
     const todayKey = cnKey(0)
     const tomorrowKey = cnKey(1)
 
-    const list = k => Array.isArray(days[k]) ? days[k] : []
+    const list = k => Array.isArray(days[k]) ? days[k].filter(t => t && typeof t.text === 'string') : []
 
     // 逾期：今天之前、还没勾完成的。只回看两周，再久的就不提了 ——
     // 一直挂着的旧任务天天念，跟没提醒是一个效果。

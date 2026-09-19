@@ -743,3 +743,32 @@
 }
 
 .nanaly-msg--her:hover .nanaly-usage { opacity: 0.8; }
+
+/* 保持浮动入口可点击，同时避免它盖住输入框；适应动态视口和系统键盘。 */
+#nanaly-panel { bottom: calc(20px + 54px + 14px + 54px + 12px); max-height: min(640px, calc(100dvh - 176px)); }
+.nanaly-head, .nanaly-quick, .nanaly-foot { flex-shrink: 0; }
+.nanaly-foot textarea { min-width: 0; }
+.nanaly-msg { min-width: 0; }
+.nanaly-msg--me { white-space: pre-wrap; }
+#nanaly-panel button:focus-visible, #nanaly-panel summary:focus-visible,
+#nanaly-launcher:focus-visible, #nanaly-poke:focus-visible {
+  outline: 2px solid var(--noimpty-accent, #e95978);
+  outline-offset: 2px;
+}
+#nanaly-panel button:disabled { opacity: .5; cursor: not-allowed; }
+.nanaly-setup { flex-shrink: 0; }
+@media (max-width: 560px) {
+  #nanaly-panel { bottom: calc(14px + 54px + 12px + 48px + 10px); max-height: calc(100dvh - 154px); }
+  .nanaly-head { gap: 5px; padding-inline: 10px; }
+  .nanaly-head__avatar { display: none; }
+  .nanaly-foot textarea, .nanaly-setup input { font-size: 16px; }
+}
+@media (max-height: 540px) {
+  #nanaly-panel { bottom: 8px; left: 78px; max-height: calc(100dvh - 16px); width: min(384px, calc(100vw - 90px)); }
+  .nanaly-body { min-height: 0; }
+  .nanaly-quick { display: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #nanaly-panel, #nanaly-launcher, #nanaly-poke, #nanaly-selbtn,
+  #nanaly-panel * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

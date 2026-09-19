@@ -78,8 +78,10 @@ for (const webPath of htmlPaths) {
 
     // 绝对 URL：只查指向本站的
     if (/^https?:\/\//i.test(url)) {
-      if (!url.startsWith(SITE)) continue
-      url = url.slice(SITE.length) || '/'
+      let parsed
+      try { parsed = new URL(url) } catch (_) { continue }
+      if (parsed.origin !== new URL(SITE).origin) continue
+      url = parsed.pathname + parsed.search
     } else if (url.startsWith('//')) {
       continue                              // 协议相对的外链
     }

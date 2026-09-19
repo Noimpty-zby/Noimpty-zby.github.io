@@ -80,7 +80,7 @@ hexo.extend.generator.register('noimpty-redirects', () => {
 
   return Object.entries(REDIRECTS).map(([from, to]) => {
     const target = withRoot(to)
-    const absolute = siteUrl + target
+    const absolute = new URL(target, siteUrl + '/').href
     const safe = escapeHtml(target)
 
     return {

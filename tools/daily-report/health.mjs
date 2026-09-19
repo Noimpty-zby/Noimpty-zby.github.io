@@ -166,8 +166,10 @@ export const checkLeak = async (crawl) => {
         out.items.push({ where: label, note: `${path} 还能访问 —— 它会把文章清单直接推出去，应该关掉`, leak: true })
         out.level = LEVEL.bad
         bad++
-      } else {
+      } else if (r.status === 404 || r.status === 410) {
         out.items.push({ where: label, note: `已关闭（HTTP ${r.status}）`, leak: false })
+      } else {
+        failed += degrade(label, new Error(`HTTP ${r.status}，无法确认已关闭`))
       }
     } catch (e) { failed += degrade(label, e) }
   }
@@ -179,15 +181,17 @@ export const checkLeak = async (crawl) => {
     // 只读了开头，体积得靠响应头拿；拿不到就别硬凑一个说法
     const size = s.total ? `${(s.total / 1024).toFixed(0)} KB` : ''
     if (!s.ok) {
-      out.items.push({ where: '搜索索引', note: `取不到（HTTP ${s.status}）`, leak: false })
+      failed += degrade('搜索索引', new Error(`HTTP ${s.status}`))
     } else if (s.body.trim().startsWith('{') && /"alg"\s*:\s*"AES-GCM"/.test(s.body.slice(0, 400))) {
       out.items.push({ where: '搜索索引', note: size ? `已加密（${size} 密文）` : '已加密（密文，取不到大小）', leak: false })
     } else if (/<entry>/.test(s.body)) {
       out.items.push({ where: '搜索索引', note: `search.xml 是明文${size ? `，${size}` : ''} —— 全站正文一个 GET 就下完，构建时没有 NOIMPTY_PASSPHRASE`, leak: true })
       out.level = LEVEL.bad
       bad++
-    } else {
+    } else if (/<search\s*>\s*<\/search>/.test(s.body)) {
       out.items.push({ where: '搜索索引', note: '是空的（没配暗号，站内搜索用不了，但也没漏）', leak: false })
+    } else {
+      failed += degrade('搜索索引', new Error('返回格式不明，不能当作空索引'))
     }
   } catch (e) { failed += degrade('搜索索引', e) }
 
@@ -258,11 +262,15 @@ export const checkBuild = async () => {
     const runs = (await res.json()).workflow_runs || []
     if (!runs.length) { out.detail = '最近没有构建记录'; return out }
     const last = runs[0]
-    const failed = runs.filter(r => r.conclusion === 'failure').length
+    const isFailure = r => ['failure', 'timed_out', 'action_required', 'startup_failure'].includes(r.conclusion)
+    const failed = runs.filter(isFailure).length
     out.items.push({ where: '最近一次', note: `${last.display_title?.slice(0, 40) || last.head_branch} → ${last.conclusion || last.status}` })
-    if (last.conclusion === 'failure') {
+    if (isFailure(last)) {
       out.level = LEVEL.bad
       out.detail = '最近一次构建失败了，站上还是旧版本'
+    } else if (last.status !== 'completed' || last.conclusion !== 'success') {
+      out.level = LEVEL.warn
+      out.detail = `最近一次部署尚未成功（${last.conclusion || last.status || '状态未知'}）`
     } else if (failed) {
       out.level = LEVEL.warn
       out.detail = `最近 5 次里有 ${failed} 次失败`
@@ -379,7 +387,8 @@ export const checkLinks = async (crawl) => {
 
     // 坏得太多多半是被限流了，不是站真的塌了。宁可这次不报。
     if (looksThrottled(broken.length, list.length)) {
-      out.detail = `${list.length} 个地址里有 ${broken.length} 个失败，比例高得不正常，判定为限流，本次不报`
+      out.level = LEVEL.warn
+      out.detail = `${list.length} 个地址里有 ${broken.length} 个失败，可能限流或站点故障，暂时无法确认`
       return out
     }
 
@@ -452,7 +461,7 @@ export const runHealth = async () => {
   const leak = await checkLeak(crawl)
   const links = crawl
     ? await checkLinks(crawl)
-    : { name: '死链与坏图', level: LEVEL.ok, detail: '这次连首页都取不到，是本次运行的网络问题，跳过不误报', items: [] }
+    : { name: '死链与坏图', level: LEVEL.warn, detail: '这次连首页都取不到，检查未完成，无法区分网络问题和站点故障', items: [] }
 
   const checks = [leak, site, build, deps, links]
   return { checks, worst: worstOf(checks) }

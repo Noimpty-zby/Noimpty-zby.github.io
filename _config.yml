@@ -168,7 +168,7 @@ ignore:
 #   order_by: -date
   icon: /img/favicon.svg
 
-# Markdown 渲染器（hexo-renderer-markdown-it）
+# Markdown 渲染器（本地适配器 + markdown-it）
 # 换掉 hexo-renderer-marked 是为了支持 KaTeX 数学公式。
 # 下面的选项刻意对齐 marked 的原有行为，避免已有文章排版变化：
 #   breaks: true   —— 单换行渲染成 <br>，正文里大量依赖这个

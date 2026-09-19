@@ -15,6 +15,8 @@
  * 会看「查看源代码」的人拿得到。详见 scripts/noimpty-lockdown.js 顶部。
  */
 (() => {
+  if (window.NOIMPTY_GATE) return
+
   const privacy = window.NOIMPTY_PRIVACY || { entries: [], publicPaths: ['/'], lockAllExceptPublic: true }
 
   /* 校验哈希由构建侧发出（scripts/noimpty-lockdown.js），不写死在这里。
@@ -26,9 +28,10 @@
     || '5a1eee3bcf723aea5c87c85ee62696443505c86e9f0add455c85252d3412d591'
   const SESSION_FLAG = 'noimpty-private-unlocked'
   const SESSION_PASS = 'noimpty-private-pass'
+  const SESSION_HASH = 'noimpty-private-hash'
 
   const normalizePath = value => {
-    let path = value || '/'
+    let path = String(value || '/')
     try { path = decodeURI(path) } catch (_) {}
     path = path.replace(/\/index\.html$/, '/').replace(/\.html$/, '/')
     if (!path.startsWith('/')) path = `/${path}`
@@ -36,9 +39,9 @@
     return path.replace(/\/{2,}/g, '/')
   }
 
-  const entries = Array.isArray(privacy.entries) ? privacy.entries : []
+  const entries = Array.isArray(privacy.entries) ? privacy.entries.filter(e => e && typeof e === 'object') : []
   const sectionMap = new Map(entries.map(e => [normalizePath(e.path), e.section || '内部']))
-  const publicPaths = new Set((privacy.publicPaths || ['/']).map(normalizePath))
+  const publicPaths = new Set((Array.isArray(privacy.publicPaths) ? privacy.publicPaths : ['/']).map(normalizePath))
 
   // 404 页不锁 —— 锁一个「页面不存在」没有意义，而且会把打错字的自己也挡在外面
   const isPublic = path => publicPaths.has(path) || path === '/404/'
@@ -54,14 +57,20 @@
   )
 
   const unlocked = () => {
-    try { return window.sessionStorage.getItem(SESSION_FLAG) === 'true' } catch (_) { return false }
+    try {
+      return window.sessionStorage.getItem(SESSION_FLAG) === 'true' &&
+        window.sessionStorage.getItem(SESSION_HASH) === expectedHash &&
+        !!window.sessionStorage.getItem(SESSION_PASS)
+    } catch (_) { return false }
   }
 
   const remember = pass => {
     try {
-      window.sessionStorage.setItem(SESSION_FLAG, 'true')
       window.sessionStorage.setItem(SESSION_PASS, pass)
-    } catch (_) {}
+      window.sessionStorage.setItem(SESSION_HASH, expectedHash)
+      window.sessionStorage.setItem(SESSION_FLAG, 'true')
+      return unlocked()
+    } catch (_) { return false }
   }
 
   /* 万一有哪个模板还是把文章卡片渲染出来了（主题升级、改配置都可能），
@@ -71,7 +80,11 @@
     if (unlocked()) return
     document.querySelectorAll('a[href]').forEach(anchor => {
       let targetPath
-      try { targetPath = normalizePath(new URL(anchor.href, window.location.origin).pathname) } catch (_) { return }
+      try {
+        const target = new URL(anchor.href, window.location.origin)
+        if (target.origin !== window.location.origin) return
+        targetPath = normalizePath(target.pathname)
+      } catch (_) { return }
       if (!isLocked(targetPath)) return
       const item = anchor.closest(
         '.recent-post-item, .article-sort-item, .aside-list-item, .card-archive-list-item, ' +
@@ -106,7 +119,7 @@
     gate.dataset.section = String(currentSection).toLowerCase()
     gate.innerHTML = `
       <div class="noimpty-gate__panel" role="dialog" aria-modal="true" aria-labelledby="noimpty-gate-title">
-        <p class="noimpty-gate__eyebrow">Private · ${currentSection}</p>
+        <p class="noimpty-gate__eyebrow"></p>
         <h1 id="noimpty-gate-title">请输入暗号(*^▽^*)</h1>
         <p class="noimpty-gate__hint">这里是私人记录。输入正确后，本次浏览期间整站都可以访问。</p>
         <form class="noimpty-gate__form" novalidate>
@@ -118,6 +131,7 @@
       </div>`
 
     document.body.appendChild(gate)
+    gate.querySelector('.noimpty-gate__eyebrow').textContent = `Private · ${currentSection}`
     const panel = gate.querySelector('.noimpty-gate__panel')
     const form = gate.querySelector('.noimpty-gate__form')
     const input = gate.querySelector('.noimpty-gate__input')
@@ -133,7 +147,10 @@
       try {
         const pass = input.value.trim()
         if (await digest(pass) === expectedHash) {
-          remember(pass)
+          if (!remember(pass)) {
+            error.textContent = '浏览器未允许保存本次解锁状态，请允许此站点使用会话存储后重试。'
+            return
+          }
           gate.classList.add('is-leaving')
           document.documentElement.classList.remove('noimpty-private-locked')
           window.setTimeout(() => gate.remove(), 300)
@@ -157,11 +174,15 @@
 
   // 点击站内链接时先把遮罩打上，避免 pjax 换页那一瞬间闪出内容
   document.addEventListener('click', event => {
-    const anchor = event.target.closest('a[href]')
-    if (!anchor || unlocked()) return
-    let targetPath
-    try { targetPath = normalizePath(new URL(anchor.href, window.location.origin).pathname) } catch (_) { return }
-    if (isLocked(targetPath)) document.documentElement.classList.add('noimpty-private-locked')
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    const anchor = event.target.closest?.('a[href]')
+    if (!anchor || unlocked() || anchor.hasAttribute('download') ||
+        (anchor.target && anchor.target.toLowerCase() !== '_self')) return
+    let target
+    try { target = new URL(anchor.href, window.location.origin) } catch (_) { return }
+    if (target.origin !== window.location.origin || !/^https?:$/.test(target.protocol)) return
+    if (target.pathname === window.location.pathname && target.search === window.location.search) return
+    if (isLocked(normalizePath(target.pathname))) document.documentElement.classList.add('noimpty-private-locked')
   })
 
   // 这一句必须在最早执行：DOM 还没构建完就先把遮罩类打上，
@@ -174,7 +195,7 @@
   window.NOIMPTY_GATE = Object.freeze({
     unlocked,
     passphrase: () => {
-      try { return window.sessionStorage.getItem(SESSION_PASS) || '' } catch (_) { return '' }
+      try { return unlocked() ? window.sessionStorage.getItem(SESSION_PASS) || '' : '' } catch (_) { return '' }
     }
   })
 

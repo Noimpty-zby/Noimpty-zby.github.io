@@ -9,15 +9,20 @@
     "server": "node node_modules/hexo/bin/hexo server",
     "test": "node tools/tests/run-all.mjs",
     "linkcheck": "node tools/linkcheck.mjs",
-    "leakcheck": "node tools/leakcheck.mjs"
+    "leakcheck": "node tools/leakcheck.mjs",
+    "prebuild": "node node_modules/hexo/bin/hexo clean",
+    "check": "npm test && npm run build && npm run linkcheck && npm run leakcheck"
   },
   "hexo": {
     "version": "8.1.2"
   },
   "dependencies": {
+    "@egjs/infinitegrid": "^4.13.0",
+    "@fancyapps/ui": "^6.1.14",
+    "@fortawesome/fontawesome-free": "^7.3.1",
     "@renbaoshuo/markdown-it-katex": "^2.0.2",
+    "butterfly-extsrc": "^1.1.6",
     "hexo": "^8.0.0",
-    "hexo-butterfly-extjs": "^1.5.8",
     "hexo-generator-archive": "^2.0.0",
     "hexo-generator-category": "^2.0.0",
     "hexo-generator-feed": "^4.0.0",
@@ -26,12 +31,23 @@
     "hexo-generator-sitemap": "^3.0.1",
     "hexo-generator-tag": "^2.0.0",
     "hexo-renderer-ejs": "^2.0.0",
-    "hexo-renderer-markdown-it": "^7.1.1",
     "hexo-renderer-pug": "^3.0.0",
     "hexo-renderer-stylus": "^3.0.1",
     "hexo-server": "^3.0.0",
     "hexo-theme-butterfly": "^5.7.0",
+    "hexo-util": "^4.0.0",
     "hexo-wordcount": "^6.0.1",
-    "markdown-it-task-lists": "^2.1.1"
+    "instant.page": "^5.2.0",
+    "katex": "^0.18.4",
+    "markdown-it": "^15.0.2",
+    "markdown-it-task-lists": "^2.1.1",
+    "mermaid": "^11.16.1",
+    "nodemailer": "^9.1.1",
+    "pjax": "^0.2.8",
+    "typed.js": "^3.0.0"
+  },
+  "devDependencies": {
+    "postcss": "^8.5.26",
+    "js-yaml": "^4.3.2"
   }
 }

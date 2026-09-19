@@ -32,6 +32,7 @@
 const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
+const { encryptEnvelope } = require('../tools/site-crypto.cjs')
 
 // ---------------- 小工具 ----------------
 
@@ -180,10 +181,9 @@ hexo.extend.generator.register('noimpty-privacy-manifest', locals => {
     searchEncrypted: !!pass
   }
 
-  return {
-    path: 'js/protected-manifest.js',
-    data: `window.NOIMPTY_PRIVACY = Object.freeze(${JSON.stringify(payload)});\n`
-  }
+  const data = `window.NOIMPTY_PRIVACY = Object.freeze(${JSON.stringify(payload)});\n`
+  hexo.__noimptyPrivacyVersion = crypto.createHash('sha256').update(data).digest('hex').slice(0, 12)
+  return { path: 'js/protected-manifest.js', data }
 })
 
 // ---------------- 1.5 首页不列文章 ----------------
@@ -227,23 +227,6 @@ hexo.extend.generator.register('noimpty-robots', () => ({
 
 // ---------------- 3. search.xml 加密 ----------------
 
-/* 密钥派生。Node 侧和浏览器侧必须完全一致，否则解不开。
- * 浏览器侧在 source/js/noimpty-search.js 里，改这边记得同步改那边。 */
-const SALT = 'noimpty-search-v1'
-const ITER = 120000
-
-const deriveKey = passphrase =>
-  crypto.pbkdf2Sync(String(passphrase), SALT, ITER, 32, 'sha256')
-
-const encrypt = (plaintext, passphrase) => {
-  const key = deriveKey(passphrase)
-  const iv = crypto.randomBytes(12)
-  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
-  const body = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
-  // WebCrypto 的 AES-GCM 要求密文和认证标签拼在一起，Node 是分开给的
-  return Buffer.concat([iv, body, cipher.getAuthTag()]).toString('base64')
-}
-
 hexo.extend.filter.register('after_generate', async () => {
   const searchPath = hexo.config.search && hexo.config.search.path
   if (!searchPath) return
@@ -263,12 +246,7 @@ hexo.extend.filter.register('after_generate', async () => {
     return
   }
 
-  hexo.route.set(searchPath, JSON.stringify({
-    v: 1,
-    alg: 'AES-GCM',
-    kdf: `PBKDF2-SHA256/${ITER}`,
-    data: encrypt(xml, pass)
-  }))
+  hexo.route.set(searchPath, encryptEnvelope(xml, pass))
   hexo.log.info(`search.xml 已加密（原文 ${(xml.length / 1024).toFixed(0)} KB）`)
 })
 
@@ -287,6 +265,7 @@ hexo.extend.filter.register('after_generate', async () => {
  * 没有暗号就**根本不发这个文件**（而不是发一份明文）。对话窗口拿到 404
  * 就当她没有日志，照常说话 —— 少一段上下文，不至于泄漏。 */
 hexo.extend.filter.register('after_generate', () => {
+  hexo.route.remove('nanaly-journal.json')
   const src = path.join(hexo.source_dir, '_data', 'nanaly-journal.json')
   let raw
   try { raw = fs.readFileSync(src, 'utf8') } catch (_) { return }
@@ -303,12 +282,7 @@ hexo.extend.filter.register('after_generate', () => {
     return
   }
 
-  hexo.route.set('nanaly-journal.json', JSON.stringify({
-    v: 1,
-    alg: 'AES-GCM',
-    kdf: `PBKDF2-SHA256/${ITER}`,
-    data: encrypt(raw, pass)
-  }))
+  hexo.route.set('nanaly-journal.json', encryptEnvelope(raw, pass))
   hexo.log.info('娜娜莉的行动日志已加密发布')
 })
 

@@ -27,6 +27,8 @@
 (() => {
   'use strict'
 
+  if (window.NOIMPTY_SCHEDULE) return
+
   const REPO = (window.NOIMPTY_SCHEDULE_REPO || 'Noimpty-zby/Noimpty-zby.github.io')
   const DATA_PATH = 'source/_data/schedule.json'
   const LS_CACHE = 'noimpty-schedule-cache-v1'
@@ -90,11 +92,35 @@
   let changeCount = 0        // 这次打开页面之后改了几处（保存条上显示）
   let focusInput = false     // 下次 render 之后要不要把光标放进输入框
   let loaded = false
+  let loadPending = null
 
   const cloneDays = d => JSON.parse(JSON.stringify(d || {}))
 
+  // 与 tools/schedule-data.cjs 一致，不能把二月三十一日当成可合并/保存的任务日期。
+  const validCalendarDay = day => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false
+    const ms = Date.parse(`${day}T00:00:00Z`)
+    return Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === day
+  }
+  const validDays = days => {
+    if (!days || typeof days !== 'object' || Array.isArray(days)) return false
+    const ids = new Set()
+    return Object.entries(days).every(([day, list]) => {
+      if (!validCalendarDay(day) || !Array.isArray(list)) return false
+      return list.every(task => {
+        if (!task || typeof task !== 'object' || Array.isArray(task) || typeof task.id !== 'string' || !task.id ||
+            typeof task.text !== 'string' || typeof task.done !== 'boolean' || ids.has(task.id)) return false
+        ids.add(task.id)
+        return true
+      })
+    })
+  }
+  const validData = value => value && typeof value === 'object' && !Array.isArray(value) && validDays(value.days)
   const readCache = () => {
-    try { return JSON.parse(localStorage.getItem(LS_CACHE) || 'null') } catch (_) { return null }
+    try {
+      const value = JSON.parse(localStorage.getItem(LS_CACHE) || 'null')
+      return validData(value) ? value : null
+    } catch (_) { return null }
   }
   // dirty 必须跟着缓存一起存。否则「加了几条 → 刷新」之后，
   // 内容还在但按钮显示「已同步」且点不动，那几条永远推不上去。
@@ -106,35 +132,69 @@
     } catch (_) {}
   }
 
-  const loadData = async () => {
-    let remote = null
-    let netFail = false
-    try {
-      const res = await fetch('/schedule/data.json?t=' + Date.now(), { cache: 'no-store' })
-      if (res.ok) remote = await res.json()
-      else netFail = true
-    } catch (_) { netFail = true }
-    if (remote && typeof remote !== 'object') { remote = null; netFail = true }
+  const loadData = () => {
+    if (loadPending) return loadPending
+    // The gate reloads the page after unlocking. Never expose cached private plans before that.
+    if (window.NOIMPTY_GATE && !window.NOIMPTY_GATE.unlocked()) return Promise.resolve('locked')
+    const pending = (async () => {
+      let remote = null
+      try {
+        const res = await fetch('/schedule/data.json?t=' + Date.now(), {
+          cache: 'no-store',
+          ...(typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+            ? { signal: AbortSignal.timeout(30000) } : {})
+        })
+        if (res.ok) {
+          const payload = await res.json()
+          remote = payload && payload.alg === 'AES-GCM'
+            ? JSON.parse(await window.NOIMPTY_SEARCH.decryptPayload(payload))
+            : payload
+        }
+      } catch (_) {}
+      if (!validData(remote)) remote = null
 
-    const cached = readCache()
-    loaded = true
-
-    // 基准优先用远端 —— 它是仓库里真实存在过的一个版本，越新越好
-    if (remote) baseline = cloneDays(remote.days)
-    else if (cached && cached._base) baseline = cloneDays(cached._base)
-    else baseline = null
-
-    // 刚保存完、部署还没跑完时，远端是旧的。比时间戳，谁新用谁。
-    if (cached && (!remote || String(cached.updatedAt || '') > String(remote.updatedAt || ''))) {
-      data = { updatedAt: cached.updatedAt || '', days: cached.days || {} }
-      dirty = !!cached._dirty
-      return remote ? 'cache-newer' : (netFail ? 'cache-offline' : 'cache-only')
-    }
-    if (!remote) { data = { updatedAt: '', days: {} }; dirty = false; return 'failed' }
-    data = { updatedAt: remote.updatedAt || '', days: remote.days || {} }
-    dirty = false
-    writeCache()
-    return 'remote'
+      const cached = dirty
+        ? { updatedAt: data.updatedAt, days: data.days, _dirty: true, _base: baseline }
+        : readCache()
+      loaded = true
+      // A dirty draft owns its original baseline. Wall-clock timestamps cannot decide
+      // whether edits can be discarded, and rebasing without that baseline invents deletions.
+      if (cached && cached._dirty) {
+        const base = validDays(cached._base) ? cached._base : null
+        data = { updatedAt: cached.updatedAt || '', days: cloneDays(cached.days) }
+        baseline = base ? cloneDays(base) : null
+        if (remote) {
+          // Drafts created before any successful read can only add/replace tasks;
+          // without a baseline they cannot claim that a remote task was deleted.
+          data.days = mergeDays(base || {}, data.days, remote.days)
+          baseline = cloneDays(remote.days)
+        }
+        dirty = !baseline || normDays(data.days) !== normDays(baseline)
+        changeCount = dirty ? Math.max(1, changeCount) : 0
+        writeCache()
+        return remote ? 'cache-draft' : 'cache-offline'
+      }
+      if (cached && (!remote || String(cached.updatedAt || '') > String(remote.updatedAt || ''))) {
+        data = { updatedAt: cached.updatedAt || '', days: cloneDays(cached.days) }
+        // A successfully saved cache may be ahead of the deployed JSON.
+        baseline = validDays(cached._base) ? cloneDays(cached._base) : (remote ? cloneDays(remote.days) : null)
+        dirty = false
+        return remote ? 'cache-newer' : 'cache-offline'
+      }
+      if (!remote) {
+        baseline = null
+        data = { updatedAt: '', days: {} }
+        dirty = false
+        return 'failed'
+      }
+      baseline = cloneDays(remote.days)
+      data = { updatedAt: remote.updatedAt || '', days: cloneDays(remote.days) }
+      dirty = false
+      writeCache()
+      return 'remote'
+    })()
+    loadPending = pending
+    return pending.finally(() => { if (loadPending === pending) loadPending = null })
   }
 
   const nextDay = k => {
@@ -291,11 +351,14 @@
   }
 
   const save = async () => {
-    if (saving) return
+    if (saving || !dirty) return
     if (!baseline) {
       status('刚才没能读到仓库里的日程，现在保存会把别的日子覆盖掉。先刷新页面，读到了再保存。', 'bad')
       return
     }
+    const saveDays = cloneDays(data.days)
+    const saveBaseline = cloneDays(baseline)
+    const saveChanges = changeCount
     saving = true
     render()
     try {
@@ -308,14 +371,14 @@
       let theirs
       try {
         const obj = JSON.parse(fromBase64(cur.content))
-        if (!obj || typeof obj !== 'object' || typeof obj.days !== 'object' || obj.days === null) {
+        if (!validData(obj)) {
           throw new Error('shape')
         }
         theirs = obj.days
       } catch (_) { throw new Error('REMOTE_UNREADABLE') }
 
-      const theyMoved = normDays(theirs) !== normDays(baseline)
-      const merged = mergeDays(baseline, data.days || {}, theirs)
+      const theyMoved = normDays(theirs) !== normDays(saveBaseline)
+      const merged = mergeDays(saveBaseline, saveDays, theirs)
 
       status('正在提交…')
       const payload = JSON.stringify({ updatedAt: new Date().toISOString(), days: merged }, null, 2) + '\n'
@@ -328,12 +391,15 @@
         })
       })
 
-      data = JSON.parse(payload)
+      // Edits made while the PUT was in flight must remain a draft, not be
+      // replaced by the older submitted snapshot.
+      const remaining = mergeDays(saveDays, data.days, merged)
       baseline = cloneDays(merged)
-      dirty = false
-      changeCount = 0
+      dirty = normDays(remaining) !== normDays(merged)
+      data = dirty ? { updatedAt: new Date().toISOString(), days: remaining } : JSON.parse(payload)
+      changeCount = dirty ? Math.max(1, changeCount - saveChanges) : 0
       writeCache()
-      status(theyMoved
+      status(dirty ? '刚才的改动已保存。保存期间又有新改动，请再保存一次。' : theyMoved
         ? '已保存。你打开这页之后仓库里也有改动（多半是娜娜莉自动勾的），窝把两边合起来了，都在。'
         : '已保存。站点大约 1–2 分钟后更新，晚上的邮件就会带上这些安排了。', 'ok')
     } catch (e) {
@@ -464,9 +530,14 @@
    * 这一页的数据是构建时拼的，拼歪了不该让整页陪葬。 */
   const STUDY = {
     courses: Array.isArray(window.NOIMPTY_STUDY && window.NOIMPTY_STUDY.courses)
-      ? window.NOIMPTY_STUDY.courses : [],
+      ? window.NOIMPTY_STUDY.courses.filter(c => c && typeof c === 'object').map(c => ({
+        ...c,
+        n: Number.isFinite(c.n) && c.n >= 0 ? c.n : 0,
+        chapters: Array.isArray(c.chapters) ? c.chapters.filter(ch => typeof ch === 'string') : [],
+        posts: Array.isArray(c.posts) ? c.posts.filter(p => p && typeof p === 'object') : []
+      })) : [],
     posts: Array.isArray(window.NOIMPTY_STUDY && window.NOIMPTY_STUDY.posts)
-      ? window.NOIMPTY_STUDY.posts : []
+      ? window.NOIMPTY_STUDY.posts.filter(p => p && typeof p === 'object') : []
   }
 
   const HEAT_DAYS = 91          // 十三周，一屏放得下
@@ -787,6 +858,10 @@
       const btn = e.target.closest('[data-act]')
       if (!btn) return
       const act = btn.dataset.act
+      if (!loaded && !['prev', 'next', 'today', 'jump'].includes(act)) {
+        status('日程仍在读取，请稍等再修改。', 'warn')
+        return
+      }
 
       if (act === 'prev') { viewM--; if (viewM < 1) { viewM = 12; viewY-- } render(); return }
       if (act === 'next') { viewM++; if (viewM > 12) { viewM = 1; viewY++ } render(); return }
@@ -842,6 +917,7 @@
 
     node.addEventListener('keydown', e => {
       if (e.target.matches('[data-role="editbox"]')) {
+        if (e.isComposing) return
         if (e.key === 'Enter') { e.preventDefault(); commitEdit(e.target.dataset.id, e.target.value) }
         else if (e.key === 'Escape') { e.preventDefault(); editFor = null; render() }
         return
@@ -864,18 +940,44 @@
       const form = e.target.closest('[data-role="condform"]')
       const input = form.querySelector('[data-role="cmatch"]')
       const t = COND_TYPES.find(x => x.v === e.target.value) || COND_TYPES[0]
-      input.disabled = !t.v
-      input.placeholder = t.hint || '不需要填'
-      if (t.v) input.focus()
+      const value = input.value || ''
+      const replacement = document.createElement(t.pick ? 'select' : 'input')
+      replacement.dataset.role = 'cmatch'
+      if (t.pick) {
+        STUDY.courses.forEach(course => {
+          const option = document.createElement('option')
+          option.value = course.leaf
+          option.textContent = course.title
+          replacement.appendChild(option)
+        })
+        if (STUDY.courses.some(course => course.leaf === value)) replacement.value = value
+      } else {
+        replacement.type = 'text'
+        replacement.maxLength = 40
+        replacement.value = input.tagName === 'INPUT' ? value : ''
+        replacement.placeholder = t.hint || '不需要填'
+      }
+      replacement.disabled = !t.v
+      input.replaceWith(replacement)
+      if (t.v) replacement.focus()
     })
 
     node.addEventListener('submit', e => {
+      if (!loaded) {
+        e.preventDefault()
+        status('日程仍在读取，请稍等再添加。', 'warn')
+        return
+      }
       if (e.target.matches('[data-role="condform"]')) {
         e.preventDefault()
         const id = e.target.dataset.id
         const type = e.target.querySelector('[data-role="ctype"]').value
         const match = e.target.querySelector('[data-role="cmatch"]').value.trim()
         const need = (COND_TYPES.find(x => x.v === type) || {}).need
+        if (type === 'section' && !STUDY.courses.some(course => course.leaf === match)) {
+          status('请先选择一门课程。', 'warn')
+          return
+        }
         if (type && need && !match) {
           status('这个条件需要填一个关键词，不然没法判断。', 'warn')
           return
@@ -898,8 +1000,16 @@
         setTasks(picked, tasksOf(picked).map(t => {
           if (t.id !== id) return t
           const next = { ...t }
-          if (type) next.when = { type, match }
+          const before = t.when && t.when.type ? { type: t.when.type, match: String(t.when.match || '').trim() } : null
+          const after = type ? { type, match } : null
+          if (after) next.when = after
           else delete next.when
+          // 更换完成判据后，旧判据下的手工撤销不应永久停掉新规则。
+          // 同一个条件原样保存时，保留撤销标记，不能擅自重新勾选。
+          if (JSON.stringify(before) !== JSON.stringify(after)) {
+            delete next.autoAt
+            delete next.autoWhy
+          }
           return next
         }))
         return
@@ -970,10 +1080,14 @@
     if (!loaded) {
       loadData().then(src => {
         render()
-        if (src === 'cache-newer' || src === 'cache-only') {
+        if (src === 'cache-draft') {
+          status('已恢复本地未保存改动，并与站点版本合并。请保存到仓库。', 'warn')
+        } else if (src === 'cache-newer' || src === 'cache-only') {
           status('显示的是你本地还没部署完的版本，站点更新后会一致。', 'warn')
         } else if (src === 'cache-offline') {
           status('没连上站点，显示的是本地缓存。保存前会先和仓库合并，不会覆盖别的日子。', 'warn')
+        } else if (src === 'locked') {
+          status('请先输入站点暗号，再读取日程。', 'warn')
         } else if (src === 'failed') {
           status('读不到仓库里的日程（网络或部署问题），现在不能保存 —— 否则会把已有安排冲掉。刷新试试。', 'bad')
         }
@@ -988,7 +1102,7 @@
     data: () => JSON.parse(JSON.stringify(data)),
     baseline: () => (baseline ? JSON.parse(JSON.stringify(baseline)) : null),
     dirty: () => dirty,
-    reload: () => { loaded = false; return loadData().then(r => { render(); return r }) },
+    reload: () => loadData().then(r => { render(); return r }),
     mergeDays,
     clearCache: () => { try { localStorage.removeItem(LS_CACHE) } catch (_) {} return '本地缓存已清' }
   })

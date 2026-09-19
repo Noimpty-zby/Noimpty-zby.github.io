@@ -59,7 +59,7 @@ const boot = ({ body = envelope, passphrase = PASSPHRASE } = {}) => {
     fetch: nativeFetch
   }
   const ctx = vm.createContext({
-    window: win, crypto, TextEncoder, TextDecoder, atob, URL, Response, console,
+    window: win, crypto, TextEncoder, TextDecoder, atob, URL, Response, console, AbortController, setTimeout, clearTimeout,
     DOMParser: class {
       parseFromString (str) {
         const entries = [...String(str).matchAll(/<entry>([\s\S]*?)<\/entry>/g)].map(m => {

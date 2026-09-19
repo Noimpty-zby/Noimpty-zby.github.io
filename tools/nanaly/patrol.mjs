@@ -21,7 +21,9 @@ const getText = async url => {
 
 // ---------------- 逐篇体检 ----------------
 
-const isInternal = u => u.startsWith(SITE)
+export const isInternal = u => {
+  try { return new URL(u).origin === new URL(SITE).origin } catch (_) { return false }
+}
 
 /* 探测结果 → 一句人话。
  *

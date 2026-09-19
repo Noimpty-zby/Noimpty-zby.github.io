@@ -38,20 +38,26 @@ const pad = n => String(n).padStart(2, '0')
  * 这就是「本地全绿、CI 红」的那类问题，2026-09-19 因为它掉过一次链子。
  */
 export const wallClockMs = value => {
-  const s = String(value == null ? '' : value).trim()
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?\s*(Z|[+-]\d{2}:?\d{2})?/)
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : null
+  let s = String(value == null ? '' : value).trim()
+  if (/^(["']).*\1$/.test(s)) s = s.slice(1, -1)
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?\s*(Z|[+-]\d{2}:?\d{2})?$/)
   if (!m) return null
-  const [, y, mo, d, hh, mi, ss, zone] = m
-
-  const ms = hh == null
-    // 只有日期没有时间：YAML 把这种值按 UTC 零点解析，本来就不是挂钟值，别再减 8 小时
-    ? Date.UTC(+y, +mo - 1, +d)
-    // 自己写了时区（Z 或 +08:00）的，交给标准解析 —— 那种写法里的时间也不是挂钟值
-    : zone
-      ? Date.parse(s)
-      : Date.UTC(+y, +mo - 1, +d, +hh, +mi, +(ss || 0)) - BJ_OFFSET_MS
-
-  return Number.isFinite(ms) ? ms : null
+  const [, y, mo, d, hh, mi, ss, fraction, zone] = m
+  if (+mo < 1 || +mo > 12 || +d < 1 || +d > 31 || +(hh || 0) > 23 || +(mi || 0) > 59 || +(ss || 0) > 59) return null
+  const utc = new Date(0)
+  utc.setUTCFullYear(+y, +mo - 1, +d)
+  utc.setUTCHours(+(hh || 0), +(mi || 0), +(ss || 0), +(fraction || '').padEnd(3, '0'))
+  if (utc.getUTCMonth() !== +mo - 1 || utc.getUTCDate() !== +d) return null
+  if (hh == null) return zone ? null : utc.getTime()
+  let offset = BJ_OFFSET_MS
+  if (zone === 'Z') offset = 0
+  else if (zone) {
+    const parts = zone.match(/^([+-])(\d{2}):?(\d{2})$/)
+    if (+parts[2] > 23 || +parts[3] > 59) return null
+    offset = (parts[1] === '+' ? 1 : -1) * (+parts[2] * 60 + +parts[3]) * 60000
+  }
+  return utc.getTime() - offset
 }
 
 /**

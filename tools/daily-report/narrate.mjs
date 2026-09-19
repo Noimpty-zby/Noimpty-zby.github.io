@@ -129,8 +129,11 @@ export const ask = async (system, user, maxTokens = 700, opts = {}) => {
   const thinking = deep ? 'enabled' : THINKING
   const model = deep ? PRO_MODEL : MODEL
   // 深度思考要留出推理的 token，也要给更长的超时 —— 不然刚想到一半就被掐了
-  const timeout = opts.timeout || (deep ? 300000 : 90000)
-  const tries = Math.max(1, 1 + (Number(opts.retries ?? DEFAULT_RETRIES) || 0))
+  const requestedTimeout = Number(opts.timeout)
+  const timeout = Number.isFinite(requestedTimeout) && requestedTimeout > 0
+    ? Math.min(600000, Math.max(1000, Math.floor(requestedTimeout))) : (deep ? 300000 : 90000)
+  const requestedRetries = Number(opts.retries ?? DEFAULT_RETRIES)
+  const tries = 1 + (Number.isFinite(requestedRetries) ? Math.min(3, Math.max(0, Math.floor(requestedRetries))) : DEFAULT_RETRIES)
   const tag = `narrate${deep ? '/pro' : ''}${opts.label ? '/' + opts.label : ''}`
 
   let lastWhy = '未知原因'
@@ -161,7 +164,12 @@ export const ask = async (system, user, maxTokens = 700, opts = {}) => {
       const data = await res.json()
       countUsage(data.usage, tag)
       const choice = data.choices?.[0] || {}
-      const out = String(choice.message?.content || '').trim()
+      const out = typeof choice.message?.content === 'string' ? choice.message.content.trim() : ''
+      if (choice.finish_reason === 'content_filter') {
+        retryable = false
+        throw new Error('模型输出被过滤，本次不采用不完整结果')
+      }
+      if (choice.finish_reason === 'length' && out) throw new Error('模型输出被截断，本次不采用不完整结果')
       if (out) return out
 
       // 有响应但正文是空的。这是最容易被误读成「模型没返回」的一种，
@@ -269,8 +277,14 @@ ${items.map((c, i) => `[${i}] ${c.who}：${c.body.slice(0, 400)}`).join('\n')}`,
   try {
     const m = out.match(/\{[\s\S]*\}/)
     const parsed = JSON.parse(m ? m[0] : out)
-    const flagged = (parsed.flagged || [])
-      .filter(f => items[f.i])
+    if (!parsed || !Array.isArray(parsed.flagged)) throw new Error('筛查结果缺少 flagged 数组')
+    const seen = new Set()
+    const flagged = parsed.flagged
+      .filter(f => {
+        if (!f || !Number.isInteger(f.i) || f.i < 0 || f.i >= items.length || typeof f.why !== 'string' || seen.has(f.i)) return false
+        seen.add(f.i)
+        return true
+      })
       .map(f => ({ ...items[f.i], why: f.why }))
     return { flagged, note: '' }
   } catch (_) {

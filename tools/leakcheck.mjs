@@ -64,8 +64,14 @@ if (!existsSync(manifestPath)) {
   process.exit(1)
 }
 const m = readFileSync(manifestPath, 'utf8').match(/Object\.freeze\(([\s\S]*)\);?\s*$/)
-const manifest = m ? JSON.parse(m[1].replace(/\)\s*$/, '')) : {}
-const publicPaths = manifest.publicPaths || ['/']
+let manifest
+try { manifest = m ? JSON.parse(m[1].replace(/\)\s*$/, '')) : null } catch (_) {}
+if (!manifest || !Array.isArray(manifest.publicPaths) || !manifest.publicPaths.length ||
+    manifest.publicPaths.some(p => typeof p !== 'string' || !p.startsWith('/') || p.includes('..'))) {
+  console.error('锁清单无效，无法确认公开页面范围')
+  process.exit(1)
+}
+const publicPaths = manifest.publicPaths
 
 console.log(`公开页面 ${publicPaths.length} 个：${publicPaths.join('、')}\n`)
 
@@ -75,7 +81,8 @@ for (const p of publicPaths) {
   const rel = (p === '/' ? '/index.html' : p.replace(/\/$/, '') + '/index.html')
   const file = join(ROOT, rel.slice(1).split('/').join(sep))
   if (!existsSync(file)) {
-    console.log(`  ? ${p} —— 产物里没有这个页面，跳过`)
+    console.log(`  ✗ ${p} —— 公开页面缺失，构建不完整`)
+    bad++
     continue
   }
 

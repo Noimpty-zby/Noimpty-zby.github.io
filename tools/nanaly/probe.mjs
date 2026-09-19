@@ -20,6 +20,8 @@ export const hit = async (u, ms) => {
   try {
     let res = await fetch(u, { method: 'HEAD', signal: T(ms) })
     if (res.status === 405 || res.status === 501) res = await fetch(u, { signal: T(ms) })
+    // GET fallback bodies are not inspected; release the connection immediately.
+    await res.body?.cancel().catch(() => {})
     return { status: res.status, err: null }
   } catch (e) {
     return { status: 0, err: String(e.message || e).slice(0, 60) }

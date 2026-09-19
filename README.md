@@ -120,7 +120,7 @@ private_section: 课外        # 课外 / 课内 / Life，决定解锁框上显�
 详见 `scripts/noimpty-lockdown.js` 顶部的说明。
 
 构建时需要环境变量 `NOIMPTY_PASSPHRASE`（线上是仓库 secret `SITE_PASSPHRASE`）。
-不设的话构建仍然成功，但 `search.xml` 会被清空，站内搜索用不了。
+不设的话构建仍然成功，但 `search.xml` 会被清空，站内搜索用不了，日程和行动日志也不会发布。日程数据与搜索索引使用相同的 AES-GCM 信封，仅在输入站点暗号后解密；源数据文件不变。
 
 `pages.yml` 里有一步「上锁自检」，上述任何一条不过就直接让部署失败。
 
@@ -167,3 +167,19 @@ AI Infra 之后它没有存在意义了，页面、脚本、工作流和测试�
 项目已包含 `.github/workflows/pages.yml`。将代码推送到 `main` 分支后，在仓库的 **Settings → Pages → Source** 中选择 **GitHub Actions**。
 
 当前按用户站点 `https://noimpty-zby.github.io` 配置。如果仓库名称不是 `noimpty-zby.github.io`，需要把 `_config.yml` 中的 `url` 改成 `https://noimpty-zby.github.io/仓库名`，并把 `root` 改成 `/仓库名/`。
+
+## 代码健壮性检查
+
+`npm run check` 会依次运行全部离线回归、干净构建、站内链接检查与公开页内容检查。
+`npm run build` 现在会先清理 Hexo 生成缓存，避免文章日期或板块列表沿用旧缓存。
+发布前设置 `NOIMPTY_PASSPHRASE`，否则搜索、日程和行动日志按上文的缺省规则处理。
+
+聊天取消、清空、保险箱锁定会终止旧轮请求；截断或错误的流式回答会保留已收到内容并提示未完成。
+日程未提交草稿使用本机缓存保留，刷新时按原基线合并；保存期间继续编辑不会被较早的保存结果覆盖。
+撤销自动完成会保留原 `autoAt` 作为手动覆盖标记，后台不会再自动勾上；修改完成条件后旧标记失效，新规则重新生效。
+
+Hexo 与娜娜莉统一使用 Markdown-it 15；本地渲染适配器保留原有数学公式、任务列表、图片与标题锚点配置。
+主题资源按当前启用功能生成，不再安装所有可选评论系统；新增本地插件时需声明其依赖，或配置对应的 `CDN.option`。
+自动任务统一使用 `npm ci`；日报的邮件依赖也已纳入锁文件。2026-09-19 的 `npm audit` 结果为 0 项已知漏洞。
+
+详细修复与验证记录见 [代码审查记录](tools/code-audit.md)。

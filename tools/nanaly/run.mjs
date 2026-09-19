@@ -22,8 +22,10 @@ import { commitJournal } from './journal.mjs'
 import { autoComplete, commitSchedule } from '../daily-report/schedule-auto.mjs'
 import { triggerDeploy } from './github.mjs'
 
-const DRY = process.argv.includes('--dry')
-const what = (process.argv[2] || 'all').replace(/^-+/, '')
+const args = process.argv.slice(2)
+const DRY = args.includes('--dry')
+const actions = args.filter(arg => !arg.startsWith('-'))
+const what = actions[0] || 'all'
 
 const tasks = {
   async patrol () {
@@ -69,7 +71,11 @@ const tasks = {
 }
 
 const main = async () => {
+  const unknown = args.filter(arg => arg.startsWith('-') && arg !== '--dry')
+  if (unknown.length) throw new Error(`不支持的参数：${unknown.join(' ')}（演练参数是 --dry）`)
+  if (actions.length > 1) throw new Error('一次只能指定一个动作；执行全部请使用 all')
   console.log(DRY ? '【演练模式，不会真的发评论或提交】\n' : '')
+  if (what !== 'all' && !Object.hasOwn(tasks, what)) throw new Error(`不认识的动作：${what}`)
   const list = what === 'all' ? ['reply', 'patrol', 'notes', 'news', 'react', 'column'] : [what]
   for (const t of list) {
     if (!tasks[t]) { console.log(`不认识的动作：${t}`); continue }

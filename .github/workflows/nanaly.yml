@@ -66,6 +66,7 @@ concurrency:
 jobs:
   live:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
         with:
@@ -75,6 +76,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+
+      - name: 安装锁定的依赖
+        run: npm ci --no-audit --no-fund
 
       - name: 决定这次做什么
         id: pick
@@ -127,9 +131,11 @@ jobs:
           if [ "${{ steps.pick.outputs.what }}" = "daily-round" ]; then
             # 一步失败不该连累后面两步，所以分三次调用而不是 run.mjs all：
             # 每一步自己会把退出码染红（见 run.mjs 的 catch）
-            node tools/nanaly/run.mjs patrol ${{ steps.pick.outputs.dry }}
-            node tools/nanaly/run.mjs notes  ${{ steps.pick.outputs.dry }}
-            node tools/nanaly/run.mjs react  ${{ steps.pick.outputs.dry }}
+            failed=0
+            for action in patrol notes react; do
+              node tools/nanaly/run.mjs "$action" ${{ steps.pick.outputs.dry }} || failed=1
+            done
+            exit "$failed"
           else
             node tools/nanaly/run.mjs ${{ steps.pick.outputs.what }} ${{ steps.pick.outputs.dry }}
           fi

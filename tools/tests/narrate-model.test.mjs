@@ -82,6 +82,24 @@ await check('calls / fails 数的是逻辑调用：重试两次只算挂了一�
   assert.equal(N.MODEL_STATE.fails - was.fails, 1)
 })
 
+await check('截断或过滤的非空回答不会成为完整产物，过滤不重复请求', async () => {
+  for (const finish of ['length', 'content_filter']) {
+    answer(() => ({ ok: true, json: async () => ({ choices: [{ message: { content: '只有一半的回答' }, finish_reason: finish }] }) }))
+    assert.equal(await N.ask('sys', 'user', 100), null)
+    assert.equal(sent.length, finish === 'content_filter' ? 1 : 2)
+    assert.match(N.MODEL_STATE.why, /截断|过滤/)
+  }
+})
+
+await check('后续成功不会抹除同轮较早失败原因，健康报告仍能定位问题', async () => {
+  answer(broke(401, 'invalid key'))
+  await N.ask('sys', 'user', 100)
+  const previous = N.MODEL_STATE.why
+  answer(said('成功'))
+  assert.equal(await N.ask('sys', 'user', 100), '成功')
+  assert.equal(N.MODEL_STATE.why, previous)
+})
+
 console.log('\n娜娜莉的模型 · 记账')
 
 /* 响应里的 usage 以前被整个丢掉，于是「这个月的钱花在哪一步」查不出来 ——

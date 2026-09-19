@@ -29,7 +29,7 @@
 
       if (linkRect.top >= tocRect.top + padding && linkRect.bottom <= tocRect.bottom - padding) return
 
-      const top = Math.max(0, link.offsetTop - toc.clientHeight * 0.42)
+      const top = Math.max(0, toc.scrollTop + linkRect.top - tocRect.top - toc.clientHeight * 0.42)
       if (typeof toc.scrollTo === 'function') toc.scrollTo({ top, behavior: 'smooth' })
       else toc.scrollTop = top
     }

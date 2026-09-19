@@ -93,7 +93,7 @@ export const collect = discussions => {
       if (cbody.includes(SIGN) || cbody.includes('<!-- nanaly:')) continue
 
       const age = (now - Date.parse(c.createdAt)) / 3600000
-      if (age < GRACE_HOURS) continue                   // 冷静期没过，先让主人有机会回
+      if (!Number.isFinite(age) || age < GRACE_HOURS) continue                   // 冷静期没过，先让主人有机会回
 
       const replies = c.replies?.nodes || []
       const ownerReplied = replies.some(r => String(r.author?.login || '').toLowerCase() === OWNER_LOGIN)
@@ -143,7 +143,8 @@ const postReply = async (discussionId, replyToId, body) =>
 export const autoReply = async () => {
   const discussions = await listDiscussions().catch(e => {
     console.log('  拉不到 Discussions：' + e.message)
-    return DRY ? [] : null
+    if (DRY) return []
+    throw e
   })
   if (!discussions) return { candidates: 0, replied: 0 }
 

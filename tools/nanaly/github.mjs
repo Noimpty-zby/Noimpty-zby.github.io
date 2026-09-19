@@ -29,8 +29,8 @@ export const gql = async (query, variables = {}, token = HER_TOKEN) => {
     signal: AbortSignal.timeout(30000)
   })
   const data = await res.json().catch(() => ({}))
-  if (data.errors) throw new Error(data.errors.map(e => e.message).join('; '))
-  if (!data.data) throw new Error(`HTTP ${res.status}｜${data.message || JSON.stringify(data).slice(0, 120)}`)
+  if (data?.errors?.length) throw new Error(data.errors.map(e => e.message).join('; '))
+  if (!res.ok || !data?.data) throw new Error(`HTTP ${res.status}｜${data?.message || JSON.stringify(data).slice(0, 120)}`)
   return data.data
 }
 
@@ -43,33 +43,78 @@ export const getRepo = async () => {
   return repoCache
 }
 
-// 一次把所有 Discussion 及其评论拉下来，后面全在内存里查，省 API 调用
+const replyFields = 'id body createdAt url author{ login url }'
+const replyConnection = `replies(last:20){ nodes{ ${replyFields} } pageInfo{ hasPreviousPage startCursor } }`
+const commentFields = `id body createdAt url author{ login url } ${replyConnection}`
+
+// An incomplete connection loses both pending questions and de-duplication
+// markers. Follow every cursor; fail visibly rather than silently truncating.
+const completeConnection = async (connection, loadPage, backwards = false) => {
+  const result = [...(connection?.nodes || [])]
+  const seen = new Set()
+  let page = connection
+  while (backwards ? page?.pageInfo?.hasPreviousPage : page?.pageInfo?.hasNextPage) {
+    const cursor = backwards ? page.pageInfo.startCursor : page.pageInfo.endCursor
+    if (!cursor || seen.has(cursor)) throw new Error('GitHub 分页游标无效，无法完整读取讨论')
+    seen.add(cursor)
+    page = await loadPage(cursor)
+    if (!page || !Array.isArray(page.nodes)) throw new Error('GitHub 分页缺少评论数据')
+    if (backwards) result.unshift(...page.nodes)
+    else result.push(...page.nodes)
+  }
+  const ids = new Set()
+  return result.filter(node => {
+    if (!node || (node.id && ids.has(node.id))) return false
+    if (node.id) ids.add(node.id)
+    return true
+  })
+}
+
 export const listDiscussions = async () => {
-  const d = await gql(`
-    query($o:String!,$n:String!){
-      repository(owner:$o,name:$n){
-        discussions(first:100, orderBy:{field:UPDATED_AT,direction:DESC}){
-          nodes{
-            id title url
-            reactions(first:20){ nodes{ content user{ login } } }
-            # 必须是 last —— 和下面 replies 同一个道理，而且这一层更要命。
-            # first:50 取的是**最旧**的 50 条：任何一篇文章的评论一过 50，
-            # 新来的评论对回评和巡逻就彻底隐身了（她不再接手），
-            # 同时她自己留的判重标记也会被挤出视野（她开始重复念叨）。
-            # 日报那边 sources.mjs 用的一直是 last:30，这里之前漏了。
-            comments(last:50){
-              nodes{
-                id body createdAt url author{ login }
-                # 同上。去重靠的是找她自己留的标记，取最旧的 20 条时
-                # 楼层一多标记就被挤出视野，她会一遍遍重复回同一条评论。
-                replies(last:20){ nodes{ id body createdAt author{ login } } }
-              }
+  const load = async after => {
+    const d = await gql(`
+      query($o:String!,$n:String!,$after:String){
+        repository(owner:$o,name:$n){
+          discussions(first:100,after:$after,orderBy:{field:UPDATED_AT,direction:DESC}){
+            nodes{
+              id title url
+              reactions(first:20){ nodes{ id content user{ login } } pageInfo{ hasNextPage endCursor } }
+              comments(last:50){ nodes{ ${commentFields} } pageInfo{ hasPreviousPage startCursor } }
             }
+            pageInfo{ hasNextPage endCursor }
           }
         }
-      }
-    }`, { o: OWNER, n: NAME }, REPO_TOKEN)
-  return d.repository?.discussions?.nodes || []
+      }`, { o: OWNER, n: NAME, after }, REPO_TOKEN)
+    if (!d.repository?.discussions) throw new Error('GitHub 未返回讨论列表')
+    return d.repository.discussions
+  }
+  const discussions = await completeConnection(await load(null), load)
+  for (const discussion of discussions) {
+    const comments = await completeConnection(discussion.comments, async before => {
+      const d = await gql(`query($id:ID!,$before:String!){node(id:$id){... on Discussion{
+        comments(last:50,before:$before){nodes{${commentFields}} pageInfo{hasPreviousPage startCursor}}
+      }}}`, { id: discussion.id, before }, REPO_TOKEN)
+      return d.node?.comments
+    }, true)
+    for (const comment of comments) {
+      const replies = await completeConnection(comment.replies, async before => {
+        const d = await gql(`query($id:ID!,$before:String!){node(id:$id){... on DiscussionComment{
+          replies(last:100,before:$before){nodes{${replyFields}} pageInfo{hasPreviousPage startCursor}}
+        }}}`, { id: comment.id, before }, REPO_TOKEN)
+        return d.node?.replies
+      }, true)
+      comment.replies = { nodes: replies }
+    }
+    discussion.comments = { nodes: comments }
+    const reactions = await completeConnection(discussion.reactions, async after => {
+      const d = await gql(`query($id:ID!,$after:String!){node(id:$id){... on Discussion{
+        reactions(first:100,after:$after){nodes{id content user{login}} pageInfo{hasNextPage endCursor}}
+      }}}`, { id: discussion.id, after }, REPO_TOKEN)
+      return d.node?.reactions
+    })
+    discussion.reactions = { nodes: reactions }
+  }
+  return discussions
 }
 
 // 新建讨论需要仓库写权限，所以这里用仓库自己的 token（她的小号没这个权限）。

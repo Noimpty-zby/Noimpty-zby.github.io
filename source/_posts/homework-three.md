@@ -13,7 +13,7 @@ sitemap: false
 private_section: 课外
 ---
 
-这篇文章记录 GAMES101 第三次作业中我完成的两个主要部分：**Blinn–Phong 片元着色**和**纹理映射**。
+这篇文章记录 GAMES101 第三次作业中的两个主要部分：**Blinn–Phong 片元着色**和**纹理映射**。
 
 上一篇笔记已经整理过光照模型和纹理采样的基础概念，这次则把公式真正放进光栅化管线中，观察一个片元如何从“插值后的属性”变成最终颜色。
 
@@ -101,7 +101,7 @@ for each light:
 
 ### 2.5 核心 C++ 实现
 
-为了避免 `phong_fragment_shader` 和 `texture_fragment_shader` 重复两遍相同的光照代码，我把 Blinn–Phong 计算整理成一个辅助函数。两个着色器只需要准备不同的 $k_d$，再调用它即可。
+为了避免 `phong_fragment_shader` 和 `texture_fragment_shader` 重复两遍相同的光照代码，这里把 Blinn–Phong 计算整理成一个辅助函数。两个着色器只需要准备不同的 $k_d$，再调用它即可。
 
 ```cpp
 Eigen::Vector3f evaluate_blinn_phong(

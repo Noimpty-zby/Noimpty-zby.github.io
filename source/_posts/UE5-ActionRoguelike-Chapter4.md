@@ -19,7 +19,7 @@ private_section: 课外
 
 # 前言
 
-这是我跟随 Tom Looman 学习 UE5 C++ 时，对第四章 **Blueprint Scripting** 的完整复盘。
+本文是 Tom Looman《UE5 C++》第四章 **Blueprint Scripting** 的完整复盘。
 
 本章使用的开发环境：
 
@@ -28,11 +28,11 @@ private_section: 课外
 - Visual Studio 2022 Build Tools / MSVC 编译工具链
 - 项目名称：`ActionRoguelike`
 
-**这一章和前三章有本质区别。** 前三章我在纯 C++ 里搭骨架，蓝图只用来赋值资产；这一章开始，蓝图第一次真正参与逻辑：在编辑器里加组件、在蓝图里实现 C++ 声明的函数、用事件分发器把两个互不认识的 Actor 连起来。
+**这一章和前三章有本质区别。** 前三章是在纯 C++ 里搭骨架，蓝图只用来赋值资产；这一章开始，蓝图第一次真正参与逻辑：在编辑器里加组件、在蓝图里实现 C++ 声明的函数、用事件分发器把两个互不认识的 Actor 连起来。
 
 所以本章学的其实是一件事：**什么时候不该写 C++。**
 
-本章代码量很少，四节课加起来新增的 C++ 不到二十行。难点全在"这段逻辑该放哪"以及"两边怎么互相调用"。我第一次接触蓝图建组件和蓝图实现函数，中间踩了五个坑，每一个都会在下面详细写清楚成因。
+本章代码量很少，四节课加起来新增的 C++ 不到二十行。难点全在"这段逻辑该放哪"以及"两边怎么互相调用"。蓝图建组件和蓝图实现函数这两件事上有五个坑，每一个都会在下面详细写清楚成因。
 
 四节课的分工：
 
@@ -69,7 +69,7 @@ private_section: 课外
 
 # 第零节：先把分工搞清楚
 
-这一节课程里没有，是我自己整理的。因为学完第一节我脑子是乱的：**明明什么都能在 C++ 里写，为什么突然要跑到编辑器里点鼠标？**
+这一节课程里没有，是额外补的。学完第一节最容易乱的就是这个问题：**明明什么都能在 C++ 里写，为什么突然要跑到编辑器里点鼠标？**
 
 先把这个问题回答清楚，后面四节才不会变成"跟着老师点按钮"。
 
@@ -146,7 +146,7 @@ BP_ItemChest (自我)
 
 前两个在细节面板里会标注"在 C++ 中定义"，意味着**不能在蓝图里删除或改名**，只能改它们的属性。后两个是纯蓝图组件，可以随便增删。
 
-这是我第一次看到"一个类的组件分别来自两个地方"，一开始觉得别扭，但对照 0.2 的判断标准就很清楚了：前两个 C++ 要操作，后两个不要。
+"一个类的组件分别来自两个地方"初看很别扭，但对照 0.2 的判断标准就很清楚了：前两个 C++ 要操作，后两个不要。
 
 ## 1.2 `BlueprintImplementableEvent`：C++ 声明，蓝图实现
 
@@ -157,7 +157,7 @@ UFUNCTION(BlueprintImplementableEvent)
 void ChestAnimationComplete();
 ```
 
-**注意：只有声明，`.cpp` 里没有任何实现。** 这是本节最反直觉的地方，也是我第一次见到"声明了却不用实现"的函数。
+**注意：只有声明，`.cpp` 里没有任何实现。** 这是本节最反直觉的地方：一个"声明了却不用实现"的函数。
 
 ### 为什么不能写函数体
 
@@ -191,7 +191,7 @@ Event ChestAnimationComplete
 
 > **必须确认的一项设置**：`TreasureBurstEffectComp` 的细节面板里，`Auto Activate` 要**取消勾选**。否则关卡一加载宝箱就自己炸一次特效，然后开箱时因为已经激活过反而没反应。这个 bug 的表现和预期正好相反，很容易查错方向。
 
-## 1.4 Tick 里的状态管理：一个我当时没意识到的问题
+## 1.4 Tick 里的状态管理：一个当时没意识到的问题
 
 第三章的 `Tick` 是这么写的：
 
@@ -213,7 +213,7 @@ void ARogueItemChest::Tick(float DeltaTime)
 
 它现在能工作，但依赖了一个巧合：**宝箱是一次性的，开了就不会再关**。
 
-问题在于：`SetActorTickEnabled(false)` 是**性能开关**，我却拿它当**状态记录**用了。"动画有没有播完"这个语义信息，被编码进了"Tick 开没开"里。这两件事的生命周期迟早会分叉：
+问题在于：`SetActorTickEnabled(false)` 是**性能开关**，这里却拿它当**状态记录**用了。"动画有没有播完"这个语义信息，被编码进了"Tick 开没开"里。这两件事的生命周期迟早会分叉：
 
 - 想做可开可关的宝箱 → 得重新开 Tick，状态就丢了
 - 想加别的 Tick 逻辑（漂浮、发光呼吸）→ 一关全停
@@ -237,7 +237,7 @@ if (!bAnimationCompleted && FMath::IsNearlyEqual(CurrentAnimationPitch, Animatio
 
 宝箱刚放进关卡、还没被交互时，`CurrentAnimationPitch` 和 `AnimationTargetPitch` 都是 0，`IsNearlyEqual` **第一帧就为真**。于是关卡一加载，每个宝箱都会：关掉自己的 Tick + 触发一次 `ChestAnimationComplete()`。
 
-我没发现是因为 `Interact_Implementation()` 里有 `SetActorTickEnabled(true)` 正好补上了。但更干净的做法是在构造函数里：
+这个问题一直没暴露，是因为 `Interact_Implementation()` 里有 `SetActorTickEnabled(true)` 正好补上了。但更干净的做法是在构造函数里：
 
 ```cpp
 PrimaryActorTick.bStartWithTickEnabled = false;
@@ -332,7 +332,7 @@ IRogueInteractionInterface::Execute_Interact(SelectedActor);
 
 原因：`BlueprintNativeEvent` 的语义是"C++ 给默认实现，蓝图**可选**覆盖"。注意是**覆盖**，不是**追加**。
 
-蓝图里一旦画了 `Event Interact`，C++ 的 `Interact_Implementation()` 就**完全不执行了**。我的 `SetActorTickEnabled(true)` 从未运行，所以盖子纹丝不动。
+蓝图里一旦画了 `Event Interact`，C++ 的 `Interact_Implementation()` 就**完全不执行了**。里面那句 `SetActorTickEnabled(true)` 从未运行，所以盖子纹丝不动。
 
 解法是在蓝图里补一个 `Parent: Interact` 节点：
 
@@ -346,7 +346,7 @@ Event Interact → Parent: Interact → Play Sound at Location
 
 ## 2.5 一个课程里没提的 bug：狂按 E 会重复触发
 
-跑通之后我发现，一直按 E，音效和粒子会一直重复播放。**这不是我抄错了**，老师的代码就是这个行为——教程通常不做状态管理，因为那会稀释当节的教学重点。
+跑通之后一直按 E，音效和粒子会一直重复播放。**这不是抄错了**，老师的代码就是这个行为——教程通常不做状态管理，因为那会稀释当节的教学重点。
 
 有意思的是，这个 bug 有**两条完全独立的成因**。
 
@@ -370,7 +370,7 @@ Event Interact → Parent: Interact → Play Sound at Location
 
 ### 关键陷阱：C++ 里的 return 拦不住蓝图
 
-我的第一反应是这么修：
+第一反应是这么修：
 
 ```cpp
 void ARogueItemChest::Interact_Implementation()
@@ -389,7 +389,7 @@ void ARogueItemChest::Interact_Implementation()
 
 所以修复必须解决"蓝图侧怎么知道该不该播"。三个方向：
 
-**方案 A：把状态暴露给蓝图（我最后选的）**
+**方案 A：把状态暴露给蓝图（最后选的）**
 
 ```cpp
 UPROPERTY(BlueprintReadOnly, Category = "Chest")
@@ -414,11 +414,11 @@ C++ 里那层 `if (bChestOpened) return;` 也别省。蓝图的 Branch 只能挡
 
 ## 2.6 踩坑记录：`bChestOpened` 在蓝图里搜不到
 
-这个坑让我卡了很久，值得单独写，因为**所有常规排查手段都会失效**。
+这个坑很容易卡很久，值得单独写，因为**所有常规排查手段都会失效**。
 
 现象：C++ 里写好了 `UPROPERTY(BlueprintReadOnly)`，完整重新编译，父类继承关系正确，`protected` 访问级别也对，但在蓝图里搜 `bChestOpened` **什么都搜不到**。
 
-我按标准流程全查了一遍：
+按标准流程全查一遍：
 
 - ✅ 关掉编辑器，Rider 里完整 Build，重开
 - ✅ 取消"情境关联"勾选再搜
@@ -507,7 +507,7 @@ BP_Lever (父类：Actor)
 
 ## 3.3 关卡蓝图里那三根线
 
-我第一次看这张图完全没看懂，因为三根线的语义完全不同。
+这张图初看很难看懂，因为三根线的语义完全不同。
 
 ![事件分发器的登记与广播两个阶段](/img/posts/ue5-ch4/ue5-ch4-dispatcher.svg)
 
@@ -551,13 +551,13 @@ void Explode();
 
 > Rider 会在函数旁提示"没有蓝图用法"，那是因为刚加完宏还没在任何蓝图里用它。关卡蓝图用上之后重新扫一遍提示就没了。
 
-## 3.5 一个关于多连线的争议（记录一下，结论是我原来判断错了）
+## 3.5 一个关于多连线的常见误解
 
-我把两个桶的引用都连到了同一个 `Explode` 节点的 `Target` 引脚上。
+把两个桶的引用都连到同一个 `Explode` 节点的 `Target` 引脚上。
 
-我当时的判断是：**蓝图的数据输入引脚只能接一根线**，拖第二根进去会把第一根静默顶掉，所以应该只有一个桶会炸。
+按常识判断：**蓝图的数据输入引脚只能接一根线**，拖第二根进去会把第一根静默顶掉，所以应该只有一个桶会炸。
 
-实测结果：**两个桶都炸了。** 而且我把两个桶拉开 20 米，排除了"爆炸冲击连锁引爆"的可能，结果依然是两个一起飞上天。
+实测结果：**两个桶都炸了。** 把两个桶拉开 20 米、排除"爆炸冲击连锁引爆"的可能之后，结果依然是两个一起飞上天。
 
 所以对象引用类型的输入引脚在这种情况下确实接受了多连，引擎会对每个连上来的 Target 各调一次。这和纯数据引脚（`float`、`bool` 那种确实只能接一根）的行为不同。
 

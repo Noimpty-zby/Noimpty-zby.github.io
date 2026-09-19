@@ -17,7 +17,7 @@ private_section: 课外
 
 # 前言
 
-这是我跟随 Tom Looman 学习 UE5 C++ 时，对第一章 **Project Setup** 的完整复盘。
+本文是 Tom Looman《UE5 C++》第一章 **Project Setup** 的完整复盘。
 
 本章使用的开发环境：
 

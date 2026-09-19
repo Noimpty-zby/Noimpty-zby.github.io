@@ -20,7 +20,7 @@ private_section: 课外
 
 # 前言
 
-这是我跟随 Tom Looman 学习 UE5 C++ 时，对第三章 **Interaction System** 的完整复盘，覆盖课程六节课的全部内容。
+本文是 Tom Looman《UE5 C++》第三章 **Interaction System** 的完整复盘，覆盖课程六节课的全部内容。
 
 本章使用的开发环境：
 
@@ -1152,7 +1152,7 @@ Rider 弹窗询问是否添加 Core Redirect，勾选后 `DefaultEngine.ini` 里
 
 ## 6.1 为什么重定向里没有文件夹信息
 
-这是本节最值得问的问题：**我明明既移动了文件夹又改了名，为什么重定向里只体现了改名？**
+这是本节最值得问的问题：**明明既移动了文件夹又改了名，为什么重定向里只体现了改名？**
 
 看那条路径的结构：`/Script/ActionRoguelike.RogueCharacter`
 

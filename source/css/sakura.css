@@ -23,23 +23,38 @@
   --section-radius: 26px;
   --section-shadow: 0 14px 36px rgba(130, 76, 93, .15);
 }
+/* Neutral charcoal for reading; rose stays an accent rather than a page tint. */
 html[data-theme='dark'] {
-  --sakura-accent: #f39bb4;
-  --sakura-soft: #d6a2be;
-  --sakura-ink: #dfcdd6;
-  --sakura-muted: #b69ca9;
-  --sakura-paper: #211a21;
-  --sakura-panel: #2c222b;
-  --sakura-line: rgba(243, 155, 180, .18);
+  --sakura-accent: #c397a8;
+  --sakura-soft: #b49ba4;
+  --sakura-ink: #cfcbc6;
+  --sakura-muted: #aaa19c;
+  --sakura-paper: #242325;
+  --sakura-panel: #2e2c2d;
+  --sakura-line: rgba(196, 175, 182, .16);
   --global-bg: var(--sakura-paper);
   --card-bg: var(--sakura-panel);
   --font-color: var(--sakura-ink);
-  --text-highlight-color: #fff0f5;
+  --text-highlight-color: #d8d2cc;
   --card-meta: var(--sakura-muted);
-  --btn-bg: #49313f;
-  --btn-color: #f6c9d8;
+  --light-grey: var(--sakura-muted);
+  --white: var(--text-highlight-color);
+  --hr-border: var(--sakura-line);
+  --hr-before-color: var(--sakura-muted);
+  --blockquote-color: var(--sakura-ink);
+  --btn-bg: #3b3338;
+  --btn-color: #cbb4be;
+  --scrollbar-color: #756870;
   --noimpty-border: var(--sakura-line);
   --noimpty-shadow: 0 12px 40px rgba(0, 0, 0, .15);
+  --hl-color: #c9c4be;
+  --hl-bg: #262527;
+  --hltools-bg: #302d30;
+  --hltools-color: #aaa3a5;
+  --hlnumber-bg: var(--hl-bg);
+  --hlnumber-color: #94918b;
+  --hlscrollbar-bg: #625b61;
+  --hlexpand-bg: linear-gradient(180deg, rgba(38, 37, 39, .6), rgba(38, 37, 39, .95));
 }
 body {
   background: radial-gradient(ellipse at 8% 15%, #fbe9ed 0, transparent 38%),
@@ -47,7 +62,7 @@ body {
   background-attachment: fixed;
 }
 html[data-theme='dark'] body {
-  background: radial-gradient(ellipse at 8% 15%, #34212c 0, transparent 42%), var(--sakura-paper);
+  background: var(--sakura-paper);
 }
 /* The original portrait gets its own space instead of being enlarged behind text. */
 html.noimpty-home-hub #page-header.full_page {
@@ -194,7 +209,14 @@ html[data-sakura-ambient] .sakura-scene__art { animation-play-state: running; }
 }
 #page-header.nav-fixed #nav a { color: var(--sakura-ink); text-shadow: none; }
 #page-header.not-home-page:not(.not-top-img) { background-color: #d78ca5; }
-html[data-theme='dark'] #page-header.not-home-page:not(.not-top-img) { background-color: #613c51; }
+html[data-theme='dark'] #page-header:not(.full_page):not(.not-top-img) { background-color: #393437; }
+html[data-theme='dark'] #page-header.fixed > #nav,
+html[data-theme='dark'] #page-header.nav-fixed > #nav,
+html[data-theme='dark'] #page-header.not-top-img > #nav {
+  background: var(--sakura-paper);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, .12);
+}
+html[data-theme='dark'] #page-header.fixed #nav :is(a, .site-page) { color: var(--sakura-ink); text-shadow: none; }
 html.noimpty-home-hub #content-inner.layout { padding-top: 52px; padding-bottom: 64px; }
 .noimpty-home-sections__intro { text-align: center; margin-bottom: 3px; }
 .noimpty-home-sections__eyebrow { letter-spacing: .16em; font-size: 12px; }
@@ -224,6 +246,66 @@ html.noimpty-home-hub #content-inner.layout { padding-top: 52px; padding-bottom:
 #article-container h2 { border-bottom: 1px dashed var(--sakura-line); padding-bottom: .4em; }
 #article-container blockquote { border-left-color: var(--sakura-accent); border-radius: 0 14px 14px 0; }
 #article-container a:not(.fancybox):focus-visible { outline: 2px solid var(--sakura-accent); outline-offset: 3px; }
+
+/* Match prose, code and diagrams without changing the source content. */
+html[data-theme='dark'] #article-container a {
+  color: var(--sakura-accent);
+  text-decoration-color: var(--sakura-soft);
+}
+html[data-theme='dark'] #article-container :not(pre) > code {
+  color: #cbb4be;
+  background: #383236;
+}
+html[data-theme='dark'] #article-container pre > code { background: transparent; }
+html[data-theme='dark'] #rightside > div > :is(button, a) { background: var(--sakura-panel); color: var(--sakura-ink); }
+html[data-theme='dark'] #rightside > div > :is(button, a):hover { background: #3b3338; color: #cbb4be; }
+html[data-theme='dark'] #article-container blockquote {
+  background: #333033;
+  color: var(--sakura-ink);
+  border-left-color: #88727d;
+}
+html[data-theme='dark'] #article-container .table-wrap > table,
+html[data-theme='dark'] #article-container .table-wrap > table :is(th, td) {
+  border-color: var(--sakura-line);
+}
+html[data-theme='dark'] #article-container .table-wrap > table thead { background: #353135; }
+html[data-theme='dark'] #article-container img { filter: brightness(.82) contrast(.94); }
+html[data-theme='dark'] #article-container kbd {
+  background: #383236;
+  border-color: #756870;
+  color: var(--sakura-ink);
+  box-shadow: 0 1px 0 #756870;
+}
+/* Hexo emits bare Highlight.js classes, scoped here so prose is unaffected. */
+html[data-theme='dark'] #article-container figure.highlight :is(.comment, .quote) { color: #9e9e98; }
+html[data-theme='dark'] #article-container figure.highlight :is(.keyword, .selector-tag) { color: #a1b6c2; }
+html[data-theme='dark'] #article-container figure.highlight :is(.type, .attr, .attribute) { color: #c7b497; }
+html[data-theme='dark'] #article-container figure.highlight :is(.built_in, .meta) { color: #b9b2cf; }
+html[data-theme='dark'] #article-container figure.highlight :is(.string, .regexp, .symbol, .addition) { color: #adb995; }
+html[data-theme='dark'] #article-container figure.highlight :is(.number, .literal, .bullet) { color: #c3aa98; }
+html[data-theme='dark'] #article-container figure.highlight :is(.function, .title, .section) { color: #c9bec6; }
+html[data-theme='dark'] #article-container figure.highlight .params { color: var(--hl-color); }
+html[data-theme='dark'] #article-container figure.highlight .deletion { color: #c79da5; }
+html[data-theme='dark'] #article-container .highlight-tools .mac-close { background: #b18186; }
+html[data-theme='dark'] #article-container .highlight-tools .mac-minimize { background: #b3a07c; }
+html[data-theme='dark'] #article-container .highlight-tools .mac-maximize { background: #8fa58b; }
+
+/* Butterfly sets these on body itself; keep its distraction-free layout and monochrome code. */
+html[data-theme='dark'] body.read-mode {
+  --font-color: var(--sakura-ink);
+  --readmode-light-color: var(--sakura-panel);
+  --white: var(--text-highlight-color);
+  --light-grey: var(--sakura-muted);
+  --gray: var(--sakura-muted);
+  --hr-border: var(--sakura-line);
+  --hr-before-color: var(--sakura-muted);
+  --highlight-bg: var(--hl-bg);
+  --exit-btn-bg: #3b3338;
+  --exit-btn-color: #cbb4be;
+  --exit-btn-hover: #4a3e45;
+  background: var(--readmode-light-color);
+}
+
 #footer { background: transparent; }
 #footer-wrap { color: var(--sakura-muted); }
 #footer-wrap a { color: var(--sakura-accent); }

@@ -22,20 +22,20 @@
 html[data-theme='dark'] :where(#nanaly-panel, #nanaly-launcher, #nanaly-poke,
   #nanaly-selbtn, #noimpty-music-player, .noimpty-gate, #noimpty-schedule,
   .search-dialog, #card-toc, #sidebar-menus, .nanaly-note) {
-  --sc-paper: var(--sakura-panel, #2c222b);
-  --sc-cream: #30242d;
-  --sc-ink: #f0dfe7;
-  --sc-muted: #c9aab9;
-  --sc-rose: #f2a3bd;
-  --sc-button: #efa0b8;
-  --sc-button-ink: #442535;
-  --sc-blush: #46303d;
-  --sc-line: rgba(238, 164, 191, .2);
-  --sc-edge: rgba(255, 219, 233, .055);
-  --sc-shadow: 0 20px 50px rgba(20, 10, 17, .3);
-  --sc-success: #afd1b7;
-  --sc-warning: #e8c38e;
-  --sc-error: #ffa9b8;
+  --sc-paper: var(--sakura-panel, #2e2c2d);
+  --sc-cream: #292729;
+  --sc-ink: var(--sakura-ink, #cfcbc6);
+  --sc-muted: #aaa19c;
+  --sc-rose: #c397a8;
+  --sc-button: #725662;
+  --sc-button-ink: #eee2e6;
+  --sc-blush: #3b3338;
+  --sc-line: rgba(196, 175, 182, .16);
+  --sc-edge: rgba(235, 224, 229, .035);
+  --sc-shadow: 0 20px 50px rgba(0, 0, 0, .2);
+  --sc-success: #a0b1a2;
+  --sc-warning: #c7b293;
+  --sc-error: #d09aa4;
 }
 
 /* 温暖的纸面和柔软边缘，不改面板原有尺寸和摆放。 */
@@ -253,7 +253,7 @@ body:has(#noimpty-music-player:not(.is-collapsed)) #nanaly-panel .nanaly-body { 
 
 /* 暗号输入保留醒目的前景，错误与成功不会只靠装饰传达。 */
 .noimpty-gate { background: linear-gradient(145deg, #f9edf0, #f6e5ed); }
-html[data-theme='dark'] .noimpty-gate { background: linear-gradient(145deg, #30232c, #211a21); }
+html[data-theme='dark'] .noimpty-gate { background: linear-gradient(145deg, var(--sc-cream), var(--sakura-paper)); }
 .noimpty-gate__panel { color: var(--sc-ink); transition: transform .26s var(--sc-ease); }
 .noimpty-gate.is-leaving .noimpty-gate__panel { transform: translate3d(0, 8px, 0) scale(.98); }
 .noimpty-gate__panel h1 { color: var(--sc-ink); }

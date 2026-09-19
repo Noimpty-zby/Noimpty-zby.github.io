@@ -37,22 +37,22 @@ const routes = boot()()
 const byPath = new Map(routes.map(route => [route.path, route.data]))
 const expectedKeys = [
   'fontawesome', 'egjs_infinitegrid', 'fancybox', 'fancybox_css',
-  'pjax', 'instantpage', 'typed', 'sharejs', 'sharejs_css',
+  'pjax', 'instantpage', 'sharejs', 'sharejs_css',
   'katex', 'katex_copytex', 'mermaid'
 ]
-check('当前配置保留全部 12 个 HTML 与动态加载资产，同时仅输出 79 个必要文件', () => {
+check('当前配置保留全部 11 个 HTML 与动态加载资产，同时仅输出 78 个必要文件', () => {
   for (const key of expectedKeys) {
     const plugin = manifest[key]
     const route = 'pluginsSrc/' + plugin.name + '/' + plugin.file
     assert.ok(byPath.has(route), 'Missing: ' + route)
     assert.deepEqual(byPath.get(route), readFileSync(path.join(base, 'node_modules', plugin.name, plugin.file)))
   }
-  assert.equal(routes.length, 79)
+  assert.equal(routes.length, 78)
   assert.equal(new Set(routes.map(route => route.path)).size, routes.length)
 })
 
-check('没有输出停用的 Gitalk、Valine、MathJax 或其他评论系统', () => {
-  const banned = /\/(?:gitalk|valine|mathjax|twikoo|artalk|disqusjs|@waline|@docsearch|algoliasearch)\//
+check('没有输出停用的打字动画、Gitalk、Valine、MathJax 或其他评论系统', () => {
+  const banned = /\/(?:typed\.js|gitalk|valine|mathjax|twikoo|artalk|disqusjs|@waline|@docsearch|algoliasearch)\//
   assert.ok(!routes.some(route => banned.test(route.path)))
 })
 

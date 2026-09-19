@@ -613,8 +613,19 @@
     })
   }
 
+  // 暗号门尚未初始化、校验失败或页面仍被遮住时，不读取正文上下文。
+  // 公开首页继续使用「无当前文章」体验；普通聊天不依赖这个开关。
+  const canReadPageContext = () => {
+    try {
+      if (document.documentElement.classList.contains('noimpty-private-locked')) return false
+      const gate = window.NOIMPTY_GATE
+      return !!gate && typeof gate.unlocked === 'function' && gate.unlocked() === true
+    } catch (_) { return false }
+  }
+
   // 取当前文章正文，去掉系列列表、版权、评论等噪声
   const currentArticle = () => {
+    if (!canReadPageContext()) return null
     const box = document.getElementById('article-container')
     if (!box) return null
     const clone = box.cloneNode(true)
@@ -1058,18 +1069,20 @@
     return scored
   }
 
-  const runAction = async act => {
-    if (!act || !act.do) return null
+  const runAction = async (act, report = () => {}) => {
+    const outcome = (message, succeeded = true) => { report(succeeded); return message }
+    if (!act || !act.do) return outcome(null, false)
     switch (act.do) {
       case 'goto': {
-        if (!act.url) return null
+        if (!act.url) return outcome(null, false)
         const moved = navigate(act.url)
-        if (moved === 'BLOCKED') return '那个地址不在这个博客里，窝不去。'
-        return moved ? `已经跳到「${act.label || act.url}」了` : `已经在「${act.label || act.url}」这一页了`
+        if (moved === 'BLOCKED') return outcome('那个地址不在这个博客里，窝不去。', false)
+        return outcome(moved ? `已经跳到「${act.label || act.url}」了` : `已经在「${act.label || act.url}」这一页了`)
       }
       case 'search': {
         const btn = document.querySelector('#search-button a, .site-page.social-icon.search, [onclick*="openSearch"]')
-        if (btn) btn.click()
+        if (!btn) return outcome('这个页面没有可用的搜索框喵。', false)
+        btn.click()
         setTimeout(() => {
           const box = document.querySelector('#local-search-input input, .search-dialog input[type="text"]')
           if (box && act.q) {
@@ -1078,29 +1091,30 @@
             box.focus()
           }
         }, 260)
-        return act.q ? `搜索框已经打开，关键词是「${act.q}」` : '搜索框打开了'
+        return outcome(act.q ? `搜索框已经打开，关键词是「${act.q}」` : '搜索框打开了')
       }
       case 'theme': {
         const btn = document.getElementById('darkmode') || document.querySelector('[id*="darkmode"]')
-        if (btn) { btn.click(); return '切好了' }
+        if (btn) { btn.click(); return outcome('切好了') }
         const cur = document.documentElement.getAttribute('data-theme')
         document.documentElement.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark')
-        return '切好了'
+        return outcome('切好了')
       }
       case 'music': {
         const mp = window.NOIMPTY_MUSIC_PLAYER
-        if (!mp) return null
+        if (!mp) return outcome(null, false)
         const op = act.op || 'play'
-        if (op === 'pause') { mp.pause(); return '停了' }
-        if (op === 'next') { mp.next(); return '换下一首了' }
-        if (op === 'prev') { mp.previous(); return '回上一首了' }
-        mp.play(); return '放上了'
+        if (op === 'pause') { mp.pause(); return outcome('停了') }
+        if (op === 'next') { mp.next(); return outcome('换下一首了') }
+        if (op === 'prev') { mp.previous(); return outcome('回上一首了') }
+        const started = await mp.play() === true
+        return outcome(started ? '放上了' : '还没能开始播放，点一下播放器的播放键再试试吧', started)
       }
       case 'top': {
         window.scrollTo({ top: 0, behavior: 'smooth' })
-        return '带你回顶上了'
+        return outcome('带你回顶上了')
       }
-      default: return null
+      default: return outcome(null, false)
     }
   }
 
@@ -1127,7 +1141,7 @@
 
   // 本地快速通道：能自己认出来的就不花钱调模型
   const NAV_RE = /^\s*(打开|开一下|去|跳到|跳转到?|带我去|看一下|看看|我想看|切到|返回|回到)\s*(.+?)\s*(吧|喵|呗|。|！|!)?\s*$/
-  const tryLocalCommand = async (text, signal) => {
+  const tryLocalCommand = async (text, signal, onSuccess = () => {}) => {
     signal?.throwIfAborted()
     const t = String(text || '').trim()
     // 本地自己办掉的这几件事同样要进历史，别只画在屏幕上
@@ -1139,17 +1153,20 @@
       const wanted = /深色|夜间|暗色/.test(t) ? 'dark' : 'light'
       const said = document.documentElement.getAttribute('data-theme') === wanted
         ? '已经是这个模式了' : await runAction({ do: 'theme' })
-      if (said) return say(t, `[伸手一按] ${said}喵。`)
+      if (said) { onSuccess(); return say(t, `[伸手一按] ${said}喵。`) }
     }
     const mu = t.match(/^(放|播放|暂停|停止|下一首|上一首|换一首)(音乐|歌)?\s*$/)
     if (mu) {
       const op = /暂停|停止/.test(mu[1]) ? 'pause' : /下一首|换一首/.test(mu[1]) ? 'next' : /上一首/.test(mu[1]) ? 'prev' : 'play'
-      const said = await runAction({ do: 'music', op })
+      const said = await runAction({ do: 'music', op }, succeeded => { if (succeeded && !signal?.aborted) onSuccess() })
+      signal?.throwIfAborted()
       if (said) return say(t, `[尾巴晃了晃] ${said}喵。`)
       return say(t, '这个页面上没找到播放器喵 (ovo)')
     }
     if (/^(回到?顶(部|上)?|上去|回顶)\s*$/.test(t)) {
-      return say(t, `[叼着你的衣角往上跑] ${await runAction({ do: 'top' })}喵。`)
+      const said = await runAction({ do: 'top' })
+      if (said) onSuccess()
+      return say(t, `[叼着你的衣角往上跑] ${said}喵。`)
     }
 
     const m = t.match(NAV_RE)
@@ -1166,6 +1183,7 @@
       const line = `[轻巧地跃过去] ${said}喵。`
       addMsg('her', line)
       logTurn(t, line)
+      if (sameOriginUrl(first.item.url)) onSuccess()
       afterNav()
       return true
     }
@@ -1200,7 +1218,118 @@
 
   // ---------------- 界面 ----------------
 
-  const launcher = el('button', '', '<i class="fas fa-cat" aria-hidden="true"></i>')
+  // 两处头像共用无外链、无重复 ID 的小猫 SVG；名称与按钮语义由外层提供。
+  const catFace = () => `<svg class="nanaly-cat" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+    <g class="nanaly-cat__portrait">
+      <path class="nanaly-cat__ear nanaly-cat__ear--left" d="M11 30 9 8Q9 4 13 7L28 20Z"/>
+      <path class="nanaly-cat__ear nanaly-cat__ear--right" d="M36 20 51 7Q55 4 55 8L53 30Z"/>
+      <path class="nanaly-cat__ear-in nanaly-cat__ear-in--left" d="m14 23-1-11 10 9Z"/>
+      <path class="nanaly-cat__ear-in nanaly-cat__ear-in--right" d="m41 21 10-9-1 11Z"/>
+      <path class="nanaly-cat__fur" d="M11 27Q14 17 32 17T53 27L56 37Q56 54 32 55 8 54 8 37Z"/>
+      <path class="nanaly-cat__tuft" d="m25 18 4 8 3-7 4 6 3-7"/>
+      <g class="nanaly-cat__eyes">
+        <ellipse cx="22" cy="35" rx="3.1" ry="4.3"/><ellipse cx="42" cy="35" rx="3.1" ry="4.3"/>
+        <circle class="nanaly-cat__glint" cx="23" cy="33.6" r="1.1"/><circle class="nanaly-cat__glint" cx="43" cy="33.6" r="1.1"/>
+      </g>
+      <g class="nanaly-cat__smile-eyes"><path d="M18 35q4-6 8 0M38 35q4-6 8 0"/></g>
+      <ellipse class="nanaly-cat__cheek" cx="16" cy="42" rx="5" ry="2.8"/><ellipse class="nanaly-cat__cheek" cx="48" cy="42" rx="5" ry="2.8"/>
+      <path class="nanaly-cat__nose" d="M29 40q3-2 6 0l-3 3Z"/>
+      <path class="nanaly-cat__mouth" d="M32 43q-4 7-7 1m7-1q4 7 7 1"/>
+      <path class="nanaly-cat__whisker" d="m10 38 5 1m-5 5 5-1m39-5-5 1m5 5-5-1"/>
+      <path class="nanaly-cat__bow" d="M48 22q-9-9-8 0 0 7 8 2 8 5 8-2 0-9-8 0Z"/><circle class="nanaly-cat__bow-knot" cx="48" cy="23" r="2.2"/>
+    </g>
+    <g class="nanaly-cat__sparkles">
+      <path class="nanaly-cat__star nanaly-cat__star--one" d="m8 14 1.5 4.5L14 20l-4.5 1.5L8 26l-1.5-4.5L2 20l4.5-1.5Z"/>
+      <path class="nanaly-cat__star nanaly-cat__star--two" d="m56 34 1.3 3.7L61 39l-3.7 1.3L56 44l-1.3-3.7L51 39l3.7-1.3Z"/>
+      <path class="nanaly-cat__star nanaly-cat__star--three" d="m37 2 1 3 3 1-3 1-1 3-1-3-3-1 3-1Z"/>
+    </g>
+  </svg>`
+
+  // 纯展示状态：不发送请求、不改历史、不控制业务 busy/取消。
+  const createNanalyDelight = (launcher, panel) => {
+    const reduced = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null
+    const connection = window.navigator && (window.navigator.connection || window.navigator.mozConnection || window.navigator.webkitConnection)
+    let opened = false, working = false, blurred = false
+    let timer = null, pendingSignal = null, abortListener = null
+    const mood = value => [launcher, panel].forEach(node => node.setAttribute('data-nanaly-mood', value))
+    const clear = () => {
+      if (timer !== null) window.clearTimeout(timer)
+      timer = null
+      mood('idle')
+    }
+    const visible = () => {
+      if (!opened || !panel.classList.contains('is-open') || panel.isConnected === false || panel.hidden || panel.inert
+        || document.hidden || blurred || !reduced || reduced.matches || (connection && connection.saveData)) return false
+      if (typeof window.getComputedStyle === 'function') {
+        const style = window.getComputedStyle(panel)
+        if (style.visibility === 'hidden' || style.display === 'none') return false
+      }
+      if (typeof panel.getBoundingClientRect === 'function') {
+        const rect = panel.getBoundingClientRect()
+        if (!(rect.width > 0 && rect.height > 0) || rect.bottom <= 0 || rect.right <= 0
+          || rect.top >= window.innerHeight || rect.left >= window.innerWidth) return false
+      }
+      return true
+    }
+    const briefly = (value, duration) => {
+      clear()
+      if (!visible()) return
+      mood(value)
+      timer = window.setTimeout(() => { timer = null; mood('idle') }, duration)
+    }
+    const showThinking = () => {
+      clear()
+      if (!working || !visible()) return
+      // 本地指令立即完成时不先闪一下思考表情。
+      timer = window.setTimeout(() => {
+        timer = null
+        if (working && visible()) mood('thinking')
+      }, 240)
+    }
+    const unbindAbort = () => {
+      if (pendingSignal && abortListener) pendingSignal.removeEventListener('abort', abortListener)
+      pendingSignal = abortListener = null
+    }
+    const refresh = () => { clear(); if (working) showThinking() }
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('blur', () => { blurred = true; clear() })
+    window.addEventListener('focus', () => { blurred = false; refresh() })
+    window.addEventListener('resize', refresh)
+    // 失败或取消的 PJAX 不一定派发 complete，不能留下永久导航锁。
+    window.addEventListener('pjax:send', clear)
+    window.addEventListener('pjax:complete', refresh)
+    ;[reduced, connection].forEach(preference => {
+      if (!preference) return
+      if (typeof preference.addEventListener === 'function') preference.addEventListener('change', refresh)
+      else if (typeof preference.addListener === 'function') preference.addListener(refresh)
+    })
+    mood('idle')
+    return {
+      open: () => {
+        if (opened) return
+        opened = true
+        working ? showThinking() : briefly('welcome', 1000)
+      },
+      close: () => { opened = false; clear() },
+      clear,
+      busy: (on, completed = false, signal) => {
+        const wasWorking = working
+        const cancelled = pendingSignal && pendingSignal.aborted
+        unbindAbort()
+        working = !!on
+        clear()
+        if (working) {
+          pendingSignal = signal || null
+          abortListener = () => { working = false; clear(); unbindAbort() }
+          if (signal?.aborted) { working = false; unbindAbort(); return }
+          if (signal) signal.addEventListener('abort', abortListener, { once: true })
+          showThinking()
+        } else if (wasWorking && completed && !cancelled) briefly('success', 1100)
+      }
+    }
+  }
+
+  const launcher = el('button', '', catFace())
   launcher.id = 'nanaly-launcher'
   launcher.type = 'button'
   launcher.title = '找娜娜莉聊聊'
@@ -1216,7 +1345,7 @@
   panel.inert = true
   panel.innerHTML = `
     <div class="nanaly-head">
-      <span class="nanaly-head__avatar"><i class="fas fa-cat" aria-hidden="true"></i></span>
+      <span class="nanaly-head__avatar">${catFace()}</span>
       <div class="nanaly-head__meta">
         <div class="nanaly-head__name">娜娜莉</div>
         <div class="nanaly-head__sub" data-role="sub">Noimpty 的学习搭子</div>
@@ -1242,6 +1371,8 @@
 
   document.body.appendChild(launcher)
   document.body.appendChild(panel)
+
+  const delight = createNanalyDelight(launcher, panel)
 
   const $ = sel => panel.querySelector(sel)
   const body = $('[data-role="body"]')
@@ -1276,8 +1407,9 @@
   /* 忙的时候把发送键变成「停」。
    * 以前唯一的叫停办法是关掉整个面板（关面板会 abort）——
    * 想让她闭嘴就得把面板一起收走，推理档一答几十秒，这很难受。 */
-  const setBusy = on => {
+  const setBusy = (on, completed = false) => {
     busy = on
+    delight.busy(on, completed, activeTurn?.controller.signal)
     sendBtn.innerHTML = on ? '<i class="fas fa-stop"></i>' : '<i class="fas fa-paper-plane"></i>'
     sendBtn.title = on ? '停下' : '发送'
     sendBtn.setAttribute('aria-label', sendBtn.title)
@@ -1355,10 +1487,9 @@
     quick.style.display = ''
     body.innerHTML = ''
     if (!history.length) {
-      // 每次清空对话都会重来一遍，所以它必须跟着主线走 ——
-      // 游戏开发那条线已经告一段落，别再拿它当开场白
-      addMsg('her', '呐，窝是娜娜莉。这个博客的东西窝都读过 —— 课内的数据结构、课外 AI Infra 那条线（Linux、Git），'
-        + '以前的图形学和 UE5 也算数，随便问。\n\n……才、才不是特地等你来的呢。')
+      // 未解锁访客也会看到默认问候，不在这里透露内部文章或分类。
+      addMsg('her', '呐，窝是娜娜莉。想聊点什么？学习里的小问题，或者今天的小日常，都可以和窝说。'
+        + '\n\n……才、才不是特地等你来的呢。')
       return
     }
     history.forEach(m => addMsg(m.role === 'user' ? 'me' : 'her', m.content))
@@ -1371,6 +1502,7 @@
     stopStream(true)
     stopSpeak()
     view = 'setup'
+    delight.clear()
     input.disabled = sendBtn.disabled = true
     const box = el('div', 'nanaly-setup')
     box.innerHTML = inner
@@ -1894,6 +2026,8 @@
      * 于是一按停/一关面板就抛 ReferenceError，
      * 那个还在跳点的空气泡永远删不掉，重开面板它还在。 */
     let full = ''
+    let completed = false
+    let replySaved = false
 
     try {
       const messages = await abortable(buildMessages(text, mode, signal), signal)
@@ -1936,17 +2070,28 @@
       // 只输出了一条指令、一个字没说的那轮也要记 —— 以前整轮丢掉，
       // 连主人说的那句一起没了，屏幕上有、历史里没有。
       logTurn(text, shown || '[点了点头]')
+      replySaved = true
 
+      let actionSucceeded = true
       if (act) {
-        const said = await runAction(act)
+        const said = await abortable(runAction(act, succeeded => { actionSucceeded = succeeded }), signal)
+        signal.throwIfAborted()
         if (said) {
           addMsg('sys', said)
           logHer(said)
           if (act.do === 'goto') afterNav()
         }
       }
+      completed = actionSucceeded && !signal.aborted && !turn.discard
     } catch (err) {
       if (turn.discard) return
+      // 回答已经完整保存时，后续音乐等动作的失败/取消不能再复制一遍半截回答。
+      if (replySaved) {
+        if (!(signal.aborted && signal.reason?.name === 'AbortError')) {
+          addMsg('sys', String((signal.aborted ? signal.reason?.message : err?.message) || err))
+        }
+        return
+      }
       // 关面板、按 Esc、切页都会 abort。那是你自己叫停的，不是出错 ——
       // 以前会把已经写好的半截答案换成一句英文报错，还把这一轮从历史里丢掉。
       if (signal.aborted && signal.reason?.name === 'AbortError') {
@@ -1991,7 +2136,7 @@
     } finally {
       clearTimeout(timeout)
       if (activeTurn === turn) { activeTurn = null; abortCtl = null }
-      setBusy(false)
+      setBusy(false, completed)
       // 副标题可能停在「这句值得想一下…」上，出错和中断时也要复原
       setSubLine()
       scrollBottom()
@@ -2012,6 +2157,7 @@
     hidePoke()
     if (locked()) showUnlock()
     else if (!body.children.length) renderHistory()
+    delight.open()
     setTimeout(() => { if (panel.classList.contains('is-open') && view === 'chat') input.focus() }, 220)
   }
   const closePanel = () => {
@@ -2020,6 +2166,7 @@
     if (view !== 'chat') backToChat()
     const hadFocus = panel.contains(document.activeElement)
     panel.classList.remove('is-open')
+    delight.close()
     panel.setAttribute('aria-hidden', 'true')
     panel.inert = true
     launcher.setAttribute('aria-expanded', 'false')
@@ -2100,15 +2247,16 @@
     const signal = turn.controller.signal
     setBusy(true)
     let handled = false
+    let localSucceeded = false
     try {
-      handled = await abortable(tryLocalCommand(t, signal), signal)
+      handled = await abortable(tryLocalCommand(t, signal, () => { localSucceeded = true }), signal)
       signal.throwIfAborted()
       if (handled && input.value.trim() === t) { input.value = ''; input.style.height = '' }
     } catch (_) {
       if (signal.aborted) return
     } finally {
       if (activeTurn === turn) { activeTurn = null; abortCtl = null }
-      setBusy(false)
+      setBusy(false, handled && localSucceeded && !signal.aborted)
     }
     if (!handled) send(t, modeOf(t))
   }
@@ -2169,6 +2317,7 @@
   const hideSel = () => { selBtn.classList.remove('is-on'); selText = '' }
 
   const maybeShowSel = () => {
+    if (!canReadPageContext()) return hideSel()
     const sel = window.getSelection()
     if (!sel || sel.isCollapsed || !sel.rangeCount) return hideSel()
     const text = sel.toString().trim()
@@ -2196,6 +2345,7 @@
   window.addEventListener('pjax:send', () => { hideSel(); stopStream() })
 
   selBtn.addEventListener('click', () => {
+    if (!canReadPageContext()) return hideSel()
     const t = selText
     hideSel()
     try { window.getSelection().removeAllRanges() } catch (_) {}
@@ -2228,6 +2378,7 @@
   const hidePoke = () => { pokeBubble.classList.remove('is-on'); pokeBubble.tabIndex = -1 }
 
   const currentHeading = () => {
+    if (!canReadPageContext()) return ''
     const box = document.getElementById('article-container')
     if (!box) return ''
     const heads = [...box.querySelectorAll('h2, h3')]

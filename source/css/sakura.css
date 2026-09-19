@@ -1,0 +1,276 @@
+/* Anime illustration, soft paper and small, optional movements. */
+:root {
+  --sakura-accent: #cc4c72;
+  --sakura-soft: #f2a3b6;
+  --sakura-ink: #59444c;
+  --sakura-muted: #8b727c;
+  --sakura-paper: #fffaf7;
+  --sakura-panel: #fffdfb;
+  --sakura-line: rgba(173, 98, 120, .18);
+  --noimpty-accent: var(--sakura-accent);
+  --noimpty-accent-soft: var(--sakura-soft);
+  --noimpty-border: var(--sakura-line);
+  --noimpty-shadow: 0 12px 40px rgba(123, 68, 91, .07);
+  --global-bg: var(--sakura-paper);
+  --card-bg: var(--sakura-panel);
+  --font-color: var(--sakura-ink);
+  --text-highlight-color: #48323d;
+  --card-meta: var(--sakura-muted);
+  --btn-bg: #f9e7ec;
+  --btn-color: #a63860;
+  --btn-hover-color: var(--sakura-accent);
+  --scrollbar-color: #d88da5;
+  --section-radius: 26px;
+  --section-shadow: 0 14px 36px rgba(130, 76, 93, .15);
+}
+html[data-theme='dark'] {
+  --sakura-accent: #f39bb4;
+  --sakura-soft: #d6a2be;
+  --sakura-ink: #dfcdd6;
+  --sakura-muted: #b69ca9;
+  --sakura-paper: #211a21;
+  --sakura-panel: #2c222b;
+  --sakura-line: rgba(243, 155, 180, .18);
+  --global-bg: var(--sakura-paper);
+  --card-bg: var(--sakura-panel);
+  --font-color: var(--sakura-ink);
+  --text-highlight-color: #fff0f5;
+  --card-meta: var(--sakura-muted);
+  --btn-bg: #49313f;
+  --btn-color: #f6c9d8;
+  --noimpty-border: var(--sakura-line);
+  --noimpty-shadow: 0 12px 40px rgba(0, 0, 0, .15);
+}
+body {
+  background: radial-gradient(ellipse at 8% 15%, #fbe9ed 0, transparent 38%),
+    radial-gradient(ellipse at 90% 85%, #f7edf4 0, transparent 38%), var(--sakura-paper);
+  background-attachment: fixed;
+}
+html[data-theme='dark'] body {
+  background: radial-gradient(ellipse at 8% 15%, #34212c 0, transparent 42%), var(--sakura-paper);
+}
+/* The original portrait gets its own space instead of being enlarged behind text. */
+html.noimpty-home-hub #page-header.full_page {
+  height: min(88svh, 850px);
+  min-height: 650px;
+  background-image: none !important;
+  background-color: var(--sakura-paper);
+  box-shadow: none;
+}
+html.noimpty-home-hub #page-header.full_page::before { background: none; }
+.sakura-scene {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.sakura-scene__art {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 57%;
+  background: url('/img/home-hero.png') center 29% / cover no-repeat;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 20%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 20%);
+  animation: sakura-breathe 18s ease-in-out infinite alternate;
+  animation-play-state: paused;
+  transform-origin: 68% 35%;
+}
+.sakura-scene::after {
+  position: absolute;
+  content: '';
+  inset: 0;
+  background: linear-gradient(0deg, var(--sakura-paper), transparent 21%);
+}
+html[data-theme='dark'] .sakura-scene__art { filter: brightness(.82); }
+html.noimpty-home-hub #page-header #site-info {
+  top: 50%;
+  left: max(7vw, calc((100vw - 1160px) / 2));
+  width: 49%;
+  max-width: 610px;
+  padding: 0;
+  transform: translateY(-47%);
+  text-align: left;
+  z-index: 2;
+}
+.sakura-greeting {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 22px;
+  padding: 7px 15px;
+  border: 1px solid var(--sakura-line);
+  border-radius: 999px;
+  color: var(--sakura-accent);
+  background: var(--sakura-paper);
+  font-size: 13px;
+  letter-spacing: .09em;
+}
+.sakura-greeting span { font-size: 19px; line-height: 1; }
+html.noimpty-home-hub #page-header #site-title {
+  color: var(--text-highlight-color);
+  font-size: clamp(46px, 5.2vw, 76px);
+  line-height: 1.2;
+  letter-spacing: -.03em;
+  text-shadow: none;
+  text-align: left;
+}
+.sakura-title-name { display: block; font-weight: 800; }
+.sakura-title-name > span { color: var(--sakura-accent); font-weight: 400; font-size: .65em; }
+.sakura-title-cn {
+  display: block;
+  margin-top: 16px;
+  font-size: .42em;
+  font-weight: 500;
+  letter-spacing: .14em;
+}
+html.noimpty-home-hub #page-header #site-subtitle {
+  margin: 26px 0 0;
+  color: var(--sakura-muted);
+  font-size: clamp(14px, 1.3vw, 17px);
+  letter-spacing: .045em;
+  text-shadow: none;
+  text-align: left;
+}
+.sakura-hero-actions { display: flex; align-items: center; gap: 20px; margin-top: 34px; }
+.sakura-enter {
+  display: inline-flex;
+  align-items: center;
+  gap: 22px;
+  min-height: 48px;
+  padding: 0 24px;
+  border: 1px solid rgba(186, 65, 105, .14);
+  border-radius: 18px;
+  background: #cb5278;
+  box-shadow: 0 8px 24px rgba(201, 74, 116, .18);
+  color: #fff8fb;
+  font-size: 14px;
+  font-weight: 600;
+  transition: transform .35s cubic-bezier(.2, .8, .2, 1), box-shadow .35s;
+}
+.sakura-enter:hover { color: #fff; transform: translateY(-3px); box-shadow: 0 12px 28px rgba(201, 74, 116, .24); }
+.sakura-enter:active { transform: translateY(0) scale(.98); }
+.sakura-enter:focus-visible { outline: 3px solid var(--sakura-accent); outline-offset: 4px; }
+html.noimpty-home-hub #site_social_icons { display: inline-flex; width: auto; margin: 0; gap: 12px; }
+html.noimpty-home-hub #site_social_icons a { color: var(--sakura-accent); text-shadow: none; }
+html.noimpty-home-hub #scroll-down { z-index: 3; }
+html.noimpty-home-hub #page-header #scroll-down .scroll-down-effects { color: var(--sakura-accent); filter: none; }
+.sakura-petal {
+  position: absolute;
+  left: var(--petal-x);
+  top: -30px;
+  width: var(--petal-size);
+  height: calc(var(--petal-size) * .65);
+  border-radius: 85% 0 85% 20%;
+  background: linear-gradient(135deg, #fff7fb, #efa0b8);
+  opacity: 0;
+  animation: sakura-fall var(--petal-duration) var(--petal-delay) linear infinite;
+  animation-play-state: paused;
+}
+html[data-sakura-ambient] .sakura-petal,
+html[data-sakura-ambient] .sakura-scene__art { animation-play-state: running; }
+@keyframes sakura-breathe { from { transform: scale(1); } to { transform: scale(1.045) translateY(-.5%); } }
+@keyframes sakura-fall {
+  0% { transform: translate3d(-25px, -20px, 0) rotate(0deg); opacity: 0; }
+  12% { opacity: .75; }
+  48% { transform: translate3d(30px, 40svh, 0) rotate(150deg); }
+  85% { opacity: .6; }
+  100% { transform: translate3d(-35px, 90svh, 0) rotate(300deg); opacity: 0; }
+}
+/* Warm navigation keeps dark text readable over the light illustration. */
+#page-header.full_page:not(.nav-fixed) #nav {
+  background: linear-gradient(180deg, var(--sakura-paper), transparent);
+}
+#page-header.full_page #nav a,
+#page-header.full_page #nav .site-page,
+#page-header.not-top-img #nav a { color: var(--sakura-ink); text-shadow: none; }
+#page-header.nav-fixed #nav,
+#page-header.not-top-img #nav {
+  background: var(--sakura-panel);
+  background: color-mix(in srgb, var(--sakura-panel) 88%, transparent);
+  border-color: var(--sakura-line);
+  box-shadow: 0 4px 24px rgba(123, 68, 91, .06);
+}
+#page-header.nav-fixed #nav a { color: var(--sakura-ink); text-shadow: none; }
+#page-header.not-home-page:not(.not-top-img) { background-color: #d78ca5; }
+html[data-theme='dark'] #page-header.not-home-page:not(.not-top-img) { background-color: #613c51; }
+html.noimpty-home-hub #content-inner.layout { padding-top: 52px; padding-bottom: 64px; }
+.noimpty-home-sections__intro { text-align: center; margin-bottom: 3px; }
+.noimpty-home-sections__eyebrow { letter-spacing: .16em; font-size: 12px; }
+.noimpty-home-sections__intro h2 { font-size: clamp(23px, 2.7vw, 32px); font-weight: 650; }
+.noimpty-home-sections__intro p:last-child { margin: 14px auto 0; font-size: 13px; color: var(--sakura-muted); }
+.noimpty-section-card {
+  border: 5px solid var(--sakura-panel);
+  transition: transform .5s cubic-bezier(.2, .8, .2, 1), box-shadow .5s;
+}
+.noimpty-section-card:hover { transform: translateY(-7px) rotate(-.4deg); box-shadow: 0 22px 42px rgba(130, 76, 93, .2); }
+.noimpty-section-card:nth-of-type(2):hover { transform: translateY(-7px) rotate(.4deg); }
+.noimpty-section-card__title { font-weight: 650; letter-spacing: -.025em; }
+.noimpty-section-card__lock { border-color: rgba(255, 230, 242, .6); background: rgba(112, 55, 77, .3); }
+.noimpty-section-card[data-sakura-light]::before,
+.noimpty-track-card[data-sakura-light]::before {
+  position: absolute;
+  content: '';
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(260px circle at var(--sakura-light-x, 50%) var(--sakura-light-y, 50%), rgba(255, 221, 231, .18), transparent 75%);
+}
+.noimpty-track-card { position: relative; }
+#post, #page, #aside-content .card-widget { border-radius: 22px; }
+#article-container { line-height: 1.95; }
+#article-container h2 { border-bottom: 1px dashed var(--sakura-line); padding-bottom: .4em; }
+#article-container blockquote { border-left-color: var(--sakura-accent); border-radius: 0 14px 14px 0; }
+#article-container a:not(.fancybox):focus-visible { outline: 2px solid var(--sakura-accent); outline-offset: 3px; }
+#footer { background: transparent; }
+#footer-wrap { color: var(--sakura-muted); }
+#footer-wrap a { color: var(--sakura-accent); }
+@media (max-width: 900px) and (min-width: 601px) {
+  html.noimpty-home-hub #page-header #site-info { left: 5%; width: 53%; }
+  .sakura-scene__art { width: 60%; }
+  .noimpty-home-sections { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .noimpty-section-card { aspect-ratio: 3 / 4; min-height: 290px; }
+  .noimpty-section-card__content { padding: 16px; }
+}
+@media (max-width: 600px) {
+  html.noimpty-home-hub #page-header.full_page { height: 780px; height: 94svh; min-height: 700px; max-height: 860px; }
+  .sakura-scene__art {
+    width: 100%; height: 72%; bottom: auto;
+    background-position: center 22%;
+    -webkit-mask-image: linear-gradient(0deg, transparent, #000 35%);
+    mask-image: linear-gradient(0deg, transparent, #000 35%);
+  }
+  .sakura-scene::after { background: linear-gradient(0deg, var(--sakura-paper) 20%, transparent 48%); }
+  html.noimpty-home-hub #page-header #site-info { top: auto; bottom: 65px; left: 5%; width: 90%; max-width: none; text-align: center; transform: none; }
+  .sakura-greeting { padding: 5px 13px; margin-bottom: 12px; font-size: 11px; }
+  html.noimpty-home-hub #page-header #site-title { font-size: 46px; text-align: center; }
+  .sakura-title-cn { margin-top: 8px; font-size: 20px; }
+  html.noimpty-home-hub #page-header #site-subtitle { margin-top: 15px; font-size: 13px; text-align: center; }
+  .sakura-hero-actions { justify-content: center; margin-top: 22px; gap: 12px; }
+  .sakura-enter { min-height: 44px; padding: 0 20px; border-radius: 16px; font-size: 13px; }
+  .sakura-petal:nth-of-type(n+7) { display: none; }
+  #nav { padding-inline: 20px; }
+  #nav .site-name { font-size: 17px; }
+  html.noimpty-home-hub #content-inner.layout { padding-top: 28px; padding-bottom: 32px; }
+  .noimpty-home-sections { gap: 24px; }
+  .noimpty-home-sections__intro { padding-inline: 12px; }
+  .noimpty-home-sections__intro p:last-child { max-width: 290px; }
+  .noimpty-section-card { aspect-ratio: 4 / 3; min-height: 260px; }
+  .noimpty-section-card--life { --section-position: center 20%; }
+  .noimpty-section-card__title { font-size: 36px; }
+}
+@media (hover: none) {
+  .noimpty-section-card:hover, .noimpty-section-card:nth-of-type(2):hover { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sakura-scene__art, .sakura-petal { animation: none !important; }
+  .sakura-petal { display: none; }
+  .sakura-enter, .noimpty-section-card, .noimpty-section-card__image { transition: none; }
+}
+
+/* A page transition cannot reveal the content behind an unopened gate. */
+html.noimpty-private-locked #body-wrap,
+html.noimpty-private-locked #sidebar,
+html.noimpty-private-locked #rightside { visibility: hidden !important; }

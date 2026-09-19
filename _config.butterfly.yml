@@ -167,7 +167,8 @@ index_top_img_height: 82vh
 
 # The subtitle on homepage
 subtitle:
-  enable: true
+  # Static homepage subtitle is rendered by section-hub.js, without a typing loop.
+  enable: false
   # Typewriter Effect
   effect: true
   # Customize typed.js
@@ -863,10 +864,11 @@ preloader:
   pace_css_url:
 
 # Page Transition
-enter_transitions: true
+# Page entry is handled by sakura-motion.js; avoid stacking the theme animation.
+enter_transitions: false
 
 # Default display mode - light (default) / dark
-display_mode: dark
+display_mode: light
 highlight_theme: mac
 
 # Configuration for beautifying the content of the article
@@ -1127,6 +1129,10 @@ inject:
     - <link rel="stylesheet" href="/css/noimpty-ai.css">
     - <link rel="stylesheet" href="/css/nanaly-notes.css">
     - <link rel="stylesheet" href="/css/schedule.css">
+    - <link rel="stylesheet" href="/css/sakura.css">
+    - <link rel="stylesheet" href="/css/sakura-components.css">
+    - <link rel="stylesheet" href="/css/nanaly-delight.css">
+    - <link rel="stylesheet" href="/css/music-stage.css">
     # 顺序有讲究：protected-manifest 给出锁清单，privacy-gate 立刻据此打遮罩，
     # noimpty-search 依赖 gate 存下的暗号才能解密索引。三者不能调换。
     - <script src="/js/protected-manifest.js"></script>
@@ -1143,6 +1149,7 @@ inject:
     # 娜娜莉：API Key 不写在代码里，由使用者在面板中输入并存在本机 localStorage
     - <script src="/js/noimpty-ai.js"></script>
     - <script src="/js/schedule.js"></script>
+    - <script src="/js/sakura-motion.js"></script>
 
 # CDN Settings
 # Don't modify the following settings unless you know how they work

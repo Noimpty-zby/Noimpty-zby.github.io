@@ -49,9 +49,13 @@
     </button>
     <div class="noimpty-music-panel">
       <div class="noimpty-music-topline">
-        <div class="noimpty-music-disc" aria-hidden="true"><i class="fas fa-music"></i></div>
+        <div class="noimpty-music-disc noimpty-music-stage" aria-hidden="true" data-stage="idle">
+          <span class="noimpty-music-stage__note noimpty-music-stage__note--one">♪</span>
+          <span class="noimpty-music-stage__bars">${Array.from({ length: 14 }, () => '<i class="noimpty-music-stage__bar"></i>').join('')}</span>
+          <span class="noimpty-music-stage__note noimpty-music-stage__note--two">♫</span>
+        </div>
         <div class="noimpty-music-meta">
-          <span class="noimpty-music-kicker">我喜欢的音乐</span>
+          <span class="noimpty-music-kicker">给今天一点旋律 ♡</span>
           <strong class="noimpty-music-title"></strong>
           <span class="noimpty-music-artist"></span>
         </div>
@@ -104,6 +108,167 @@
   const playIcon = playButton.querySelector('i')
   const shuffleButton = player.querySelector('[data-action="shuffle"]')
 
+  const stage = (() => {
+    const element = player.querySelector('.noimpty-music-stage')
+    if (!element) return { activate() {}, refresh() {}, waiting() {}, playing() {}, changeTrack() {} }
+    const bars = Array.from(element.querySelectorAll('.noimpty-music-stage__bar'))
+    const reduced = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null
+    const connection = navigator.connection
+    let context, analyser, capture, source, sourceTrack, samples, resuming
+    let frame = 0
+    let lastPaint = -Infinity
+    let disabled = false
+    let buffering = true
+    let pageVisible = true
+    let previousTrack = ''
+    let titleAnimations = []
+
+    const allowed = () => !collapsed && !document.hidden && pageVisible && !reduced?.matches && !connection?.saveData
+    const audible = () => !audio.paused && !audio.ended && !audio.error && !buffering
+    const cancelTitles = () => {
+      titleAnimations.forEach(animation => { try { animation.cancel() } catch (_) {} })
+      titleAnimations = []
+    }
+    const stop = () => {
+      if (frame) window.cancelAnimationFrame(frame)
+      frame = 0
+      lastPaint = -Infinity
+      player.removeAttribute('data-stage-running')
+      element.dataset.stage = disabled ? 'unavailable' : 'idle'
+      element.style.setProperty('--stage-energy', '0')
+      bars.forEach(bar => bar.style.setProperty('--level', '0.08'))
+    }
+    const fail = () => {
+      disabled = true
+      stop()
+      try { source?.disconnect() } catch (_) {}
+      source = null
+      if (capture) {
+        capture.removeEventListener('addtrack', bindSource)
+        capture.removeEventListener('removetrack', bindSource)
+      }
+      try { if (context && context.state !== 'closed') Promise.resolve(context.close()).catch(() => {}) } catch (_) {}
+    }
+    const paint = time => {
+      frame = 0
+      if (!allowed() || !audible() || disabled || !source || context?.state !== 'running') { stop(); return }
+      try {
+        // Limit DOM writes to 30fps. Every value comes from the captured audio;
+        // the quiet baseline is static, never a simulated/random equalizer.
+        if (time - lastPaint >= 1000 / 30) {
+          analyser.getByteFrequencyData(samples)
+          const volume = audio.muted ? 0 : audio.volume
+          let energy = 0
+          bars.forEach((bar, index) => {
+            const from = Math.floor(Math.pow(samples.length, index / bars.length)) - 1
+            const to = Math.max(from + 1, Math.floor(Math.pow(samples.length, (index + 1) / bars.length)))
+            let peak = 0
+            for (let bin = from; bin < to; bin++) peak = Math.max(peak, samples[bin] || 0)
+            // A gentle perceptual curve keeps the 52px stage legible at low volume.
+            const level = Math.sqrt((peak / 255) * volume)
+            energy += level
+            bar.style.setProperty('--level', Math.max(0.08, level).toFixed(3))
+          })
+          element.style.setProperty('--stage-energy', (energy / bars.length).toFixed(3))
+          element.dataset.stage = 'live'
+          player.setAttribute('data-stage-running', 'true')
+          lastPaint = time
+        }
+        frame = window.requestAnimationFrame(paint)
+      } catch (_) { fail() }
+    }
+    const resume = () => {
+      if (resuming || !context || context.state !== 'suspended') return
+      // This side graph can be suspended/rejected without affecting audio.play().
+      // Do not wait for it before playing or retry a refused context in a loop.
+      try {
+        resuming = Promise.resolve(context.resume()).then(() => {
+          resuming = null
+          if (context.state === 'running') refresh()
+        }, () => { resuming = null; fail() })
+      } catch (_) { fail() }
+    }
+    const refresh = () => {
+      if (!allowed()) cancelTitles()
+      if (disabled || !allowed() || !audible() || !source || context?.state !== 'running') {
+        stop()
+        if (!disabled && allowed() && audible()) resume()
+        return
+      }
+      if (!frame) frame = window.requestAnimationFrame(paint)
+    }
+    const bindSource = () => {
+      if (disabled || !capture || !context || context.state === 'closed') return
+      try {
+        const track = capture.getAudioTracks().find(track => track.readyState !== 'ended')
+        if (track !== sourceTrack) {
+          source?.disconnect()
+          source = null
+          sourceTrack = track
+          if (track) {
+            source = context.createMediaStreamSource(new window.MediaStream([track]))
+            source.connect(analyser)
+          }
+        }
+        refresh()
+      } catch (_) { fail() }
+    }
+    const activate = () => {
+      if (disabled || !allowed()) return
+      if (context) { resume(); refresh(); return }
+      const AudioContext = window.AudioContext || window.webkitAudioContext
+      const captureStream = audio.captureStream || audio.mozCaptureStream
+      if (!AudioContext || typeof captureStream !== 'function' || typeof window.MediaStream !== 'function') { fail(); return }
+      try {
+        context = new AudioContext()
+        analyser = context.createAnalyser()
+        analyser.fftSize = 256
+        analyser.smoothingTimeConstant = 0.72
+        samples = new Uint8Array(analyser.frequencyBinCount)
+        // Capture is a side channel. Never create a MediaElementSource or connect
+        // this graph to destination: either would reroute or duplicate playback.
+        // See https://www.w3.org/TR/mediacapture-fromelement/#html-media-element-media-capture-extensions
+        capture = captureStream.call(audio)
+        capture.addEventListener('addtrack', bindSource)
+        capture.addEventListener('removetrack', bindSource)
+        context.addEventListener('statechange', () => {
+          if (disabled) return
+          if (context.state === 'closed') fail()
+          else refresh()
+        })
+        bindSource()
+        resume()
+      } catch (_) { fail() }
+    }
+    const changeTrack = track => {
+      const changed = previousTrack && previousTrack !== track.src
+      previousTrack = track.src
+      cancelTitles()
+      if (!changed || !allowed()) return
+      ;[titleElement, artistElement].forEach((node, index) => {
+        if (typeof node.animate !== 'function') return
+        try {
+          titleAnimations.push(node.animate([
+            { opacity: 0.25, transform: 'translateY(5px)' },
+            { opacity: 1, transform: 'translateY(0)' }
+          ], { duration: 260 + index * 40, easing: 'cubic-bezier(.2,.8,.2,1)' }))
+        } catch (_) {}
+      })
+    }
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('pagehide', () => { pageVisible = false; refresh() })
+    window.addEventListener('pageshow', () => { pageVisible = true; refresh() })
+    if (reduced?.addEventListener) reduced.addEventListener('change', refresh)
+    else if (reduced?.addListener) reduced.addListener(refresh)
+    connection?.addEventListener?.('change', refresh)
+    stop()
+    return {
+      activate, refresh, changeTrack,
+      waiting: () => { buffering = true; refresh() },
+      playing: () => { buffering = false; bindSource(); refresh() }
+    }
+  })()
+
   const clampVolume = value => Math.max(0, Math.min(1, Number(value)))
   audio.volume = Number.isFinite(saved.volume) ? clampVolume(saved.volume) : 0.45
   volumeElement.value = String(audio.volume)
@@ -147,12 +312,14 @@
     playIcon.className = playing ? 'fas fa-pause' : 'fas fa-play'
     playButton.setAttribute('aria-label', playing ? '暂停' : '播放')
     playButton.title = playing ? '暂停' : '播放'
+    stage.refresh()
   }
 
   const updateTrackMeta = () => {
     const track = tracks[currentIndex]
     titleElement.textContent = track.title
     artistElement.textContent = track.artist
+    stage.changeTrack(track)
     player.style.setProperty('--music-track-number', `'${currentIndex + 1}'`)
     updateShuffle()
 
@@ -177,18 +344,21 @@
   const tryPlay = async () => {
     const request = ++playbackRequest
     resumeRequested = true
+    let played = false
     try {
       await audio.play()
-      if (request !== playbackRequest) return
+      if (request !== playbackRequest) return false
       resumeRequested = false
+      played = true
       setStatus(`${shuffleEnabled ? '随机播放' : '顺序播放'} · ${currentIndex + 1}/${tracks.length}`)
     } catch (_) {
-      if (request !== playbackRequest) return
+      if (request !== playbackRequest) return false
       resumeRequested = false
       setStatus('点击播放键开始播放')
     }
     updatePlayState()
     persist()
+    return played
   }
 
   const loadTrack = (index, options = {}) => {
@@ -204,6 +374,7 @@
       historyCursor = history.length - 1
     }
 
+    stage.waiting()
     audio.src = tracks[currentIndex].src
     audio.load()
     progressElement.value = '0'
@@ -257,21 +428,29 @@
       case 'expand':
         collapsed = false
         player.classList.remove('is-collapsed')
+        if (event.isTrusted && !audio.paused) stage.activate()
+        stage.refresh()
         persist()
         break
       case 'collapse':
         collapsed = true
         player.classList.add('is-collapsed')
+        stage.refresh()
         persist()
         break
       case 'play':
-        if (audio.paused && !resumeRequested) tryPlay()
+        if (audio.paused && !resumeRequested) {
+          if (event.isTrusted) stage.activate()
+          tryPlay()
+        }
         else pause()
         break
       case 'previous':
+        if (event.isTrusted && !audio.paused) stage.activate()
         previousTrack()
         break
       case 'next':
+        if (event.isTrusted && !audio.paused) stage.activate()
         nextTrack()
         break
       case 'shuffle':
@@ -322,10 +501,14 @@
   })
 
   audio.addEventListener('play', updatePlayState)
+  audio.addEventListener('playing', stage.playing)
+  audio.addEventListener('waiting', stage.waiting)
+  audio.addEventListener('emptied', stage.waiting)
   audio.addEventListener('pause', () => { updatePlayState(); persist() })
   // 包一层，别把 Event 对象当成 opts 传进去
   audio.addEventListener('ended', () => nextTrack({ forcePlay: true }))
   audio.addEventListener('error', () => {
+    stage.waiting()
     resumeRequested = false
     setStatus('当前音频加载失败，请切换下一首')
     updatePlayState()
@@ -335,7 +518,7 @@
 
   if ('mediaSession' in navigator) {
     const handlers = {
-      play: tryPlay,
+      play: () => { stage.activate(); return tryPlay() },
       pause,
       previoustrack: () => previousTrack(),
       nexttrack: () => nextTrack()

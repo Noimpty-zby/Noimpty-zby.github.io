@@ -1,0 +1,210 @@
+/* 图片只在本机保存；发送问题时才传给配置的视觉服务。 */
+(() => {
+  'use strict'
+  if (window.NANALY_VISION) return
+  const DEFAULTS = Object.freeze({ baseURL: 'https://api.siliconflow.cn/v1', model: 'Pro/moonshotai/Kimi-K2.6' })
+  const MAX_FILES = 2, MAX_BYTES = 10 * 1024 * 1024
+  const validRef = ref => ref && typeof ref.id === 'string' && /^[a-zA-Z0-9-]{8,80}$/.test(ref.id)
+  const refs = items => (Array.isArray(items) ? items : []).filter(validRef).slice(0, MAX_FILES)
+    .map(x => ({ id: x.id, name: String(x.name || '图片').slice(0, 160), type: 'image/jpeg' }))
+  const memory = new Map()
+  let database
+  const openDB = () => {
+    if (!database) database = new Promise((resolve, reject) => {
+      if (!window.indexedDB) return reject(new Error('浏览器不支持图片存储'))
+      const request = indexedDB.open('nanaly-images-v1', 1)
+      request.onupgradeneeded = () => request.result.createObjectStore('images', { keyPath: 'id' })
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+      request.onblocked = () => reject(new Error('图片存储被另一个标签页占用'))
+    }).catch(error => { database = null; throw error })
+    return database
+  }
+  const transact = async (mode, work) => {
+    const db = await openDB()
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('images', mode), request = work(tx.objectStore('images'))
+      tx.oncomplete = () => resolve(request.result)
+      tx.onerror = tx.onabort = () => reject(tx.error || new Error('图片存储失败'))
+    })
+  }
+  const load = async id => {
+    if (memory.has(id)) return memory.get(id)
+    try { return await transact('readonly', store => store.get(id)) } catch (_) { return null }
+  }
+  const remove = async id => {
+    memory.delete(id)
+    try { await transact('readwrite', store => store.delete(id)) } catch (_) {}
+  }
+  // Clear only images no longer referenced by any topic, pending retry or undo record.
+  const prune = async (state, draft = []) => {
+    const keep = new Set(refs(draft).map(x => x.id))
+    const scan = value => {
+      if (!value || typeof value !== 'object') return
+      if (Array.isArray(value.attachments)) refs(value.attachments).forEach(x => keep.add(x.id))
+      Object.values(value).forEach(v => { if (v && typeof v === 'object') scan(v) })
+    }
+    scan(state)
+    // Another tab may have added references after this tab loaded. Uncertain storage means no deletion.
+    try {
+      const raw = window.localStorage?.getItem('nanaly-workspace-v1')
+      const persisted = raw ? JSON.parse(raw) : null
+      const validSession = session => session && typeof session === 'object' && !Array.isArray(session)
+        && typeof session.id === 'string' && session.id && Array.isArray(session.messages)
+        && session.messages.every(m => m && typeof m === 'object' && ['user', 'assistant'].includes(m.role) && typeof m.content === 'string')
+      if (!persisted || persisted.v !== 1 || !Array.isArray(persisted.sessions) || !persisted.sessions.length
+          || !persisted.sessions.every(validSession)) return
+      scan(persisted)
+    } catch (_) { return }
+    try {
+      const items = await transact('readonly', store => store.getAll())
+      for (const item of items || []) {
+        if (!keep.has(item.id) && Date.now() - item.at > 3600000) await remove(item.id)
+      }
+      // IndexedDB retains history, the live heap only needs a few previews.
+      for (const [id, item] of memory) if (!item.temporary && memory.size > 4) memory.delete(id)
+    } catch (_) {}
+  }
+  const validateFile = file => {
+    if (!file || !/^image\/(?:png|jpeg|webp)$/.test(file.type)) throw new Error('支持 PNG、JPEG、WebP 静态图片')
+    if (!file.size || file.size > MAX_BYTES) throw new Error('每张图片请控制在 10 MB 以内')
+  }
+  const prepare = async file => {
+    validateFile(file)
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    try {
+      await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = () => reject(new Error('无法读取这张图片')); img.src = url })
+      if (!img.naturalWidth || !img.naturalHeight || img.naturalWidth * img.naturalHeight > 40000000)
+        throw new Error('图片尺寸过大，请先裁剪需要提问的部分')
+      const scale = Math.min(1, 2560 / Math.max(img.naturalWidth, img.naturalHeight))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale))
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale))
+      const ctx = canvas.getContext('2d')
+      if (!ctx) throw new Error('浏览器无法处理图片')
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      // 重新编码同时去掉相机定位等元数据。
+      let dataURL = canvas.toDataURL('image/jpeg', 0.9)
+      if (dataURL.length > 2200000) dataURL = canvas.toDataURL('image/jpeg', 0.72)
+      if (dataURL.length > 2600000) throw new Error('图片压缩后仍然过大，请裁剪后再试')
+      const item = { id: crypto.randomUUID(), name: file.name || '粘贴的图片', type: 'image/jpeg', dataURL, at: Date.now() }
+      memory.set(item.id, item)
+      try { await transact('readwrite', store => store.put(item)) }
+      catch (_) { item.temporary = true }
+      return item
+    } finally { URL.revokeObjectURL(url) }
+  }
+  const imageContent = async (text, attachments, { strict = true } = {}) => {
+    const content = [{ type: 'text', text: String(text || '请分析这张图片。') }]
+    for (const ref of refs(attachments)) {
+      const item = await load(ref.id)
+      if (!item || !/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(item.dataURL || '')) {
+        if (strict) throw new Error('图片「' + ref.name + '」已不在本机，请重新附加后发送。')
+        content[0].text += '\n（历史图片「' + ref.name + '」已丢失，不能假装看过。）'
+      } else content.push({ type: 'image_url', image_url: { url: item.dataURL, detail: 'high' } })
+    }
+    return content.length === 1 ? content[0].text : content
+  }
+  const decorate = async (node, attachments) => {
+    if (!refs(attachments).length || node.querySelector('.nanaly-image-history')) return
+    const wrap = document.createElement('div')
+    wrap.className = 'nanaly-image-history'
+    node.prepend(wrap)
+    for (const ref of refs(attachments)) {
+      const item = await load(ref.id)
+      if (!node.isConnected) return
+      if (item) {
+        const img = document.createElement('img')
+        img.src = item.dataURL; img.alt = ref.name; img.loading = 'lazy'
+        wrap.appendChild(img)
+      } else {
+        const label = document.createElement('span')
+        label.textContent = '图片已不可用：' + ref.name
+        wrap.appendChild(label)
+      }
+    }
+  }
+  const mount = ({ panel, input, isBusy, isChat, notify }) => {
+    let attachments = [], loading = false, revision = 0
+    const retained = new Set()
+    const tray = document.createElement('div')
+    tray.className = 'nanaly-image-tray'
+    tray.setAttribute('aria-label', '待发送图片')
+    const foot = panel.querySelector('.nanaly-foot')
+    foot.before(tray)
+    const button = document.createElement('button')
+    button.className = 'nanaly-attach'; button.type = 'button'; button.textContent = '＋'
+    button.title = '附加图片（也可粘贴或拖入）'; button.setAttribute('aria-label', button.title)
+    const picker = document.createElement('input')
+    picker.type = 'file'; picker.accept = 'image/png,image/jpeg,image/webp'; picker.multiple = true; picker.hidden = true
+    foot.prepend(button, picker)
+    const render = () => {
+      tray.replaceChildren()
+      attachments.forEach(item => {
+        const chip = document.createElement('span'), img = document.createElement('img'), del = document.createElement('button')
+        img.src = item.dataURL; img.alt = item.name
+        chip.title = item.name
+        del.type = 'button'; del.textContent = '×'; del.setAttribute('aria-label', '移除图片：' + item.name)
+        del.onclick = () => { attachments = attachments.filter(x => x.id !== item.id); if (!retained.has(item.id)) remove(item.id); render() }
+        chip.append(img, del); tray.append(chip)
+      })
+      tray.hidden = !isChat() || !attachments.length
+      button.disabled = loading || isBusy() || !isChat()
+      tray.querySelectorAll('button').forEach(b => { b.disabled = isBusy() || !isChat() })
+    }
+    const add = async files => {
+      if (loading || isBusy() || !isChat()) return
+      const items = [...files]
+      if (items.length + attachments.length > MAX_FILES) return notify('一次最多附加 2 张图片，可先裁剪需要提问的区域。')
+      loading = true; const current = revision; render()
+      try {
+        for (const file of items) {
+          const item = await prepare(file)
+          if (current !== revision) { await remove(item.id); break }
+          attachments.push(item)
+          if (item.temporary) notify('浏览器未能持久保存图片；刷新前可以发送，刷新后需重新附加。')
+        }
+      } catch (error) { notify(error.message) }
+      finally { loading = false; render() }
+    }
+    button.onclick = () => picker.click()
+    picker.onchange = () => { add(picker.files); picker.value = '' }
+    input.addEventListener('paste', event => {
+      const files = [...(event.clipboardData?.items || [])].filter(x => x.kind === 'file').map(x => x.getAsFile()).filter(Boolean)
+      if (files.length) { event.preventDefault(); add(files) }
+    })
+    panel.addEventListener('dragover', event => { if ([...(event.dataTransfer?.types || [])].includes('Files')) event.preventDefault() })
+    panel.addEventListener('drop', event => {
+      if (event.dataTransfer?.files.length) { event.preventDefault(); add(event.dataTransfer.files) }
+    })
+    render()
+    return {
+      refs: () => refs(attachments),
+      loading: () => loading,
+      take: () => { const out = refs(attachments); attachments = []; render(); return out },
+      clear: () => { revision++; attachments.forEach(x => { if (!retained.has(x.id)) remove(x.id) }); attachments = []; render() },
+      restore: async list => {
+        if (isBusy() || loading) return
+        loading = true; const current = ++revision; render()
+        try {
+          const recovered = []
+          for (const ref of refs(list)) {
+            const item = await load(ref.id)
+            if (!item) throw new Error('原图片已不可用，请重新附加：' + ref.name)
+            retained.add(item.id); recovered.push(item)
+          }
+          if (current === revision) {
+            attachments.forEach(x => { if (!retained.has(x.id)) remove(x.id) })
+            attachments = recovered
+          }
+        } catch (error) { notify(error.message) }
+        finally { loading = false; render() }
+      },
+      refresh: render,
+      decorate, imageContent
+    }
+  }
+  window.NANALY_VISION = Object.freeze({ DEFAULTS, refs, validateFile, imageContent, decorate, prune, mount })
+})()

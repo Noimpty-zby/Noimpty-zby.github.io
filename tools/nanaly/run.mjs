@@ -32,6 +32,7 @@ const tasks = {
     console.log('巡逻中…')
     const r = await patrol()
     console.log(`  看了 ${r.checked} 篇，留言 ${r.reported} 条`)
+    if (r.failed) throw new Error(`${r.failed} 篇巡逻问题未能送达提醒，详情已写入行动日志`)
     return r
   },
   async react () {

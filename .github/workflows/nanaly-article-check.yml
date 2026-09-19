@@ -1,0 +1,40 @@
+name: 娜娜莉文章检查
+run-name: Nanaly article check ${{ inputs.request_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      article_path:
+        description: 已发布文章的站内完整路径
+        required: true
+        type: string
+      request_id:
+        description: 浏览器生成的任务编号
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  checks: write
+
+concurrency:
+  group: nanaly-article-${{ inputs.request_id }}
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: 检查文章并发布只读结果
+        env:
+          NANALY_TASK_ID: ${{ inputs.request_id }}
+          NANALY_TASK_PATH: ${{ inputs.article_path }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node tools/nanaly/article-task.mjs

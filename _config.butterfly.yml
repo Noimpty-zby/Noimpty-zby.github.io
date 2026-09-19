@@ -1131,6 +1131,7 @@ inject:
     - <link rel="stylesheet" href="/css/schedule.css">
     - <link rel="stylesheet" href="/css/sakura.css">
     - <link rel="stylesheet" href="/css/sakura-components.css">
+    - <link rel="stylesheet" href="/css/nanaly-workspace.css">
     - <link rel="stylesheet" href="/css/nanaly-delight.css">
     - <link rel="stylesheet" href="/css/music-stage.css">
     # 顺序有讲究：protected-manifest 给出锁清单，privacy-gate 立刻据此打遮罩，
@@ -1147,6 +1148,11 @@ inject:
     - <script src="/js/toc-sync.js"></script>
     - <script src="/js/music-player.js"></script>
     # 娜娜莉：API Key 不写在代码里，由使用者在面板中输入并存在本机 localStorage
+    - <script src="/js/nanaly-provider.js"></script>
+    - <script src="/js/nanaly-vision.js"></script>
+    - <script src="/js/nanaly-workspace.js"></script>
+    - <script src="/js/nanaly-research.js"></script>
+    - <script src="/js/nanaly-tasks.js"></script>
     - <script src="/js/noimpty-ai.js"></script>
     - <script src="/js/schedule.js"></script>
     - <script src="/js/sakura-motion.js"></script>

@@ -1,23 +1,13 @@
 /* 娜娜莉的小表情只画在头像里，不摇动对话、输入框或浮动按钮。 */
 #nanaly-launcher,
 #nanaly-panel .nanaly-head__avatar {
-  --cat-fur: #fff7ea;
-  --cat-line: #92556b;
-  --cat-ear: #f3bacb;
-  --cat-eye: #643e52;
-  --cat-blush: #ed9eb5;
-  --cat-bow: #d95e86;
-  --cat-star: #d6993d;
-}
-html[data-theme='dark'] #nanaly-launcher,
-html[data-theme='dark'] #nanaly-panel .nanaly-head__avatar {
-  --cat-fur: #c9bbae;
-  --cat-line: #8a7580;
-  --cat-ear: #bd97a4;
-  --cat-eye: #4f4349;
-  --cat-blush: #b38a98;
-  --cat-bow: #b18498;
-  --cat-star: #c4ae86;
+  --cat-fur: #fff7fa;
+  --cat-line: #7f3f52;
+  --cat-ear: var(--noimpty-accent-soft);
+  --cat-eye: #4f4650;
+  --cat-blush: var(--noimpty-accent);
+  --cat-bow: #d94e70;
+  --cat-star: #ffd166;
 }
 .nanaly-cat {
   display: block;
@@ -43,8 +33,7 @@ html[data-theme='dark'] #nanaly-panel .nanaly-head__avatar {
 .nanaly-cat__ear-in--right { transform-box: view-box; transform-origin: 70% 43%; }
 .nanaly-cat__tuft { fill: none; stroke: var(--cat-ear); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .nanaly-cat__eyes { fill: var(--cat-eye); }
-.nanaly-cat__glint { fill: #fffdfa; }
-html[data-theme='dark'] .nanaly-cat__glint { fill: #e1d7cf; }
+.nanaly-cat__glint { fill: #fff; }
 .nanaly-cat__smile-eyes,
 .nanaly-cat__mouth,
 .nanaly-cat__whisker {

@@ -5,8 +5,6 @@
   height: 52px;
   overflow: visible;
   border-radius: 19px;
-  background: linear-gradient(145deg, var(--sc-paper), var(--sc-blush));
-  box-shadow: inset 0 1px 0 var(--sc-edge), 0 5px 14px rgba(161, 72, 106, .09);
   animation: none;
 }
 #noimpty-music-player.is-playing .noimpty-music-stage { animation: none; }
@@ -17,7 +15,7 @@
   left: 7px;
   width: 34px;
   height: 24px;
-  border: 2px solid var(--sc-rose);
+  border: 2px solid var(--music-accent);
   border-bottom: 0;
   border-radius: 24px 24px 0 0;
   opacity: .75;
@@ -26,7 +24,7 @@
 #noimpty-music-player .noimpty-music-stage::after {
   z-index: 2;
   font-size: 9px;
-  box-shadow: 0 2px 5px rgba(132, 53, 83, .12);
+  box-shadow: 0 2px 5px rgba(217, 78, 112, .12);
 }
 .noimpty-music-stage__bars {
   position: absolute;
@@ -42,13 +40,13 @@
   min-width: 1px;
   height: 100%;
   border-radius: 3px;
-  background: var(--sc-rose);
+  background: var(--music-accent);
   opacity: .82;
   transform: scaleY(var(--level, .12));
   transform-origin: center bottom;
   transition: transform .075s linear;
 }
-.noimpty-music-stage__bar:nth-child(3n) { background: var(--sakura-soft, #ef9fbb); }
+.noimpty-music-stage__bar:nth-child(3n) { background: var(--noimpty-accent-soft, #ff91a8); }
 .noimpty-music-stage__bars::before,
 .noimpty-music-stage__bars::after {
   position: absolute;
@@ -57,14 +55,14 @@
   width: 5px;
   height: 12px;
   border-radius: 4px;
-  background: var(--sc-rose);
+  background: var(--music-accent);
 }
 .noimpty-music-stage__bars::before { left: -5px; }
 .noimpty-music-stage__bars::after { right: -5px; }
 .noimpty-music-stage__note {
   position: absolute;
   z-index: 1;
-  color: var(--sc-rose);
+  color: var(--music-accent);
   font-size: 14px;
   font-weight: 650;
   line-height: 1;
@@ -83,7 +81,7 @@
   content: '♡';
   top: 5px;
   right: 7px;
-  color: var(--sc-rose);
+  color: #fff;
   font-size: 12px;
   line-height: 1;
   transform: rotate(12deg);
@@ -93,7 +91,6 @@
 #noimpty-music-player.is-playing.is-collapsed .noimpty-music-launcher i { animation: none; }
 #noimpty-music-player .noimpty-music-kicker { font-size: 10px; letter-spacing: .05em; }
 #noimpty-music-player .noimpty-music-title { transform-origin: left center; }
-#noimpty-music-player .noimpty-music-collapse { background: var(--sc-blush); }
 @keyframes music-note-hop {
   0%, 100% { transform: translate3d(0, 0, 0) rotate(-12deg); opacity: .8; }
   50% { transform: translate3d(2px, -5px, 0) rotate(10deg); opacity: 1; }

@@ -1,55 +1,17 @@
-/* 奶油粉与莓果色的小面板。状态、定位和焦点仍由各组件自己管理。 */
+/* 只增强圆角、布局和动效；颜色由原有组件样式管理。 */
 :where(#nanaly-panel, #nanaly-launcher, #nanaly-poke, #nanaly-selbtn,
   #noimpty-music-player, .noimpty-gate, #noimpty-schedule,
   .search-dialog, #card-toc, #sidebar-menus, .nanaly-note) {
-  --sc-paper: var(--sakura-panel, #fffdfb);
-  --sc-cream: var(--sakura-paper, #fffaf7);
-  --sc-ink: var(--sakura-ink, #59444c);
-  --sc-muted: #80616e;
-  --sc-rose: #af3d64;
-  --sc-button: #bb4269;
-  --sc-button-ink: #fffdfb;
-  --sc-blush: #fbe8ef;
-  --sc-line: var(--sakura-line, rgba(173, 98, 120, .18));
-  --sc-edge: rgba(255, 255, 255, .85);
-  --sc-shadow: 0 18px 48px rgba(131, 71, 93, .14);
-  --sc-success: #407057;
-  --sc-warning: #916123;
-  --sc-error: #b2384e;
   --sc-ease: cubic-bezier(.22, .75, .24, 1);
 }
-
-html[data-theme='dark'] :where(#nanaly-panel, #nanaly-launcher, #nanaly-poke,
-  #nanaly-selbtn, #noimpty-music-player, .noimpty-gate, #noimpty-schedule,
-  .search-dialog, #card-toc, #sidebar-menus, .nanaly-note) {
-  --sc-paper: var(--sakura-panel, #2e2c2d);
-  --sc-cream: #292729;
-  --sc-ink: var(--sakura-ink, #cfcbc6);
-  --sc-muted: #aaa19c;
-  --sc-rose: #c397a8;
-  --sc-button: #725662;
-  --sc-button-ink: #eee2e6;
-  --sc-blush: #3b3338;
-  --sc-line: rgba(196, 175, 182, .16);
-  --sc-edge: rgba(235, 224, 229, .035);
-  --sc-shadow: 0 20px 50px rgba(0, 0, 0, .2);
-  --sc-success: #a0b1a2;
-  --sc-warning: #c7b293;
-  --sc-error: #d09aa4;
-}
-
-/* 温暖的纸面和柔软边缘，不改面板原有尺寸和摆放。 */
 #nanaly-panel,
 #noimpty-music-player .noimpty-music-panel,
 .noimpty-gate__panel,
 #local-search .search-dialog,
 #aside-content #card-toc {
-  border: 1px solid var(--sc-line);
+  border-width: 1px;
+  border-style: solid;
   border-radius: 26px;
-  background: var(--sc-paper);
-  background: linear-gradient(145deg, var(--sc-cream), var(--sc-paper) 72%);
-  color: var(--sc-ink);
-  box-shadow: var(--sc-shadow), inset 0 1px 0 var(--sc-edge);
 }
 
 #nanaly-panel {
@@ -65,139 +27,62 @@ html[data-theme='dark'] :where(#nanaly-panel, #nanaly-launcher, #nanaly-poke,
 
 #nanaly-launcher,
 #noimpty-music-player .noimpty-music-launcher {
-  border: 1px solid var(--sc-line);
+  border-width: 1px;
+  border-style: solid;
   border-radius: 20px;
-  background: linear-gradient(145deg, var(--sc-paper), var(--sc-blush));
-  box-shadow: 0 8px 22px rgba(146, 75, 100, .18), inset 0 1px 0 var(--sc-edge);
-  color: var(--sc-rose);
   transition: transform .24s var(--sc-ease), opacity .18s ease;
 }
 #nanaly-launcher { transition: transform .24s var(--sc-ease), opacity .18s ease, translate .3s var(--sc-ease); }
-#nanaly-launcher.has-news::after {
-  background: var(--sc-button);
-  border-color: var(--sc-paper);
-}
-.nanaly-head,
-.nanaly-foot { border-color: var(--sc-line); background: var(--sc-cream); }
 .nanaly-head__avatar {
-  border: 1px solid var(--sc-line);
+  border-width: 1px;
+  border-style: solid;
   border-radius: 50%;
-  background: var(--sc-blush);
-  color: var(--sc-rose);
 }
-.nanaly-head__name,
-.nanaly-setup h4 { color: var(--sc-ink); }
-.nanaly-head__sub,
-.nanaly-msg--sys,
-.nanaly-setup label,
-.nanaly-setup__advanced summary,
-.nanaly-usage { color: var(--sc-muted); }
-.nanaly-head__btn { border-radius: 11px; color: var(--sc-muted); }
-.nanaly-head__btn:hover,
-.nanaly-head__btn.is-on { background: var(--sc-blush); color: var(--sc-rose); }
-.nanaly-head__btn.is-auto {
-  background: color-mix(in srgb, var(--sc-blush) 50%, transparent);
-  color: var(--sc-rose);
-}
-.nanaly-body { scrollbar-color: var(--sc-line) transparent; }
-.nanaly-body::-webkit-scrollbar-thumb { background: var(--sc-line); }
+.nanaly-head__btn { border-radius: 11px; }
 .nanaly-msg { border-radius: 18px; line-height: 1.8; }
 .nanaly-msg--her {
-  border: 1px solid var(--sc-line);
+  border-width: 1px;
+  border-style: solid;
   border-bottom-left-radius: 6px;
-  background: var(--sc-paper);
-  color: var(--sc-ink);
 }
 .nanaly-msg--me {
-  border: 1px solid var(--sc-line);
+  border-width: 1px;
+  border-style: solid;
   border-bottom-right-radius: 6px;
-  background: var(--sc-blush);
-  color: var(--sc-ink);
 }
-.nanaly-msg h4,
-.nanaly-msg a { color: var(--sc-rose); }
-.nanaly-msg code,
-.nanaly-msg pre,
-.nanaly-msg--me code,
-.nanaly-msg--me pre { background: var(--sc-cream); }
-.nanaly-msg pre { border: 1px solid var(--sc-line); border-radius: 12px; }
-.nanaly-msg pre code { background: transparent; }
+.nanaly-msg pre { border-width: 1px; border-style: solid; border-radius: 12px; }
 .nanaly-copy {
-  border-color: var(--sc-line);
   border-radius: 7px;
-  background: var(--sc-paper);
-  color: var(--sc-muted);
 }
-.nanaly-copy:hover,
-.nanaly-speak.is-on { color: var(--sc-rose); }
-.nanaly-speak { color: var(--sc-muted); }
 .nanaly-think,
 .nanaly-setup .nanaly-tip {
-  border-color: var(--sc-line);
   border-radius: 6px 14px 14px 6px;
-  background: var(--sc-blush);
 }
-.nanaly-think > summary,
-.nanaly-think > div,
-.nanaly-setup,
-.nanaly-setup .nanaly-tip { color: var(--sc-muted); }
-.nanaly-typing i { background: var(--sc-rose); }
 .nanaly-usage { opacity: .85; }
 .nanaly-quick button,
 .nanaly-choices button,
 .nanaly-setup__actions button {
-  border-color: var(--sc-line);
   border-radius: 999px;
-  background: var(--sc-paper);
-  color: var(--sc-rose);
 }
-.nanaly-quick button:hover,
-.nanaly-choices button:hover,
-.nanaly-setup__actions button:hover { border-color: var(--sc-rose); background: var(--sc-blush); color: var(--sc-rose); }
 .nanaly-foot textarea,
 .nanaly-setup input {
-  border-color: var(--sc-line);
   border-radius: 15px;
-  background: var(--sc-paper);
-  color: var(--sc-ink);
-  caret-color: var(--sc-rose);
 }
 .nanaly-foot textarea::placeholder,
-.nanaly-setup input::placeholder { color: var(--sc-muted); opacity: 1; }
+.nanaly-setup input::placeholder { opacity: 1; }
 .nanaly-send,
 .nanaly-setup__actions button.primary {
-  border: 1px solid transparent;
+  border-width: 1px;
+  border-style: solid;
   border-radius: 14px;
-  background: var(--sc-button);
-  box-shadow: 0 4px 10px rgba(173, 64, 102, .13);
-  color: var(--sc-button-ink);
-}
-.nanaly-setup__actions button.primary:hover { background: var(--sc-button); color: var(--sc-button-ink); }
-.nanaly-send.is-stop {
-  border-color: var(--sc-line);
-  background: var(--sc-blush);
-  color: var(--sc-rose);
-  box-shadow: none;
-}
-#nanaly-poke,
-#nanaly-selbtn {
-  border-color: var(--sc-line);
-  background: var(--sc-paper);
-  box-shadow: var(--sc-shadow);
-  color: var(--sc-ink);
 }
 #nanaly-poke { border-radius: 20px 20px 20px 6px; transition: opacity .2s ease, transform .28s var(--sc-ease), translate .3s var(--sc-ease); }
-#nanaly-poke:hover { border-color: var(--sc-rose); }
-#nanaly-selbtn { border-radius: 999px; color: var(--sc-rose); }
+#nanaly-selbtn { border-radius: 999px; }
 
 /* 文章里的猫爪批注，沿用原来的正文排版。 */
 .nanaly-note {
-  border-left-color: var(--sc-rose);
   border-radius: 5px 16px 16px 5px;
-  background: var(--sc-blush);
-  color: var(--sc-ink);
 }
-.nanaly-note__paw { background: var(--sc-button); color: var(--sc-button-ink); }
 
 /* 独立 translate 为展开的播放器让位，不覆盖猫爪的 hover transform。
    不支持 :has 的浏览器继续使用原来位置。 */
@@ -213,7 +98,6 @@ body:has(#noimpty-music-player:not(.is-collapsed)) #nanaly-panel {
 body:has(#noimpty-music-player:not(.is-collapsed)) #nanaly-panel .nanaly-body { min-height: 0; }
 
 /* 音乐面板淡出时保持展开宽度，避免被已经收起的父容器挤窄。 */
-#noimpty-music-player { --music-accent: var(--sc-rose); color: var(--sc-ink); }
 #noimpty-music-player .noimpty-music-panel {
   width: min(370px, calc(100vw - 40px));
   box-sizing: border-box;
@@ -225,57 +109,27 @@ body:has(#noimpty-music-player:not(.is-collapsed)) #nanaly-panel .nanaly-body { 
   transition: opacity .18s ease, transform .24s var(--sc-ease), visibility 0s linear .24s;
 }
 .noimpty-music-disc {
-  border: 1px solid var(--sc-line);
+  border-width: 1px;
+  border-style: solid;
   border-radius: 18px;
-  background: linear-gradient(145deg, var(--sc-blush), var(--sc-paper));
-  box-shadow: inset 0 1px 0 var(--sc-edge);
-  color: var(--sc-rose);
 }
-.noimpty-music-disc::after { border-color: var(--sc-paper); background: var(--sc-button); color: var(--sc-button-ink); }
-#noimpty-music-player.is-playing .noimpty-music-disc { animation: none; border-color: var(--sc-rose); }
+#noimpty-music-player.is-playing .noimpty-music-disc { animation: none; }
 #noimpty-music-player.is-playing .noimpty-music-launcher i { animation: none; }
 #noimpty-music-player.is-playing.is-collapsed .noimpty-music-launcher i { animation: sakura-music-beat 2.8s ease-in-out infinite; }
-.noimpty-music-title { color: var(--sc-ink); }
-.noimpty-music-kicker { color: var(--sc-rose); }
-.noimpty-music-artist,
-.noimpty-music-status,
-.noimpty-music-progress-row,
-.noimpty-music-volume { color: var(--sc-muted); }
 .noimpty-music-collapse,
-.noimpty-music-controls button { border-radius: 50%; color: var(--sc-ink); }
-.noimpty-music-collapse:hover,
-.noimpty-music-controls button:hover { background: var(--sc-blush); color: var(--sc-rose); }
-.noimpty-music-controls .noimpty-music-play,
-.noimpty-music-controls .noimpty-music-play:hover { background: var(--sc-button); color: var(--sc-button-ink); box-shadow: 0 4px 12px rgba(173, 64, 102, .16); }
-.noimpty-music-controls button.is-active { background: var(--sc-blush); color: var(--sc-rose); }
-.noimpty-music-progress,
-.noimpty-music-volume input { accent-color: var(--sc-rose); }
+.noimpty-music-controls button { border-radius: 50%; }
 
 /* 暗号输入保留醒目的前景，错误与成功不会只靠装饰传达。 */
-.noimpty-gate { background: linear-gradient(145deg, #f9edf0, #f6e5ed); }
-html[data-theme='dark'] .noimpty-gate { background: linear-gradient(145deg, var(--sc-cream), var(--sakura-paper)); }
-.noimpty-gate__panel { color: var(--sc-ink); transition: transform .26s var(--sc-ease); }
+.noimpty-gate__panel { transition: transform .26s var(--sc-ease); }
 .noimpty-gate.is-leaving .noimpty-gate__panel { transform: translate3d(0, 8px, 0) scale(.98); }
-.noimpty-gate__panel h1 { color: var(--sc-ink); }
-.noimpty-gate__eyebrow { color: var(--sc-rose); }
-.noimpty-gate__hint,
-.noimpty-gate__back { color: var(--sc-muted); }
-.noimpty-gate__back:hover { color: var(--sc-rose); }
 .noimpty-gate__input {
-  border-color: var(--sc-line);
   border-radius: 16px;
-  background: var(--sc-paper);
-  color: var(--sc-ink);
-  caret-color: var(--sc-rose);
   transition: none;
 }
-.noimpty-gate__input::placeholder { color: var(--sc-muted); opacity: 1; }
-.noimpty-gate__button { border-radius: 16px; background: var(--sc-button); color: var(--sc-button-ink); box-shadow: 0 6px 16px rgba(173, 64, 102, .16); }
-.noimpty-gate__error { color: var(--sc-error); }
-.noimpty-gate__panel.is-error { border-color: var(--sc-error); }
+.noimpty-gate__input::placeholder { opacity: 1; }
+.noimpty-gate__button { border-radius: 16px; }
 
 /* 只替换搜索的动画外观，仍由主题显示面板并接收 animationend。 */
-#local-search .search-dialog { --search-bg: var(--sc-paper); --search-input-color: var(--sc-ink); --search-a-color: var(--sc-ink); }
 #local-search .search-dialog[style*='titleScale'] {
   animation-name: sakura-search-in !important;
   animation-duration: .28s !important;
@@ -286,126 +140,68 @@ html[data-theme='dark'] .noimpty-gate { background: linear-gradient(145deg, var(
   animation-duration: .2s !important;
   animation-timing-function: ease-in !important;
 }
-#local-search .search-dialog .search-nav,
-#local-search .search-dialog .search-keyword { color: var(--sc-rose); }
-#local-search .search-dialog .search-close-button { color: var(--sc-muted); transition: transform .2s var(--sc-ease), opacity .18s ease; }
-#local-search .search-dialog .search-close-button:hover { color: var(--sc-rose); }
+#local-search .search-dialog .search-close-button { transition: transform .2s var(--sc-ease), opacity .18s ease; }
 #local-search .search-dialog .local-search-input input {
-  border: 1px solid var(--sc-line);
+  border-width: 1px;
+  border-style: solid;
   border-radius: 18px;
-  background: var(--sc-cream);
-  color: var(--sc-ink);
-  caret-color: var(--sc-rose);
 }
-#local-search .search-dialog .local-search-input input::placeholder { color: var(--sc-muted); opacity: 1; }
+#local-search .search-dialog .local-search-input input::placeholder { opacity: 1; }
 #local-search .search-dialog .local-search-hit-item { border-radius: 12px; transition: transform .2s var(--sc-ease), opacity .18s ease; }
-#local-search .search-dialog .search-result-title { color: var(--sc-ink); }
-#local-search .search-dialog .search-result,
-#local-search .search-dialog .search-result-stats { color: var(--sc-muted); }
-#local-search .search-dialog .search-result-list a:hover { color: var(--sc-rose); }
 #local-search .search-dialog .ais-Pagination-link { border-radius: 10px; transition: transform .2s var(--sc-ease), opacity .18s ease; }
 
 /* 手机目录沿用 .open 状态，细小的淡入代替突然缩放。 */
-#aside-content #card-toc .toc-percentage { color: var(--sc-muted); }
-#aside-content #card-toc .toc-content .toc-link { border-radius: 10px; color: var(--sc-ink); transition: transform .2s var(--sc-ease), opacity .18s ease; }
-#aside-content #card-toc .toc-content .toc-link:hover,
-#aside-content #card-toc .toc-content .toc-link.active { background: var(--sc-blush); color: var(--sc-rose); }
+#aside-content #card-toc .toc-content .toc-link { border-radius: 10px; transition: transform .2s var(--sc-ease), opacity .18s ease; }
 
 /* 手机抽屉沿用原来的 .open 与 transform，只换纸面和按钮反馈。 */
 #sidebar #sidebar-menus {
-  --sidebar-bg: var(--sakura-paper, var(--sc-cream));
-  --sidebar-menu-bg: var(--sc-paper);
-  border-left: 1px solid var(--sc-line);
-  background: var(--sidebar-bg);
-  color: var(--sc-ink);
-  box-shadow: var(--sc-shadow);
+  border-left-width: 1px;
+  border-left-style: solid;
   transition: transform .32s var(--sc-ease), opacity .2s ease;
 }
 #sidebar #sidebar-menus .menus_items {
-  border: 1px solid var(--sc-line);
+  border-width: 1px;
+  border-style: solid;
   border-radius: 22px;
-  background: var(--sc-paper);
-  box-shadow: 0 6px 20px rgba(146, 75, 100, .06);
 }
-#sidebar #sidebar-menus hr { border-color: var(--sc-line); }
-#sidebar #sidebar-menus hr::before { color: var(--sc-rose); }
 #sidebar #sidebar-menus .menus_items .site-page {
   border-radius: 12px;
-  color: var(--sc-ink);
   transition: transform .2s var(--sc-ease), opacity .18s ease;
 }
-#sidebar #sidebar-menus .menus_items .site-page:hover {
-  background: var(--sc-blush);
-  box-shadow: none;
-  color: var(--sc-rose);
-}
-#sidebar #sidebar-menus .site-data a { color: var(--sc-ink); }
-#sidebar #sidebar-menus .site-data a:hover { color: var(--sc-rose); }
 #sidebar #sidebar-menus :is(a, button, .site-page):focus-visible {
-  outline: 2px solid var(--sc-rose);
+  outline: 2px solid var(--noimpty-accent);
   outline-offset: 3px;
 }
-
-/* 日程卡片：粉色选择态与清楚的状态颜色。 */
-#noimpty-schedule { color: var(--sc-ink); }
 #noimpty-schedule :is(.sch-review, .sch-cal, .sch-course, .sch-next, .sch-panel, .sch-seed, .sch-condform) {
-  border-color: var(--sc-line);
   border-radius: 18px;
-  background: var(--sc-paper);
 }
-#noimpty-schedule :is(.sch-h, .sch-month, .sch-course__name) { color: var(--sc-ink); }
-#noimpty-schedule :is(.sch-wd, .sch-count, .sch-tip, .sch-empty, .sch-condtip,
-  .sch-course__n, .sch-course__last, .sch-course__cold, .sch-heat__foot,
-  .sch-next__cond, .sch-cal > summary, .sch-overdue__more, .sch-more) { color: var(--sc-muted); }
-#noimpty-schedule .sch-course:hover { border-color: var(--sc-rose); background: var(--sc-cream); }
-#noimpty-schedule :is(.sch-course__bar, .sch-heat__c, .sch-heat__key i) { background: var(--sc-line); }
-#noimpty-schedule .sch-course__bar i { background: var(--sc-rose); }
-#noimpty-schedule :is(.sch-heat__c, .sch-heat__key i)[data-lv='1'] { background: color-mix(in srgb, var(--sc-rose) 28%, var(--sc-paper)); }
-#noimpty-schedule :is(.sch-heat__c, .sch-heat__key i)[data-lv='2'] { background: color-mix(in srgb, var(--sc-rose) 58%, var(--sc-paper)); }
-#noimpty-schedule :is(.sch-heat__c, .sch-heat__key i)[data-lv='3'] { background: var(--sc-rose); }
 #noimpty-schedule .sch-cell { border-radius: 11px; transition: transform .2s var(--sc-ease), opacity .18s ease; }
-#noimpty-schedule .sch-cell:not(.is-blank) { border-color: var(--sc-line); background: var(--sc-paper); }
-#noimpty-schedule .sch-cell.is-picked,
-#noimpty-schedule .sch-cell:not(.is-blank):hover { border-color: var(--sc-rose); background: var(--sc-blush); }
-#noimpty-schedule .sch-cell.is-today .sch-d { background: var(--sc-button); color: var(--sc-button-ink); }
-#noimpty-schedule .sch-chip { border-radius: 6px; background: var(--sc-blush); color: var(--sc-ink); }
-#noimpty-schedule .sch-dot { background: var(--sc-rose); }
-#noimpty-schedule .sch-item { border-color: var(--sc-line); }
+#noimpty-schedule .sch-chip { border-radius: 6px; }
 #noimpty-schedule :is(.sch-nav, .sch-today, .sch-save, .sch-mini, .sch-cond, .sch-condform button, .sch-tick) {
-  border-color: var(--sc-line);
   border-radius: 10px;
-  background: var(--sc-paper);
-  color: var(--sc-rose);
 }
-#noimpty-schedule :is(.sch-nav, .sch-today, .sch-mini, .sch-condform button):hover { border-color: var(--sc-rose); background: var(--sc-blush); }
-#noimpty-schedule .sch-tick { border-radius: 6px; border-color: var(--sc-muted); }
-#noimpty-schedule .sch-item.is-done .sch-tick { border-color: var(--sc-success); color: var(--sc-success); }
-#noimpty-schedule .sch-panel__head span { color: var(--sc-rose); }
-#noimpty-schedule .sch-cond.is-set { border-color: var(--sc-rose); }
-#noimpty-schedule .sch-next__day { background: var(--sc-blush); color: var(--sc-rose); }
+#noimpty-schedule .sch-tick { border-radius: 6px; }
 #noimpty-schedule :is(.sch-add input, .sch-edit, .sch-condform input, .sch-condform select, .sch-seed select) {
-  border-color: var(--sc-line);
   border-radius: 11px;
-  background: var(--sc-cream);
-  color: var(--sc-ink);
-  caret-color: var(--sc-rose);
 }
 #noimpty-schedule :is(.sch-add button, .sch-save.is-dirty, .sch-condform button[type='submit'], .sch-savebar button) {
-  border: 1px solid transparent;
+  border-width: 1px;
+  border-style: solid;
   border-radius: 11px;
-  background: var(--sc-button);
-  color: var(--sc-button-ink);
 }
-#noimpty-schedule .sch-savebar { border: 1px solid var(--sc-line); border-radius: 16px; background: var(--sc-paper); color: var(--sc-ink); box-shadow: var(--sc-shadow); }
-#noimpty-schedule .sch-next.is-late,
-#noimpty-schedule .sch-cell.is-overdue { border-color: var(--sc-warning); }
-#noimpty-schedule .sch-overdue { border-color: var(--sc-warning); background: var(--sc-cream); }
-#noimpty-schedule :is(.sch-overdue__head, .sch-course__last.is-stale, .sch-status.is-warn) { color: var(--sc-warning); }
-#noimpty-schedule .sch-overdue__jump,
-#noimpty-schedule .sch-next.is-late .sch-next__day { color: var(--sc-warning); background: var(--sc-cream); }
-#noimpty-schedule :is(.sch-status.is-ok, .sch-auto) { color: var(--sc-success); }
-#noimpty-schedule :is(.sch-status.is-bad, .sch-del:hover) { color: var(--sc-error); }
-#noimpty-schedule :is(.sch-del, .sch-push) { color: var(--sc-muted); }
+#noimpty-schedule .sch-savebar { border-width: 1px; border-style: solid; border-radius: 16px; }
+
+/* Keep the current box sizes where the original component had no visible border. */
+.nanaly-head__avatar,
+.nanaly-msg--me,
+.nanaly-msg pre,
+.nanaly-send,
+.noimpty-music-disc,
+#sidebar #sidebar-menus .menus_items,
+#noimpty-schedule .sch-add button,
+#noimpty-schedule .sch-savebar,
+#noimpty-schedule .sch-savebar button { border-color: transparent; }
+#sidebar #sidebar-menus { border-left-color: transparent; }
 
 /* 反馈只动画 transform / opacity；不反复重排输入区或消息内容。 */
 #nanaly-panel button,
@@ -442,28 +238,9 @@ html[data-theme='dark'] .noimpty-gate { background: linear-gradient(145deg, var(
 #noimpty-schedule :is(button, input, select, summary, a):focus-visible,
 #local-search .search-dialog :is(button, input, a):focus-visible,
 #aside-content #card-toc a:focus-visible {
-  outline: 2px solid var(--sc-rose);
+  outline: 2px solid var(--noimpty-accent);
   outline-offset: 3px;
 }
-.nanaly-foot textarea:focus,
-.nanaly-setup input:focus,
-.noimpty-gate__input:focus,
-#local-search .search-dialog .local-search-input input:focus,
-#noimpty-schedule :is(input, select):focus {
-  border-color: var(--sc-rose);
-  box-shadow: 0 0 0 3px var(--sc-blush);
-}
-
-/* 浅色气泡中的代码，保留语法区分与足够对比。 */
-html:not([data-theme='dark']) .nanaly-msg :is(.token.comment, .token.prolog, .token.cdata) { color: #806975; }
-html:not([data-theme='dark']) .nanaly-msg .token.punctuation { color: #765d69; }
-html:not([data-theme='dark']) .nanaly-msg :is(.token.property, .token.tag, .token.constant, .token.symbol, .token.deleted) { color: #a13e61; }
-html:not([data-theme='dark']) .nanaly-msg :is(.token.boolean, .token.number) { color: #885b20; }
-html:not([data-theme='dark']) .nanaly-msg :is(.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted) { color: #436d50; }
-html:not([data-theme='dark']) .nanaly-msg :is(.token.operator, .token.entity, .token.url) { color: #79558d; }
-html:not([data-theme='dark']) .nanaly-msg :is(.token.atrule, .token.attr-value, .token.keyword) { color: #9a3f68; }
-html:not([data-theme='dark']) .nanaly-msg :is(.token.function, .token.class-name) { color: #925631; }
-html:not([data-theme='dark']) .nanaly-msg :is(.token.regex, .token.important, .token.variable) { color: #914e78; }
 
 @keyframes sakura-music-beat { 50% { transform: translateY(-1px) scale(1.06); } }
 @keyframes sakura-search-in {

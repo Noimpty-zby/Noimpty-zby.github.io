@@ -868,7 +868,7 @@ preloader:
 enter_transitions: false
 
 # Default display mode - light (default) / dark
-display_mode: light
+display_mode: dark
 highlight_theme: mac
 
 # Configuration for beautifying the content of the article

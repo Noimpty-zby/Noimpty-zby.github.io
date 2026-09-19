@@ -16,7 +16,7 @@
  * 9-13 那次跑在 15:39 UTC，差 21 分钟又要中一次。
  */
 import assert from 'node:assert/strict'
-import { utcDay, postPath } from '../nanaly/permalink.mjs'
+import { utcDay, postPath, wallClockMs } from '../nanaly/permalink.mjs'
 import { pathOf } from '../nanaly/notes.mjs'
 
 let pass = 0
@@ -67,6 +67,28 @@ check('推不出来就返回 null，不要瞎猜一个日期', () => {
   assert.equal(utcDay(''), null)
   assert.equal(utcDay('八月三十一号'), null)
   assert.equal(utcDay(null), null)
+})
+
+console.log('\n永久链接 · 挂钟换算本身（数篇数也在用它）')
+
+check('★★ 不带时区的那串是北京挂钟，不是跑测试那台机器的本地时间', () => {
+  /* 这一条和机器时区无关，所以在 UTC 的 CI 上和 UTC+8 的开发机上结论一样。
+   * 换回 Date.parse('2026-09-19T14:46:00') 的话，这里在 UTC 上会差 8 小时 ——
+   * 2026-09-19 就是这么让部署红掉的：CI 把当天下午发的文章当成了未来。 */
+  assert.equal(wallClockMs('2026-09-19 14:46:00'), Date.parse('2026-09-19T06:46:00Z'))
+  assert.equal(wallClockMs('2026-08-31 00:05:53'), Date.parse('2026-08-30T16:05:53Z'))
+})
+
+check('带时区的、只有日期的，各按各的规矩，别再减一次 8 小时', () => {
+  assert.equal(wallClockMs('2026-08-31T00:05:53Z'), Date.parse('2026-08-31T00:05:53Z'))
+  assert.equal(wallClockMs('2026-08-31T00:05:53+08:00'), Date.parse('2026-08-30T16:05:53Z'))
+  assert.equal(wallClockMs('2026-08-31'), Date.UTC(2026, 7, 31))
+})
+
+check('读不出来的返回 null（不是 0 —— 0 会被当成 1970 年，比什么都早）', () => {
+  assert.equal(wallClockMs(''), null)
+  assert.equal(wallClockMs('八月三十一号'), null)
+  assert.equal(wallClockMs(null), null)
 })
 
 check('notes.mjs 的 pathOf 走的是同一套（老名字还在被测试和调用方用着）', () => {

@@ -20,7 +20,7 @@ private_section: 课外
 
 # 前言
 
-这是我跟随 Tom Looman 学习 UE5 C++ 时，对第二章 **Projectile & Damage** 的完整复盘，覆盖课程五节课的全部内容。
+本文是 Tom Looman《UE5 C++》第二章 **Projectile & Damage** 的完整复盘，覆盖课程五节课的全部内容。
 
 上一篇见{% post_link UE5-ActionRoguelike-Chapter1 %}。第一章搭好了"能移动、能观察、有动画的第三人称角色"，本章要给这个角色装上第一个能对世界产生影响的能力。
 

@@ -20,7 +20,7 @@ private_section: 课外
 
 # 前言
 
-这是我跟随 Tom Looman 学习 UE5 C++ 时，对 **Assignment 1** 的完整复盘。
+本文是 Tom Looman《UE5 C++》**Assignment 1** 的完整复盘。
 
 本次使用的开发环境：
 
@@ -31,7 +31,7 @@ private_section: 课外
 
 ## 这次作业和前两章的根本区别
 
-前两章是**跟着敲**：老师写一行，我写一行，遇到不懂的地方回看视频。作业是**自己设计**：只给一份需求清单和几个资产名，中间所有的类结构、成员划分、函数职责、执行顺序都要自己决定。
+前两章是**跟着敲**：老师写一行，跟一行，遇到不懂的地方回看视频。作业是**自己设计**：只给一份需求清单和几个资产名，中间所有的类结构、成员划分、函数职责、执行顺序都要自己决定。
 
 作业原始需求（课程给出的完整清单）：
 
@@ -76,7 +76,7 @@ private_section: 课外
 
 - 每一个设计决策的**判断依据**是什么；
 - 需求里的每一句话对应代码里的哪一行；
-- 中间我实际写错的十四个地方，以及每个错误暴露了什么认知盲区。
+- 中间实际出错的十四个地方，以及每个错误暴露了什么认知盲区。
 
 ---
 
@@ -167,7 +167,7 @@ bool UCharacterMovementComponent::DoJump(bool bReplayingMoves, float DeltaTime)
 
 对比第二章的 `IA_PrimaryAttack`：那里加"已按下"触发器是**必须的**，因为绑定用的是 `ETriggerEvent::Triggered`，不加触发器会导致按住鼠标每帧喷出一发法球。
 
-这里我最终用的是 `ETriggerEvent::Started`，所以触发器加不加都能正常工作。留着它只是保持资产配置的一致性。**但两者的可靠性完全不同**，见 1.3。
+这里最终用的是 `ETriggerEvent::Started`，所以触发器加不加都能正常工作。留着它只是保持资产配置的一致性。**但两者的可靠性完全不同**，见 1.3。
 
 然后在 `IMC_DefaultPlayer` 里添加映射：`IA_Jump` → 空格键。这一步的映射条目下面的"触发器/修改器"数组都保持为空，因为按键级不需要额外处理，`设置行为` 保持"从操作中继承设置"即可。
 
@@ -198,7 +198,7 @@ EnhancedInput->BindAction(Input_Jump, ETriggerEvent::Completed, this, &ACharacte
 | `Started` | Action 从"未激活"跃迁到"开始激活"的**那一帧**，只发一次 |
 | `Triggered` | 每次 Action 判定为"已触发"就发，无触发器时按住期间**每帧都发** |
 
-我一开始写的是 `Triggered`，跑起来完全正常 —— 因为 `IA_Jump` 上挂了"已按下"触发器，把 `Triggered` 压成了只在按下那一帧发射。
+写成 `Triggered` 也能跑，而且完全正常 —— 因为 `IA_Jump` 上挂了"已按下"触发器，把 `Triggered` 压成了只在按下那一帧发射。
 
 **问题在于：这样一来 C++ 的正确性依赖于资产配置。** 哪天有人在编辑器里删掉那个触发器，或者改成 Hold，`Triggered` 就恢复成每帧发射，`Jump()` 会被调用 60 次/秒。
 
@@ -217,9 +217,9 @@ EnhancedInput->BindAction(Input_Jump, ETriggerEvent::Completed, this, &ACharacte
 
 默认 `JumpMaxHoldTime = 0`，所以现在看不出差别。**这是典型的"配置一改就崩"的隐藏 bug** —— 代码现在能跑，不代表它是对的。
 
-## 1.4 我写错的第一版：不要自己重写 `Jump()`
+## 1.4 第一版的错法：不要自己重写 `Jump()`
 
-我的第一版是这样的：
+第一版是这样写的：
 
 ```cpp
 // 错误示范
@@ -291,7 +291,7 @@ void ARogueCharacter::Jump()
 
 ## 2.2 最关键的认知：`TakeDamage` 不负责爆炸
 
-很多人（包括我）第一反应是"挨打了 → 炸"，然后发现要延迟 3 秒，就开始想在 `TakeDamage` 里怎么"等待"。
+很多人的第一反应是"挨打了 → 炸"，然后发现要延迟 3 秒，就开始想在 `TakeDamage` 里怎么"等待"。
 
 这是错的。**挨打和爆炸是两个在时间上分离的事件，中间靠定时器连接。**
 
@@ -306,11 +306,11 @@ void ARogueCharacter::Jump()
 
 ## 2.3 创建 C++ 类的正确姿势
 
-我在这里踩了两个坑，值得单独记录。
+这里有两个坑，值得单独记录。
 
 ### 坑一：在 Rider 里手写文件
 
-我第一次是在 Rider 的解决方案树里右键"新建 C++ 类"，得到的是这样一个文件：
+在 Rider 的解决方案树里右键"新建 C++ 类"，得到的是这样一个文件：
 
 ```cpp
 #pragma once
@@ -330,7 +330,7 @@ public:
 
 ### 坑二：先建蓝图后建 C++ 类
 
-我先在 Content Browser 里建了 `BP_ExplodingBarrel`，当时 C++ 类还不存在，所以它的父类是 `AActor`。
+先在 Content Browser 里建 `BP_ExplodingBarrel`、C++ 类还不存在的话，它的父类就是 `AActor`。
 
 后来 C++ 类建好了，Rider 在 `UCLASS()` 上方提示"没有派生的蓝图类" —— 这条提示就是在说：**你的 C++ 类和你的蓝图没有任何关系。**
 
@@ -373,15 +373,15 @@ class UStaticMeshComponent;
 
 和第一章、第二章一致：**头文件里只前向声明，实际的 include 放到 cpp**。这样修改 `NiagaraComponent.h` 不会导致所有 include 了本头文件的翻译单元重新编译。
 
-一个我差点漏掉的点：我最初没有前向声明 `UStaticMeshComponent`，编译也过了 —— 因为 `GameFramework/Actor.h` 的传递包含把它带进来了。
+一个容易漏掉的点：不写 `UStaticMeshComponent` 的前向声明，编译一样过 —— 因为 `GameFramework/Actor.h` 的传递包含把它带进来了。
 
 **这属于依赖运气。** IWYU（Include What You Use）的原则是：你用到的每个类型，都应该由你自己保证它可见，而不是指望别的头文件顺手带进来。上游头文件一旦重构，你的代码就会莫名其妙编译失败。要么全部显式声明，要么全部不声明，**保持一致**，别一半一半。
 
 ## 3.2 `UPROPERTY` 说明符的判断标准（本次作业最重要的一条）
 
-这是我错得最彻底、也收获最大的一处。
+这是整份作业里最容易错、也最值得想清楚的一处。
 
-我的第一版把所有成员都标成了 `EditDefaultsOnly`，包括两个组件：
+第一版把所有成员都标成了 `EditDefaultsOnly`，包括两个组件：
 
 ```cpp
 // 错误示范
@@ -406,7 +406,7 @@ TObjectPtr<UNiagaraComponent> BurntEffect;
 
 ### 关于 `FuseDelay` 该不该可编辑
 
-我当时的想法是："延迟固定就是 3 秒，用 `VisibleAnywhere` 就行了吧？"
+当时的想法是："延迟固定就是 3 秒，用 `VisibleAnywhere` 就行了吧？"
 
 这个想法混了两件事。**"当前设计值是 3 秒"不等于"这个值该被锁死"**：
 
@@ -442,7 +442,7 @@ virtual float TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent,
 void Explode();
 ```
 
-我的第一版写的是：
+第一版写的是：
 
 ```cpp
 // 错误示范
@@ -455,7 +455,7 @@ void TakeDamage();
 
 **养成习惯：所有重写虚函数一律加 `override`，让编译器帮你检查。**
 
-关于 `Explode()` 要不要加 `UFUNCTION()`：我留着了，但严格说不必要。`SetTimer` 有一个模板重载直接接受成员函数指针，不走反射：
+关于 `Explode()` 要不要加 `UFUNCTION()`：这里留着了，但严格说不必要。`SetTimer` 有一个模板重载直接接受成员函数指针，不走反射：
 
 ```cpp
 template<class UserClass>
@@ -748,7 +748,7 @@ GetWorldTimerManager().SetTimer(FuseTimerHandle, this,
 
 五个参数：句柄、对象、成员函数指针、延迟秒数、**是否循环**。
 
-最后那个 `false` 我第一版**漏写了**。它的默认值恰好是 `false`，所以功能上侥幸是对的 —— 但"漏写"和"依赖默认值"在 code review 里是两种性质。显式写出来，读代码的人不需要去查函数签名才能确认这是个一次性定时器。
+最后那个 `false` 在第一版里**漏写了**。它的默认值恰好是 `false`，所以功能上侥幸是对的 —— 但"漏写"和"依赖默认值"在 code review 里是两种性质。显式写出来，读代码的人不需要去查函数签名才能确认这是个一次性定时器。
 
 写成 `true` 的后果：桶每 3 秒爆炸一次，永远不停。
 
@@ -847,7 +847,7 @@ if (ExplosionSound)  { ... }
 
 **为什么组件指针不用判**：`BurningEffect`、`RadialForceComponent` 这些由构造函数的 `CreateDefaultSubobject` 创建，必然非空。
 
-我在这里犯了一个很典型的错误 —— 复制粘贴之后忘了改变量名：
+这里有个很典型的错误 —— 复制粘贴之后忘了改变量名：
 
 ```cpp
 // 错误示范
@@ -863,7 +863,7 @@ if (BurningEffect)          // ← 判的是组件（永远非空）
 
 ## 6.4 关于 `Destroy()`
 
-我的第一版在 `FireImpulse()` 之后加了 `Destroy()`。后来删掉了。
+第一版在 `FireImpulse()` 之后加了 `Destroy()`，后来删掉了。
 
 理由：**作业没有要求爆炸后销毁桶。** 桶炸完留在原地（可能换个焦黑材质）是更常见的做法。加 `Destroy()` 会导致"爆炸后桶凭空消失、地上没有任何痕迹"的视觉突兀。
 
@@ -878,7 +878,7 @@ if (BurningEffect)          // ← 判的是组件（永远非空）
 
 `Build.cs` 的 `PublicDependencyModuleNames` 里必须有 `"Niagara"`，否则是 **LNK2019 链接错误**，报错信息完全看不出是模块问题。本项目第二章已经加过了。
 
-另外 `GetWorldTimerManager()` 严格说需要 `#include "TimerManager.h"`。我没写也编译通过了（由传递包含提供），但按 IWYU 原则应该显式包含。
+另外 `GetWorldTimerManager()` 严格说需要 `#include "TimerManager.h"`。不写也能编译过（由传递包含提供），但按 IWYU 原则应该显式包含。
 
 ---
 
@@ -918,7 +918,7 @@ static ConstructorHelpers::FObjectFinder<UNiagaraSystem>
 
 这个分布正好印证了 3.2 的判断标准 —— 说明符选对了，配置的位置就是自然的。
 
-## 7.3 我配错的两个资产
+## 7.3 配错的两个资产
 
 **① 循环燃烧音填成了 `MSS_Enemy_StatusEffect...`**
 

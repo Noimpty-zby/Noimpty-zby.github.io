@@ -20,7 +20,7 @@ private_section: 课外
 
 # 前言
 
-这是我跟随 Tom Looman 学习 UE5 C++ 时，对 **Assignment 2** 的完整复盘。
+本文是 Tom Looman《UE5 C++》**Assignment 2** 的完整复盘。
 
 本次使用的开发环境：
 
@@ -121,11 +121,11 @@ private_section: 课外
 
 ## 1.1 为什么必须先做这一步
 
-第三、四章我一路记了一张"遗留待办"清单，当时判断都是"不影响跑通，以后再说"。
+第三、四章一路攒下一张"遗留待办"清单，当时的判断都是"不影响跑通，以后再说"。
 
 作业二让其中三条从"以后再说"变成了"现在必须做"，原因只有一个：**黑洞弹会大批量销毁 Actor**。
 
-在此之前，我的关卡里没有任何东西会在运行时消失，所以"扫到的 Actor 一直存在"这个隐含假设从来没被打破过。黑洞一上线，假设立刻失效：
+在此之前，关卡里没有任何东西会在运行时消失，所以"扫到的 Actor 一直存在"这个隐含假设从来没被打破过。黑洞一上线，假设立刻失效：
 
 - 交互组件的 `SelectedActor` 可能指向一个已被黑洞销毁的方块
 - `OverlapMultiByChannel` 返回的组件，其宿主 Actor 可能在同一帧被销毁
@@ -171,7 +171,7 @@ FVector Center = MyPawn->GetActorLocation();
 | `GetOwner()` 不是 PlayerController | 程序结构错了 | `CastChecked`，立刻崩 |
 | `GetPawn()` 为空 | 正常运行时状态 | 静默 `if` + `return` |
 
-我中途走过一次弯路：一度把 `Center` 改成了 `GetOwner()->GetActorLocation()`，想省掉那次 `GetPawn()`。
+这里有一条容易走的弯路：把 `Center` 改成 `GetOwner()->GetActorLocation()`，想省掉那次 `GetPawn()`。
 
 **这行代码能编译、能运行、不崩，但结果是错的。** `AController` 确实是 `AActor`，有 Transform，但它的 `bAttachToPawn` 默认为 `false`——控制器的 Transform **不跟随** Pawn，它停在 GameMode 生成它时的位置，也就是世界原点附近。结果是交互检测球固定在世界原点，跟角色位置完全无关。
 
@@ -214,7 +214,7 @@ static void Execute_Interact(UObject* O)
 
 ## 1.3 `check` / `ensure` / `if` 的选择标准
 
-这一节写代码时我在这三者之间反复摇摆，最后收敛成一条标准：
+这三者在写的时候很容易反复摇摆，最后收敛成一条标准：
 
 > **这个条件为假，是"不该发生的事"，还是"正常会发生的事"？**
 
@@ -225,7 +225,7 @@ static void Execute_Interact(UObject* O)
 | 玩家对着空气按 E | 是，每天几百次 | 不该 | `if` + `return` |
 | 目标没实现交互接口 | 否，资产配错了 | 该，但不该崩 | `if (!ensure(...))` |
 
-我一开始把 `SelectedActor` 的判空写成了 `ensure(SelectedActor);`，两个错误叠在一起：
+把 `SelectedActor` 的判空写成 `ensure(SelectedActor);` 是个常见写法，两个错误叠在一起：
 
 **① `ensure` 不中断执行。** 它的语义是"检查、报告一次、**返回 bool 继续往下跑**"。所以它触发之后紧跟着还是会执行 `Execute_Interact(nullptr)`，然后被里面的 `check` 崩掉——想防的崩溃一次都没防住。正确用法是接住返回值：`if (!ensure(X)) { return; }`。
 
@@ -271,7 +271,7 @@ if (OverlapActor == nullptr)
 float HighestDotResult = 0.7f;   // 原来是 -1.0f
 ```
 
-原来初始化成 `-1.0f`，意味着**任何方向都能通过**——正后方的点积正好是 `-1.0`，只要不是浮点意义上的精确相等，背后的宝箱也会被选中。改之前我特意先转身实测了一次，确认红框真的还在。
+原来初始化成 `-1.0f`，意味着**任何方向都能通过**——正后方的点积正好是 `-1.0`，只要不是浮点意义上的精确相等，背后的宝箱也会被选中。改之前先转身实测一次，能确认红框真的还在。
 
 `0.7` 约等于 45° 半角。这里有个顺手的收益：**阈值和"取最大值"合并成了同一个机制**。低于 0.7 的候选连进入 `if` 的资格都没有，不需要额外写一句 `if (DotResult < Threshold) continue;`。用初始值编码约束，省一个分支，也省掉了"阈值和初始值不一致"这种未来的 bug。
 
@@ -281,7 +281,7 @@ float HighestDotResult = 0.7f;   // 原来是 -1.0f
 
 1. 美术在编辑器里给一个装饰物设了 `Interaction` 预设，但没实现接口——碰撞预设是运行时数据，编译器看不见。
 2. 有人在蓝图的 Class Settings 里删掉了接口——同样不触发编译错误。
-3. **通道在组件上，接口在 Actor 上。** 一个 Actor 挂十个组件，只要其中一个开了 Interaction 通道，这个 Actor 就进候选列表。第三章我把宝箱盖子设成 `NoCollision` 来避免重复计数，那是**内容层面的修补**，不是代码层面的保证。
+3. **通道在组件上，接口在 Actor 上。** 一个 Actor 挂十个组件，只要其中一个开了 Interaction 通道，这个 Actor 就进候选列表。第三章把宝箱盖子设成 `NoCollision` 来避免重复计数，那是**内容层面的修补**，不是代码层面的保证。
 
 概括一句：**碰撞通道是"谁能被扫到"的过滤器，不是"谁能被交互"的类型断言。**
 
@@ -291,7 +291,7 @@ float HighestDotResult = 0.7f;   // 原来是 -1.0f
 SelectedActor->Implements<URogueInteractionInterface>()
 ```
 
-只有 U 类进反射系统、有 `UClass` 和 `StaticClass()`，而 `Implements` 是查表操作。我第一次写成了 `Implements<IRogueInteractionInterface>`，编译不过。
+只有 U 类进反射系统、有 `UClass` 和 `StaticClass()`，而 `Implements` 是查表操作。写成 `Implements<IRogueInteractionInterface>` 是编译不过的。
 
 **凡是"查表 / 路由"的场合一律用 U 类，凡是 C++ 继承链上的场合用 I 类。** 同一行代码里两个都会出现：`IRogueInteractionInterface::Execute_Interact` 用 I（那是静态成员函数），模板参数用 U。
 
@@ -303,7 +303,7 @@ SelectedActor->Implements<URogueInteractionInterface>()
 
 原因是 `DrawDebugSphere` 被写进了 `for` 循环体内。`Overlaps` 为空 → 循环一次都不执行 → 球不画；同时捞到三个物体 → 球被重复画三遍。
 
-**这个 bug 把探针的价值整个反转了。** 调试球存在的意义，就是让我在"什么都没发生"的时候还能看见检测范围——半径够不够、中心在不在角色身上。这些问题恰恰只在没捞到东西时才需要排查，而它偏偏在那个时候消失。
+**这个 bug 把探针的价值整个反转了。** 调试球存在的意义，就是在"什么都没发生"的时候还能看见检测范围——半径够不够、中心在不在角色身上。这些问题恰恰只在没捞到东西时才需要排查，而它偏偏在那个时候消失。
 
 顺带说清楚这个球是什么：它**不是**碰撞体，不参与任何碰撞。`DrawDebugSphere` 只是往渲染器的调试线框列表里塞一组线段。真正做检测的是 `OverlapMultiByChannel`，那是一次瞬时查询，不留下任何东西。两者靠同一个 `Center` 和 `InteractionRadius` 保持一致，但代码上没有强制关系。
 
@@ -313,9 +313,9 @@ SelectedActor->Implements<URogueInteractionInterface>()
 
 作业"准备级别"两条，加上一个作业没写但必须做的判断。
 
-**判断关卡地面是不是 Landscape。** 作业提示说 UE5 自带的开放世界关卡会导致 `TeleportTo` 失败。我原来就在 `P_OpenWorldTestMap` 上，一度以为"我在平地上，避开有地形的地方就行"——**这个想法是错的：Open World 模板里整片地面就是一个 Landscape Actor，包括看起来完全平坦的部分。平不平是高度数据的事，跟几何体类型无关。**
+**判断关卡地面是不是 Landscape。** 作业提示说 UE5 自带的开放世界关卡会导致 `TeleportTo` 失败。在 `P_OpenWorldTestMap` 上很容易以为"我在平地上，避开有地形的地方就行"——**这个想法是错的：Open World 模板里整片地面就是一个 Landscape Actor，包括看起来完全平坦的部分。平不平是高度数据的事，跟几何体类型无关。**
 
-验证方法：点一下要测试的地面，看大纲里选中的是什么。我这里显示的是 `LandscapeStreamingProxy_3_2_0`，确认是地形。
+验证方法：点一下要测试的地面，看大纲里选中的是什么。显示成 `LandscapeStreamingProxy_3_2_0` 就说明是地形。
 
 **铺一块拉伸立方体当地板。** 复制粘贴一面墙，缩放成 `X=40, Y=40, Z=0.5`（即 4000×4000×50），Z 抬高约 100 让它明确是独立的一层——贴太近，传送查询可能仍然摸到下面的地形。碰撞预设保持 `BlockAll`（`WorldStatic`），**不要开物理模拟**，否则黑洞会把地板吸走。
 
@@ -333,7 +333,7 @@ SelectedActor->Implements<URogueInteractionInterface>()
 
 **顺带清掉一条 World Partition 警告。** 消息日志的"地图检测"里有一条：关卡蓝图引用了一个"空间加载"的 Actor（第四章那个 `BP_ProjectileSpammer`）。关卡蓝图属于持久关卡永远加载，而世界里的 Actor 是玩家走近才流送进来的，这是一条从"永远存在"指向"随时可能不存在"的硬引用。
 
-它不阻止 PIE，但打包后引用可能解析成空，`StartSpawning` 静默不执行。**又是一个"不崩、不报错、就是不工作"。** 处理方式三选一：取消勾选该 Actor 的 `Is Spatially Loaded`、改用事件分发器让 Actor 自己持有引用、或者直接删掉这个练习产物。我选了最后一条。
+它不阻止 PIE，但打包后引用可能解析成空，`StartSpawning` 静默不执行。**又是一个"不崩、不报错、就是不工作"。** 处理方式三选一：取消勾选该 Actor 的 `Is Spatially Loaded`、改用事件分发器让 Actor 自己持有引用、或者直接删掉这个练习产物 —— 这里走的是最后一条。
 
 ---
 
@@ -347,7 +347,7 @@ SelectedActor->Implements<URogueInteractionInterface>()
 
 ## 2.2 执行顺序
 
-这一步我按"**先建空基类 → 改继承 → 再搬成员**"三段走，每段编译一次。合并成一步做的话，出问题时分不清是继承关系的锅还是成员搬迁的锅。
+这一步按"**先建空基类 → 改继承 → 再搬成员**"三段走，每段编译一次。合并成一步做的话，出问题时分不清是继承关系的锅还是成员搬迁的锅。
 
 ## 2.3 搬哪些
 
@@ -380,7 +380,7 @@ SphereComponent = CreateDefaultSubobject<USphereComponent>(TEXT("SphereComp"));
 
 **搬到基类时，字符串和 `UPROPERTY` 变量名都必须一字不差。** 改一个字母，蓝图里的覆盖静默丢失——不报错，就是回到默认值。搬的时候要用复制粘贴，别手打。
 
-我在黑洞类上就打错了一个：`TEXT("RadiaForceComp")`，少了个 `l`。现在改的话会丢掉 `BP_BlackHole` 里对 RadialForce 的所有覆盖值，所以暂时留着当记号，列进遗留待办。**别在有蓝图依赖之后随手改这类字符串。**
+黑洞类上就打错了一个：`TEXT("RadiaForceComp")`，少了个 `l`。现在改的话会丢掉 `BP_BlackHole` 里对 RadialForce 的所有覆盖值，所以暂时留着当记号，列进遗留待办。**别在有蓝图依赖之后随手改这类字符串。**
 
 ## 2.5 `UCLASS(Abstract)`
 
@@ -388,7 +388,7 @@ SphereComponent = CreateDefaultSubobject<USphereComponent>(TEXT("SphereComp"));
 
 为什么基类需要它：基类没有赋任何资产（Niagara 是空的、音效是空的），也没有具体行为，拖进关卡就是个隐形的、什么都不做的 Actor。`Abstract` 从源头杜绝这件事。
 
-**我犯的错是把它顺手也加到了黑洞类上。** 黑洞是具体类，理应可以被直接生成。之所以一直没暴露，是因为 `ProjectileClass` 指向的是 `BP_BlackHole`，而**蓝图子类不继承 `Abstract`**。但如果哪天在 C++ 里直接 `SpawnActor<ARogueProjectileBlackhole>`，会静默返回 `nullptr`。
+**这里的错是把它顺手也加到了黑洞类上。** 黑洞是具体类，理应可以被直接生成。之所以一直没暴露，是因为 `ProjectileClass` 指向的是 `BP_BlackHole`，而**蓝图子类不继承 `Abstract`**。但如果哪天在 C++ 里直接 `SpawnActor<ARogueProjectileBlackhole>`，会静默返回 `nullptr`。
 
 发现它的方式很朴素：传送弹是 `UCLASS()`，黑洞是 `UCLASS(Abstract)`——**两个平级的兄弟类标记不一致，这本身就是复制粘贴留下的痕迹。**
 
@@ -433,7 +433,7 @@ SphereComponent = CreateDefaultSubobject<USphereComponent>(TEXT("SphereComp"));
 
 ## 3.3 数量级
 
-作业提示"想想几百万个数字吧"，我还是先按自己的直觉试了 `-2000`——方块纹丝不动，然后一路往上加到 `-2000000` 才有效果。
+作业提示"想想几百万个数字吧"，按直觉试 `-2000` 是方块纹丝不动，一路往上加到 `-2000000` 才有效果。
 
 **这个弯路值得走一次。** 亲手体验"数量级错误"比直接抄一个数字记得牢。原因是 `ForceStrength` 走的是 `AddForce` 路径，力要先除以质量才变成加速度，而且是每帧施加、要克服重力和摩擦；`ImpulseStrength` 配合 `bImpulseVelChange = true` 则是直接改速度、跳过质量。所以爆炸桶的 `2500` 和黑洞的 `2000000` 不在一个尺度上——**它们根本不是同一种物理量。**
 
@@ -443,7 +443,7 @@ SphereComponent = CreateDefaultSubobject<USphereComponent>(TEXT("SphereComp"));
 
 调错会出现两种症状：吸力范围小于碰撞球 → 方块还没被吸就已经被销毁了，看不到吸引过程；反过来则是"被吸过来但一直不消失"。
 
-我设的是 `RadialForceComponent->Radius = 750.f`，明显大于球体半径，先看到吸引再看到销毁。
+这里设的是 `RadialForceComponent->Radius = 750.f`，明显大于球体半径，先看到吸引再看到销毁。
 
 ## 3.5 "只能销毁模拟角色"
 
@@ -582,7 +582,7 @@ UGameplayStatics::PlaySoundAtLocation(this, ExplosionSound, GetActorLocation(), 
 
 这和作业一爆炸桶的"循环燃烧用组件、一次性爆炸用 `SpawnSystemAtLocation`"是同一条判断：**效果的生命周期是否需要超出宿主 Actor。**
 
-## 4.6 `TeleportTo` 与我关掉的那个安全检查
+## 4.6 `TeleportTo` 与那个被关掉的安全检查
 
 ```cpp
 void ARogueProjectileTeleport::TeleportInstigator()
@@ -601,16 +601,16 @@ void ARogueProjectileTeleport::TeleportInstigator()
 
 作业明确要求用 `TeleportTo` 而不是 `SetActorLocation`，理由是前者带碰撞检查，会在落点不合法时尝试寻找空位，防止玩家卡进墙里。
 
-**我一度把这个收益自己关掉了。** 完整签名是：
+**而这个收益很容易被自己关掉。** 完整签名是：
 
 ```cpp
 bool TeleportTo(const FVector& DestLocation, const FRotator& DestRotation,
                 bool bIsATest = false, bool bNoCheck = false);
 ```
 
-我最初写的是 `TeleportTo(..., false, true)`。`bNoCheck = true` 的含义是**跳过落点合法性检查**——不做 encroachment 查询、不尝试寻找空位、不管目标点是否被几何体占据，直接挪过去。
+最初写的是 `TeleportTo(..., false, true)`。`bNoCheck = true` 的含义是**跳过落点合法性检查**——不做 encroachment 查询、不尝试寻找空位、不管目标点是否被几何体占据，直接挪过去。
 
-也就是说：我换了函数名，然后用第四个参数把那个函数存在的意义关掉了，行为退回到 `SetActorLocation`。
+也就是说：换了函数名，又用第四个参数把那个函数存在的意义关掉了，行为退回到 `SetActorLocation`。
 
 之所以会写成这样，是因为不加它传送经常失败，加了就"好了"。**这是个值得记住的模式：当一个参数让问题消失时，先搞清楚它关掉的是什么。**
 
@@ -645,7 +645,7 @@ bool TeleportTo(const FVector& DestLocation, const FRotator& DestRotation,
 
 ## 5.1 问题
 
-第一版我图省事，三个技能各写了一对函数，一共六个：
+图省事的第一版，三个技能各写一对函数，一共六个：
 
 ```text
 PrimaryAttack()   / AttackTimerElapsed()
@@ -1372,7 +1372,7 @@ void URogueInteractionComponent::Interact()
 
 ### ⑩ 用 `BindAction` 传参的另一条路
 
-作业提示给了两条路，我选了 `FTimerDelegate`。另一条是在 `BindAction` 时就把弹丸类作为额外参数传进来，那样连三个一行的入口函数都能省掉。值得试一次做对比。
+作业提示给了两条路，这里走的是 `FTimerDelegate`。另一条是在 `BindAction` 时就把弹丸类作为额外参数传进来，那样连三个一行的入口函数都能省掉。值得试一次做对比。
 
 ---
 

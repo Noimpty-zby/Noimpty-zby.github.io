@@ -1,68 +1,14 @@
-/* Anime illustration, soft paper and small, optional movements. */
+/* Original blog colors, with the existing illustration layout and optional motion. */
 :root {
-  --sakura-accent: #cc4c72;
-  --sakura-soft: #f2a3b6;
-  --sakura-ink: #59444c;
-  --sakura-muted: #8b727c;
-  --sakura-paper: #fffaf7;
-  --sakura-panel: #fffdfb;
-  --sakura-line: rgba(173, 98, 120, .18);
-  --noimpty-accent: var(--sakura-accent);
-  --noimpty-accent-soft: var(--sakura-soft);
-  --noimpty-border: var(--sakura-line);
-  --noimpty-shadow: 0 12px 40px rgba(123, 68, 91, .07);
-  --global-bg: var(--sakura-paper);
-  --card-bg: var(--sakura-panel);
-  --font-color: var(--sakura-ink);
-  --text-highlight-color: #48323d;
-  --card-meta: var(--sakura-muted);
-  --btn-bg: #f9e7ec;
-  --btn-color: #a63860;
-  --btn-hover-color: var(--sakura-accent);
-  --scrollbar-color: #d88da5;
+  /* Reuse the original palette from custom.css in both display modes. */
+  --sakura-accent: var(--noimpty-accent);
+  --sakura-soft: var(--noimpty-accent-soft);
+  --sakura-ink: var(--font-color);
+  --sakura-muted: var(--card-meta);
+  --sakura-paper: var(--global-bg);
+  --sakura-panel: var(--card-bg);
+  --sakura-line: var(--noimpty-border);
   --section-radius: 26px;
-  --section-shadow: 0 14px 36px rgba(130, 76, 93, .15);
-}
-/* Neutral charcoal for reading; rose stays an accent rather than a page tint. */
-html[data-theme='dark'] {
-  --sakura-accent: #c397a8;
-  --sakura-soft: #b49ba4;
-  --sakura-ink: #cfcbc6;
-  --sakura-muted: #aaa19c;
-  --sakura-paper: #242325;
-  --sakura-panel: #2e2c2d;
-  --sakura-line: rgba(196, 175, 182, .16);
-  --global-bg: var(--sakura-paper);
-  --card-bg: var(--sakura-panel);
-  --font-color: var(--sakura-ink);
-  --text-highlight-color: #d8d2cc;
-  --card-meta: var(--sakura-muted);
-  --light-grey: var(--sakura-muted);
-  --white: var(--text-highlight-color);
-  --hr-border: var(--sakura-line);
-  --hr-before-color: var(--sakura-muted);
-  --blockquote-color: var(--sakura-ink);
-  --btn-bg: #3b3338;
-  --btn-color: #cbb4be;
-  --scrollbar-color: #756870;
-  --noimpty-border: var(--sakura-line);
-  --noimpty-shadow: 0 12px 40px rgba(0, 0, 0, .15);
-  --hl-color: #c9c4be;
-  --hl-bg: #262527;
-  --hltools-bg: #302d30;
-  --hltools-color: #aaa3a5;
-  --hlnumber-bg: var(--hl-bg);
-  --hlnumber-color: #94918b;
-  --hlscrollbar-bg: #625b61;
-  --hlexpand-bg: linear-gradient(180deg, rgba(38, 37, 39, .6), rgba(38, 37, 39, .95));
-}
-body {
-  background: radial-gradient(ellipse at 8% 15%, #fbe9ed 0, transparent 38%),
-    radial-gradient(ellipse at 90% 85%, #f7edf4 0, transparent 38%), var(--sakura-paper);
-  background-attachment: fixed;
-}
-html[data-theme='dark'] body {
-  background: var(--sakura-paper);
 }
 /* The original portrait gets its own space instead of being enlarged behind text. */
 html.noimpty-home-hub #page-header.full_page {
@@ -155,16 +101,16 @@ html.noimpty-home-hub #page-header #site-subtitle {
   gap: 22px;
   min-height: 48px;
   padding: 0 24px;
-  border: 1px solid rgba(186, 65, 105, .14);
+  border: 1px solid var(--noimpty-border);
   border-radius: 18px;
-  background: #cb5278;
-  box-shadow: 0 8px 24px rgba(201, 74, 116, .18);
-  color: #fff8fb;
+  background: linear-gradient(140deg, var(--noimpty-accent), var(--noimpty-accent-soft));
+  box-shadow: 0 8px 24px rgba(217, 78, 112, .28);
+  color: #fff;
   font-size: 14px;
   font-weight: 600;
   transition: transform .35s cubic-bezier(.2, .8, .2, 1), box-shadow .35s;
 }
-.sakura-enter:hover { color: #fff; transform: translateY(-3px); box-shadow: 0 12px 28px rgba(201, 74, 116, .24); }
+.sakura-enter:hover { color: #fff; transform: translateY(-3px); box-shadow: 0 12px 28px rgba(217, 78, 112, .34); }
 .sakura-enter:active { transform: translateY(0) scale(.98); }
 .sakura-enter:focus-visible { outline: 3px solid var(--sakura-accent); outline-offset: 4px; }
 html.noimpty-home-hub #site_social_icons { display: inline-flex; width: auto; margin: 0; gap: 12px; }
@@ -178,7 +124,7 @@ html.noimpty-home-hub #page-header #scroll-down .scroll-down-effects { color: va
   width: var(--petal-size);
   height: calc(var(--petal-size) * .65);
   border-radius: 85% 0 85% 20%;
-  background: linear-gradient(135deg, #fff7fb, #efa0b8);
+  background: linear-gradient(135deg, #fff7fa, var(--noimpty-accent-soft));
   opacity: 0;
   animation: sakura-fall var(--petal-duration) var(--petal-delay) linear infinite;
   animation-play-state: paused;
@@ -193,43 +139,25 @@ html[data-sakura-ambient] .sakura-scene__art { animation-play-state: running; }
   85% { opacity: .6; }
   100% { transform: translate3d(-35px, 90svh, 0) rotate(300deg); opacity: 0; }
 }
-/* Warm navigation keeps dark text readable over the light illustration. */
-#page-header.full_page:not(.nav-fixed) #nav {
-  background: linear-gradient(180deg, var(--sakura-paper), transparent);
-}
-#page-header.full_page #nav a,
-#page-header.full_page #nav .site-page,
-#page-header.not-top-img #nav a { color: var(--sakura-ink); text-shadow: none; }
-#page-header.nav-fixed #nav,
-#page-header.not-top-img #nav {
-  background: var(--sakura-panel);
-  background: color-mix(in srgb, var(--sakura-panel) 88%, transparent);
-  border-color: var(--sakura-line);
-  box-shadow: 0 4px 24px rgba(123, 68, 91, .06);
-}
-#page-header.nav-fixed #nav a { color: var(--sakura-ink); text-shadow: none; }
-#page-header.not-home-page:not(.not-top-img) { background-color: #d78ca5; }
-html[data-theme='dark'] #page-header:not(.full_page):not(.not-top-img) { background-color: #393437; }
-html[data-theme='dark'] #page-header.fixed > #nav,
-html[data-theme='dark'] #page-header.nav-fixed > #nav,
-html[data-theme='dark'] #page-header.not-top-img > #nav {
-  background: var(--sakura-paper);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, .12);
-}
-html[data-theme='dark'] #page-header.fixed #nav :is(a, .site-page) { color: var(--sakura-ink); text-shadow: none; }
+/* The original navigation surface is dark in both modes. Keep its top-level labels light. */
+#page-header #nav #blog-info,
+#page-header #nav #blog-info a,
+#page-header #nav .site-page:not(.child) { color: #fffafa; }
+#page-header.fixed:not(.full_page) > #nav { background: rgba(20, 17, 23, .82); }
+
 html.noimpty-home-hub #content-inner.layout { padding-top: 52px; padding-bottom: 64px; }
 .noimpty-home-sections__intro { text-align: center; margin-bottom: 3px; }
 .noimpty-home-sections__eyebrow { letter-spacing: .16em; font-size: 12px; }
 .noimpty-home-sections__intro h2 { font-size: clamp(23px, 2.7vw, 32px); font-weight: 650; }
 .noimpty-home-sections__intro p:last-child { margin: 14px auto 0; font-size: 13px; color: var(--sakura-muted); }
 .noimpty-section-card {
-  border: 5px solid var(--sakura-panel);
+  border: 5px solid rgba(255, 255, 255, .18);
   transition: transform .5s cubic-bezier(.2, .8, .2, 1), box-shadow .5s;
 }
-.noimpty-section-card:hover { transform: translateY(-7px) rotate(-.4deg); box-shadow: 0 22px 42px rgba(130, 76, 93, .2); }
+.noimpty-section-card:hover { transform: translateY(-7px) rotate(-.4deg); box-shadow: var(--section-shadow); }
 .noimpty-section-card:nth-of-type(2):hover { transform: translateY(-7px) rotate(.4deg); }
 .noimpty-section-card__title { font-weight: 650; letter-spacing: -.025em; }
-.noimpty-section-card__lock { border-color: rgba(255, 230, 242, .6); background: rgba(112, 55, 77, .3); }
+.noimpty-section-card__lock { border-color: rgba(255, 255, 255, .18); background: rgba(17, 12, 19, .3); }
 .noimpty-section-card[data-sakura-light]::before,
 .noimpty-track-card[data-sakura-light]::before {
   position: absolute;
@@ -238,7 +166,7 @@ html.noimpty-home-hub #content-inner.layout { padding-top: 52px; padding-bottom:
   z-index: 1;
   border-radius: inherit;
   pointer-events: none;
-  background: radial-gradient(260px circle at var(--sakura-light-x, 50%) var(--sakura-light-y, 50%), rgba(255, 221, 231, .18), transparent 75%);
+  background: radial-gradient(260px circle at var(--sakura-light-x, 50%) var(--sakura-light-y, 50%), rgba(255, 145, 168, .18), transparent 75%);
 }
 .noimpty-track-card { position: relative; }
 #post, #page, #aside-content .card-widget { border-radius: 22px; }
@@ -246,69 +174,6 @@ html.noimpty-home-hub #content-inner.layout { padding-top: 52px; padding-bottom:
 #article-container h2 { border-bottom: 1px dashed var(--sakura-line); padding-bottom: .4em; }
 #article-container blockquote { border-left-color: var(--sakura-accent); border-radius: 0 14px 14px 0; }
 #article-container a:not(.fancybox):focus-visible { outline: 2px solid var(--sakura-accent); outline-offset: 3px; }
-
-/* Match prose, code and diagrams without changing the source content. */
-html[data-theme='dark'] #article-container a {
-  color: var(--sakura-accent);
-  text-decoration-color: var(--sakura-soft);
-}
-html[data-theme='dark'] #article-container :not(pre) > code {
-  color: #cbb4be;
-  background: #383236;
-}
-html[data-theme='dark'] #article-container pre > code { background: transparent; }
-html[data-theme='dark'] #rightside > div > :is(button, a) { background: var(--sakura-panel); color: var(--sakura-ink); }
-html[data-theme='dark'] #rightside > div > :is(button, a):hover { background: #3b3338; color: #cbb4be; }
-html[data-theme='dark'] #article-container blockquote {
-  background: #333033;
-  color: var(--sakura-ink);
-  border-left-color: #88727d;
-}
-html[data-theme='dark'] #article-container .table-wrap > table,
-html[data-theme='dark'] #article-container .table-wrap > table :is(th, td) {
-  border-color: var(--sakura-line);
-}
-html[data-theme='dark'] #article-container .table-wrap > table thead { background: #353135; }
-html[data-theme='dark'] #article-container img { filter: brightness(.82) contrast(.94); }
-html[data-theme='dark'] #article-container kbd {
-  background: #383236;
-  border-color: #756870;
-  color: var(--sakura-ink);
-  box-shadow: 0 1px 0 #756870;
-}
-/* Hexo emits bare Highlight.js classes, scoped here so prose is unaffected. */
-html[data-theme='dark'] #article-container figure.highlight :is(.comment, .quote) { color: #9e9e98; }
-html[data-theme='dark'] #article-container figure.highlight :is(.keyword, .selector-tag) { color: #a1b6c2; }
-html[data-theme='dark'] #article-container figure.highlight :is(.type, .attr, .attribute) { color: #c7b497; }
-html[data-theme='dark'] #article-container figure.highlight :is(.built_in, .meta) { color: #b9b2cf; }
-html[data-theme='dark'] #article-container figure.highlight :is(.string, .regexp, .symbol, .addition) { color: #adb995; }
-html[data-theme='dark'] #article-container figure.highlight :is(.number, .literal, .bullet) { color: #c3aa98; }
-html[data-theme='dark'] #article-container figure.highlight :is(.function, .title, .section) { color: #c9bec6; }
-html[data-theme='dark'] #article-container figure.highlight .params { color: var(--hl-color); }
-html[data-theme='dark'] #article-container figure.highlight .deletion { color: #c79da5; }
-html[data-theme='dark'] #article-container .highlight-tools .mac-close { background: #b18186; }
-html[data-theme='dark'] #article-container .highlight-tools .mac-minimize { background: #b3a07c; }
-html[data-theme='dark'] #article-container .highlight-tools .mac-maximize { background: #8fa58b; }
-
-/* Butterfly sets these on body itself; keep its distraction-free layout and monochrome code. */
-html[data-theme='dark'] body.read-mode {
-  --font-color: var(--sakura-ink);
-  --readmode-light-color: var(--sakura-panel);
-  --white: var(--text-highlight-color);
-  --light-grey: var(--sakura-muted);
-  --gray: var(--sakura-muted);
-  --hr-border: var(--sakura-line);
-  --hr-before-color: var(--sakura-muted);
-  --highlight-bg: var(--hl-bg);
-  --exit-btn-bg: #3b3338;
-  --exit-btn-color: #cbb4be;
-  --exit-btn-hover: #4a3e45;
-  background: var(--readmode-light-color);
-}
-
-#footer { background: transparent; }
-#footer-wrap { color: var(--sakura-muted); }
-#footer-wrap a { color: var(--sakura-accent); }
 @media (max-width: 900px) and (min-width: 601px) {
   html.noimpty-home-hub #page-header #site-info { left: 5%; width: 53%; }
   .sakura-scene__art { width: 60%; }

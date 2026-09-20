@@ -15,10 +15,11 @@
   const abort = signal => { if (signal?.aborted) throw new DOMException('文件处理已取消', 'AbortError') }
   const range = list => list.length ? list.join('、') : '无'
   const memory = new Map(), pending = new Map()
-  // 内存缓存的上限。条目握着原始 File，按原文件大小算账，不按解析出来的文字算 ——
-  // 所以真正当闸的是字节数，条数只用来兜住「很多份极小的文本」。
-  const MEM = Object.freeze({ count: 32, bytes: 24 * 1024 * 1024 })
-  const sizeOf = item => Math.max(Number(item?.size) || 0, item?.text?.length || 0)
+  // 内存缓存的上限。记录里留下的是正文和已渲染好的扫描图，按这两样算账 ——
+  // item.size 是原件大小，原件并不保留，拿它算会把预算浪费掉。
+  const MEM = Object.freeze({ count: 48, bytes: 24 * 1024 * 1024 })
+  const sizeOf = item => (item?.text?.length || 0) +
+    (Array.isArray(item?.images) ? item.images.reduce((total, x) => total + (x?.dataURL?.length || 0), 0) : 0)
   let memoryBytes = 0
   let database, mammothPromise, pdfPromise
   const openDB = () => {
@@ -285,7 +286,9 @@
       if (result.messages?.length) { parsed.summary += '解析器有 ' + result.messages.length + ' 条提示，部分嵌入内容可能未读取。'; parsed.truncated = true }
     }
     abort(signal)
-    const item = { id: crypto.randomUUID(), name: String(file.name || '文件').slice(0, 160), type, size: file.size, source: file, at: Date.now(), ...parsed }
+    // 不留原始 File。解析结果（正文和已渲染好的扫描图）就是后面唯一会用到的东西，
+    // 而原件能占一条记录的九成九 —— 留着它，内存和 IndexedDB 都是白付。
+    const item = { id: crypto.randomUUID(), name: String(file.name || '文件').slice(0, 160), type, size: file.size, at: Date.now(), ...parsed }
     // 先当作没落盘：这样它在写入期间不会被别的读取挤出内存。存进去的那份不带这个内存标记。
     const stored = { ...item }
     item.temporary = true

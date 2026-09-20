@@ -238,6 +238,39 @@
     }
   }
 
+  // The theme permanently caches even a failed fetch as an empty index. Check
+  // the shared loader first so a temporary failure leaves a same-page retry.
+  // Wrap the installed class at load time; never edit files in node_modules.
+  const installThemeRetry = () => {
+    if (typeof LocalSearch !== 'function' || typeof LocalSearch.prototype.fetchData !== 'function') return false
+    const fetchData = LocalSearch.prototype.fetchData
+    const pending = new WeakMap()
+    LocalSearch.prototype.fetchData = function (...args) {
+      if (!isIndexUrl(this.path)) return fetchData.apply(this, args)
+      if (this.isfetched) return
+      if (pending.has(this)) return pending.get(this)
+      const request = loadXml().then(() => fetchData.apply(this, args)).catch(error => {
+        const loading = document.getElementById('loading-database')
+        if (!loading) return
+        const message = document.createElement('span')
+        message.textContent = window.NOIMPTY_SEARCH.explain(String(error && error.message || error)) + ' '
+        const retry = document.createElement('button')
+        retry.type = 'button'
+        retry.textContent = '重试'
+        retry.addEventListener('click', () => {
+          retry.disabled = true
+          retry.textContent = '重试中…'
+          this.fetchData()
+        })
+        loading.replaceChildren(message, retry)
+      }).finally(() => pending.delete(this))
+      pending.set(this, request)
+      return request
+    }
+    return true
+  }
+  if (!installThemeRetry()) window.addEventListener?.('load', installThemeRetry, { once: true })
+
   /* 行动日志。
    *
    * 和 search.xml 唯一的区别是：**取不到不算错**。

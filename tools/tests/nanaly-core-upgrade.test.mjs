@@ -14,6 +14,12 @@ const cut = (start, end) => {
 // Reuse the existing small DOM fixture; browser rendering is covered separately.
 const existingFixture = readFileSync(new URL('./nanaly-workspace.test.mjs', import.meta.url), 'utf8')
 const Element = vm.runInNewContext(existingFixture.slice(existingFixture.indexOf('class Element'), existingFixture.indexOf('\nconst boot =')) + '\nElement')
+// Match the DOM behavior that removes the current settings view when history is redrawn.
+class UIElement extends Element {
+  constructor(tag, document) { super(tag, document); this.dataset = {} }
+  set innerHTML(value) { this.markup = String(value); this.replaceChildren() }
+  get innerHTML() { return this.markup || '' }
+}
 const storage = initial => ({ values: new Map(Object.entries(initial || {})),
   getItem(key) { return this.values.get(key) ?? null }, setItem(key, value) { this.values.set(key, value) } })
 const plain = value => JSON.parse(JSON.stringify(value))
@@ -23,9 +29,9 @@ const keys = { apiKey: 'offline-text-placeholder', visionKey: 'offline-vision-pl
 const picture = { id: 'picture-core-001', name: '矩阵.png', type: 'image/jpeg' }
 const imageURL = 'data:image/jpeg;base64,AA=='
 
-const harness = ({ saved = storage({ 'nanaly-deep-v1': 'off' }), imageEntries = [], failFinal = false, article = null } = {}) => {
+const harness = ({ saved = storage({ 'nanaly-deep-v1': 'off' }), imageEntries = [], failFinal = false, article = null, credentials = keys } = {}) => {
   const requests = [], bubbles = [], usage = [], jobs = []
-  const document = { activeElement: null, createElement: tag => new Element(tag, document) }
+  const document = { activeElement: null, createElement: tag => new UIElement(tag, document) }
   const images = new Map(imageEntries)
   const indexedDB = { open() {
     const request = { result: { transaction() {
@@ -40,6 +46,7 @@ const harness = ({ saved = storage({ 'nanaly-deep-v1': 'off' }), imageEntries = 
     NOIMPTY_SEARCH: { loadCorpus: async () => corpus, loadJournal: async () => [], explain: x => x } }
   const panel = document.createElement('div'), body = document.createElement('div'), input = document.createElement('textarea')
   panel.append(body, input)
+  const quick = document.createElement('div'), sendBtn = document.createElement('button')
   panel.classList.contains = () => true
   let context
   const responseState = { failFinal }
@@ -58,15 +65,23 @@ const harness = ({ saved = storage({ 'nanaly-deep-v1': 'off' }), imageEntries = 
     return new Response('data: ' + JSON.stringify({ choices: [{ delta: { content: '行列互换。[S1]' } }] }) + '\n\ndata: [DONE]\n\n')
   }
   context = vm.createContext({ window, document, indexedDB, localStorage: saved, URL, Response, Event, AbortController, DOMException, TextEncoder, TextDecoder, setTimeout, clearTimeout, fetch,
-    cfg: { ...cfg }, secrets: { ...keys }, busy: false, view: 'chat', activeTurn: null, abortCtl: null, uiRevision: 0,
-    research: null, vision: null, input, panel, subLine: {}, followScroll: false, lastUsage: null,
+    cfg: { ...cfg }, secrets: { ...credentials }, busy: false, view: 'chat', activeTurn: null, abortCtl: null, uiRevision: 0,
+    research: null, vision: null, input, panel, body, quick, sendBtn, delight: { clear() {} }, subLine: {}, followScroll: false, lastUsage: null,
     currentArticle: () => article, canReadPageContext: () => true, location: { origin: 'https://blog.test', pathname: '/', href: 'https://blog.test/' },
     getSiteMap: async () => [], addUsage: value => usage.push(value),
-    addMsg: (role, value) => { const node = document.createElement('div'); node.innerHTML = value; node.contains = x => node.children.includes(x); bubbles.push(node); return node },
-    el: tag => { const node = document.createElement(tag); node.contains = x => node.children.includes(x); return node },
+    addMsg: (role, value) => { const node = document.createElement('div'); node.innerHTML = value; node.contains = x => node.children.includes(x); bubbles.push(node); body.appendChild(node); return node },
+    el: (tag, className = '', html) => { const node = document.createElement(tag); node.className = className; if (html !== undefined) node.innerHTML = html; node.contains = x => node.children.includes(x); return node },
     setBusy: on => { context.busy = on; window.workspace.refresh() },
     enhance: async () => {}, renderSources() {}, showUsage() {}, addSpeakBtn() {}, scrollBottom() {}, setSubLine() {},
-    mdToHtml: x => x, escapeHtml: x => x, launcher: { classList: { add() {} } }, showKeyUI: message => { throw new Error(message) }
+    mdToHtml: x => x, escapeHtml: x => x, launcher: { classList: { add() {} } },
+    stopSpeak() {}, refreshContext() {}, hasVault: () => false, locked: () => false,
+    showSetup: () => {
+      const box = context.subject.setupShell('')
+      const field = document.createElement('input')
+      field.type = 'password'; field.className = 'setup-api-key'
+      box.appendChild(field)
+      return box
+    }
   })
   for (const name of ['nanaly-workspace', 'nanaly-provider', 'nanaly-vision', 'nanaly-research']) vm.runInContext(read(name), context)
   Object.assign(context, { history: [], historyAnchor: 0, LS_DEEP: 'nanaly-deep-v1' })
@@ -82,18 +97,24 @@ const harness = ({ saved = storage({ 'nanaly-deep-v1': 'off' }), imageEntries = 
     cut('  const LS_MEM', '  // ---------------- 操控页面'),
     cut('  const abortable =', '  /* 忙的时候'),
     cut('  const stopStream =', '  const addMsg ='),
+    cut('  const renderHistory =', '  // 首次设置：'),
+    cut('  const showKeyUI =', '  // ---------------- Token 账'),
     cut('  const WEB_PREFIX', '  // 模型把指令'),
     cut('  const ACT_RE =', '  const checkArticleLinks =')
   ]
-  vm.runInContext(pieces.join('\n') + '\nthis.subject = { send, buildMessages, stream, stopStream, workspace }', context)
+  vm.runInContext(pieces.join('\n') + '\nthis.subject = { send, buildMessages, stream, stopStream, workspace, setupShell, backToChat }', context)
   const workspace = context.subject.workspace
   window.workspace = workspace
   context.history = workspace.readLog()
-  assert.equal(workspace.mount({ panel, body, input, isBusy: () => context.busy, isLocked: () => false,
-    onHistoryChange: log => { context.history = log; context.historyAnchor = 0; context.research?.reset() },
+  const adapterStart = core.indexOf('    onHistoryChange: log => {', core.indexOf('  workspace?.mount({'))
+  const adapterEnd = core.indexOf('    send:', adapterStart)
+  assert.ok(adapterStart >= 0 && adapterEnd > adapterStart, 'Missing real workspace history adapter')
+  const historyAdapter = vm.runInContext('({' + core.slice(adapterStart, adapterEnd) + '})', context)
+  assert.equal(workspace.mount({ panel, body, input, isBusy: () => context.busy, isLocked: () => context.view !== 'chat',
+    onHistoryChange: historyAdapter.onHistoryChange,
     send: (...args) => { const job = context.subject.send(...args); jobs.push(job); return job }
   }), true)
-  return { ...context.subject, workspace, saved, context, requests, usage, bubbles, jobs, responseState,
+  return { ...context.subject, workspace, saved, context, requests, usage, bubbles, jobs, responseState, body, input,
     finalRequests: () => requests.filter(r => r.payload.stream), planningRequests: () => requests.filter(r => !r.payload.stream) }
 }
 let passed = 0
@@ -181,6 +202,39 @@ await test('persisted verified sources are reintroduced after a new page runtime
   assert.ok(firstPlan.includes(oldSource.url))
   assert.ok(firstPlan.includes(oldSource.quote))
   assert.ok(restored.workspace.readLog().at(-1).sources.some(s => s.id === oldSource.id && s.url === oldSource.url))
+})
+
+
+await test('a retry without API credentials restores history without removing the settings view', async () => {
+  for (const kind of ['retry', 'continue']) {
+    const h = harness({ credentials: {} })
+    h.workspace.writeLog([{ role: 'user', content: '此前的问题', at: 1 }, { role: 'assistant', content: '此前的回答', at: 2 }])
+    const token = h.workspace.beginTurn('保留这个未完成的问题', 'article')
+    h.workspace.writeLog([...h.workspace.readLog(), { role: 'assistant', content: '保留这段未完成的回答', at: 3 }])
+    h.workspace.finishTurn(token, { status: 'interrupted', partial: '保留这段未完成的回答' })
+    const original = plain(h.workspace.readLog())
+    assert.equal(h.workspace.retry(kind), true)
+    const setup = h.body.querySelector('.nanaly-setup')
+    assert.ok(setup, 'missing credentials must open the real settings shell')
+    const keyField = setup.querySelector('.setup-api-key')
+    assert.ok(keyField, 'the API key field must be present')
+    keyField.value = 'unsaved-local-placeholder'
+    await Promise.all(h.jobs)
+    await Promise.resolve()
+    assert.equal(h.context.view, 'setup')
+    assert.equal(h.body.querySelector('.nanaly-setup'), setup, 'history recovery must not replace the settings UI')
+    assert.equal(keyField.value, 'unsaved-local-placeholder', 'the user must retain an in-progress setting edit')
+    assert.equal(h.input.disabled, true, 'the composer remains disabled while setup is visible')
+    assert.deepEqual(plain(h.workspace.readLog()), original)
+    assert.deepEqual(plain(h.context.history), original)
+    assert.equal(h.workspace.snapshot().sessions[0].pending.id, token.turnId)
+    assert.equal(h.requests.length, 0, 'an unconfigured retry must never reach any model service')
+    h.backToChat()
+    assert.equal(h.context.view, 'chat')
+    assert.equal(h.input.disabled, false)
+    assert.equal(h.body.querySelector('.nanaly-setup'), null)
+    assert.deepEqual(plain(h.context.history), original)
+  }
 })
 
 console.log(`\n${passed} core upgrade integration cases passed`)

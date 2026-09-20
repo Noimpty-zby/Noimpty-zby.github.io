@@ -442,30 +442,36 @@
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 
   const renderSources = (node, sources, answerText = '') => {
-    if (!sources?.length || node.querySelector('.nanaly-sources')) return
-    const usedIds = [...String(answerText).matchAll(/\[S(\d+)\]/g)].map(m => 'S' + m[1])
-    const available = sources.filter(source => {
+    if (node.querySelector('.nanaly-sources')) return
+    const usedIds = [...new Set([...String(answerText).matchAll(/\[S(\d+)\]/g)].map(m => 'S' + m[1]))]
+    const available = (sources || []).filter(source => {
       try { const url = new URL(source.url, location.origin); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password }
       catch (_) { return false }
     })
-    if (!available.length) return
+    const invalid = usedIds.filter(id => !available.some(source => source.id === id))
+    if (!available.length && !invalid.length) return
     const details = el('details', 'nanaly-sources')
     const summary = el('summary')
     const cited = available.filter(source => usedIds.includes(source.id))
     const shown = cited.length ? cited : available
-    summary.textContent = (cited.length ? '回答引用的资料' : '本轮查阅的资料') + ' · ' + shown.length
-    const list = el('ol')
-    for (const source of shown) {
-      const row = el('li'), link = el('a'), quote = el('blockquote')
-      link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer'
-      link.textContent = '[' + source.id + '] ' + source.title + (source.section ? ' · ' + source.section : '')
-      quote.textContent = source.quote || ''
-      row.append(link, quote); list.append(row)
+    summary.textContent = shown.length
+      ? (cited.length ? '回答引用的资料' : '本轮查阅的资料') + ' · ' + shown.length
+      : '引用待核实'
+    details.append(summary)
+    if (shown.length) {
+      const list = el('ol')
+      for (const source of shown) {
+        const row = el('li'), link = el('a'), quote = el('blockquote')
+        link.href = source.url; link.target = '_blank'; link.rel = 'noopener noreferrer'
+        link.textContent = '[' + source.id + '] ' + source.title + (source.section ? ' · ' + source.section : '')
+        quote.textContent = source.quote || ''
+        row.append(link, quote); list.append(row)
+      }
+      details.append(list)
     }
-    const invalid = usedIds.filter(id => !available.some(source => source.id === id))
-    details.append(summary, list)
     if (invalid.length) {
-      const note = el('p'); note.textContent = '回答中的 ' + invalid.join('、') + ' 未对应到检索材料，请核实。'; details.append(note)
+      details.open = true
+      const note = el('p'); note.textContent = '回答中的 ' + invalid.map(id => '[' + id + ']').join('、') + ' 未对应到检索材料，请核实。'; details.append(note)
     }
     node.append(details)
   }
@@ -2647,7 +2653,10 @@
   workspace?.mount({
     panel, body, input, isBusy: () => busy, isLocked: () => locked() || view !== 'chat',
     onHistoryChange: log => {
-      history = log; historyAnchor = 0; research?.reset(); vision?.clear(); renderHistory(); refreshContext()
+      history = log; historyAnchor = 0; research?.reset(); vision?.clear()
+      // A rejected retry can restore history after opening the API settings.
+      // Keep that form visible until the user returns to chat.
+      if (view === 'chat') { renderHistory(); refreshContext() }
     },
     send: (text, mode, options) => send(text, mode, options),
     editQuestion: message => {

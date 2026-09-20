@@ -1,5 +1,6 @@
 // 生成 HTML 邮件。邮件客户端对 CSS 支持很差，所以全部用内联样式 + 表格布局，
 // 不用 flex/grid，不用外部字体。深色配色跟博客一致。
+import { kilo } from '../nanaly/usage.mjs'
 
 const esc = s => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -29,6 +30,28 @@ const kv = rows => `
 </table>`
 
 const empty = t => `<div style="font-size:13px;color:${C.dim}">${esc(t)}</div>`
+
+/* 模型用量。只报 token，不报钱 —— 单价会变，各家计费口径也不一样，
+ * 编一个金额出来比不给更糟。
+ *
+ * 带七天日均做对照：单看「昨天 42k」说明不了任何事，能看出问题的是「比平时多一倍」。
+ * 每项按未命中缓存的输入排序 —— 那是最贵的一列，想省钱先看它。 */
+const usageCard = (day, week) => {
+  if (!day || !day.calls) return card('模型用量', empty('过去一天没记到用量 —— 要么没跑任务，要么没配模型 key。'))
+  const rate = day.input ? Math.round(day.hit / day.input * 100) : 0
+  const avg = week && week.runs ? week.miss / 7 : 0
+  const delta = avg >= 100
+    ? `<span style="color:${day.miss > avg * 1.5 ? C.warn : C.dim}">（七天日均 ${kilo(Math.round(avg))}）</span>`
+    : ''
+  const rows = [
+    ['合计', `输入 ${kilo(day.input)}（命中缓存 ${rate}%）· 输出 ${kilo(day.out)}`],
+    ['未命中输入', `${kilo(day.miss)} ${delta}`],
+    ['调用', `${day.calls} 次 · ${day.runs} 轮`]
+  ]
+  for (const t of day.ranked.slice(0, 6))
+    rows.push([esc(t.name), `未命中 ${kilo(t.miss)} · 输出 ${kilo(t.out)} · ${t.calls} 次`])
+  return card('模型用量', kv(rows))
+}
 
 const trafficCard = t => {
   if (!t.ok) return card('访问情况', empty('没取到 —— ' + t.why))
@@ -159,7 +182,7 @@ const healthCard = h => {
   return card('健康检查', `<table width="100%" cellpadding="0" cellspacing="0">${rows}</table>`)
 }
 
-export const renderEmail = ({ opening, traffic, comments, screen, newPosts, feedbacks, health, schedule, windowLabel, site }) => `<!doctype html>
+export const renderEmail = ({ opening, traffic, comments, screen, newPosts, feedbacks, health, schedule, usage, usageWeek, windowLabel, site }) => `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:${C.bg}">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:${C.bg};padding:22px 12px">
@@ -181,6 +204,7 @@ export const renderEmail = ({ opening, traffic, comments, screen, newPosts, feed
   <tr><td>${trafficCard(traffic)}</td></tr>
   <tr><td>${commentCard(comments, screen)}</td></tr>
   <tr><td>${postCard(newPosts, feedbacks)}</td></tr>
+  <tr><td>${usageCard(usage, usageWeek)}</td></tr>
   <tr><td>${healthCard(health)}</td></tr>
 
   <tr><td style="padding:6px 0 0;font-size:11px;color:${C.dim};line-height:1.7">

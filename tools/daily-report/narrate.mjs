@@ -65,15 +65,26 @@ export const MODEL_STATE = {
    * 以前响应里的 usage 被整个丢掉，于是「这个月的钱花在哪一步」查不出来 ——
    * 主人看着账单上「输入（未命中缓存）」高得离谱，却没有任何数据能说明是谁烧的，
    * 只能靠在本地搭探针去猜。命中和未命中是两个价钱，所以分开记。 */
-  tokens: { hit: 0, miss: 0, out: 0, detail: true }
+  tokens: { hit: 0, miss: 0, out: 0, detail: true },
+  /* 同一轮里按任务分开记。
+   *
+   * 只有总数的时候，「这个月贵了」只能看出「贵了」，看不出是谁贵的 —— 而每项
+   * 任务的频次和该不该用推理模型是分开的决定，混在一起就没法单独调。
+   * pro 单独计数：推理模型和普通档不是一个价钱。 */
+  byTask: Object.create(null)
 }
+
+const taskOf = (label, deep) => (label || '未标注') + (deep ? '（推理）' : '')
+const bucket = name => (MODEL_STATE.byTask[name] ||= { calls: 0, hit: 0, miss: 0, out: 0 })
 
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : null }
 
 /* 记一笔账，并在日志里留一行。
  * 字段名按接口给的来；给不出缓存明细就整笔算未命中，不猜 —— 宁可账面难看，
  * 也不要编一个好看的命中率出来。 */
-const countUsage = (usage, tag) => {
+const countUsage = (usage, tag, task) => {
+  const slot = bucket(task)
+  slot.calls++
   if (!usage) { MODEL_STATE.tokens.detail = false; return }
   const all = num(usage.prompt_tokens) || 0
   const hit = num(usage.prompt_cache_hit_tokens ?? usage.prompt_cached_tokens)
@@ -83,6 +94,7 @@ const countUsage = (usage, tag) => {
   MODEL_STATE.tokens.hit += hit || 0
   MODEL_STATE.tokens.miss += miss
   MODEL_STATE.tokens.out += out
+  slot.hit += hit || 0; slot.miss += miss; slot.out += out
   console.log(`  [${tag}] 输入 ${all}${hit == null ? '（这次没给缓存明细）' : `（命中缓存 ${hit}）`}，输出 ${out}`)
 }
 
@@ -162,7 +174,7 @@ export const ask = async (system, user, maxTokens = 700, opts = {}) => {
         throw new Error(`${res.status} ${body}`)
       }
       const data = await res.json()
-      countUsage(data.usage, tag)
+      countUsage(data.usage, tag, taskOf(opts.label, deep))
       const choice = data.choices?.[0] || {}
       const out = typeof choice.message?.content === 'string' ? choice.message.content.trim() : ''
       if (choice.finish_reason === 'content_filter') {

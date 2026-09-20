@@ -5,13 +5,27 @@
   const MODEL = 'FunAudioLLM/CosyVoice2-0.5B'
   const KEY = 'nanaly-voice-v1'
   const END_DRAIN_MS = 500
-  const ENDING = '每个字完整发音，尤其不要省略最后一个字的尾音，句尾自然收住。'
-  const NEUTRAL = '请用平静自然、清楚克制的语气朗读，不刻意表现开心或悲伤。'
+  // CosyVoice2 tells instruction from content by sentence form, not by the delimiter,
+  // and it reads whatever it does not take as instruction out loud in place of the reply.
+  // Measured against a 9-character reply: a descriptive '清甜轻盈的少女动漫声线…' leaked
+  // 1/14 while the same words as '请保持清甜轻盈的少女动漫声线…' leaked 0/14; a clause that
+  // dropped the 请 took a 68-character prompt to 10/14. Clause count then matters as much
+  // as length — four imperative clauses over 62 characters leaked 12/14, two over 31
+  // characters 0/14. So the prompt is two 请-led sentences, intensity rides along as an
+  // adverb, and speak() still measures what comes back because no wording is guaranteed.
+  const PROMPT_BUDGET = 40
+  const NEUTRAL = '请用平静自然的语气朗读。'
   const STYLES = Object.freeze({
-    cat: { name: '清甜猫娘', voice: 'diana', instruction: '请保持清甜、稍高的女性动漫角色声线，音色轻盈可爱。普通话清晰自然，不要尖叫。' },
-    soft: { name: '温柔陪伴', voice: 'claire', instruction: '请保持温柔清甜的女声音色，吐字清楚自然。' },
-    bright: { name: '元气满满', voice: 'diana', instruction: '请保持明亮、有活力的女性动漫角色声线，声音通透，不要夸张尖叫。' }
+    cat: { name: '清甜猫娘', voice: 'diana', instruction: '请保持清甜轻盈的少女动漫声线。' },
+    soft: { name: '温柔陪伴', voice: 'claire', instruction: '请保持温柔清甜的女声。' },
+    bright: { name: '元气满满', voice: 'diana', instruction: '请保持明亮有活力的少女声线。' }
   })
+  // Speech runs near 0.2 s per character. Well past that is the prompt being read out.
+  const overlong = async (blob, utterance) => {
+    if (!window.NANALY_AUDIO?.measure) return false
+    const seconds = await window.NANALY_AUDIO.measure(blob)
+    return Number.isFinite(seconds) && seconds > 1.5 + [...utterance].length * 0.45
+  }
   const normalize = value => ({
     style: STYLES[value?.style] ? value.style : 'cat',
     speed: Number.isFinite(Number(value?.speed)) ? Math.min(1.3, Math.max(0.8, Number(value.speed))) : 1.04,
@@ -197,6 +211,20 @@
           cache.clear(); plans.clear(); audioBytes = 0
           cacheAccount = { url, key: connection.key, model: connection.model }
         }
+        const synthesize = async (prompt, utterance) => {
+          const response = await fetcher(url, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + connection.key },
+            body: JSON.stringify({ model: MODEL, voice: MODEL + ':' + style.voice,
+              input: prompt ? prompt + '<|endofprompt|>' + utterance : utterance,
+              response_format: 'wav', sample_rate: 24000, stream: false, speed: settings.speed }),
+            signal: turn.controller.signal
+          })
+          if (!response.ok) throw await speechError(response)
+          if (/json|text\//i.test(response.headers?.get('content-type') || '')) throw new Error('语音服务返回了异常内容，请稍后重试。')
+          const blob = await response.blob()
+          if (!blob.size || blob.size > 12 * 1024 * 1024) throw new Error('语音服务没有返回可播放的音频。')
+          return blob
+        }
         const parts = settings.emotion
           ? await planSpeech(String(text), String(context || '').slice(0, 1200), connection, turn)
           : splitText(text).map(text => ({ text, instruction: NEUTRAL }))
@@ -205,24 +233,24 @@
           // A complete sentence also gives synthesis an explicit ending for bare headings.
           const phrase = part.text.trim()
           const utterance = /[。！？!?….，,；;：:、][”’"'）)」』]*$/.test(phrase) ? phrase : phrase + '。'
-          const instruction = style.instruction + part.instruction + '情绪只通过语调、节奏和重音表达，不添加原文没有的笑声、哭声、喵或其他字词，不念语气说明。' + ENDING
-          const cacheKey = JSON.stringify([url, settings.style, settings.speed, 'wav-emotion-v1', instruction, utterance])
+          const composed = style.instruction + part.instruction
+          // Past the budget the prompt leaks often enough to matter; keep the voice only.
+          const instruction = [...composed].length <= PROMPT_BUDGET ? composed : style.instruction
+          const cacheKey = JSON.stringify([url, settings.style, settings.speed, 'wav-guarded-v1', instruction, utterance])
           let blob = cache.get(cacheKey)
           if (!blob) {
             turn.phase = 'loading'; emit()
             const timeout = setTimeout(() => turn.controller.abort(new DOMException('声音生成超时，请重试。', 'TimeoutError')), 60000)
             try {
-              const response = await fetcher(url, {
-                method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + connection.key },
-                body: JSON.stringify({ model: MODEL, voice: MODEL + ':' + style.voice,
-                  input: instruction + '<|endofprompt|>' + utterance,
-                  response_format: 'wav', sample_rate: 24000, stream: false, speed: settings.speed }),
-                signal: turn.controller.signal
-              })
-              if (!response.ok) throw await speechError(response)
-              if (/json|text\//i.test(response.headers?.get('content-type') || '')) throw new Error('语音服务返回了异常内容，请稍后重试。')
-              blob = await response.blob()
-              if (!blob.size || blob.size > 12 * 1024 * 1024) throw new Error('语音服务没有返回可播放的音频。')
+              blob = await synthesize(instruction, utterance)
+              // The prompt leaked into the audio. Text with no prompt at all never did
+              // this in testing, so regenerate that way rather than playing the prompt.
+              if (await overlong(blob, utterance)) {
+                turn.controller.signal.throwIfAborted()
+                const bare = await synthesize('', utterance)
+                if (await overlong(bare, utterance)) notify('这段语音生成异常，已改用无语气朗读。')
+                blob = bare
+              }
               // Tail padding is optional. Browser decoders can accept WAV headers
               // this conservative editor cannot safely rewrite. Keep those bytes
               // intact and let the player decide; never guess where speech ends.

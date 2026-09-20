@@ -7,14 +7,19 @@
     error.code = 'NANALY_INVALID_WAV'
     throw error
   }
-  // Non-seekable writers use UINT32_MAX or a value near INT32_MAX (sometimes
-  // minus the header) until the final byte count is known. These are not allocations.
-  const streamingLength = value => value === 0xffffffff || value >= 0x7fff0000 && value <= 0x7fffffff
+  const WAV_TYPES = ['audio/wav', 'audio/wave', 'audio/x-wav', 'audio/vnd.wave', 'application/octet-stream']
+  // Non-seekable writers leave a placeholder until the final byte count is known:
+  // UINT32_MAX, a value near INT32_MAX (sometimes minus the header), or a small
+  // negative int32 written unsigned. SiliconFlow's CosyVoice2 emits the last kind
+  // on every response (RIFF 0xffffffa6, data 0xffffff00), so a reader that only
+  // knows UINT32_MAX rejects all of its audio. None of these are allocations, and
+  // callers still require the size to exceed the bytes actually present.
+  const streamingLength = value => value >= 0xffffff00 || value >= 0x7fff0000 && value <= 0x7fffffff
   const padWav = async (blob, seconds = 0.35) => {
     if (!blob || typeof blob.arrayBuffer !== 'function' || typeof blob.size !== 'number') throw new TypeError('需要 Blob 音频')
     if (!Number.isFinite(seconds) || seconds < 0) throw new RangeError('静音时长必须是非负有限数字')
     const mime = String(blob.type || '').split(';')[0].trim().toLowerCase()
-    if (mime && !['audio/wav', 'audio/wave', 'audio/x-wav', 'audio/vnd.wave', 'application/octet-stream'].includes(mime)) return blob
+    if (mime && !WAV_TYPES.includes(mime)) return blob
     const bytes = new Uint8Array(await blob.arrayBuffer())
     if (bytes.length < 12) fail('文件头不完整')
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
@@ -85,5 +90,30 @@
     return new Blob([prefix, bytes.subarray(data.start, data.start + data.size), silence, padding,
       tail], { type: 'audio/wav' })
   }
-  window.NANALY_AUDIO = Object.freeze({ padWav })
+  // Playback duration, for callers checking synthesis against the text it was given.
+  // Deliberately lenient where padWav is strict: an unreadable header is not an error
+  // here, it simply means the length is unknown.
+  const measure = async blob => {
+    if (!blob || typeof blob.arrayBuffer !== 'function') return null
+    const mime = String(blob.type || '').split(';')[0].trim().toLowerCase()
+    if (mime && !WAV_TYPES.includes(mime)) return null
+    const bytes = new Uint8Array(await blob.arrayBuffer())
+    if (bytes.length < 12) return null
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+    const tag = offset => String.fromCharCode(...bytes.subarray(offset, offset + 4))
+    if (tag(0) !== 'RIFF' || tag(8) !== 'WAVE') return null
+    const declared = view.getUint32(4, true)
+    const end = declared && !streamingLength(declared) && declared + 8 <= bytes.length ? declared + 8 : bytes.length
+    let rate = 0, align = 0, size = 0, offset = 12
+    while (offset + 8 <= end) {
+      const name = tag(offset), start = offset + 8, available = end - start
+      const length = view.getUint32(offset + 4, true)
+      const bounded = Math.min(length, available)
+      if (name === 'fmt ' && bounded >= 16) { rate = view.getUint32(start + 4, true); align = view.getUint16(start + 12, true) }
+      if (name === 'data') { size = bounded; break }
+      offset = start + bounded + (bounded & 1)
+    }
+    return rate > 0 && align > 0 && size > 0 ? size / (rate * align) : null
+  }
+  window.NANALY_AUDIO = Object.freeze({ padWav, measure })
 })()

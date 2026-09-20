@@ -3,18 +3,22 @@
   'use strict'
   if (window.NANALY_PROSODY) return
   const LIMITS = Object.freeze({ spokenChars: 16000, segmentChars: 450, segments: 128, contextChars: 1200, stageChars: 2400, stageDirections: 32, confidence: 0.75 })
+  // These become one clause of a CosyVoice2 instruct prompt, which obeys an imperative
+  // and reads anything else aloud. Each stays a single 请-led sentence, and intensity is
+  // an adverb inside it rather than a clause of its own: clause count drives the leak
+  // rate as much as length does. See the measurements in nanaly-voice.js.
   const STYLE = Object.freeze({
-    neutral: '语气自然平稳，按语义重音清楚朗读，不额外渲染情绪。',
-    joy: '带真诚的开心和笑意，轻快自然，不夸张大笑。',
-    sadness: '带低缓、克制的难过，保留清晰吐字，不强加哭腔。',
-    comfort: '温暖、耐心地安慰听者，柔和而有支撑感，不读成自己在悲伤。',
-    excited: '带积极、明亮的兴奋感，节奏有活力，不尖叫。',
-    surprise: '自然地表达意外和惊讶，重音轻微上扬，不过分夸张。',
-    serious: '认真、明确、稳重地说明，重点清晰，不生硬训斥。',
-    curious: '带友好探索和求知的语气，疑问自然，不咄咄逼人。',
-    embarrassed: '带含蓄、轻微羞赧和嘴硬心软的感觉，不故意结巴。',
-    teasing: '友好、俏皮地打趣，带轻微笑意，不讥辱听者。',
-    annoyed: '表达克制的不满和无奈，保持清晰、礼貌，不吼叫。'
+    neutral: '用自然平稳的语气朗读，不渲染情绪。',
+    joy: '带真诚的开心笑意，轻快自然。',
+    sadness: '用低缓克制的难过语气，吐字清楚。',
+    comfort: '温暖耐心地安慰听者，柔和有支撑。',
+    excited: '带明亮的兴奋感，节奏有活力。',
+    surprise: '表达意外和惊讶，重音轻微上扬。',
+    serious: '认真稳重地说明，重点清晰。',
+    curious: '带友好探索的语气，疑问自然。',
+    embarrassed: '带含蓄羞赧、嘴硬心软的感觉。',
+    teasing: '俏皮地打趣，带轻微笑意。',
+    annoyed: '表达克制的不满，保持礼貌。'
   })
   const EMOTIONS = Object.freeze(Object.keys(STYLE))
   const freeze = value => {
@@ -162,11 +166,11 @@ from/to 是输入 segments 的整数索引半开范围 [from,to)，不是字符�
       max_tokens: Math.max(512, Math.min(10000, segments.length * 72 + 128)) })
     issued.add(prepared); return prepared
   }
-  const instruction = (emotion, intensity) => emotion === 'neutral' ? STYLE.neutral
-    : STYLE[emotion] + (intensity < 0.35 ? '情绪轻微、含蓄。' : intensity < 0.7 ? '情绪适中、自然。' : '情绪清楚但有节制，不要夸张表演。')
+  const instruction = (emotion, intensity) => emotion === 'neutral' ? '请' + STYLE.neutral
+    : (intensity < 0.35 ? '请略微' : intensity < 0.7 ? '请' : '请明显地') + STYLE[emotion]
   const neutral = prepared => {
     assertPrepared(prepared)
-    return freeze({ segments: prepared.segments.map(segment => ({ ...segment, emotion: 'neutral', intensity: 0, confidence: 0, instruction: STYLE.neutral })) })
+    return freeze({ segments: prepared.segments.map(segment => ({ ...segment, emotion: 'neutral', intensity: 0, confidence: 0, instruction: '请' + STYLE.neutral })) })
   }
   const parse = (content, prepared) => {
     assertPrepared(prepared)

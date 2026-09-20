@@ -1136,6 +1136,7 @@ inject:
     - <link rel="stylesheet" href="/css/music-stage.css">
     - <link rel="stylesheet" href="/css/nanaly-shell.css">
     - <link rel="stylesheet" href="/css/nanaly-voice.css">
+    - <link rel="stylesheet" href="/css/site-clock.css">
     # 顺序有讲究：protected-manifest 给出锁清单，privacy-gate 立刻据此打遮罩，
     # noimpty-search 依赖 gate 存下的暗号才能解密索引。三者不能调换。
     - <script src="/js/protected-manifest.js"></script>
@@ -1162,6 +1163,7 @@ inject:
     - <script src="/js/nanaly-voice.js"></script>
     - <script src="/js/noimpty-ai.js"></script>
     - <script src="/js/schedule.js"></script>
+    - <script src="/js/site-clock.js"></script>
     - <script src="/js/sakura-motion.js"></script>
 
 # CDN Settings

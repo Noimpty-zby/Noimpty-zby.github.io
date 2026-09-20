@@ -242,7 +242,23 @@ await test('a mixed reply changes delivery without changing voice or losing text
   assert.equal(parts.map(part => part.input.split('<|endofprompt|>')[1]).join(''), text)
   h.audio[1].onended(); await h.drain(); assert.equal(await job, true)
 })
-await test('replay caches plans, while new context and configured models force fresh interpretation', async () => {
+await test('★★ 常被重播的那段不会因为「进得早」被新回复挤出缓存', async () => {
+  // 缓存上限 12 段。原来只有写入排序，命中不挪位，于是越常重播的越先被淘汰 ——
+  // 正好和缓存该干的事相反。
+  const h = boot()
+  const say = async text => { const job = h.controller.speak(text, { id: text }); await flush(); h.audio.at(-1).onended(); await job }
+  for (let i = 0; i < 12; i++) await say('第' + i + '条回复')
+  assert.equal(h.requests.length, 12, '十二段各生成一次，缓存正好装满')
+  await say('第0条回复')
+  assert.equal(h.requests.length, 12, '还在缓存里')
+  for (const text of ['新回复甲', '新回复乙']) await say(text)
+  await say('第0条回复')
+  assert.equal(h.requests.length, 14, '刚重播过的那段被挤掉了 —— 命中没有刷新它的位置')
+  await say('第1条回复')
+  assert.equal(h.requests.length, 15, '最久没用的那段应该已经被淘汰')
+})
+
+await test('replay caches plans; a new context or model reinterprets without re-paying for identical audio', async () => {
   const text = '真好啊。'
   let emotion = 'joy'
   const h = boot({ emotion: true, fetcher: async url => url.endsWith('/chat/completions') ? plannedResponse(h.planner.prepare(text), emotion) : audioResponse() })
@@ -253,10 +269,13 @@ await test('replay caches plans, while new context and configured models force f
   await run('其实我很难过。'); assert.equal(h.requests.length, 4)
   assert.notEqual(JSON.parse(h.requests[1].init.body).input, JSON.parse(h.requests[3].init.body).input, 'same words with different emotions cannot reuse the wrong audio')
   h.connection.model = 'configured-alternative'
-  await run('其实我很难过。'); assert.equal(h.requests.length, 6)
+  // 换文字模型要重新理解语气，但音频只取决于声线、语速、语气指令和文本 —— 同一段
+  // 话同一种语气，没有理由为一模一样的声音再付一次钱。
+  await run('其实我很难过。'); assert.equal(h.requests.length, 5, 'only the interpretation is redone')
+  assert.ok(h.requests[4].url.endsWith('/chat/completions'))
   assert.equal(JSON.parse(h.requests[4].init.body).model, 'configured-alternative')
   h.controller.clearCache()
-  await run('其实我很难过。'); assert.equal(h.requests.length, 8)
+  await run('其实我很难过。'); assert.equal(h.requests.length, 7)
   assert.ok([...h.values.values()].every(value => !value.includes('其实我很难过')))
 })
 await test('ambiguous confidence uses neutral delivery, and malformed plans fall back visibly without invented emotions', async () => {

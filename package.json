@@ -14,7 +14,8 @@
     "check": "npm test && npm run build && npm run linkcheck && npm run leakcheck",
     "voicecheck": "node tools/voice-check.mjs",
     "svgcheck": "node tools/svg-check.mjs",
-    "emotioncheck": "node tools/emotion-check.mjs"
+    "emotioncheck": "node tools/emotion-check.mjs",
+    "vendor:live2d": "node tools/vendor-live2d.mjs"
   },
   "hexo": {
     "version": "8.1.2"
@@ -52,6 +53,8 @@
   },
   "devDependencies": {
     "js-yaml": "^4.3.2",
+    "pixi-live2d-display-lipsyncpatch": "^0.5.0-ls-8",
+    "pixi.js": "^7.4.3",
     "postcss": "^8.5.26"
   }
 }

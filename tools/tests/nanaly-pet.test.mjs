@@ -313,6 +313,18 @@ await test('★★ 一句还没说完又来一句，不能两个打字器一起�
   assert.equal(env.bubble().textContent, '', '新的一句该从头开始打')
 })
 
+await test('★ 按钮图标里用到的 class，css 里得真的有', () => {
+  /* 帽带和星星是填充的，靠 .solid 这个 class。哪天改了其中一边的名字，
+   * 它们会静静地变成描边 —— 不报错，只是难看，而且没人会发现。 */
+  const env = boot()
+  const html = env.button().innerHTML
+  const used = [...new Set([...html.matchAll(/class="([^"]+)"/g)].map(m => m[1]))]
+  assert.ok(used.length, '图标里一个 class 都没用到，这条对照不算数')
+  const css = readFileSync(path.join(base, 'source/css/nanaly-pet.css'), 'utf8')
+  for (const cls of used)
+    assert.ok(css.includes('.' + cls), `图标用了 .${cls}，但 nanaly-pet.css 里没这个选择器`)
+})
+
 console.log('\n看板娘 · 戳她一下')
 
 await test('★★ 得把模型设成可交互，否则戳了没反应', async () => {

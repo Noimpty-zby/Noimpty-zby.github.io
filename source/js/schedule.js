@@ -400,7 +400,7 @@
       changeCount = dirty ? Math.max(1, changeCount - saveChanges) : 0
       writeCache()
       status(dirty ? '刚才的改动已保存。保存期间又有新改动，请再保存一次。' : theyMoved
-        ? '已保存。你打开这页之后仓库里也有改动（多半是娜娜莉自动勾的），窝把两边合起来了，都在。'
+        ? '已保存。你打开这页之后仓库里也有改动（多半是娜娜莉自动勾的），我把两边合起来了，都在。'
         : '已保存。站点大约 1–2 分钟后更新，晚上的邮件就会带上这些安排了。', 'ok')
     } catch (e) {
       const msg = String(e.message || e)
@@ -640,7 +640,7 @@
           <button class="sch-tick" data-act="toggle" data-id="${esc(t.id)}" data-day="${esc(day)}" aria-label="标记完成"></button>
           <button class="sch-next__day" data-act="jump" data-day="${esc(day)}">${esc(day.slice(5))}</button>
           <span class="sch-next__text">${esc(t.text)}</span>
-          ${w ? `<span class="sch-next__cond" title="满足时窝会自动勾上">⛭ ${esc(w)}</span>` : ''}
+          ${w ? `<span class="sch-next__cond" title="满足时我会自动勾上">⛭ ${esc(w)}</span>` : ''}
         </div>`
     }).join('') + (rows.length > 12 ? `<div class="sch-overdue__more">还有 ${rows.length - 12} 件…</div>` : '')
   }
@@ -759,7 +759,7 @@
                     <button class="sch-del" data-act="del" data-id="${esc(t.id)}" aria-label="删除">×</button>
                   </div>
                   ${t.autoWhy
-                    ? `<div class="sch-auto">窝替你勾的 —— ${esc(t.autoWhy)}</div>`
+                    ? `<div class="sch-auto">我替你勾的 —— ${esc(t.autoWhy)}</div>`
                     : ''}
                   ${condFor === t.id ? condForm(t) : `
                     <button class="sch-cond${t.when && t.when.type ? ' is-set' : ''}"

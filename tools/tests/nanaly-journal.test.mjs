@@ -69,7 +69,7 @@ check('★★ 必须说清「这是你自己做的」，否则她会说成「另
   const d = journalDigest([entry(NOON - 3600000, 'patrol', '巡逻了 29 篇')], { now: NOON })
   assert.match(d, /你自己/, '没说这是她自己做的')
   assert.match(d, /同一只猫/, '没说清几个分身是同一个人')
-  assert.match(d, /窝/, '没告诉她提到这些事时自称「窝」')
+  assert.match(d, /用「我」/, '没告诉她提到这些事时自称「我」')
   assert.ok(!/系统|另一个程序/.test(d.replace(/别说成[^\n]*/g, '')), '措辞里别留下「系统」这种叫法')
 })
 

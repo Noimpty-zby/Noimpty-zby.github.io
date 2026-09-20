@@ -102,7 +102,7 @@ const scheduleCard = sc => {
   const line = t => `<div style="padding:4px 0;font-size:13px;color:${C.text}">
       <span style="color:${t.done ? C.ok : C.soft}">${t.done ? '✓' : '○'}</span>
       <span style="${t.done ? 'opacity:.55;text-decoration:line-through' : ''}">${esc(t.text)}</span>
-      ${t.autoWhy ? `<div style="font-size:11.5px;color:${C.dim};padding:1px 0 0 16px">窝替你勾的 —— ${esc(t.autoWhy)}</div>` : ''}
+      ${t.autoWhy ? `<div style="font-size:11.5px;color:${C.dim};padding:1px 0 0 16px">我替你勾的 —— ${esc(t.autoWhy)}</div>` : ''}
     </div>`
 
   const parts = []
@@ -129,7 +129,7 @@ const scheduleCard = sc => {
   const off = (sc.autoDone || []).filter(d => d.date !== sc.todayKey)
   if (off.length) {
     parts.push(`<div style="margin:12px 0 0;padding:9px 11px;background:rgba(127,201,154,.1);border-left:3px solid ${C.ok};border-radius:0 8px 8px 0">
-      <div style="font-size:12px;color:${C.ok};margin:0 0 4px">窝还顺手勾掉了别的日子里的 ${off.length} 件</div>
+      <div style="font-size:12px;color:${C.ok};margin:0 0 4px">我还顺手勾掉了别的日子里的 ${off.length} 件</div>
       ${off.map(d => `<div style="font-size:12.5px;color:${C.text};padding:2px 0">
         ${esc(d.date.slice(5))} ${esc(d.text)}
         <span style="color:${C.dim}">—— ${esc(d.why)}</span></div>`).join('')}

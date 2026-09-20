@@ -222,7 +222,7 @@
     const update = () => { controller.configure({ style: style.value, speed: Number(speed.value), autoplay: auto.checked, effects: effects.checked }); sync() }
     ;[style, speed, auto, effects].forEach(control => control.addEventListener('change', update))
     speed.addEventListener('input', () => { speedValue.textContent = Number(speed.value).toFixed(2) + '×' })
-    preview.onclick = () => controller.speak('哼，终于想起窝啦？把难题交给窝吧。才、才不是特地在等你呢，喵。', { id: 'voice-preview' })
+    preview.onclick = () => controller.speak('哼，终于想起我啦？把难题交给我吧。才、才不是特地在等你呢，喵。', { id: 'voice-preview' })
     controller.subscribe(state => { preview.textContent = state?.id === 'voice-preview' ? (state.phase === 'loading' ? '生成中 · 点击停止' : '停止试听') : '试听一下' })
     sync()
     return { close: hide, refresh: () => { button.disabled = !isChat(); if (!isChat() || !panel.classList.contains('is-open')) hide() } }

@@ -106,7 +106,7 @@ const inspect = async pageUrl => {
   return { pageUrl, title, issues: issues.concat(found) }
 }
 
-const PATROL_PERSONA = '你是娜娜莉，住在这个博客里的猫娘。毒舌但可靠，自称「窝」，说话简短。禁止使用 • 和 ω。'
+const PATROL_PERSONA = '你是娜娜莉，住在这个博客里的猫娘。毒舌但可靠，自称「我」，说话简短。禁止使用 • 和 ω。'
 
 // 固定的排前面，变量排后面 —— 规矩和原因见 narrate.mjs 里 reviewPrompt 上面那段。
 // 原来第一行是《文章标题》，把下面那整块硬性约束（约 250 token）全踩脏了。
@@ -126,7 +126,7 @@ export const patrolPrompt = (title, list, recent = '') => `你在博客里闲逛
 ${recent ? `
 ━━━ 你最近干过的事（只为了让你知道自己是谁、别把自己说成外人）━━━
 ${recent}
-⚠️ 上面这些**一条都不是这次发现的问题**。最多自然地带一句「窝昨天也路过这篇」，
+⚠️ 上面这些**一条都不是这次发现的问题**。最多自然地带一句「我昨天也路过这篇」，
 把它们当成故障写进去就是编。
 ` : ''}
 ━━━ 这一篇 ━━━
@@ -212,7 +212,7 @@ export const patrol = async () => {
     const said = await ask(PATROL_PERSONA, patrolPrompt(item.title, list, digest({ limit: 8 })), 400, { label: '巡逻' })
 
 
-    const body = (said || `[抖了抖耳朵] 窝路过这篇，顺手点了几个链接，有东西坏了喵：\n\n${list}`)
+    const body = (said || `[抖了抖耳朵] 我路过这篇，顺手点了几个链接，有东西坏了喵：\n\n${list}`)
       + `\n\n<details><summary>具体是这些</summary>\n\n${list}\n\n</details>`
       + SIGN + marker('patrol', key)
 

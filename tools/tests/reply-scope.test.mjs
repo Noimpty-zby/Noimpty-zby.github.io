@@ -71,12 +71,12 @@ check('主人已经回过了就别插嘴', () => {
 })
 
 check('★ 她自己留的言不会被当成读者提问（巡逻发的是顶楼评论）', () => {
-  const her = comment('随便谁', 10, { body: '窝路过这篇，有几个链接坏了喵' + SIGN })
+  const her = comment('随便谁', 10, { body: '我路过这篇，有几个链接坏了喵' + SIGN })
   assert.equal(collect([disc('2026/09/14/x/', [her])]).length, 0)
 })
 
 check('★ 她已经回过的那条不再回第二遍', () => {
-  const c = comment('读者甲', 10, { id: 'C9', replies: [{ author: { login: '娜娜莉' }, body: '窝先答一下' + marker('reply', 'C9') }] })
+  const c = comment('读者甲', 10, { id: 'C9', replies: [{ author: { login: '娜娜莉' }, body: '我先答一下' + marker('reply', 'C9') }] })
   assert.equal(collect([disc('2026/09/14/x/', [c])]).length, 0)
 })
 

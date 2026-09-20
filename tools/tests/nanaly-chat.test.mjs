@@ -95,7 +95,7 @@ check('★★ 换了一天就打日期分隔线 —— 她串的就是这个', (
   const now = NOON
   const out = withTimeMarks([
     { role: 'user', content: '上周问的那句', at: now - 6 * DAY },
-    { role: 'assistant', content: '窝当时答的，还说了「今天」', at: now - 6 * DAY },
+    { role: 'assistant', content: '我当时答的，还说了「今天」', at: now - 6 * DAY },
     { role: 'user', content: '今天又来了', at: now }
   ], NOON)
   assert.match(out[0].content, /（以下是 \d{4}-\d{2}-\d{2} 说的）/, '旧那天没标日期')
@@ -118,7 +118,7 @@ check('同一天里隔太久，补一条间隔标记', () => {
   const now = NOON
   const out = withTimeMarks([
     { role: 'user', content: '早上说的', at: now - 3 * HOUR },
-    { role: 'assistant', content: '窝答的', at: now - 3 * HOUR },
+    { role: 'assistant', content: '我答的', at: now - 3 * HOUR },
     { role: 'user', content: '下午又来', at: now }
   ], NOON)
   assert.match(out[2].content, /（这里隔了 3 小时）/)
@@ -199,8 +199,8 @@ check('★★ 行动日志与文章清单并行读取，快照排在检索材料
 
 check('★★ 人设里要写死「你不只是这个聊天框」', () => {
   const p = cut('const PERSONA = `', '【被夸奖时】')
-  assert.match(p, /你不只是这个聊天框/, '这一节没了 —— 她会答成「窝只是个聊天助手」')
-  assert.match(p, /窝只是个聊天助手/, '缺少那条明确的反例')
+  assert.match(p, /你不只是这个聊天框/, '这一节没了 —— 她会答成「我只是个聊天助手」')
+  assert.match(p, /我只是个聊天助手/, '缺少那条明确的反例')
   assert.match(p, /巡逻/, '没告诉她自己还会巡逻')
   assert.match(p, /随笔/, '没告诉她自己还会写随笔')
 })

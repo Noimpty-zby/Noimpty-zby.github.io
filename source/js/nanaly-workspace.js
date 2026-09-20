@@ -258,15 +258,26 @@
     const setDraft = value => { active().draft = text(value); scheduleSave() }
     const retry = kind => {
       if (!adapter || !allowed() || !active().pending) return false
-      const p = clone(active().pending), s = active()
+      const p = clone(active().pending), s = active(), originalMessages = clone(active().messages)
       if (kind === 'continue' && !p.partial) return false
       if (kind !== 'continue') s.messages = clone(p.baseMessages)
       else if (!s.messages.slice(s.messages.findLastIndex(m => m.role === 'user' && m.content === p.text && m.at === p.at) + 1).some(m => m.role === 'assistant')) s.messages.push({ role: 'assistant', content: p.partial + '\n（回答未完成）', at: p.at })
+      const retryMessages = JSON.stringify(s.messages)
       changed(true)
+      const recoverUnstarted = () => {
+        // Sending may return early while credentials or images are unavailable.
+        // Never let a late failure overwrite a replacement turn or newer history.
+        if (findTurn({ sessionId: s.id, turnId: p.id }) !== s || JSON.stringify(s.messages) !== retryMessages) return false
+        s.messages = originalMessages
+        changed(state.activeId === s.id)
+        notify('重试未能开始，原问题和回答已保留，请检查设置或稍后再试。')
+        return true
+      }
       try {
         const task = adapter.send(kind === 'continue' ? '请接着上一条未完成的回答继续，不要重复已经说过的内容。' : p.text, kind === 'continue' ? undefined : p.mode, { attachments: kind === 'continue' ? [] : clone(p.attachments) })
-        if (task && typeof task.catch === 'function') task.catch(() => notify('重试未能开始，请稍后再试。'))
-      } catch (_) { notify('重试未能开始，请稍后再试。'); return false }
+        if (task && typeof task.then === 'function') task.then(recoverUnstarted, recoverUnstarted)
+        else if (recoverUnstarted()) return false
+      } catch (_) { recoverUnstarted(); return false }
       return true
     }
 
@@ -335,6 +346,8 @@
     }
     const renderMemories = (proposal = null) => {
       if (!ui) return
+      // A blank form starts a new memory, including after leaving an unfinished edit.
+      if (!proposal) { editingMemory = ''; correcting = false; correctionText = '' }
       ui.drawer.replaceChildren()
       const intro = node('p', 'nanaly-workspace-hint', '只有你确认的内容才会加入之后的回答。记忆和对话仅保存在此浏览器。')
       const list = node('div', 'nanaly-memory-list')

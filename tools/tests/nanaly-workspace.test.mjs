@@ -58,11 +58,11 @@ const boot = (saved = storage()) => {
   }
 }
 let passed = 0
-const check = (label, fn) => { fn(); passed++; console.log('  ✓ ' + label) }
+const check = async (label, fn) => { await fn(); passed++; console.log('  ✓ ' + label) }
 const user = (content, at = 10) => ({ role: 'user', content, at })
 const assistant = (content, at = 11) => ({ role: 'assistant', content, at })
 
-check('legacy history migrates safely and retains the original backup', () => {
+await check('legacy history migrates safely and retains the original backup', () => {
   const original = JSON.stringify([null, { role: 'system', content: 'no' }, user('你好'), assistant('回答'), { role: 'user', content: 1 }])
   const saved = storage({ [LEGACY]: original }), app = boot(saved)
   assert.deepEqual(plain(app.workspace.readLog()), [user('你好'), assistant('回答')])
@@ -70,7 +70,7 @@ check('legacy history migrates safely and retains the original backup', () => {
   assert.equal(saved.getItem(LEGACY), original)
   assert.deepEqual(plain(boot(saved).workspace.readLog()), [user('你好'), assistant('回答')])
 })
-check('corrupt and future-format records are never overwritten by fallback history', () => {
+await check('corrupt and future-format records are never overwritten by fallback history', () => {
   for (const raw of ['{broken', '{"v":9,"sessions":[]}', 'null']) {
     const saved = storage({ [KEY]: raw, [LEGACY]: JSON.stringify([user('recoverable')]) }), app = boot(saved)
     app.workspace.beginTurn('new')
@@ -79,7 +79,7 @@ check('corrupt and future-format records are never overwritten by fallback histo
     assert.equal(app.workspace.readLog()[0].content, 'recoverable')
   }
 })
-check('denied and full storage leave working in-memory messages and an honest warning', () => {
+await check('denied and full storage leave working in-memory messages and an honest warning', () => {
   const saved = storage(), app = boot(saved)
   saved.denied = true
   const token = app.workspace.beginTurn('saved only in memory')
@@ -91,7 +91,7 @@ check('denied and full storage leave working in-memory messages and an honest wa
   assert.equal(app.workspace.flush(), true)
   assert.equal(app.workspace.getProblem(), '')
 })
-check('pending questions and attachment references survive a reload without a response', () => {
+await check('pending questions and attachment references survive a reload without a response', () => {
   const saved = storage(), app = boot(saved), image = { id: 'image-local', name: '题目.png', type: 'image/png', data: 'must-not-persist' }
   app.workspace.beginTurn('看图', 'vision', { attachments: [image] })
   const restored = boot(saved).workspace, log = plain(restored.readLog())
@@ -100,7 +100,7 @@ check('pending questions and attachment references survive a reload without a re
   assert.equal(restored.snapshot().sessions[0].pending.status, 'interrupted')
   assert.equal(saved.getItem(KEY).includes('must-not-persist'), false)
 })
-check('partial checkpoints recover once, including at the history capacity boundary', () => {
+await check('partial checkpoints recover once, including at the history capacity boundary', () => {
   const saved = storage(), app = boot(saved)
   app.workspace.writeLog(Array.from({ length: 120 }, (_, i) => user('old-' + i, i + 1)))
   const token = app.workspace.beginTurn('new question')
@@ -112,7 +112,7 @@ check('partial checkpoints recover once, including at the history capacity bound
   recovered.flush()
   assert.equal(boot(saved).workspace.readLog().filter(m => m.content.includes('half an answer')).length, 1)
 })
-check('turn tokens cannot mutate a replacement turn or resurrect a cleared conversation', () => {
+await check('turn tokens cannot mutate a replacement turn or resurrect a cleared conversation', () => {
   const app = boot(), old = app.workspace.beginTurn('old')
   app.workspace.clear()
   const fresh = app.workspace.beginTurn('new')
@@ -122,7 +122,7 @@ check('turn tokens cannot mutate a replacement turn or resurrect a cleared conve
   assert.equal(app.workspace.snapshot().sessions[0].pending, null)
   assert.deepEqual(plain(app.workspace.readLog().map(m => m.content)), ['new'])
 })
-check('a turn token stays bound to its original topic and completion never duplicates assistant messages', () => {
+await check('a turn token stays bound to its original topic and completion never duplicates assistant messages', () => {
   const app = boot(), w = app.workspace, first = w.snapshot().activeId
   const token = w.beginTurn('original question')
   w.writeLog([...w.readLog(), assistant('complete reply')])
@@ -134,7 +134,7 @@ check('a turn token stays bound to its original topic and completion never dupli
   assert.equal(w.readLog().filter(m => m.role === 'assistant').length, 1)
   assert.equal(w.snapshot().sessions.find(s => s.id === first).pending, null)
 })
-check('sessions, drafts and searched text stay separate and returned values cannot mutate state', () => {
+await check('sessions, drafts and searched text stay separate and returned values cannot mutate state', () => {
   const app = boot(), first = app.workspace.snapshot().activeId
   app.workspace.writeLog([user('<script>literal</script>'), assistant('First answer')])
   app.workspace.setDraft('first draft')
@@ -147,7 +147,7 @@ check('sessions, drafts and searched text stay separate and returned values cann
   const list = app.workspace.readLog(); list[0].content = 'mutated'
   assert.equal(app.workspace.readLog()[0].content, '<script>literal</script>')
 })
-check('clear is undoable after reload, but never overwrites later messages or expires silently', () => {
+await check('clear is undoable after reload, but never overwrites later messages or expires silently', () => {
   const saved = storage(), app = boot(saved)
   app.workspace.writeLog([user('keep me')]); app.workspace.clear()
   const reloaded = boot(saved).workspace
@@ -159,7 +159,7 @@ check('clear is undoable after reload, but never overwrites later messages or ex
   const expired = boot(); expired.workspace.writeLog([user('old')]); expired.workspace.clear(); expired.advance(900001)
   assert.equal(expired.workspace.undoClear(), false)
 })
-check('another tab cannot be silently overwritten by a stale workspace', () => {
+await check('another tab cannot be silently overwritten by a stale workspace', () => {
   const saved = storage(), first = boot(saved), second = boot(saved)
   first.workspace.writeLog([user('tab one')])
   const existing = saved.getItem(KEY)
@@ -167,7 +167,7 @@ check('another tab cannot be silently overwritten by a stale workspace', () => {
   assert.equal(saved.getItem(KEY), existing)
   assert.match(second.workspace.getProblem(), /另一个标签页/)
 })
-check('only explicitly confirmed structured memories enter model context and can be corrected/deleted', () => {
+await check('only explicitly confirmed structured memories enter model context and can be corrected/deleted', () => {
   const app = boot(), w = app.workspace
   assert.equal(w.confirmMemory({ kind: 'fact', text: 'inferred' }), false)
   assert.equal(w.confirmMemory({ kind: '__proto__', text: 'bad', confirmed: true }), false)
@@ -180,7 +180,7 @@ check('only explicitly confirmed structured memories enter model context and can
   w.deleteMemory(id)
   assert.equal(w.memoryPrompt(), '')
 })
-check('sources and attachments preserve only bounded safe metadata through storage', () => {
+await check('sources and attachments preserve only bounded safe metadata through storage', () => {
   const app = boot(), w = app.workspace
   w.writeLog([{ ...assistant('sourced'), taskId: 'task-12345678', sources: [{ id: 'S1', title: 'source', url: '/notes/a/', quote: 'excerpt', kind: 'blog', section: '小节', secret: 'no' },
     { id: 'bad', url: 'javascript:alert(1)' }, { id: 'bad2', url: '//evil.test' }] }])
@@ -189,8 +189,8 @@ check('sources and attachments preserve only bounded safe metadata through stora
   w.writeLog([{ ...assistant('invalid task'), taskId: '../secret' }])
   assert.equal(w.readLog()[0].taskId, undefined)
 })
-check('retry restores pre-turn history and the original image references; continue preserves the partial answer', () => {
-  const app = boot(), w = app.workspace, ui = app.mount()
+await check('retry restores pre-turn history and the original image references; continue preserves the partial answer', () => {
+  const app = boot(), w = app.workspace, ui = app.mount({ send: (...args) => { ui.calls.send.push(plain(args)); w.beginTurn(...args) } })
   w.writeLog([user('before'), assistant('prior')])
   const image = { id: 'image1', name: 'one.png', type: 'image/png' }
   const token = w.beginTurn('question', 'vision', { attachments: [image] })
@@ -204,7 +204,7 @@ check('retry restores pre-turn history and the original image references; contin
   assert.equal(w.readLog().filter(m => m.content.includes('second partial')).length, 1)
   assert.match(ui.calls.send.at(-1)[0], /接着上一条/)
 })
-check('busy or locked UI blocks topic changes/retry and hides stored memory/history drawers', () => {
+await check('busy or locked UI blocks topic changes/retry and hides stored memory/history drawers', () => {
   const app = boot(), w = app.workspace
   let busy = false, locked = false
   const ui = app.mount({ isBusy: () => busy, isLocked: () => locked })
@@ -222,7 +222,7 @@ check('busy or locked UI blocks topic changes/retry and hides stored memory/hist
   assert.equal(w.handleMemoryCommand('记住：do not save'), false)
   assert.equal(w.snapshot().memories.length, 0)
 })
-check('memory commands only stage confirmation, and correction keeps the proposed replacement', () => {
+await check('memory commands only stage confirmation, and correction keeps the proposed replacement', () => {
   const app = boot(), w = app.workspace, ui = app.mount()
   assert.equal(w.handleMemoryCommand('记住：喜欢具体例子'), true)
   assert.equal(w.snapshot().memories.length, 0)
@@ -234,7 +234,7 @@ check('memory commands only stage confirmation, and correction keeps the propose
   assert.equal(ui.panel.querySelector('.nanaly-memory-form').querySelector('textarea').value, '更喜欢简短例子')
   assert.equal(w.snapshot().memories[0].text, '喜欢具体例子')
 })
-check('message tools preserve literal content and image editing metadata without duplicating controls', () => {
+await check('message tools preserve literal content and image editing metadata without duplicating controls', () => {
   const app = boot(), w = app.workspace
   const edited = []
   const ui = app.mount({ editQuestion: value => edited.push(value) })
@@ -248,7 +248,7 @@ check('message tools preserve literal content and image editing metadata without
   assert.ok(ui.input.value.includes('> <b>question</b>'))
   assert.equal(ui.input.children.length, 0)
 })
-check('routine refresh keeps unsaved topic names, search input and memory edits intact', () => {
+await check('routine refresh keeps unsaved topic names, search input and memory edits intact', () => {
   const app = boot(), w = app.workspace, ui = app.mount()
   ui.panel.querySelector('.nanaly-workspace-bar').children.find(b => b.textContent === '话题').click()
   const rename = ui.panel.querySelector('.nanaly-session-rename').querySelector('input')
@@ -266,4 +266,71 @@ check('routine refresh keeps unsaved topic names, search input and memory edits 
   assert.equal(ui.panel.querySelector('.nanaly-memory-form').querySelector('textarea'), area)
   assert.equal(area.value, 'unsaved edit')
 })
+
+await check('retry and continue preserve the original question and partial answer when sending cannot start', async () => {
+  for (const kind of ['retry', 'continue']) {
+    for (const send of [() => undefined, async () => undefined, () => { throw new Error('not ready') }, async () => { throw new Error('not ready') }]) {
+      const saved = storage(), app = boot(saved), w = app.workspace, ui = app.mount({ send })
+      w.writeLog([user('before'), assistant('prior')])
+      const token = w.beginTurn('recover this question')
+      w.writeLog([...w.readLog(), assistant('recover this partial')])
+      w.finishTurn(token, { status: 'interrupted', partial: 'recover this partial' })
+      const original = plain(w.readLog())
+      w.retry(kind)
+      await Promise.resolve(); await Promise.resolve()
+      assert.deepEqual(plain(w.readLog()), original, kind)
+      assert.deepEqual(ui.calls.history.at(-1), original, kind)
+      assert.deepEqual(plain(boot(saved).workspace.readLog()), original, kind)
+      assert.equal(w.snapshot().sessions[0].pending.id, token.turnId)
+      assert.match(w.getProblem(), /重试未能开始/)
+    }
+  }
+})
+await check('late retry failure restores only its own untouched conversation', async () => {
+  for (const next of ['new turn', 'other topic', 'new history']) {
+    const app = boot(), w = app.workspace
+    let rejectSend
+    const ui = app.mount({ send: () => new Promise((_, reject) => { rejectSend = reject }) })
+    w.writeLog([user('before')])
+    const token = w.beginTurn('old failed question')
+    w.writeLog([...w.readLog(), assistant('old partial')])
+    w.finishTurn(token, { status: 'failed', partial: 'old partial' })
+    const original = plain(w.readLog()), oldId = w.snapshot().activeId
+    w.retry('retry')
+    if (next === 'new turn') w.beginTurn('new question')
+    if (next === 'other topic') w.createSession('other')
+    if (next === 'new history') w.writeLog([user('newer content')])
+    const current = plain(w.readLog()), lastHistory = ui.calls.history.at(-1)
+    rejectSend(new Error('late failure'))
+    await Promise.resolve(); await Promise.resolve()
+    assert.deepEqual(plain(w.readLog()), current, next)
+    assert.deepEqual(ui.calls.history.at(-1), lastHistory, next)
+    if (next === 'other topic') {
+      assert.deepEqual(plain(w.snapshot().sessions.find(s => s.id === oldId).messages), original)
+    }
+  }
+})
+await check('a fresh memory form never retains a hidden target from an abandoned edit', () => {
+  for (const leave of ['close', 'switch tab', 'delete another']) {
+    const app = boot(), w = app.workspace, ui = app.mount()
+    const original = w.confirmMemory({ kind: 'fact', text: 'existing fact', confirmed: true })
+    w.confirmMemory({ kind: 'goal', text: 'other memory', confirmed: true })
+    const toolbar = ui.panel.querySelector('.nanaly-workspace-bar')
+    const clickTab = label => toolbar.children.find(b => b.textContent === label).click()
+    clickTab('记忆')
+    ui.panel.querySelector('.nanaly-memory-item').children.find(b => b.textContent === '编辑').click()
+    if (leave === 'close') { clickTab('记忆'); clickTab('记忆') }
+    if (leave === 'switch tab') { clickTab('话题'); clickTab('记忆') }
+    if (leave === 'delete another') ui.panel.querySelectorAll('.nanaly-memory-item')[1].children.find(b => b.textContent === '删除').click()
+    const form = ui.panel.querySelector('.nanaly-memory-form')
+    assert.equal(form.querySelector('textarea').value, '')
+    assert.equal(form.querySelector('button').textContent, '确认记住')
+    form.querySelector('textarea').value = 'a new preference'
+    form.dispatchEvent({ type: 'submit', preventDefault() {} })
+    const memories = plain(w.snapshot().memories)
+    assert.equal(memories.find(m => m.id === original).text, 'existing fact', leave)
+    assert.equal(memories.filter(m => m.text === 'a new preference').length, 1, leave)
+  }
+})
+
 console.log(`\n${passed} workspace regression groups passed`)

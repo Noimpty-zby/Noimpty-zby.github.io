@@ -119,7 +119,8 @@ check('★★ 提交之后必须自己叫一次部署，否则她后台干的活
   const run = readFileSync(join(process.cwd(), 'tools/nanaly/run.mjs'), 'utf8')
   // 用 GITHUB_TOKEN 推的提交不触发 on:push（防递归），而巡逻和回评
   // 都只发评论、不碰仓库 —— 没人叫部署的话日志就一直躺在仓库里。
-  assert.match(run, /if \(await commitJournal\(\)\)[\s\S]{0,600}triggerDeploy\(\)/,
+  // 允许带参数：用量记账现在跟日志同车提交，commitJournal 接了个 extra。
+  assert.match(run, /if \(await commitJournal\([^)]*\)\)[\s\S]{0,600}triggerDeploy\(\)/,
     'commitJournal 之后没有跟着 triggerDeploy —— 对话窗口里的她会一直读到旧日志')
   assert.match(run, /catch[\s\S]{0,200}没叫动部署/,
     '叫不动部署时应该只记一笔，不该把整个工作流染红（日志本身没丢）')

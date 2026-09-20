@@ -12,6 +12,7 @@ import { runHealth, checkModel, worstOf } from './health.mjs'
 import { writeOpening, reviewPost, screenComments, writeMissYou, draftReplies, MODEL_STATE, tokenSummary } from './narrate.mjs'
 import { renderEmail, renderSubject, renderMissYou } from './render.mjs'
 import { autoComplete, commitSchedule } from './schedule-auto.mjs'
+import { recordRun, commitUsage, readRuns, rollup } from '../nanaly/usage.mjs'
 import { postPath } from '../nanaly/permalink.mjs'
 
 const DRY = process.argv.includes('--dry')
@@ -117,8 +118,16 @@ const main = async () => {
     (comments.ok && comments.items.length > 0) ||
     (newPosts.ok && newPosts.items.length > 0)
 
+  /* 报的是「到此刻为止」的账 —— 这一轮日报自己烧的还没记进去（记账在最后），
+   * 差的就是这一次的量，下一份日报会补上。读不出来就不报，别为一块卡片让日报炸掉。 */
+  let usage = null, usageWeek = null
+  try {
+    const runs = readRuns()
+    usage = rollup(runs, { days: 1 }); usageWeek = rollup(runs, { days: 7 })
+  } catch (error) { console.log('  用量读不出来，这块留空：' + String(error.message).slice(0, 80)) }
+
   const html = renderEmail({
-    opening, traffic, comments, screen, newPosts, feedbacks, health, schedule,
+    opening, traffic, comments, screen, newPosts, feedbacks, health, schedule, usage, usageWeek,
     windowLabel: WINDOW_LABEL, site: CFG.site
   })
   const subject = renderSubject({ traffic, comments, newPosts, health })
@@ -190,4 +199,13 @@ const sendMissYou = async ({ days, traffic, comments, newPosts }) => {
   await sendMail(subject, html)
 }
 
-main().catch(e => { console.error('致命错误：', e); process.exit(1) })
+/* 账要记，哪怕这一轮后面炸了 —— token 已经烧掉了，不记就永远查不出来。
+ * 两条出口（正常日报和「想念」）都会走到这里，不用在每个分支各插一遍。 */
+const bookkeep = async () => {
+  try { if (recordRun('daily-report', MODEL_STATE.byTask)) await commitUsage() } catch (_) {}
+}
+main().then(bookkeep, async error => {
+  await bookkeep()
+  console.error('致命错误：', error)
+  process.exit(1)
+})

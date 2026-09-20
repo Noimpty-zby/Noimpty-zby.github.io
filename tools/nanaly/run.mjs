@@ -17,8 +17,9 @@ import { buildNotes, commitNotes } from './notes.mjs'
 import { buildNews, commitNews } from './news.mjs'
 import { writeColumn, commitAndPush } from './column.mjs'
 import { getComments } from '../daily-report/sources.mjs'
-import { tokenSummary } from '../daily-report/narrate.mjs'
+import { tokenSummary, MODEL_STATE } from '../daily-report/narrate.mjs'
 import { commitJournal } from './journal.mjs'
+import { recordRun, FILE as USAGE_FILE } from './usage.mjs'
 import { autoComplete, commitSchedule } from '../daily-report/schedule-auto.mjs'
 import { triggerDeploy } from './github.mjs'
 
@@ -120,7 +121,11 @@ const main = async () => {
    * 而这一班里常常没有别人提交东西 —— 巡逻和回评都只发评论、不碰仓库。
    * 不叫的话日志就一直躺在仓库里：她后台干的活，右下角对话窗口里的她要等到
    * 下一期资讯（三天）甚至下一篇随笔（一周）才知道，那这本日志就废了一半。 */
-  if (await commitJournal()) {
+  /* 记账要赶在提交之前 —— 这一轮的账和这一轮的日志同车走，
+   * 免得为一个几百字节的 JSON 单独再推一次。 */
+  recordRun('nanaly', MODEL_STATE.byTask)
+
+  if (await commitJournal({ extra: [USAGE_FILE] })) {
     /* 叫不动部署只记一笔，不染红工作流。
      *
      * 和批注 / 资讯 / 随笔那几处不一样：它们不部署等于文章进了仓库但线上看不见，

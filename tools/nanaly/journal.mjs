@@ -133,23 +133,32 @@ export const digest = opts => journalDigest(readJournal(), opts)
  * 回评每三小时一班，一天最多八次，各自提交就是一天八个提交八次部署。
  * 那几个本来就要提交东西的分身（批注、资讯、随笔）只 add 自己那个路径，
  * 所以日志不会被它们顺手带走，留到这里一起走。 */
-export const commitJournal = async ({ run = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: 'pipe' }) } = {}) => {
+/* extra 里是跟这一轮一起产生、该同车提交的数据文件（现在是用量记账）。
+ * 单独为它再开一次提交推送不划算 —— 每次推送都可能撞上别处的提交要重试。 */
+export const commitJournal = async ({ run = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: 'pipe' }), extra = [] } = {}) => {
   if (DRY) { console.log('  [演练] 不提交行动日志'); return false }
   if (pendingWriteError) throw new Error('行动日志未能保存：' + String(pendingWriteError.message).slice(0, 140))
   try {
     if (!existsSync(FILE)) return false
+    const files = [FILE, ...extra.filter(f => typeof f === 'string' && existsSync(f))]
     /* 先看有没有变化，**再**动 git 身份。
      *
      * useNanalyIdentity 会往仓库的 .git/config 里写 user.name / user.email。
      * 在 runner 上无所谓，在主人自己的机器上就是把他的提交身份改掉了 ——
      * 而这个函数现在每次运行都会被调到（不像批注、随笔那样偶尔才跑一次）。
      * 顺序反过来的话，一次「什么都没发生」的空跑也会留下这个副作用。 */
-    if (!run('status', '--porcelain', '--', FILE).trim()) return false
+    const changed = files.filter(f => run('status', '--porcelain', '--', f).trim())
+    if (!changed.length) return false
     useNanalyIdentity(run)
-    run('add', FILE)
-    run('commit', '-m', '娜娜莉：更新行动日志')
-    pushWithRetry(run, '行动日志')
-    console.log('  行动日志已提交并推送')
+    run('add', ...changed)
+    // 提交信息按实际改了什么写，别让一次纯记账的提交谎称更新了日志。
+    const what = changed.includes(FILE) ? (changed.length > 1 ? '行动日志和用量记账' : '行动日志') : '用量记账'
+    run('commit', '-m', '娜娜莉：更新' + what)
+    pushWithRetry(run, what)
+    console.log(`  ${what}已提交并推送`)
+    /* 返回值的含义是「有没有东西需要部署」，不是「有没有提交过」。
+     * 用量记账不发布，只有它变了的那种运行不该白叫一次部署。 */
+    if (!changed.includes(FILE)) return false
     return true
   } catch (e) {
     // An ephemeral runner cannot promise to recreate these records next time:

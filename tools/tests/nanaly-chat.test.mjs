@@ -320,9 +320,9 @@ check('★★ 两个方向的「包含」不是一回事：打简称要跳，蹭
 })
 
 check('★ 本地自己办掉的那几件事要进历史，不能只画在屏幕上', () => {
-  assert.match(src, /const say = \(mine, hers\) => \{ addMsg\('me', mine\); addMsg\('her', hers\); logTurn\(mine, hers\)/,
+  assert.match(src, /const say = \(mine, hers\) => \{ addMsg\('me', mine\); addMsg\('her', hers, \{ voiceContext: mine \}\); logTurn\(mine, hers\)/,
     'tryLocalCommand 里的 say 不见了')
-  assert.match(cut('  const afterNav = ()', '  // 本地快速通道'), /logHer\(line\)/,
+  assert.match(cut('  const afterNav =', '  // 本地快速通道'), /logHer\(line\)/,
     '跳转之后那句话又只画在屏幕上了')
 })
 

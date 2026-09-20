@@ -158,7 +158,7 @@ const sendHarness = (fetch, action) => {
   const workspace = { ...workspaceWindow.NANALY_WORKSPACE.create(), refresh() {}, decorateMessage() {} }
   h.panel.contains = () => false
   const logCode = cut('  const logTurn =', '  const locked =').replace('const at = Date.now()', 'logs.push([userText, herText]); const at = Date.now()')
-  const subject = run(abortableCode + logCode + busyCode + cut('  const stream =', '  const send =') +
+  const subject = run(abortableCode + logCode + busyCode + cut('  const speechMetadata =', '  const speakableText =') + cut('  const stream =', '  const send =') +
     cut('  const send =', '  // ---------------- 事件') + cut('  const closePanel =', '  launcher.addEventListener'), {
     delight: h.delight, window: h.window, document: h.document, panel: h.panel, launcher: h.launcher,
     workspace, vision: null, history: [], HISTORY_MAX: 22, logs, writeLog: log => workspace.writeLog(log), stopSpeak() {}, backToChat() {},

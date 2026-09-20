@@ -6,18 +6,20 @@
   const KEY = 'nanaly-voice-v1'
   const END_DRAIN_MS = 500
   const ENDING = '每个字完整发音，尤其不要省略最后一个字的尾音，句尾自然收住。'
+  const NEUTRAL = '请用平静自然、清楚克制的语气朗读，不刻意表现开心或悲伤。'
   const STYLES = Object.freeze({
-    cat: { name: '清甜猫娘', voice: 'diana', instruction: '请用清甜、明亮、稍高的女性动漫角色声线，语气可爱俏皮，带一点嘴硬心软的傲娇感。普通话清晰自然，轻盈有亲近感，不要尖叫，不要念出语气说明。' },
-    soft: { name: '温柔陪伴', voice: 'claire', instruction: '请用温柔清甜的女声自然朗读，像耐心陪伴朋友学习，语气柔和、吐字清楚，不要念出语气说明。' },
-    bright: { name: '元气满满', voice: 'diana', instruction: '请用明亮活泼的女声自然朗读，像开心的动漫女主角，轻快可爱但不要夸张尖叫，不要念出语气说明。' }
+    cat: { name: '清甜猫娘', voice: 'diana', instruction: '请保持清甜、稍高的女性动漫角色声线，音色轻盈可爱。普通话清晰自然，不要尖叫。' },
+    soft: { name: '温柔陪伴', voice: 'claire', instruction: '请保持温柔清甜的女声音色，吐字清楚自然。' },
+    bright: { name: '元气满满', voice: 'diana', instruction: '请保持明亮、有活力的女性动漫角色声线，声音通透，不要夸张尖叫。' }
   })
   const normalize = value => ({
     style: STYLES[value?.style] ? value.style : 'cat',
     speed: Number.isFinite(Number(value?.speed)) ? Math.min(1.3, Math.max(0.8, Number(value.speed))) : 1.04,
     autoplay: value?.autoplay === true,
+    emotion: value?.emotion !== false,
     effects: value?.effects !== false
   })
-  const cleanText = text => String(text || '')
+  const cleanText = text => window.NANALY_PROSODY?.cleanText ? window.NANALY_PROSODY.cleanText(text) : String(text || '')
     .replace(/```[\s\S]*?```/g, '（这里有一段代码。）')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
@@ -49,11 +51,11 @@
         (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))) throw new Error('请检查硅基流动接口地址')
     return url.href.replace(/\/+$/, '') + '/audio/speech'
   }
-  const create = ({ getConnection, notify = () => {}, onNeedKey = () => {}, fetcher = (...args) => window.fetch(...args), makeAudio = () => new Audio() } = {}) => {
+  const create = ({ getConnection, notify = () => {}, onNeedKey = () => {}, onUsage = () => {}, fetcher = (...args) => window.fetch(...args), makeAudio = () => new Audio() } = {}) => {
     let prefs
     try { prefs = normalize(JSON.parse(window.localStorage.getItem(KEY) || '{}')) } catch (_) { prefs = normalize() }
     let revision = 0, active = null, soundContext = null, audioBytes = 0, cacheAccount = null
-    const cache = new Map(), listeners = new Set()
+    const cache = new Map(), plans = new Map(), listeners = new Set()
     const emit = () => listeners.forEach(listener => listener(active ? { id: active.id, phase: active.phase } : null))
     const stop = ({ clearCache = false } = {}) => {
       revision++
@@ -61,7 +63,7 @@
       active = null
       // The playback abort listener owns cleanup, including the natural-end grace period.
       if (prior) prior.controller.abort()
-      if (clearCache) { cache.clear(); audioBytes = 0; cacheAccount = null }
+      if (clearCache) { cache.clear(); plans.clear(); audioBytes = 0; cacheAccount = null }
       emit()
     }
     const configure = change => {
@@ -81,6 +83,58 @@
       while (cache.size > 12 || audioBytes > 12 * 1024 * 1024) {
         const oldest = cache.keys().next().value
         audioBytes -= cache.get(oldest).size; cache.delete(oldest)
+      }
+    }
+    const planSpeech = async (text, context, connection, turn) => {
+      const planner = window.NANALY_PROSODY
+      const fallback = () => splitText(text).map(text => ({ text, instruction: NEUTRAL }))
+      const model = connection.model || 'Pro/moonshotai/Kimi-K2.6'
+      const cacheKey = JSON.stringify([model, text, context])
+      if (plans.has(cacheKey)) return plans.get(cacheKey)
+      turn.phase = 'planning'; emit()
+      const controller = new AbortController()
+      const abort = () => controller.abort(turn.controller.signal.reason)
+      turn.controller.signal.addEventListener('abort', abort, { once: true })
+      const timeout = setTimeout(() => controller.abort(new DOMException('语气理解超时', 'TimeoutError')), 30000)
+      try {
+        turn.controller.signal.throwIfAborted()
+        if (!planner || !window.NANALY_PROVIDER) throw new Error('语气模块尚未加载')
+        const prepared = planner.prepare(text, { context })
+        const request = window.NANALY_PROVIDER.request({
+          cfg: { visionBaseURL: connection.baseURL || 'https://api.siliconflow.cn/v1', visionModel: model },
+          secrets: { visionKey: connection.key }, messages: prepared.messages,
+          vision: true, deep: false, stream: false
+        })
+        // Kimi is a vision model: strict JSON is requested in the prompt and
+        // validated locally, without assuming support for forced JSON mode.
+        const response = await fetcher(request.url, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + request.key },
+          body: JSON.stringify({ ...request.payload, temperature: 0, max_tokens: 8192 }), signal: controller.signal
+        })
+        if (!response.ok) throw await speechError(response)
+        const result = await response.json()
+        controller.signal.throwIfAborted(); turn.controller.signal.throwIfAborted()
+        if (result.usage) { try { onUsage(result.usage) } catch (_) {} }
+        const choice = result.choices?.[0]
+        if (choice?.finish_reason === 'length') throw new Error('语气结果未完整生成')
+        const plan = planner.parse(choice?.message?.content, prepared)
+        // Merge adjacent phrases with identical delivery, preserving all text.
+        const chunks = []
+        for (const segment of plan.segments) {
+          const previous = chunks[chunks.length - 1]
+          if (previous && previous.instruction === segment.instruction && previous.text.length + segment.text.length <= 450) previous.text += segment.text
+          else chunks.push({ text: segment.text, instruction: segment.instruction })
+        }
+        plans.set(cacheKey, chunks)
+        while (plans.size > 16) plans.delete(plans.keys().next().value)
+        return chunks
+      } catch (error) {
+        turn.controller.signal.throwIfAborted()
+        notify('这次语气识别未完成，先用平静语气朗读。')
+        return fallback()
+      } finally {
+        clearTimeout(timeout)
+        turn.controller.signal.removeEventListener('abort', abort)
       }
     }
     const play = (blob, turn) => new Promise((resolve, reject) => {
@@ -114,7 +168,7 @@
       Promise.resolve().then(() => { signal.throwIfAborted(); return audio.play() }).catch(error => finish(error?.name === 'NotAllowedError'
         ? new Error('声音已生成，请再点一次朗读来允许播放。') : error))
     })
-    const speak = async (text, { id = 'preview', automatic = false } = {}) => {
+    const speak = async (text, { id = 'preview', automatic = false, context = '' } = {}) => {
       if (automatic && (!prefs.autoplay || document.hidden)) return false
       if (automatic && active) return false
       if (active?.id === id && !automatic) { stop(); return false }
@@ -131,15 +185,20 @@
       try {
         const url = endpoint(connection.baseURL)
         // Cache belongs to one unlocked account; never reuse another account's audio.
-        if (cacheAccount?.url !== url || cacheAccount?.key !== connection.key) {
-          cache.clear(); audioBytes = 0
-          cacheAccount = { url, key: connection.key }
+        if (cacheAccount?.url !== url || cacheAccount?.key !== connection.key || cacheAccount?.model !== connection.model) {
+          cache.clear(); plans.clear(); audioBytes = 0
+          cacheAccount = { url, key: connection.key, model: connection.model }
         }
-        for (const part of splitText(plain)) {
+        const parts = settings.emotion
+          ? await planSpeech(String(text), String(context || '').slice(0, 1200), connection, turn)
+          : splitText(text).map(text => ({ text, instruction: NEUTRAL }))
+        for (const part of parts) {
           turn.controller.signal.throwIfAborted()
           // A complete sentence also gives synthesis an explicit ending for bare headings.
-          const utterance = /[。！？!?….][”’"'）)」』]*$/.test(part) ? part : part + '。'
-          const cacheKey = JSON.stringify([url, settings.style, settings.speed, 'wav-tail-v1', utterance])
+          const phrase = part.text.trim()
+          const utterance = /[。！？!?….，,；;：:、][”’"'）)」』]*$/.test(phrase) ? phrase : phrase + '。'
+          const instruction = style.instruction + part.instruction + '情绪只通过语调、节奏和重音表达，不添加原文没有的笑声、哭声、喵或其他字词，不念语气说明。' + ENDING
+          const cacheKey = JSON.stringify([url, settings.style, settings.speed, 'wav-emotion-v1', instruction, utterance])
           let blob = cache.get(cacheKey)
           if (!blob) {
             turn.phase = 'loading'; emit()
@@ -148,7 +207,7 @@
               const response = await fetcher(url, {
                 method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + connection.key },
                 body: JSON.stringify({ model: MODEL, voice: MODEL + ':' + style.voice,
-                  input: style.instruction + ENDING + '<|endofprompt|>' + utterance,
+                  input: instruction + '<|endofprompt|>' + utterance,
                   response_format: 'wav', sample_rate: 24000, stream: false, speed: settings.speed }),
                 signal: turn.controller.signal
               })
@@ -201,7 +260,7 @@
     return { speak, stop, chime, configure, preferences: () => ({ ...prefs }),
       subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener) },
       state: () => active ? { id: active.id, phase: active.phase } : null,
-      clearCache: () => { cache.clear(); audioBytes = 0; cacheAccount = null } }
+      clearCache: () => { cache.clear(); plans.clear(); audioBytes = 0; cacheAccount = null } }
   }
   const mount = ({ panel, controller, isChat = () => true, onOpen = () => {} }) => {
     const button = document.createElement('button')
@@ -220,21 +279,22 @@
     const speedValue = document.createElement('output')
     const auto = document.createElement('input'); auto.type = 'checkbox'; auto.setAttribute('aria-label', '自动朗读新回复')
     const effects = document.createElement('input'); effects.type = 'checkbox'; effects.setAttribute('aria-label', '轻柔提示音')
+    const emotion = document.createElement('input'); emotion.type = 'checkbox'; emotion.setAttribute('aria-label', '随文字表达情绪')
     const preview = document.createElement('button'); preview.type = 'button'; preview.className = 'nanaly-voice-preview'; preview.textContent = '试听一下'
-    const hint = document.createElement('p'); hint.className = 'nanaly-voice-hint'; hint.textContent = '共用已保存的硅基流动密钥。朗读按服务商计费，自动朗读默认关闭。'
-    drawer.append(close, title, intro, label('声线', style), label('语速', speed), speedValue, label('自动朗读新回复', auto), label('轻柔提示音', effects), preview, hint)
+    const hint = document.createElement('p'); hint.className = 'nanaly-voice-hint'; hint.textContent = '共用硅基流动密钥。理解语气会额外使用少量模型额度，不确定时平静朗读；语音另行计费。自动朗读默认关闭。'
+    drawer.append(close, title, intro, label('声线', style), label('语速', speed), speedValue, label('随文字表达情绪', emotion), label('自动朗读新回复', auto), label('轻柔提示音', effects), preview, hint)
     const host = panel.querySelector('.nanaly-shell-actions') || panel.querySelector('.nanaly-shell-bar') || panel.querySelector('.nanaly-workspace-bar')
     host?.append(button); panel.append(drawer)
-    const sync = () => { const prefs = controller.preferences(); style.value = prefs.style; speed.value = prefs.speed; speedValue.textContent = prefs.speed.toFixed(2) + '×'; auto.checked = prefs.autoplay; effects.checked = prefs.effects }
+    const sync = () => { const prefs = controller.preferences(); style.value = prefs.style; speed.value = prefs.speed; speedValue.textContent = prefs.speed.toFixed(2) + '×'; auto.checked = prefs.autoplay; effects.checked = prefs.effects; emotion.checked = prefs.emotion }
     const hide = () => { drawer.hidden = true; button.setAttribute('aria-expanded', 'false') }
     button.onclick = () => { if (!isChat()) return; if (drawer.hidden) { onOpen(); sync(); drawer.hidden = false; button.setAttribute('aria-expanded', 'true'); style.focus() } else hide() }
     close.onclick = () => { hide(); button.focus() }
     drawer.addEventListener('keydown', event => { if (event.key === 'Escape') { event.stopPropagation(); hide(); button.focus() } })
-    const update = () => { controller.configure({ style: style.value, speed: Number(speed.value), autoplay: auto.checked, effects: effects.checked }); sync() }
-    ;[style, speed, auto, effects].forEach(control => control.addEventListener('change', update))
+    const update = () => { controller.configure({ style: style.value, speed: Number(speed.value), autoplay: auto.checked, effects: effects.checked, emotion: emotion.checked }); sync() }
+    ;[style, speed, auto, effects, emotion].forEach(control => control.addEventListener('change', update))
     speed.addEventListener('input', () => { speedValue.textContent = Number(speed.value).toFixed(2) + '×' })
     preview.onclick = () => controller.speak('哼，终于想起我啦？把难题交给我吧。才、才不是特地在等你呢，喵。', { id: 'voice-preview' })
-    controller.subscribe(state => { preview.textContent = state?.id === 'voice-preview' ? (state.phase === 'loading' ? '生成中 · 点击停止' : '停止试听') : '试听一下' })
+    controller.subscribe(state => { preview.textContent = state?.id === 'voice-preview' ? (state.phase === 'planning' ? '理解语气… · 点击停止' : state.phase === 'loading' ? '生成中 · 点击停止' : '停止试听') : '试听一下' })
     sync()
     return { close: hide, refresh: () => { button.disabled = !isChat(); if (!isChat() || !panel.classList.contains('is-open')) hide() } }
   }

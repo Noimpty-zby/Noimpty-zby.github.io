@@ -102,12 +102,13 @@ const harness = ({ saved = storage({ 'nanaly-deep-v1': 'off' }), imageEntries = 
     cut('  const LS_MEM', '  // ---------------- 操控页面'),
     cut('  const abortable =', '  /* 忙的时候'),
     cut('  const stopStream =', '  const addMsg ='),
+    cut('  const speechMetadata =', '  const stopSpeak ='),
     cut('  const renderHistory =', '  // 首次设置：'),
     cut('  const showKeyUI =', '  // ---------------- Token 账'),
     cut('  const WEB_PREFIX', '  // 模型把指令'),
     cut('  const ACT_RE =', '  const checkArticleLinks =')
   ]
-  vm.runInContext(pieces.join('\n') + '\nthis.subject = { send, buildMessages, attachmentContent, generateTopicTitle, stream, stopStream, workspace, setupShell, backToChat }', context)
+  vm.runInContext(pieces.join('\n') + '\nthis.subject = { send, buildMessages, attachmentContent, generateTopicTitle, stream, stopStream, speechPayload, workspace, setupShell, backToChat }', context)
   const workspace = context.subject.workspace
   window.workspace = workspace
   context.history = workspace.readLog()
@@ -148,6 +149,9 @@ await test('beginTurn persists immediately but final request and stored history 
   assert.equal(request.auth, 'Bearer ' + keys.apiKey)
   assert.equal(request.payload.model, cfg.model)
   assert.ok(history[1].sources.some(s => s.url === 'https://blog.test/matrix/#transpose-real'))
+  const speech = h.speechPayload(h.bubbles[1])
+  assert.equal(speech.rawText, '行列互换。[S1]')
+  assert.equal(speech.context, question)
   assert.ok(request.payload.messages.some(m => typeof m.content === 'string' && m.content.includes('非方阵转置时')))
 })
 await test('confirmed memory reaches the final request while an unconfirmed proposal does not', async () => {

@@ -1195,7 +1195,7 @@
   }
 
   // 跳转之后主动问一句，别跳完就没声了
-  const afterNav = () => {
+  const afterNav = (question = '') => {
     const revision = uiRevision
     setTimeout(() => {
       if (revision !== uiRevision || view !== 'chat') return
@@ -1210,7 +1210,7 @@
         : art
           ? `到了 —— 《${art.title}》。想知道点什么？直接问，或者点上面的「总结本文」「考考我」喵。(=^w^=)`
           : '到了。想看哪篇跟我说一声就行 (ovo)'
-      addMsg('her', line)
+      addMsg('her', line, { voiceContext: question })
       logHer(line)
     }, 700)
   }
@@ -1221,7 +1221,7 @@
     signal?.throwIfAborted()
     const t = String(text || '').trim()
     // 本地自己办掉的这几件事同样要进历史，别只画在屏幕上
-    const say = (mine, hers) => { addMsg('me', mine); addMsg('her', hers); logTurn(mine, hers); return true }
+    const say = (mine, hers) => { addMsg('me', mine); addMsg('her', hers, { voiceContext: mine }); logTurn(mine, hers); return true }
 
     // 必须整句锚定。以前是前缀匹配，「深色模式是怎么实现的？」「主题里的配置在哪」
     // 这种真问题会被当成「切主题」吞掉，她按一下就回一句「切好了喵」，问题根本没发出去。
@@ -1257,10 +1257,10 @@
       addMsg('me', t)
       const said = await runAction({ do: 'goto', url: first.item.url, label: first.item.label })
       const line = `[轻巧地跃过去] ${said}喵。`
-      addMsg('her', line)
+      addMsg('her', line, { voiceContext: t })
       logTurn(t, line)
       if (sameOriginUrl(first.item.url)) onSuccess()
-      afterNav()
+      afterNav(t)
       return true
     }
     /* 有几个都像，让他选，别猜。
@@ -1270,7 +1270,7 @@
     if (cands.length >= 2) {
       addMsg('me', t)
       const ask = '[歪着头] 有好几个都像喵，你要哪个？'
-      const node = addMsg('her', ask, { raw: false })
+      const node = addMsg('her', ask, { raw: false, voiceContext: t })
       logTurn(t, ask)
       const box = el('div', 'nanaly-choices')
       cands.forEach(c => {
@@ -1279,9 +1279,9 @@
         b.addEventListener('click', async () => {
           box.remove()
           const picked = `[轻巧地跃过去] ${await runAction({ do: 'goto', url: c.item.url, label: c.item.label })}喵。`
-          addMsg('her', picked)
+          addMsg('her', picked, { voiceContext: t })
           logHer(picked)
-          afterNav()
+          afterNav(t)
         })
         box.appendChild(b)
       })
@@ -1512,7 +1512,10 @@
         : 'nanaly-msg nanaly-msg--her'
     const node = el('div', cls, opts.raw ? text : (role === 'her' ? mdToHtml(text) : escapeHtml(text)))
     body.appendChild(node)
-    if (role === 'her' && !opts.raw) { enhance(node); addSpeakBtn(node) }
+    if (role === 'her' && !opts.raw) {
+      rememberSpeech(node, text, opts.voiceContext)
+      enhance(node); addSpeakBtn(node)
+    }
     if (!opts.raw && role !== 'sys') {
       workspace?.decorateMessage(node, { role: role === 'me' ? 'user' : 'assistant', content: text, attachments: opts.attachments || [], files: opts.files || [] })
       if (opts.attachments?.length) vision?.decorate(node, opts.attachments)
@@ -1530,6 +1533,14 @@
   let speakingFor = null
   // 有些浏览器首次调用返回空列表，先热一下
   if (synth) { try { synth.getVoices() } catch (_) {} }
+
+  // Keep the original reply and its own question together. DOM decorations and later
+  // turns must not change the material used by either manual or automatic speech.
+  const speechMetadata = new WeakMap()
+  const rememberSpeech = (node, rawText, question = '') => {
+    speechMetadata.set(node, { rawText: String(rawText || ''), context: String(question || '').slice(0, 1200) })
+  }
+  const speechPayload = node => speechMetadata.get(node) || { rawText: speakableText(node), context: '' }
 
   const speakableText = node => {
     const clone = node.cloneNode(true)
@@ -1558,7 +1569,8 @@
       if (voiceController) {
         const id = node.dataset.voiceId || (node.dataset.voiceId = 'voice-' + crypto.randomUUID())
         if (voiceController.state()?.id !== id && synth) { try { synth.cancel() } catch (_) {} }
-        voiceController.speak(speakableText(node), { id })
+        const speech = speechPayload(node)
+        voiceController.speak(speech.rawText, { id, context: speech.context })
         return
       }
       if (speakingFor === btn) return stopSpeak()
@@ -1591,7 +1603,12 @@
       workspace?.refresh()
       return
     }
-    history.forEach(m => addMsg(m.role === 'user' ? 'me' : 'her', m.content, { attachments: m.attachments, files: m.files, sources: m.sources, taskId: m.taskId }))
+    let previousQuestion = ''
+    history.forEach(m => {
+      if (m.role === 'user') previousQuestion = String(m.content || '').slice(0, 1200)
+      addMsg(m.role === 'user' ? 'me' : 'her', m.content, { attachments: m.attachments, files: m.files,
+        sources: m.sources, taskId: m.taskId, voiceContext: m.role === 'assistant' ? previousQuestion : '' })
+    })
     workspace?.refresh()
     quick.style.display = ''
   }
@@ -2228,6 +2245,7 @@
       await abortable(enhance(answer), signal)
       signal.throwIfAborted()
       showUsage(bubble)
+      rememberSpeech(bubble, shown || '[点了点头]', text)
       addSpeakBtn(bubble)
       scrollBottom()
       // 存进历史的是去掉指令后的文本，免得她把旧指令当范例反复照抄。
@@ -2246,13 +2264,17 @@
         if (said) {
           addMsg('sys', said)
           logHer(said)
-          if (act.do === 'goto') afterNav()
+          if (act.do === 'goto') afterNav(text)
         }
       }
       completed = actionSucceeded && !signal.aborted && !turn.discard
       if (completed && window.NANALY_VOICE && panel.classList.contains('is-open')) {
         voiceController?.chime('done')
-        if (shown) voiceController?.speak(shown, { id: bubble.dataset.voiceId || (bubble.dataset.voiceId = 'voice-' + crypto.randomUUID()), automatic: true })
+        if (shown) {
+          const speech = speechPayload(bubble)
+          voiceController?.speak(speech.rawText, { id: bubble.dataset.voiceId || (bubble.dataset.voiceId = 'voice-' + crypto.randomUUID()),
+            context: speech.context, automatic: true })
+        }
       }
     } catch (err) {
       turn.status = signal.aborted ? 'interrupted' : 'failed'
@@ -2282,6 +2304,7 @@
             answer.innerHTML = mdToHtml(part + '\n（这句被打断了，没说完）')
             if (thinkBox) thinkBox.open = false
             enhance(answer)
+            rememberSpeech(bubble, part + '\n（这句被打断了，没说完）', text)
             addSpeakBtn(bubble)
             logTurn(text, part + '\n（这句被打断了，没说完）')
           } else bubble.remove()
@@ -2295,6 +2318,7 @@
           answer.innerHTML = mdToHtml(part + '\n（回答未完成）')
           bubble.replaceChildren(answer)
           enhance(answer)
+          rememberSpeech(bubble, part + '\n（回答未完成）', text)
           addSpeakBtn(bubble)
           logTurn(text, part + '\n（回答未完成）')
           addMsg('sys', msg)
@@ -2776,15 +2800,17 @@
   if (window.NANALY_SHELL) shell = window.NANALY_SHELL.mount({ panel, launcher, input, onCloseDrawer: () => workspace?.closeDrawer() })
   if (window.NANALY_VOICE) {
     voiceController = window.NANALY_VOICE.create({
-      getConnection: () => ({ key: secrets.visionKey || '', baseURL: cfg.visionBaseURL }),
+      getConnection: () => ({ key: secrets.visionKey || '', baseURL: cfg.visionBaseURL, model: cfg.visionModel }),
+      onUsage: addUsage,
       notify: message => addMsg('sys', message), onNeedKey: () => showKeyUI('声音共用硅基流动密钥，解锁后即可试听。')
     })
     voiceController.subscribe(state => {
       body.querySelectorAll('.nanaly-speak').forEach(button => {
         const on = !!state && button.parentNode?.dataset.voiceId === state.id
         button.classList.toggle('is-on', on)
-        button.classList.toggle('is-loading', on && state.phase === 'loading')
-        button.title = on ? (state.phase === 'loading' ? '生成声音中，点击停止' : '停止朗读') : '用娜娜莉的声音朗读'
+        button.classList.toggle('is-loading', on && ['planning', 'loading'].includes(state.phase))
+        button.title = on ? (state.phase === 'planning' ? '理解语气…，点击停止'
+          : state.phase === 'loading' ? '生成声音中，点击停止' : '停止朗读') : '用娜娜莉的声音朗读'
         button.setAttribute('aria-label', button.title); button.setAttribute('aria-pressed', String(on))
       })
     })

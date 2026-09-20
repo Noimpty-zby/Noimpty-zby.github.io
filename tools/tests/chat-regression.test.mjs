@@ -30,6 +30,7 @@ const deferred = () => {
 }
 const abortableCode = cut('  const abortable =', '  /* 忙的时候')
 const streamCode = cut('  const stream =', '  const send =')
+const speechCode = cut('  const speechMetadata =', '  const stopSpeak =')
 const sse = (content, eol = '\n') => 'data: ' + JSON.stringify({ choices: [{ delta: { content } }] }) + eol + eol
 
 const streamHarness = fetch => run(providerSource + '\n' + abortableCode + '\n' + streamCode, {
@@ -146,14 +147,14 @@ await test('Inline code preserves Markdown/math and URL placeholders stay inside
 })
 
 class Bubble {
-  constructor() { this.children = []; this.innerHTML = ''; this.className = ''; this.removed = false }
+  constructor() { this.children = []; this.innerHTML = ''; this.className = ''; this.removed = false; this.dataset = {} }
   contains(node) { return this.children.includes(node) }
   replaceChildren(...children) { this.children = children }
   remove() { this.removed = true }
 }
-const sendHarness = (buildMessages, stream) => {
+const sendHarness = (buildMessages, stream, extra = {}) => {
   const logs = [], bubbles = [], busyStates = []
-  const controller = run(abortableCode + '\n' + cut('  const stopStream =', '  const addMsg =') + '\n' +
+  const controller = run(speechCode + '\n' + abortableCode + '\n' + cut('  const stopStream =', '  const addMsg =') + '\n' +
     cut('  const send =', '  // ---------------- 事件'), {
     busy: false, view: 'chat', activeTurn: null, abortCtl: null, uiRevision: 0,
     writeLog() {}, renderSources() {}, panel: { classList: { contains: () => true } }, launcher: { classList: { add() {} } },
@@ -163,8 +164,8 @@ const sendHarness = (buildMessages, stream) => {
     el: () => new Bubble(), buildMessages, stream, wantsBrain: () => false,
     setBusy: value => busyStates.push(value), mdToHtml: text => text, escapeHtml: text => text,
     enhance: async () => {}, hideActFragment: text => text, splitAction: text => ({ text, act: null }),
-    showUsage() {}, addSpeakBtn() {}, scrollBottom() {}, logTurn: (...args) => logs.push(args), setSubLine() {}
-  }, ['send', 'stopStream'])
+    showUsage() {}, addSpeakBtn() {}, scrollBottom() {}, logTurn: (...args) => logs.push(args), setSubLine() {}, ...extra
+  }, ['send', 'stopStream', 'speechPayload'])
   return { ...controller, logs, bubbles, busyStates }
 }
 
@@ -197,6 +198,8 @@ await test('Stop after a text delta preserves visible partial answer and history
   assert.match(h.logs[0][1], /partial answer.*\n（这句被打断了/)
   assert.match(h.bubbles[1].children[0].innerHTML, /partial answer/)
   assert.equal(h.bubbles[1].removed, false)
+  assert.equal(h.speechPayload(h.bubbles[1]).rawText, h.logs[0][1])
+  assert.equal(h.speechPayload(h.bubbles[1]).context, 'question')
 })
 
 await test('Reset/lock discards an active partial reply instead of restoring cleared history', async () => {
@@ -560,6 +563,134 @@ await test('Old behavioral memory expires from the prompt without diagnosing the
     EMPTY_SECRETS: {}, localStorage: { getItem: () => value, setItem() {} }
   }, ['memoryDigest'])
   assert.equal(memoryDigest(), '')
+})
+
+
+await test('manual reading retains raw stage directions and the reply-specific question after DOM decoration', () => {
+  const calls = []
+  const node = { dataset: {}, querySelector: () => null, appendChild(button) { this.button = button }, cloneNode() { throw new Error('Must not read decorated DOM when raw metadata exists') } }
+  const { rememberSpeech, addSpeakBtn } = run(speechCode + '\n' + cut('  const addSpeakBtn =', '  const renderHistory ='), {
+    synth: null, window: { NANALY_VOICE: true }, crypto: { randomUUID: () => 'fixture-speech-id' },
+    voiceController: { state: () => null, speak: (raw, options) => calls.push({ raw, options }) },
+    el: () => ({ type: '', title: '', setAttribute() {}, addEventListener(type, callback) { this[type] = callback } })
+  }, ['rememberSpeech', 'addSpeakBtn'])
+  const raw = '[轻轻叹气] 今天确实不容易。\n\n```js\nprivateCode()\n```\n我们慢慢来。[S1]'
+  const question = '这一条对应的问题' + '甲'.repeat(1400)
+  rememberSpeech(node, raw, question)
+  addSpeakBtn(node)
+  node.innerHTML = 'unrelated decorations and source cards'
+  node.button.click()
+  assert.equal(calls[0].raw, raw, 'voice planner receives raw text before stage directions are stripped')
+  assert.equal(calls[0].options.context, question.slice(0, 1200))
+  assert.equal(calls[0].options.context.length, 1200)
+  assert.equal(calls[0].options.id, 'voice-fixture-speech-id')
+})
+
+await test('history speech context follows each reply instead of the last question in the conversation', () => {
+  const firstQuestion = '旧问题' + '甲'.repeat(1500)
+  const history = [
+    { role: 'assistant', content: '独立问候' },
+    { role: 'user', content: firstQuestion, files: [{ name: '不要加入语气上下文.pdf' }] },
+    { role: 'assistant', content: '[笑] 旧回答' },
+    { role: 'assistant', content: '旧回答的补充' },
+    { role: 'user', content: '新的问题' },
+    { role: 'assistant', content: '新的回答' }
+  ]
+  const rendered = []
+  const { renderHistory } = run(cut('  const renderHistory =', '  // ---------------- 设置界面'), {
+    stopSpeak() {}, followScroll: false, quick: { style: {} }, body: {}, history,
+    addMsg: (role, text, options) => rendered.push({ role, text, options })
+  }, ['renderHistory'])
+  renderHistory()
+  assert.deepEqual(rendered.filter(m => m.role === 'her').map(m => m.options.voiceContext), ['', firstQuestion.slice(0, 1200), firstQuestion.slice(0, 1200), '新的问题'])
+  assert.ok(rendered.filter(m => m.role === 'her').every(m => !m.options.voiceContext.includes('.pdf')))
+})
+
+await test('automatic and manual reading share exactly the streamed raw reply and current-question context', async () => {
+  const calls = []
+  const raw = '[勉强忍住笑] 笨蛋，这次做得很棒。\n```js\nexample()\n```\n请看这里。[S1]'
+  const question = '我是不是又做错了？' + '问'.repeat(1300)
+  const h = sendHarness(async () => [], async (_, delta) => { delta(raw, ''); return raw }, {
+    window: { NANALY_VOICE: true }, crypto: { randomUUID: () => 'streamed-speech' },
+    voiceController: { chime() {}, speak: (text, options) => calls.push({ text, options }) }
+  })
+  await h.send(question, 'article')
+  assert.equal(calls.length, 1)
+  const payload = h.speechPayload(h.bubbles[1])
+  assert.equal(calls[0].text, payload.rawText)
+  assert.equal(calls[0].text, raw)
+  assert.equal(calls[0].options.context, payload.context)
+  assert.equal(payload.context, question.slice(0, 1200))
+  assert.equal(calls[0].options.automatic, true)
+})
+
+await test('failed partial replies retain their own raw emotion cues and question for later reading', async () => {
+  const h = sendHarness(async () => [], async (_, delta) => { delta('[担心地看着你] 我听见了。', ''); throw new Error('offline stream failed') })
+  await h.send('这道题让我很难过', 'article')
+  const payload = h.speechPayload(h.bubbles[1])
+  assert.equal(payload.rawText, '[担心地看着你] 我听见了。\n（回答未完成）')
+  assert.equal(payload.context, '这道题让我很难过')
+})
+
+await test('voice connection exposes the configured semantic model and reports planning as a cancellable loading state', () => {
+  let createOptions, subscriber
+  const toggles = new Map(), attributes = new Map(), usages = []
+  const button = { parentNode: { dataset: { voiceId: 'the-reply' } }, classList: { toggle: (name, on) => toggles.set(name, on) }, setAttribute: (name, value) => attributes.set(name, value) }
+  const addUsage = value => usages.push(value)
+  run(cut('  if (window.NANALY_VOICE) {', '  refreshContext()\n  resetDwell()'), {
+    cfg: { visionBaseURL: 'https://api.siliconflow.cn/v1', visionModel: 'saved-semantic-model' }, secrets: { visionKey: 'offline-placeholder' },
+    panel: {}, body: { querySelectorAll: () => [button] }, addUsage, addMsg() {}, showKeyUI() {},
+    window: { NANALY_VOICE: {
+      create(options) { createOptions = options; return { subscribe(callback) { subscriber = callback } } }, mount: () => ({})
+    } }
+  })
+  assert.equal(createOptions.getConnection().model, 'saved-semantic-model')
+  assert.equal(createOptions.onUsage, addUsage)
+  const usage = { prompt_tokens: 12, completion_tokens: 4 }
+  createOptions.onUsage(usage)
+  assert.equal(usages[0], usage)
+  subscriber({ id: 'the-reply', phase: 'planning' })
+  assert.equal(toggles.get('is-loading'), true)
+  assert.match(button.title, /理解语气.*点击停止/)
+  assert.equal(attributes.get('aria-label'), button.title)
+  subscriber({ id: 'the-reply', phase: 'playing' })
+  assert.equal(toggles.get('is-loading'), false)
+  assert.equal(button.title, '停止朗读')
+  subscriber(null)
+  assert.equal(attributes.get('aria-pressed'), 'false')
+})
+
+
+await test('the real addMsg path registers raw metadata before attaching the reading button', () => {
+  const makeNode = (tag, className = '', html = '') => ({ tag, className, innerHTML: html, children: [], dataset: {},
+    querySelector(selector) { return this.children.find(child => selector === '.' + child.className) || null },
+    appendChild(child) { this.children.push(child); child.parentNode = this },
+    setAttribute() {}, addEventListener(type, callback) { this[type] = callback }
+  })
+  const calls = []
+  const { addMsg, speechPayload } = run(speechCode + '\n' + cut('  const addMsg =', '  // ---------------- 朗读') + '\n' + cut('  const addSpeakBtn =', '  const renderHistory ='), {
+    synth: null, window: { NANALY_VOICE: true }, crypto: { randomUUID: () => 'normal-message' },
+    voiceController: { state: () => null, speak: (raw, options) => calls.push({ raw, options }) },
+    body: { appendChild() {} }, el: makeNode, mdToHtml: text => 'rendered: ' + text, escapeHtml: text => text,
+    enhance() {}, renderSources() {}, scrollBottom() {}
+  }, ['addMsg', 'speechPayload'])
+  const node = addMsg('her', '[蹭蹭] 我陪你。', { voiceContext: '今天有点难过' })
+  node.querySelector('.nanaly-speak').click()
+  assert.equal(calls[0].raw, '[蹭蹭] 我陪你。')
+  assert.equal(calls[0].options.context, '今天有点难过')
+  assert.equal(speechPayload(addMsg('her', '你好')).context, '')
+})
+
+await test('navigation follow-up captures the triggering question before its deferred message', () => {
+  let callback
+  const messages = []
+  const { afterNav } = run(cut('  const afterNav =', '  // 本地快速通道'), {
+    uiRevision: 1, view: 'chat', setTimeout: fn => { callback = fn }, refreshContext() {},
+    location: { pathname: '/archive/' }, SECTIONS: [{ url: '/archive/' }], currentArticle: () => null,
+    addMsg: (role, text, options) => messages.push({ role, text, options }), logHer() {}
+  }, ['afterNav'])
+  afterNav('带我去归档'); callback()
+  assert.equal(messages[0].options.voiceContext, '带我去归档')
 })
 
 console.log(`\n${passed} chat regression checks passed`)

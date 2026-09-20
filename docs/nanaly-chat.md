@@ -97,4 +97,4 @@
 
 有两类问题只有它能照出来：服务返回的 WAV 头换了写法（离线用例里的占位长度是构造出来的，撞不上真值），以及语音模型把语气提示当正文念出来（离线用例喂的是 mock 音频，听不出在念什么）。
 
-语义验收样例位于 `tools/fixtures/nanaly-emotion-cases.json`。运行 `node tools/tests/nanaly-emotion-eval.mjs` 检查样例与分段契约，不发网络请求；这不代表真实模型通过了准确率测试。需要实际评估时，显式设置专用 `NANALY_EMOTION_EVAL_KEY`、`NANALY_EMOTION_EVAL_BASE_URL`（以及可选 `NANALY_EMOTION_EVAL_MODEL`），运行 `node tools/tests/nanaly-emotion-eval.mjs --live`。它会逐条调用模型并报告结果及用量，不生成付费语音；最终情绪听感仍需试听。
+语义验收样例位于 `tools/fixtures/nanaly-emotion-cases.json`。运行 `node tools/emotion-check.mjs` 检查样例与分段契约，不发网络请求；这不代表真实模型通过了准确率测试。需要实际评估时，显式设置专用 `NANALY_EMOTION_EVAL_KEY`、`NANALY_EMOTION_EVAL_BASE_URL`（以及可选 `NANALY_EMOTION_EVAL_MODEL`），运行 `node tools/emotion-check.mjs --live`。它会逐条调用模型并报告结果及用量，不生成付费语音；最终情绪听感仍需试听。

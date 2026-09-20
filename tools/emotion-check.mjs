@@ -1,10 +1,10 @@
 /*
- * Default: node tools/tests/nanaly-emotion-eval.mjs
+ * Default: node tools/emotion-check.mjs
  *   Validates fixtures and the real planner's input/output structure OFFLINE.
  *
  * Opt-in paid semantic evaluation (does not synthesize or play any audio):
  *   NANALY_EMOTION_EVAL_KEY=... NANALY_EMOTION_EVAL_BASE_URL=https://api.siliconflow.cn/v1 \
- *     node tools/tests/nanaly-emotion-eval.mjs --live --limit=3
+ *     node tools/emotion-check.mjs --live --limit=3
  * Optional: NANALY_EMOTION_EVAL_MODEL, --case=genuine-success-joy
  *
  * No .env files, browser profiles, vaults, or generic API_KEY variables are read.
@@ -17,13 +17,13 @@ import vm from 'node:vm'
 
 const argv = process.argv.slice(2)
 if (argv.includes('--help')) {
-  console.log('Offline: node tools/tests/nanaly-emotion-eval.mjs\nPaid opt-in: --live [--limit=N] [--case=ID]\nLive requires NANALY_EMOTION_EVAL_KEY and NANALY_EMOTION_EVAL_BASE_URL; optional NANALY_EMOTION_EVAL_MODEL.\nSemantic labels are checked; audio quality requires a separate listening review.')
+  console.log('Offline: node tools/emotion-check.mjs\nPaid opt-in: --live [--limit=N] [--case=ID]\nLive requires NANALY_EMOTION_EVAL_KEY and NANALY_EMOTION_EVAL_BASE_URL; optional NANALY_EMOTION_EVAL_MODEL.\nSemantic labels are checked; audio quality requires a separate listening review.')
   process.exit(0)
 }
 assert.ok(argv.every(arg => arg === '--live' || /^--(?:limit=[1-9]\d*|case=[a-z0-9-]+)$/.test(arg)), 'Unsupported evaluation argument; use --help')
 for (const flag of ['--live', '--limit=', '--case=']) assert.ok(argv.filter(arg => arg.startsWith(flag)).length <= 1, 'Repeated evaluation argument: ' + flag)
 const live = argv.includes('--live')
-const dataset = JSON.parse(readFileSync(new URL('../fixtures/nanaly-emotion-cases.json', import.meta.url), 'utf8'))
+const dataset = JSON.parse(readFileSync(new URL('./fixtures/nanaly-emotion-cases.json', import.meta.url), 'utf8'))
 assert.equal(dataset.version, 1)
 assert.ok(typeof dataset.purpose === 'string' && dataset.purpose.length > 20)
 assert.ok(Array.isArray(dataset.labels) && dataset.labels.length >= 8)
@@ -54,7 +54,7 @@ for (const category of ['否定', '引用', '第三人称', '真实高兴', '忧
 // Reuse the production preparation, prompt and parser instead of maintaining a
 // second prompt that could pass while the real browser planner behaves differently.
 const window = {}
-vm.runInNewContext(readFileSync(new URL('../../source/js/nanaly-prosody.js', import.meta.url), 'utf8'), { window, URL, AbortController, DOMException, setTimeout, clearTimeout })
+vm.runInNewContext(readFileSync(new URL('../source/js/nanaly-prosody.js', import.meta.url), 'utf8'), { window, URL, AbortController, DOMException, setTimeout, clearTimeout })
 const planner = window.NANALY_PROSODY
 assert.ok(planner && typeof planner.prepare === 'function' && typeof planner.parse === 'function')
 assert.deepEqual([...planner.EMOTIONS].sort(), [...labels].sort(), 'Fixture labels must match the production planner')

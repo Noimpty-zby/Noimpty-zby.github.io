@@ -3,25 +3,41 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 
 const source = readFileSync('source/js/nanaly-voice.js', 'utf8')
-const boot = ({ key = 'offline-siliconflow-key', fetcher, autoplay = false, fastTimeout = false } = {}) => {
+const audioSource = readFileSync('source/js/nanaly-audio.js', 'utf8')
+const wave = () => {
+  const bytes = Buffer.alloc(44 + 4800)
+  bytes.write('RIFF'); bytes.writeUInt32LE(bytes.length - 8, 4); bytes.write('WAVEfmt ', 8)
+  bytes.writeUInt32LE(16, 16); bytes.writeUInt16LE(1, 20); bytes.writeUInt16LE(1, 22)
+  bytes.writeUInt32LE(24000, 24); bytes.writeUInt32LE(48000, 28)
+  bytes.writeUInt16LE(2, 32); bytes.writeUInt16LE(16, 34); bytes.write('data', 36); bytes.writeUInt32LE(4800, 40)
+  // The final sample is voiced: padding must keep it intact, not fade it away.
+  for (let i = 44; i < bytes.length; i += 2) bytes.writeInt16LE(1234, i)
+  return new Blob([bytes], { type: 'audio/wav' })
+}
+const boot = ({ key = 'offline-siliconflow-key', fetcher, autoplay = false, fastTimeout = false, manualDrain = false } = {}) => {
   const values = new Map([['nanaly-voice-v1', JSON.stringify({ autoplay })]])
-  const requests = [], notices = [], audio = [], urls = new Set()
+  const requests = [], notices = [], audio = [], blobs = [], urls = new Set(), drains = new Map()
   let needed = 0, nextUrl = 0
   const window = { localStorage: { getItem: k => values.get(k), setItem: (k, v) => values.set(k, v) }, addEventListener() {} }
   class ObjectURL extends URL {
-    static createObjectURL() { const value = 'blob:test-' + (++nextUrl); urls.add(value); return value }
+    static createObjectURL(blob) { blobs.push(blob); const value = 'blob:test-' + (++nextUrl); urls.add(value); return value }
     static revokeObjectURL(value) { urls.delete(value) }
   }
   const document = { hidden: false }, connection = { key, baseURL: 'https://api.siliconflow.cn/v1' }
-  const clock = (fn, delay) => setTimeout(fn, fastTimeout && delay === 60000 ? 5 : delay)
-  vm.runInNewContext(source, { window, document, URL: ObjectURL, AbortController, DOMException, setTimeout: clock, clearTimeout })
+  const clock = (fn, delay) => {
+    if (manualDrain && delay === 500) { const id = {}; drains.set(id, fn); return id }
+    return setTimeout(fn, fastTimeout && delay === 60000 ? 5 : delay)
+  }
+  const cancelTimer = id => { if (!drains.delete(id)) clearTimeout(id) }
+  vm.runInNewContext(audioSource + ';\n' + source, { window, document, Blob, URL: ObjectURL, AbortController, DOMException, setTimeout: clock, clearTimeout: cancelTimer })
   const api = window.NANALY_VOICE
   const controller = api.create({ getConnection: () => connection,
     notify: text => notices.push(text), onNeedKey: () => needed++,
-    fetcher: async (url, init) => { requests.push({ url, init }); return fetcher ? fetcher(url, init) : new Response(new Blob(['offline audio'], { type: 'audio/mpeg' }), { headers: { 'content-type': 'audio/mpeg' } }) },
-    makeAudio: () => { const item = { paused: false, play: async () => {}, pause() { this.paused = true }, removeAttribute() {}, load() {} }; audio.push(item); return item }
+    fetcher: async (url, init) => { requests.push({ url, init }); return fetcher ? fetcher(url, init) : new Response(wave(), { headers: { 'content-type': 'audio/wav' } }) },
+    makeAudio: () => { const item = { paused: false, events: [], play: async () => { item.events.push('play') }, pause() { this.events.push('pause'); this.paused = true }, removeAttribute() { this.events.push('remove') }, load() { this.events.push('load') } }; audio.push(item); return item }
   })
-  return { api, controller, requests, notices, values, document, audio, urls, connection, needed: () => needed }
+  return { api, controller, requests, notices, values, document, audio, urls, blobs, drains, connection, needed: () => needed,
+    drain: async () => { for (const [id, fn] of [...drains]) { drains.delete(id); fn() }; await flush() } }
 }
 const flush = async () => { for (let i = 0; i < 8; i++) await new Promise(resolve => setImmediate(resolve)) }
 let passed = 0
@@ -39,7 +55,11 @@ await test('speech uses only the configured SiliconFlow key and documented CosyV
   assert.equal(payload.model, 'FunAudioLLM/CosyVoice2-0.5B')
   assert.equal(payload.voice, payload.model + ':diana')
   assert.ok(payload.input.includes('<|endofprompt|>你好喵。'))
-  assert.equal(payload.response_format, 'mp3')
+  assert.equal(payload.response_format, 'wav')
+  assert.equal(payload.sample_rate, 24000)
+  const rendered = new DataView(await h.blobs[0].arrayBuffer())
+  assert.equal(rendered.getInt16(44 + 4798, true), 1234, 'the final voiced sample survives unchanged')
+  assert.equal(rendered.getUint32(40, true), 4800 + 16800, '350ms silence follows all original speech')
   assert.ok(states.some(state => state?.phase === 'loading'))
   assert.equal(h.controller.state().phase, 'playing')
   h.audio[0].onended()
@@ -87,6 +107,61 @@ await test('a stopped request cannot play late audio or replace a newer reply', 
   resolve(new Response(new Blob(['audio']), { headers: { 'content-type': 'audio/mpeg' } }))
   assert.equal(await job, false)
   assert.equal(h.audio.length, 0)
+  assert.equal(h.urls.size, 0)
+})
+await test('natural completion drains without resetting the player or releasing its URL immediately', async () => {
+  const h = boot({ manualDrain: true })
+  let done = false
+  const job = h.controller.speak('最后一个字也要读完喵').then(value => { done = true; return value })
+  await flush()
+  assert.match(JSON.parse(h.requests[0].init.body).input, /最后一个字也要读完喵。$/)
+  h.audio[0].onended(); h.audio[0].onended(); await flush()
+  assert.equal(done, false)
+  assert.equal(h.drains.size, 1)
+  assert.equal(h.urls.size, 1)
+  assert.deepEqual(h.audio[0].events, ['play'])
+  await h.drain()
+  assert.equal(await job, true)
+  assert.deepEqual(h.audio[0].events, ['play'], 'natural completion never resets the decoder')
+  assert.equal(h.urls.size, 0)
+})
+await test('stop during end-drain cleans once and stale completion cannot disturb newer audio', async () => {
+  const h = boot({ manualDrain: true })
+  const first = h.controller.speak('第一句喵', { id: 'first' }); await flush()
+  h.audio[0].onended()
+  const staleTimer = [...h.drains.values()][0]
+  h.controller.stop()
+  assert.equal(await first, false)
+  assert.deepEqual(h.audio[0].events, ['play', 'pause', 'remove', 'load'])
+  assert.equal(h.drains.size, 0)
+  assert.equal(h.urls.size, 0)
+  const next = h.controller.speak('第二句喵', { id: 'next' }); await flush()
+  staleTimer()
+  assert.equal(h.controller.state().id, 'next')
+  assert.deepEqual(h.audio[1].events, ['play'])
+  h.controller.stop(); assert.equal(await next, false)
+})
+await test('automatic replies do not interrupt an existing manual reading', async () => {
+  const h = boot({ autoplay: true })
+  const first = h.controller.speak('我还没有读完喵', { id: 'manual' }); await flush()
+  assert.equal(await h.controller.speak('新回复', { id: 'auto', automatic: true }), false)
+  assert.equal(h.requests.length, 1)
+  assert.equal(h.controller.state().id, 'manual')
+  assert.deepEqual(h.audio[0].events, ['play'])
+  h.controller.stop(); assert.equal(await first, false)
+})
+await test('long reading waits for each segment tail before starting the next segment', async () => {
+  const h = boot({ manualDrain: true }), text = '完整读完每一句话喵。'.repeat(50)
+  const parts = h.api.splitText(text)
+  assert.equal(parts.length, 2)
+  const job = h.controller.speak(text); await flush()
+  h.audio[0].onended(); await flush()
+  assert.equal(h.requests.length, 1)
+  await h.drain()
+  assert.equal(h.requests.length, 2)
+  assert.equal(h.audio.length, 2)
+  h.audio[1].onended(); await h.drain()
+  assert.equal(await job, true)
   assert.equal(h.urls.size, 0)
 })
 await test('missing credentials and default autoplay never send a synthesis request', async () => {

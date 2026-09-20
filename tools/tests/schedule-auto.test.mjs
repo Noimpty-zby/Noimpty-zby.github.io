@@ -176,7 +176,7 @@ await acheck('关键词是空的 → 不匹配任何东西（不是匹配一切�
 })
 
 await acheck('★ 她自己写的随笔不算「主人发了新文章」', async () => {
-  addPost('nanaly-2026-w99', '窝今天也在看着主人', TODAY)
+  addPost('nanaly-2026-w99', '我今天也在看着主人', TODAY)
   writeSchedule({ [TODAY]: [T('a', '写点东西', { type: 'post', match: '主人' })] })
   assert.equal((await run({})).changed, 0, '她自己的随笔把主人的任务勾了')
   dropPost('nanaly-2026-w99')
@@ -260,11 +260,11 @@ const yaml = await import('file://' + join(REPO, 'node_modules/js-yaml/index.js'
 console.log('\nfront-matter 标题安全')
 
 const titles = [
-  'Nanite: 窝读完之后的三个疑问',
+  'Nanite: 我读完之后的三个疑问',
   '[笔记] UE5 的渲染管线',
   '- 随笔：今天很安静',
-  '"窝说" 与 "你说"',
-  '#1 窝的观察',
+  '"我说" 与 "你说"',
+  '#1 我的观察',
   '主人今天写了 3 篇：都在讲光栅化',
   '换行\n混进来了',
   ''

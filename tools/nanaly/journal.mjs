@@ -45,7 +45,7 @@ export const WHO = {
  *
  * 跑在 Actions 上，机器时区是 UTC，而她的班表是按北京时间排的。
  * 日志是给她自己读的，读到的时间必须和主人看表看到的一致，
- * 否则她会在随笔里写「窝凌晨一点在巡逻」—— 那其实是早上九点。 */
+ * 否则她会在随笔里写「我凌晨一点在巡逻」—— 那其实是早上九点。 */
 export const bjStamp = (ts = Date.now()) => {
   const p = new Intl.DateTimeFormat('zh-CN', {
     timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric',
@@ -117,11 +117,11 @@ export const journalDigest = (entries, { limit = 12, sinceDays = 0, now = Date.n
   if (sinceDays) list = list.filter(e => now - e.ts <= sinceDays * 86400000)
   list = list.slice(-limit)
   if (!list.length) return ''
-  return '【窝最近做过的事】\n'
+  return '【我最近做过的事】\n'
     + list.map(e => `- ${e.at} ${WHO[e.who] || e.who}：${e.what}`).join('\n')
     + '\n上面每一条都是**你自己**做的。你在这个博客的不同地方干活 —— 回读者的留言、'
     + '巡逻找坏链、给文章写批注、写资讯、写随笔、在右下角陪主人聊天 —— '
-    + '但那都是同一只猫。提到这些事的时候用「窝」，别说成「有人」「系统」或者「另一个程序」。\n'
+    + '但那都是同一只猫。提到这些事的时候用「我」，别说成「有人」「系统」或者「另一个程序」。\n'
 }
 
 /** 直接读文件拼摘要。绝大多数调用方要的都是这个。 */

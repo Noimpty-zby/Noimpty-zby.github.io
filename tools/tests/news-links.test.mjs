@@ -46,11 +46,11 @@ const check = (name, fn) => {
 console.log('\n资讯来源链接')
 
 check('★ 正常情况：编号被换成真链接，并带上域名', () => {
-  const out = attachSources('- [0] **A 公司裁员** —— 裁撤引擎组，涉及三百人。窝觉得没意思。', HITS)
-  assert.equal(out, '- **A 公司裁员** —— 裁撤引擎组，涉及三百人。窝觉得没意思。 [来源 · example.com](https://example.com/a?ref=1)')
+  const out = attachSources('- [0] **A 公司裁员** —— 裁撤引擎组，涉及三百人。我觉得没意思。', HITS)
+  assert.equal(out, '- **A 公司裁员** —— 裁撤引擎组，涉及三百人。我觉得没意思。 [来源 · example.com](https://example.com/a?ref=1)')
 })
 
-check('★ 她自己写了全角括号的链接（线上就是这个毛病）→ 清掉，只留窝拼的', () => {
+check('★ 她自己写了全角括号的链接（线上就是这个毛病）→ 清掉，只留我拼的', () => {
   const out = attachSources('- [1] **B 引擎更新** —— 发布 5.6 版本，重做了渲染管线。［来源］（https://wrong.example/x）', HITS)
   assert.ok(out.includes('](https://example.org/b/)'), '没挂上正确链接')
   assert.ok(!out.includes('wrong.example'), '她写错的网址还留着')

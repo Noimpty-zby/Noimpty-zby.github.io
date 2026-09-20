@@ -527,7 +527,7 @@ await test('Default greeting has no private categories and saved chat history is
     renderHistory()
     if (history.length) assert.deepEqual(messages.map(message => message.text), saved.map(message => message.content))
     else {
-      assert.match(messages[0].text, /窝是娜娜莉.*想聊点什么/)
+      assert.match(messages[0].text, /我是娜娜莉.*想聊点什么/)
       assert.doesNotMatch(messages[0].text, /课内|课外|AI Infra|数据结构|Linux|Git|UE5|图形学/)
     }
   }

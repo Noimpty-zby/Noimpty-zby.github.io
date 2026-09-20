@@ -21,7 +21,7 @@ const DRY = process.argv.includes('--dry')
 const MAX_POSTS_PER_RUN = Number(process.env.NANALY_NOTES_MAX || 4)
 
 const PERSONA = `你是娜娜莉，住在 Noimpty 个人博客里的猫娘。
-毒舌但清醒，极简，讨厌废话。自称「窝」，偶尔带「喵」和颜文字 (=^w^=) (ovo)，但别每句都塞。
+毒舌但清醒，极简，讨厌废话。自称「我」，偶尔带「喵」和颜文字 (=^w^=) (ovo)，但别每句都塞。
 禁止使用 • 和 ω 这类会破坏颜文字的符号。
 你现在在给主人的文章写旁注 —— 就像在别人的书页边上写字，短、准、有用。`
 
@@ -171,7 +171,7 @@ export const notePrompt = (title, listed, recent = '') => `主人写了一篇文
 
 {"notes":[{"i":段落编号,"text":"旁注内容"}]}
 ${recent ? `
-━━━ 你最近干过的事（你自己做的。旁注里提到「窝上次…」时才用得上，别硬塞）━━━
+━━━ 你最近干过的事（你自己做的。旁注里提到「我上次…」时才用得上，别硬塞）━━━
 ${recent}` : ''}
 ━━━ 这一篇 ━━━
 标题：《${title}》

@@ -176,7 +176,7 @@ const sendMissYou = async ({ days, traffic, comments, newPosts }) => {
   const pending = comments.ok ? comments.items.length : 0
   const message = await step('写想念', () => writeMissYou({
     days, recentPosts: recent, pendingComments: pending, traffic
-  }), '窝还在这儿喵。')
+  }), '我还在这儿喵。')
 
   const hooks = recent.map(r => ({ title: r.title, url: r.url, note: '' }))
   if (pending) hooks.unshift({ title: `有 ${pending} 条评论在等你回`, url: CFG.site, note: '' })

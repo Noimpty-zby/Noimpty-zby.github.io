@@ -42,6 +42,7 @@
     const scan = value => {
       if (!value || typeof value !== 'object') return
       if (Array.isArray(value.attachments)) refs(value.attachments).forEach(x => keep.add(x.id))
+      if (Array.isArray(value.draftAttachments)) refs(value.draftAttachments).forEach(x => keep.add(x.id))
       Object.values(value).forEach(v => { if (v && typeof v === 'object') scan(v) })
     }
     scan(state)
@@ -126,9 +127,8 @@
       }
     }
   }
-  const mount = ({ panel, input, isBusy, isChat, notify }) => {
+  const mount = ({ panel, input, isBusy, isChat, notify, onChange = () => {} }) => {
     let attachments = [], loading = false, revision = 0
-    const retained = new Set()
     const tray = document.createElement('div')
     tray.className = 'nanaly-image-tray'
     tray.setAttribute('aria-label', '待发送图片')
@@ -147,7 +147,7 @@
         img.src = item.dataURL; img.alt = item.name
         chip.title = item.name
         del.type = 'button'; del.textContent = '×'; del.setAttribute('aria-label', '移除图片：' + item.name)
-        del.onclick = () => { attachments = attachments.filter(x => x.id !== item.id); if (!retained.has(item.id)) remove(item.id); render() }
+        del.onclick = () => { attachments = attachments.filter(x => x.id !== item.id); onChange(refs(attachments)); render() }
         chip.append(img, del); tray.append(chip)
       })
       tray.hidden = !isChat() || !attachments.length
@@ -163,29 +163,30 @@
         for (const file of items) {
           const item = await prepare(file)
           if (current !== revision) { await remove(item.id); break }
-          attachments.push(item)
+          attachments.push(item); onChange(refs(attachments))
           if (item.temporary) notify('浏览器未能持久保存图片；刷新前可以发送，刷新后需重新附加。')
         }
       } catch (error) { notify(error.message) }
-      finally { loading = false; render() }
+      finally { if (current === revision) loading = false; render() }
     }
     button.onclick = () => picker.click()
     picker.onchange = () => { add(picker.files); picker.value = '' }
     input.addEventListener('paste', event => {
-      const files = [...(event.clipboardData?.items || [])].filter(x => x.kind === 'file').map(x => x.getAsFile()).filter(Boolean)
+      const files = [...(event.clipboardData?.items || [])].filter(x => x.kind === 'file').map(x => x.getAsFile()).filter(file => file && /^image\//.test(file.type))
       if (files.length) { event.preventDefault(); add(files) }
     })
     panel.addEventListener('dragover', event => { if ([...(event.dataTransfer?.types || [])].includes('Files')) event.preventDefault() })
     panel.addEventListener('drop', event => {
-      if (event.dataTransfer?.files.length) { event.preventDefault(); add(event.dataTransfer.files) }
+      const images = [...(event.dataTransfer?.files || [])].filter(file => /^image\//.test(file.type))
+      if (images.length) { event.preventDefault(); add(images) }
     })
     render()
     return {
       refs: () => refs(attachments),
       loading: () => loading,
-      take: () => { const out = refs(attachments); attachments = []; render(); return out },
-      clear: () => { revision++; attachments.forEach(x => { if (!retained.has(x.id)) remove(x.id) }); attachments = []; render() },
-      restore: async list => {
+      take: ({ silent = false } = {}) => { const out = refs(attachments); attachments = []; if (!silent) onChange([]); render(); return out },
+      clear: ({ silent = false } = {}) => { revision++; loading = false; attachments = []; if (!silent) onChange([]); render() },
+      restore: async (list, { silent = false } = {}) => {
         if (isBusy() || loading) return
         loading = true; const current = ++revision; render()
         try {
@@ -193,14 +194,14 @@
           for (const ref of refs(list)) {
             const item = await load(ref.id)
             if (!item) throw new Error('原图片已不可用，请重新附加：' + ref.name)
-            retained.add(item.id); recovered.push(item)
+            recovered.push(item)
           }
           if (current === revision) {
-            attachments.forEach(x => { if (!retained.has(x.id)) remove(x.id) })
             attachments = recovered
+            if (!silent) onChange(refs(attachments))
           }
         } catch (error) { notify(error.message) }
-        finally { loading = false; render() }
+        finally { if (current === revision) loading = false; render() }
       },
       refresh: render,
       decorate, imageContent

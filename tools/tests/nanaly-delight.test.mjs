@@ -16,7 +16,7 @@ const cut = (start, end) => {
 }
 const run = (code, globals = {}, names = []) => {
   const context = vm.createContext({ TextEncoder, TextDecoder, AbortController, DOMException,
-    setTimeout, clearTimeout, URL, ...globals })
+    setTimeout, clearTimeout, URL, fileTray: null, voiceController: null, voiceUI: null, shell: null, activeTurn: null, ...globals })
   vm.runInContext(code + '\nglobalThis.subject = {' + names.join(',') + '}', context)
   return context.subject
 }

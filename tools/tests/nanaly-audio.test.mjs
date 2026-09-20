@@ -93,6 +93,29 @@ await test('changing data parity updates only padding, never promotes a padding 
   }
 })
 
+await test('complete odd final PCM payloads missing only the RIFF word pad retain every sample', async () => {
+  // Python 3.12 wave.writeframes writes these complete payloads without a final pad.
+  for (const bits of [8, 24]) for (const seconds of [.2, .4]) {
+    const samples = Buffer.from(Array.from({ length: 3 * bits / 8 }, (_, i) => i + 1))
+    const bytes = make({ fmt: format({ bits, rate: 5 }), data: samples, dataOptions: { missingPad: true } })
+    const wave = await inspect(await padWav(blob(bytes), seconds))
+    assert.deepEqual(wave.audio.data.subarray(0, samples.length), samples)
+    assert.equal(wave.audio.size, samples.length + Math.ceil(5 * seconds) * bits / 8)
+    assert.ok(wave.audio.data.subarray(samples.length).every(x => x === (bits === 8 ? 128 : 0)))
+    assert.equal(wave.end, wave.bytes.length)
+  }
+})
+
+await test('missing alignment is repaired only for complete final data at physical EOF', async () => {
+  for (const bytes of [
+    make({ data: [1, 2, 3], dataOptions: { missingPad: true } }),
+    make({ before: [chunk('JUNK', [1, 2, 3], { missingPad: true })] }),
+    make({ after: [chunk('LIST', [1, 2, 3], { missingPad: true })] }),
+    make({ fmt: format({ bits: 8 }), data: [1, 2, 3], dataOptions: { missingPad: true }, after: [chunk('LIST', [4, 5])] }),
+    make({ fmt: format({ bits: 8 }), data: [1, 2, 3], dataOptions: { missingPad: true }, tail: Buffer.from('external') })
+  ]) await assert.rejects(padWav(blob(bytes)), error => error.code === 'NANALY_INVALID_WAV')
+})
+
 await test('ffmpeg non-seekable RIFF/data sentinel sizes become exact lengths without losing EOF sample bytes', async () => {
   const samples = Buffer.from('LISTJUNKdataRIFF')
   for (const unknown of [false, true]) for (const dataUnknown of [false, true]) {
@@ -207,7 +230,6 @@ await test('malformed headers, chunks and non-frame-aligned audio fail explicitl
     container([chunk('fmt ', format()), chunk('data', [1, 2]), chunk('data', [3, 4])]),
     container([chunk('fmt ', format()), Buffer.from('data')]),
     edit(b => b.writeUInt32LE(100, 40)),
-    make({ fmt: format({ bits: 8 }), data: [1, 2, 3], dataOptions: { missingPad: true } }),
     make({ data: [1, 2, 3] }),
     make({ data: [1, 2, 3], unknown: true, dataOptions: { unknown: true } }),
     edit(b => b.writeUInt32LE(0xffffffff, 16)),

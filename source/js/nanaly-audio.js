@@ -2,7 +2,11 @@
 (() => {
   'use strict'
   if (window.NANALY_AUDIO) return
-  const fail = reason => { throw new Error('WAV 音频格式无效：' + reason) }
+  const fail = reason => {
+    const error = new Error('WAV 音频格式无效：' + reason)
+    error.code = 'NANALY_INVALID_WAV'
+    throw error
+  }
   // Non-seekable writers use UINT32_MAX or a value near INT32_MAX (sometimes
   // minus the header) until the final byte count is known. These are not allocations.
   const streamingLength = value => value === 0xffffffff || value >= 0x7fff0000 && value <= 0x7fffffff
@@ -35,7 +39,10 @@
       // An explicitly unbounded data chunk extends to EOF. Never guess that sample
       // bytes spelling LIST/JUNK are metadata and silently remove part of a voice.
       const size = unbounded ? end - start : length
-      const pad = unbounded ? 0 : size & 1
+      // Some writers omit the word-alignment byte after the final data payload.
+      // Repair only an exact physical EOF; never consume metadata or outside bytes.
+      const missingFinalPad = name === 'data' && start + size === end && end === bytes.length
+      const pad = unbounded || missingFinalPad ? 0 : size & 1
       const next = start + size + pad
       if (next > end) fail('区块超出 RIFF 边界或缺少对齐字节')
       if (name === 'fact' && size >= 4) facts.push(start)

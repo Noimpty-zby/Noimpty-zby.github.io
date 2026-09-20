@@ -16,7 +16,7 @@ const wave = () => {
   for (let i = 44; i < bytes.length; i += 2) bytes.writeInt16LE(1234, i)
   return new Blob([bytes], { type: 'audio/wav' })
 }
-const boot = ({ key = 'offline-siliconflow-key', fetcher, autoplay = false, emotion = false, fastTimeout = false, manualDrain = false } = {}) => {
+const boot = ({ key = 'offline-siliconflow-key', fetcher, autoplay = false, emotion = false, fastTimeout = false, manualDrain = false, playError = null, padWav = null } = {}) => {
   const values = new Map([['nanaly-voice-v1', JSON.stringify({ autoplay, emotion })]])
   const requests = [], notices = [], audio = [], blobs = [], usages = [], urls = new Set(), drains = new Map()
   let needed = 0, nextUrl = 0
@@ -32,11 +32,12 @@ const boot = ({ key = 'offline-siliconflow-key', fetcher, autoplay = false, emot
   }
   const cancelTimer = id => { if (!drains.delete(id)) clearTimeout(id) }
   vm.runInNewContext(audioSource + ';\n' + providerSource + ';\n' + prosodySource + ';\n' + source, { window, document, Blob, URL: ObjectURL, AbortController, DOMException, setTimeout: clock, clearTimeout: cancelTimer })
+  if (padWav) window.NANALY_AUDIO = { padWav }
   const api = window.NANALY_VOICE
   const controller = api.create({ getConnection: () => connection,
     notify: text => notices.push(text), onNeedKey: () => needed++, onUsage: usage => usages.push(usage),
     fetcher: async (url, init) => { requests.push({ url, init }); return fetcher ? fetcher(url, init) : new Response(wave(), { headers: { 'content-type': 'audio/wav' } }) },
-    makeAudio: () => { const item = { paused: false, events: [], play: async () => { item.events.push('play') }, pause() { this.events.push('pause'); this.paused = true }, removeAttribute() { this.events.push('remove') }, load() { this.events.push('load') } }; audio.push(item); return item }
+    makeAudio: () => { const item = { paused: false, events: [], play: async () => { item.events.push('play'); if (playError) throw playError }, pause() { this.events.push('pause'); this.paused = true }, removeAttribute() { this.events.push('remove') }, load() { this.events.push('load') } }; audio.push(item); return item }
   })
   return { api, planner: window.NANALY_PROSODY, controller, requests, notices, values, document, audio, urls, blobs, drains, usages, connection, needed: () => needed,
     drain: async () => { for (const [id, fn] of [...drains]) { drains.delete(id); fn() }; await flush() } }
@@ -354,19 +355,73 @@ await test('a streaming WAV placeholder header is repaired before playback and r
   await h.drain(); assert.equal(await job, true)
   assert.deepEqual(h.audio[0].events, ['play'])
 })
-await test('a genuinely truncated WAV reports failure without playing or caching the damaged response', async () => {
+await test('uneditable WAV headers reach the native player unchanged and still drain and cache normally', async () => {
+  for (const declared of [36, 1000000000]) {
+    const bytes = Buffer.from(await wave().arrayBuffer())
+    if (declared === 36) bytes.writeUInt32LE(declared, 4)
+    else bytes.writeUInt32LE(declared, 40)
+    const original = new Blob([bytes], { type: 'audio/wav' })
+    const h = boot({ manualDrain: true, fetcher: async () => ({ ok: true, headers: new Headers({ 'content-type': 'audio/wav' }), blob: async () => original }) })
+    const job = h.controller.speak('保留完整的声音。'); await flush()
+    assert.equal(h.blobs[0], original, 'fallback must not slice, recode or guess the audio extent')
+    assert.equal(h.audio.length, 1)
+    assert.equal(h.notices.length, 0)
+    h.audio[0].onended(); assert.equal(h.drains.size, 1)
+    await h.drain(); assert.equal(await job, true)
+    assert.deepEqual(h.audio[0].events, ['play'])
+    const again = h.controller.speak('保留完整的声音。'); await flush()
+    assert.equal(h.requests.length, 1)
+    assert.equal(h.blobs[1], original)
+    h.controller.stop(); assert.equal(await again, false)
+    assert.equal(h.urls.size, 0)
+  }
+})
+await test('a WAV rejected by the native decoder reports failure and is evicted before retry', async () => {
   let calls = 0
   const h = boot({ fetcher: async () => {
     const bytes = Buffer.from(await wave().arrayBuffer())
     if (++calls === 1) return new Response(bytes.subarray(0, bytes.length - 2), { headers: { 'content-type': 'audio/wav' } })
     return audioResponse()
   } })
-  assert.equal(await h.controller.speak('完整音频才朗读。'), false)
-  assert.equal(h.audio.length, 0)
-  assert.ok(h.notices.some(message => /WAV 音频格式无效/.test(message)))
+  const failed = h.controller.speak('完整音频才朗读。'); await flush()
+  assert.equal(h.audio.length, 1)
+  h.audio[0].onerror()
+  assert.equal(await failed, false)
+  assert.ok(h.notices.some(message => /浏览器无法播放/.test(message)))
+  assert.equal(h.urls.size, 0)
   const retry = h.controller.speak('完整音频才朗读。'); await flush()
   assert.equal(calls, 2)
-  assert.equal(h.audio.length, 1)
+  assert.equal(h.audio.length, 2)
   h.controller.stop(); await retry
+})
+
+await test('play rejection evicts undecodable media but permission denial keeps the paid response', async () => {
+  for (const name of ['NotSupportedError', 'NotAllowedError']) {
+    const h = boot({ playError: new DOMException('play failed', name) })
+    assert.equal(await h.controller.speak('再次播放。'), false)
+    assert.equal(await h.controller.speak('再次播放。'), false)
+    assert.equal(h.requests.length, name === 'NotSupportedError' ? 2 : 1)
+    assert.equal(h.urls.size, 0)
+  }
+})
+
+await test('padding failures other than WAV compatibility errors remain visible', async () => {
+  for (const error of [new TypeError('padding bug'), new RangeError('padding limit')]) {
+    const h = boot({ padWav: async () => { throw error } })
+    assert.equal(await h.controller.speak('检查异常。'), false)
+    assert.equal(h.audio.length, 0)
+    assert.ok(h.notices.some(message => message.includes(error.message)))
+  }
+})
+
+await test('stop during WAV preparation prevents fallback playback and stale cache writes', async () => {
+  let reject
+  const h = boot({ padWav: () => new Promise((_resolve, fail) => { reject = fail }) })
+  const job = h.controller.speak('停止后不播放。'); await flush()
+  h.controller.stop({ clearCache: true })
+  const error = new Error('format'); error.code = 'NANALY_INVALID_WAV'; reject(error)
+  assert.equal(await job, false)
+  assert.equal(h.audio.length, 0)
+  assert.equal(h.notices.length, 0)
 })
 console.log('\n' + passed + ' speech behavior groups passed')

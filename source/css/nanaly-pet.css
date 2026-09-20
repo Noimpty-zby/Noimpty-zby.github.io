@@ -41,7 +41,8 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-#nanaly-pet-toggle svg circle { fill: currentColor; stroke: none; }
+/* 帽带和那颗星星是填充的，小尺寸下描边立不住 */
+#nanaly-pet-toggle svg .solid { fill: currentColor; stroke: none; }
 
 /* 关着的时候按钮自己退成灰的，一眼看得出现在是关的 */
 #nanaly-pet-toggle[aria-pressed='false'] {

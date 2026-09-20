@@ -111,7 +111,7 @@ const coreContext = (api, keys) => {
     withTimeMarks: list => list.map(m => ({ role: m.role, content: m.content })), memoryDigest: () => '', nowLine: () => 'now',
     workspace: null, activeTurn: null, secrets: keys, setTimeout, clearTimeout, DOMException, AbortController
   })
-  vm.runInContext(cut('  const abortable =', '  /* 忙的时候') + '\n' + cut('  const WEB_PREFIX', '  /* 这几条消息的') + '\n' + cut('  const buildMessages =', '  // 模型把指令') + '\nthis.buildMessages = buildMessages', context)
+  vm.runInContext(cut('  const abortable =', '  /* 忙的时候') + '\n' + cut('  const WEB_PREFIX', '  /* 这几条消息的') + '\n' + cut('  const attachmentContent =', '  const generateTopicTitle =') + '\n' + cut('  const buildMessages =', '  // 模型把指令') + '\nthis.buildMessages = buildMessages', context)
   return context.buildMessages
 }
 await check('a text follow-up with available historical images stays on the visual model', async () => {

@@ -13,7 +13,7 @@ const cut = (start, end) => {
 }
 const run = (code, globals = {}, names = []) => {
   const context = vm.createContext({ TextEncoder, TextDecoder, AbortController, DOMException,
-    setTimeout, clearTimeout, URL, workspace: null, vision: null, research: null, history: [], HISTORY_MAX: 22, window: {}, ...globals })
+    setTimeout, clearTimeout, URL, workspace: null, vision: null, fileTray: null, voiceController: null, voiceUI: null, shell: null, activeTurn: null, research: null, history: [], HISTORY_MAX: 22, window: {}, ...globals })
   vm.runInContext(code + '\nglobalThis.subject = {' + names.join(',') + '}', context)
   return context.subject
 }
@@ -216,7 +216,7 @@ await test('Reset/lock discards an active partial reply instead of restoring cle
 
 await test('Lookup failure does not also tell the model that the subject was never written', async () => {
   const { buildMessages } = run(abortableCode + '\n' + cut('  const WEB_PREFIX', '  /* 这几条消息的') + '\n' +
-    cut('  const buildMessages', '  // 模型把指令'), {
+    cut('  const attachmentContent =', '  const generateTopicTitle =') + '\n' + cut('  const buildMessages', '  // 模型把指令'), {
     PERSONA: 'persona', TIME_RULES: 'time', currentArticle: () => null, postDigest: async () => 'posts', selfLog: async () => 'journal',
     research: { prepare: async ({ query, mode, signal }) => {
       assert.equal(query, '递归'); assert.equal(mode, 'site'); assert.equal(signal.aborted, false)

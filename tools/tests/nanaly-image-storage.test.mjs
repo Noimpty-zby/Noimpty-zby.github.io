@@ -49,11 +49,11 @@ const boot = (entries, saved = workspace()) => {
   return { api, data, deleted, reads: () => gets,
     save: value => { raw = typeof value === 'string' || value === null ? value : JSON.stringify(value) },
     deny: () => { denied = true },
-    mount() {
+    mount(extra = {}) {
       let chat = true, busy = false
       const panel = new Element('div'), foot = new Element('div'), input = new Element('textarea'), notices = []
       foot.className = 'nanaly-foot'; foot.append(input); panel.append(foot)
-      const ui = api.mount({ panel, input, isBusy: () => busy, isChat: () => chat, notify: message => notices.push(message) })
+      const ui = api.mount({ panel, input, isBusy: () => busy, isChat: () => chat, notify: message => notices.push(message), ...extra })
       return { ui, panel, notices, tray: () => panel.querySelector('.nanaly-image-tray'),
         setChat: value => { chat = value; ui.refresh() }, setBusy: value => { busy = value; ui.refresh() } }
     }
@@ -159,4 +159,32 @@ await check('setup and lock views hide retained previews without deleting the dr
   assert.equal(mounted.tray().hidden, false)
   assert.equal(h.data.has(old.id), true)
 })
+
+await check('image draft onChange honors silent restore and clear while retaining recoverable bytes', async () => {
+  const item = image('image-draft-notify'), changes = [], h = boot([item]), mounted = h.mount({ onChange: value => changes.push(clone(value)) })
+  await mounted.ui.restore([ref(item)])
+  assert.equal(changes.length, 1)
+  mounted.ui.clear({ silent: true }); await mounted.ui.restore([ref(item)], { silent: true })
+  assert.equal(changes.length, 1)
+  mounted.ui.take(); assert.equal(changes.length, 2); assert.equal(changes[1].length, 0)
+  assert.equal(h.data.has(item.id), true)
+})
+await check('clearing an in-flight image restore immediately permits the next topic restore', async () => {
+  const first = image('image-draft-first'), second = image('image-draft-second'), h = boot([first, second]), mounted = h.mount()
+  const old = mounted.ui.restore([ref(first)], { silent: true })
+  mounted.ui.clear({ silent: true })
+  const current = mounted.ui.restore([ref(second)], { silent: true })
+  await Promise.all([old, current])
+  assert.equal(mounted.ui.refs()[0].id, second.id)
+  assert.equal(mounted.ui.loading(), false)
+})
+await check('stored topic image drafts and clear undo drafts survive pruning from another tab', async () => {
+  const first = image('image-draft-saved'), second = image('image-draft-undo'), stale = image('image-draft-stale')
+  const saved = workspace(); saved.sessions[0].draftAttachments = [ref(first)]; saved.undo = { draftAttachments: [ref(second)] }
+  const h = boot([first, second, stale], saved)
+  await h.api.prune(workspace(), [])
+  assert.equal(h.data.has(first.id), true); assert.equal(h.data.has(second.id), true)
+  assert.deepEqual(h.deleted, [stale.id])
+})
+
 console.log(`\n${passed} image storage regression cases passed`)

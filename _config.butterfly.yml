@@ -1134,6 +1134,8 @@ inject:
     - <link rel="stylesheet" href="/css/nanaly-workspace.css">
     - <link rel="stylesheet" href="/css/nanaly-delight.css">
     - <link rel="stylesheet" href="/css/music-stage.css">
+    - <link rel="stylesheet" href="/css/nanaly-shell.css">
+    - <link rel="stylesheet" href="/css/nanaly-voice.css">
     # 顺序有讲究：protected-manifest 给出锁清单，privacy-gate 立刻据此打遮罩，
     # noimpty-search 依赖 gate 存下的暗号才能解密索引。三者不能调换。
     - <script src="/js/protected-manifest.js"></script>
@@ -1150,9 +1152,12 @@ inject:
     # 娜娜莉：API Key 不写在代码里，由使用者在面板中输入并存在本机 localStorage
     - <script src="/js/nanaly-provider.js"></script>
     - <script src="/js/nanaly-vision.js"></script>
+    - <script src="/js/nanaly-files.js"></script>
     - <script src="/js/nanaly-workspace.js"></script>
     - <script src="/js/nanaly-research.js"></script>
     - <script src="/js/nanaly-tasks.js"></script>
+    - <script src="/js/nanaly-shell.js"></script>
+    - <script src="/js/nanaly-voice.js"></script>
     - <script src="/js/noimpty-ai.js"></script>
     - <script src="/js/schedule.js"></script>
     - <script src="/js/sakura-motion.js"></script>

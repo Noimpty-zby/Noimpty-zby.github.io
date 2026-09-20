@@ -3,6 +3,9 @@
   'use strict'
   if (window.NANALY_AUDIO) return
   const fail = reason => { throw new Error('WAV 音频格式无效：' + reason) }
+  // Non-seekable writers use UINT32_MAX or a value near INT32_MAX (sometimes
+  // minus the header) until the final byte count is known. These are not allocations.
+  const streamingLength = value => value === 0xffffffff || value >= 0x7fff0000 && value <= 0x7fffffff
   const padWav = async (blob, seconds = 0.35) => {
     if (!blob || typeof blob.arrayBuffer !== 'function' || typeof blob.size !== 'number') throw new TypeError('需要 Blob 音频')
     if (!Number.isFinite(seconds) || seconds < 0) throw new RangeError('静音时长必须是非负有限数字')
@@ -16,16 +19,20 @@
     if (['RF64', 'RIFX'].includes(tag(0))) return blob
     if (tag(0) !== 'RIFF' || tag(8) !== 'WAVE') fail('不是 RIFF/WAVE 文件')
     const declared = view.getUint32(4, true)
-    const end = declared === 0xffffffff ? bytes.length : declared + 8
-    if (end < 12 || end > bytes.length) fail('RIFF 长度与文件不符')
+    const openRiff = declared === 0 || streamingLength(declared) && declared + 8 > bytes.length
+    // The outer size may not have been backpatched by the service. A complete,
+    // independently bounded fmt/data layout can recover it; a truncated ordinary
+    // data chunk still fails below. Keep real bytes beyond a finite RIFF untouched.
+    const end = openRiff || declared + 8 > bytes.length ? bytes.length : declared + 8
+    if (end < 12) fail('RIFF 长度与文件不符')
     let fmt = null, data = null, offset = 12
     const facts = []
     while (offset < end) {
       if (end - offset < 8) fail('区块头不完整')
       const name = tag(offset), length = view.getUint32(offset + 4, true), start = offset + 8
-      const unbounded = length === 0xffffffff
+      const unbounded = streamingLength(length) && length > end - start || length === 0 && name === 'data' && openRiff
       if (unbounded && name !== 'data') fail('只有 data 区块可以使用流式长度')
-      // A non-seekable ffmpeg data chunk extends to EOF. Never guess that sample
+      // An explicitly unbounded data chunk extends to EOF. Never guess that sample
       // bytes spelling LIST/JUNK are metadata and silently remove part of a voice.
       const size = unbounded ? end - start : length
       const pad = unbounded ? 0 : size & 1

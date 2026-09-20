@@ -11,7 +11,8 @@
     "linkcheck": "node tools/linkcheck.mjs",
     "leakcheck": "node tools/leakcheck.mjs",
     "prebuild": "node node_modules/hexo/bin/hexo clean",
-    "check": "npm test && npm run build && npm run linkcheck && npm run leakcheck"
+    "check": "npm test && npm run build && npm run linkcheck && npm run leakcheck",
+    "voicecheck": "node tools/voice-check.mjs"
   },
   "hexo": {
     "version": "8.1.2"

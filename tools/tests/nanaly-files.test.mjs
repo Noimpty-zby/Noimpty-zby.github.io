@@ -98,7 +98,8 @@ await check('real DOCX paragraphs and table cells extract as text with no invent
   const { api, data } = boot(), doc = await api.prepare(file('hello.docx', await docx('Hello cat')))
   assert.match(doc.text, /Hello cat/); assert.match(doc.text, /Table cell 42/)
   assert.equal(doc.pageCount, null); assert.match(doc.summary, /无固定页数/)
-  assert.equal(data.size, 1); assert.ok(data.get(doc.id).source instanceof Blob)
+  // 不留原件：解析出的正文和扫描图才是后面会用到的，原件占一条记录九成九的体积。
+  assert.equal(data.size, 1); assert.equal(data.get(doc.id).source, undefined)
   const reference = api.refs([doc])[0]
   assert.equal(reference.text, undefined); assert.equal(reference.source, undefined)
 })

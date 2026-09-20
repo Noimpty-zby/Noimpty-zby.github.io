@@ -110,12 +110,12 @@ await test('★★ 读不到的条目不会被记成命中，下次还会再去�
 })
 
 await test('★★ 淘汰按最近使用排序：一直在用的那份不会被新来的挤掉', async () => {
-  // 字节预算 24 MB 才是真正起作用的那道闸。拿 6 份 4 MB 的文件正好填满。
-  const big = id => ({ ...doc(id), size: 4 * 1024 * 1024 })
+  // 字节预算 24 MB 才是真正起作用的那道闸；记录按正文长度算账，拿 6 份 4 M 字的正好填满。
+  const big = id => ({ ...doc(id), text: '文'.repeat(4 * 1024 * 1024) })
   const many = Array.from({ length: 6 }, (_, i) => big('keep-' + String(i).padStart(4, '0')))
   const hot = many[0]
   const h = boot('files', many)
-  const take = async item => h.api.content('x', [{ id: item.id, name: item.name, type: 'text', size: item.size }])
+  const take = async item => h.api.content('x', [{ id: item.id, name: item.name, type: 'text', size: 1024 }])
   for (const item of many) await take(item)
   assert.equal(h.reads.length, 6, '六份各读一次，预算正好装满')
   await take(hot)
@@ -136,8 +136,8 @@ await test('★★ 没能落盘的条目永远不淘汰 —— 它只存在于�
   // 之后再走 9 份别的文件，足够把上限顶穿好几轮
   for (let i = 0; i < 9; i++) {
     const id = 'push-' + String(i).padStart(4, '0')
-    h.data.set(id, doc(id))
-    await h.api.content('x', [{ id, name: id + '.txt', type: 'text', size: 4 * 1024 * 1024 }])
+    h.data.set(id, { ...doc(id), text: '文'.repeat(4 * 1024 * 1024) })
+    await h.api.content('x', [{ id, name: id + '.txt', type: 'text', size: 1024 }])
   }
   const [entry] = await h.api.content('x', [ref(stuck)])
     .then(() => [true]).catch(() => [false])

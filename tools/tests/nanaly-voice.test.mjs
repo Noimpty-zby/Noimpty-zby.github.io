@@ -474,4 +474,14 @@ await test('every voice and emotion combination keeps the instruct prompt inside
       }
 })
 
+await test('实机检查脚本的垫片仍能把真模块启动起来', async () => {
+  // tools/voice-check.mjs 是唯一能照出「服务那边变了」的检查，而它全靠那份垫片。
+  // 模块哪天用上一个新的全局对象，垫片就再也启动不了 —— 偏偏那种时候最需要它。
+  const { loadModules } = await import('../voice-check.mjs')
+  const { window } = loadModules('source/js')
+  assert.equal(typeof window.NANALY_VOICE.create, 'function')
+  assert.equal(typeof window.NANALY_AUDIO.measure, 'function', 'voice-check 靠 measure 判断有没有失控')
+  assert.equal(typeof window.NANALY_PROSODY.prepare, 'function')
+})
+
 console.log('\n' + passed + ' speech behavior groups passed')

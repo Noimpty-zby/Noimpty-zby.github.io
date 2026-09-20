@@ -93,4 +93,8 @@
 
 离线回归不使用真实密钥，不发付费请求。真实服务的账号权限、模型可用性、识别准确度和最终音色，需要解锁自己的配置后体验确认。
 
+`npm run voicecheck` 是对着真实服务的实机检查，**不在 `npm test` 里**：它要花钱、要联网，结果还带随机性，不适合当门禁。它用 `node:vm` 把 `source/js` 下的语音模块原样搬进 Node，配一个不出声的播放器，跑的是线上那条真链路而不是仿制品，报告短回复的语气提示泄漏率、是否触发重传、补尾音是否真的生效。密钥从 `NANALY_TTS_KEY` 或 `~/.nanaly-tts-key` 读，不接受命令行参数。改语音相关代码、换模型，或怀疑服务端改了响应格式时跑一次；`-n` 调次数，`--samples <目录>` 额外落盘音频供试听。
+
+有两类问题只有它能照出来：服务返回的 WAV 头换了写法（离线用例里的占位长度是构造出来的，撞不上真值），以及语音模型把语气提示当正文念出来（离线用例喂的是 mock 音频，听不出在念什么）。
+
 语义验收样例位于 `tools/fixtures/nanaly-emotion-cases.json`。运行 `node tools/tests/nanaly-emotion-eval.mjs` 检查样例与分段契约，不发网络请求；这不代表真实模型通过了准确率测试。需要实际评估时，显式设置专用 `NANALY_EMOTION_EVAL_KEY`、`NANALY_EMOTION_EVAL_BASE_URL`（以及可选 `NANALY_EMOTION_EVAL_MODEL`），运行 `node tools/tests/nanaly-emotion-eval.mjs --live`。它会逐条调用模型并报告结果及用量，不生成付费语音；最终情绪听感仍需试听。

@@ -85,6 +85,10 @@
         audioBytes -= cache.get(oldest).size; cache.delete(oldest)
       }
     }
+    const forget = key => {
+      if (cache.has(key)) audioBytes -= cache.get(key).size
+      cache.delete(key)
+    }
     const planSpeech = async (text, context, connection, turn) => {
       const planner = window.NANALY_PROSODY
       const fallback = () => splitText(text).map(text => ({ text, instruction: NEUTRAL }))
@@ -162,7 +166,11 @@
       audio.onended = () => {
         if (!settled && drainTimer === null) drainTimer = setTimeout(() => finish(), END_DRAIN_MS)
       }
-      audio.onerror = () => finish(new Error('音频播放失败，请重试。'))
+      audio.onerror = () => {
+        const error = new Error('浏览器无法播放这段音频，请重试。')
+        error.code = 'NANALY_AUDIO_DECODE'
+        finish(error)
+      }
       audio.src = url
       turn.phase = 'playing'; emit()
       Promise.resolve().then(() => { signal.throwIfAborted(); return audio.play() }).catch(error => finish(error?.name === 'NotAllowedError'
@@ -215,14 +223,28 @@
               if (/json|text\//i.test(response.headers?.get('content-type') || '')) throw new Error('语音服务返回了异常内容，请稍后重试。')
               blob = await response.blob()
               if (!blob.size || blob.size > 12 * 1024 * 1024) throw new Error('语音服务没有返回可播放的音频。')
-              // Preserve every speech sample and put the media boundary in silence.
-              if (window.NANALY_AUDIO) blob = await window.NANALY_AUDIO.padWav(blob, .35)
+              // Tail padding is optional. Browser decoders can accept WAV headers
+              // this conservative editor cannot safely rewrite. Keep those bytes
+              // intact and let the player decide; never guess where speech ends.
+              if (window.NANALY_AUDIO) {
+                try { blob = await window.NANALY_AUDIO.padWav(blob, .35) }
+                catch (error) {
+                  if (error?.code !== 'NANALY_INVALID_WAV') throw error
+                  turn.controller.signal.throwIfAborted()
+                }
+              }
               turn.controller.signal.throwIfAborted()
               remember(cacheKey, blob)
             } finally { clearTimeout(timeout) }
           }
           if (version !== revision || active !== turn) return false
-          await play(blob, turn)
+          try { await play(blob, turn) }
+          catch (error) {
+            // Failed media must not poison retries. Keep useful cached audio when
+            // the user stops or the browser merely requires another click to play.
+            if (error?.code === 'NANALY_AUDIO_DECODE' || error?.name === 'NotSupportedError') forget(cacheKey)
+            throw error
+          }
         }
         return true
       } catch (error) {

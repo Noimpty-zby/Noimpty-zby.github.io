@@ -112,6 +112,55 @@ await test('unknown RIFF size still retains metadata after a data chunk with a k
   assert.deepEqual(wave.chunks.at(-1).raw, metadata)
 })
 
+await test('streaming 2 GiB and zero headers are normalized while preserving the final voiced frame', async () => {
+  const samples = Buffer.from('LISTJUNKdataRIFF'), outerSizes = [0, 0x7fffffff, 0x7fffffdb, 0xffffffff]
+  for (const outer of outerSizes) for (const dataSize of [0, 0x7fffffff, 0x7fffffdb, 0xffffffff, samples.length]) {
+    const bytes = make({ data: samples })
+    bytes.writeUInt32LE(outer, 4); bytes.writeUInt32LE(dataSize, 40)
+    const wave = await inspect(await padWav(blob(bytes)))
+    assert.equal(wave.end, wave.bytes.length)
+    assert.equal(wave.audio.size, samples.length + 8400 * 2)
+    assert.deepEqual(wave.audio.data.subarray(0, samples.length), samples)
+    assert.ok(wave.audio.data.subarray(samples.length).every(value => value === 0))
+  }
+})
+
+await test('a stale oversized outer length is repaired only when the individual chunks are complete', async () => {
+  const metadata = chunk('LIST', Buffer.from('INFOfinal'))
+  const samples = Buffer.from([1, 2, 254, 127])
+  const bytes = make({ data: samples, after: [metadata] })
+  bytes.writeUInt32LE(bytes.length + 100, 4)
+  const wave = await inspect(await padWav(blob(bytes)))
+  assert.equal(wave.end, wave.bytes.length)
+  assert.deepEqual(wave.audio.data.subarray(0, samples.length), samples)
+  assert.deepEqual(wave.chunks.at(-1).raw, metadata)
+  const truncated = bytes.subarray(0, bytes.length - 2)
+  await assert.rejects(padWav(blob(truncated)), /WAV 音频格式无效/)
+})
+
+await test('unknown outer lengths preserve known data boundaries, metadata and zero-length finite data', async () => {
+  const metadata = chunk('LIST', Buffer.from('INFOsafe'))
+  for (const outer of [0, 0x7fffffdb]) {
+    const bytes = make({ after: [metadata] }); bytes.writeUInt32LE(outer, 4)
+    const wave = await inspect(await padWav(blob(bytes)))
+    assert.equal(wave.audio.size, 4 + 8400 * 2)
+    assert.deepEqual(wave.chunks.at(-1).raw, metadata)
+  }
+  const wave = await inspect(await padWav(blob(make({ data: [], after: [metadata] }))))
+  assert.equal(wave.audio.size, 8400 * 2)
+  assert.deepEqual(wave.chunks.at(-1).raw, metadata, 'finite empty data must not swallow a following metadata chunk')
+})
+
+await test('streaming compatibility never accepts ordinary truncated data or partial sample frames', async () => {
+  for (const outer of [0, 0x7fffffff, 0x7fffffdb, 0xffffffff]) {
+    const truncated = make(); truncated.writeUInt32LE(outer, 4); truncated.writeUInt32LE(100, 40)
+    await assert.rejects(padWav(blob(truncated)), /区块超出/)
+    const partial = make({ data: [1, 2, 3], dataOptions: { unknown: true } })
+    partial.writeUInt32LE(outer, 4)
+    await assert.rejects(padWav(blob(partial)), /采样帧对齐/)
+  }
+})
+
 await test('zero duration is a no-op and fractional frame duration rounds upward to a complete frame', async () => {
   const input = blob(make({ fmt: format({ rate: 3 }) }))
   assert.equal(await padWav(input, 0), input)
@@ -150,7 +199,6 @@ await test('malformed headers, chunks and non-frame-aligned audio fail explicitl
     Buffer.from('RIFF'),
     edit(b => b.write('NOPE', 0, 4, 'ascii')),
     edit(b => b.write('AVI ', 8, 4, 'ascii')),
-    edit(b => b.writeUInt32LE(b.length + 100, 4)),
     edit(b => b.writeUInt32LE(1, 4)),
     container([chunk('data', [1, 2])]),
     container([chunk('fmt ', format())]),

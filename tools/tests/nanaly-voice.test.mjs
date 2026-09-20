@@ -337,4 +337,36 @@ await test('neutral reading and service fallback both preserve literal code brac
     h.controller.stop(); await job
   }
 })
+await test('a streaming WAV placeholder header is repaired before playback and retains the tail drain', async () => {
+  const h = boot({ manualDrain: true, fetcher: async () => {
+    const bytes = Buffer.from(await wave().arrayBuffer())
+    bytes.writeUInt32LE(0x7fffffdb, 4); bytes.writeUInt32LE(0xffffffff, 40)
+    return new Response(bytes, { headers: { 'content-type': 'audio/wav' } })
+  } })
+  const job = h.controller.speak('最后一个字要完整读完喵。'); await flush()
+  assert.equal(h.audio.length, 1)
+  assert.equal(h.notices.length, 0)
+  const bytes = Buffer.from(await h.blobs[0].arrayBuffer())
+  assert.equal(bytes.readUInt32LE(4), bytes.length - 8)
+  assert.equal(bytes.readInt16LE(44 + 4798), 1234)
+  assert.equal(bytes.readUInt32LE(40), 4800 + 16800)
+  h.audio[0].onended(); assert.equal(h.drains.size, 1)
+  await h.drain(); assert.equal(await job, true)
+  assert.deepEqual(h.audio[0].events, ['play'])
+})
+await test('a genuinely truncated WAV reports failure without playing or caching the damaged response', async () => {
+  let calls = 0
+  const h = boot({ fetcher: async () => {
+    const bytes = Buffer.from(await wave().arrayBuffer())
+    if (++calls === 1) return new Response(bytes.subarray(0, bytes.length - 2), { headers: { 'content-type': 'audio/wav' } })
+    return audioResponse()
+  } })
+  assert.equal(await h.controller.speak('完整音频才朗读。'), false)
+  assert.equal(h.audio.length, 0)
+  assert.ok(h.notices.some(message => /WAV 音频格式无效/.test(message)))
+  const retry = h.controller.speak('完整音频才朗读。'); await flush()
+  assert.equal(calls, 2)
+  assert.equal(h.audio.length, 1)
+  h.controller.stop(); await retry
+})
 console.log('\n' + passed + ' speech behavior groups passed')

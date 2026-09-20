@@ -1157,6 +1157,7 @@ inject:
     - <script src="/js/nanaly-research.js"></script>
     - <script src="/js/nanaly-tasks.js"></script>
     - <script src="/js/nanaly-shell.js"></script>
+    - <script src="/js/nanaly-audio.js"></script>
     - <script src="/js/nanaly-voice.js"></script>
     - <script src="/js/noimpty-ai.js"></script>
     - <script src="/js/schedule.js"></script>

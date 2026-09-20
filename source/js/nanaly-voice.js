@@ -4,6 +4,8 @@
   if (window.NANALY_VOICE) return
   const MODEL = 'FunAudioLLM/CosyVoice2-0.5B'
   const KEY = 'nanaly-voice-v1'
+  const END_DRAIN_MS = 500
+  const ENDING = '每个字完整发音，尤其不要省略最后一个字的尾音，句尾自然收住。'
   const STYLES = Object.freeze({
     cat: { name: '清甜猫娘', voice: 'diana', instruction: '请用清甜、明亮、稍高的女性动漫角色声线，语气可爱俏皮，带一点嘴硬心软的傲娇感。普通话清晰自然，轻盈有亲近感，不要尖叫，不要念出语气说明。' },
     soft: { name: '温柔陪伴', voice: 'claire', instruction: '请用温柔清甜的女声自然朗读，像耐心陪伴朋友学习，语气柔和、吐字清楚，不要念出语气说明。' },
@@ -57,11 +59,8 @@
       revision++
       const prior = active
       active = null
-      if (prior) {
-        prior.controller.abort()
-        if (prior.audio) { prior.audio.pause(); prior.audio.removeAttribute?.('src'); prior.audio.load?.() }
-        if (prior.url) URL.revokeObjectURL(prior.url)
-      }
+      // The playback abort listener owns cleanup, including the natural-end grace period.
+      if (prior) prior.controller.abort()
       if (clearCache) { cache.clear(); audioBytes = 0; cacheAccount = null }
       emit()
     }
@@ -89,28 +88,35 @@
       const audio = makeAudio(), url = URL.createObjectURL(blob)
       turn.audio = audio; turn.url = url
       const signal = turn.controller.signal
-      let settled = false
+      let settled = false, drainTimer = null
       const finish = error => {
         if (settled) return
         settled = true
+        if (drainTimer !== null) clearTimeout(drainTimer)
         signal.removeEventListener('abort', abort)
         audio.onended = audio.onerror = null
-        audio.pause(); audio.removeAttribute?.('src'); audio.load?.()
+        // Reset only interrupted/failed playback. A natural end should be allowed to
+        // drain to the output device without resetting the decoder at its final frame.
+        if (error) { audio.pause(); audio.removeAttribute?.('src'); audio.load?.() }
         URL.revokeObjectURL(url)
+        if (turn.audio === audio) turn.audio = null
         if (turn.url === url) turn.url = null
         error ? reject(error) : resolve()
       }
       const abort = () => finish(signal.reason || new DOMException('停止朗读', 'AbortError'))
       signal.addEventListener('abort', abort, { once: true })
-      audio.onended = () => finish()
+      audio.onended = () => {
+        if (!settled && drainTimer === null) drainTimer = setTimeout(() => finish(), END_DRAIN_MS)
+      }
       audio.onerror = () => finish(new Error('音频播放失败，请重试。'))
       audio.src = url
       turn.phase = 'playing'; emit()
-      Promise.resolve().then(() => audio.play()).catch(error => finish(error?.name === 'NotAllowedError'
+      Promise.resolve().then(() => { signal.throwIfAborted(); return audio.play() }).catch(error => finish(error?.name === 'NotAllowedError'
         ? new Error('声音已生成，请再点一次朗读来允许播放。') : error))
     })
     const speak = async (text, { id = 'preview', automatic = false } = {}) => {
       if (automatic && (!prefs.autoplay || document.hidden)) return false
+      if (automatic && active) return false
       if (active?.id === id && !automatic) { stop(); return false }
       stop()
       const plain = cleanText(text)
@@ -131,7 +137,9 @@
         }
         for (const part of splitText(plain)) {
           turn.controller.signal.throwIfAborted()
-          const cacheKey = JSON.stringify([url, settings.style, settings.speed, part])
+          // A complete sentence also gives synthesis an explicit ending for bare headings.
+          const utterance = /[。！？!?….][”’"'）)」』]*$/.test(part) ? part : part + '。'
+          const cacheKey = JSON.stringify([url, settings.style, settings.speed, 'wav-tail-v1', utterance])
           let blob = cache.get(cacheKey)
           if (!blob) {
             turn.phase = 'loading'; emit()
@@ -140,13 +148,16 @@
               const response = await fetcher(url, {
                 method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + connection.key },
                 body: JSON.stringify({ model: MODEL, voice: MODEL + ':' + style.voice,
-                  input: style.instruction + '<|endofprompt|>' + part, response_format: 'mp3', stream: false, speed: settings.speed }),
+                  input: style.instruction + ENDING + '<|endofprompt|>' + utterance,
+                  response_format: 'wav', sample_rate: 24000, stream: false, speed: settings.speed }),
                 signal: turn.controller.signal
               })
               if (!response.ok) throw await speechError(response)
               if (/json|text\//i.test(response.headers?.get('content-type') || '')) throw new Error('语音服务返回了异常内容，请稍后重试。')
               blob = await response.blob()
               if (!blob.size || blob.size > 12 * 1024 * 1024) throw new Error('语音服务没有返回可播放的音频。')
+              // Preserve every speech sample and put the media boundary in silence.
+              if (window.NANALY_AUDIO) blob = await window.NANALY_AUDIO.padWav(blob, .35)
               turn.controller.signal.throwIfAborted()
               remember(cacheKey, blob)
             } finally { clearTimeout(timeout) }

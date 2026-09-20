@@ -5,7 +5,13 @@ import vm from 'node:vm'
 const source = readFileSync('source/js/nanaly-audio.js', 'utf8')
 const window = {}
 vm.runInNewContext(source, { window, Blob })
-const { padWav } = window.NANALY_AUDIO
+const { padWav, measure } = window.NANALY_AUDIO
+// The exact placeholders every live SiliconFlow CosyVoice2 response carries.
+const liveHeader = (payload, dataSize = 0xffffff00, extra = []) => {
+  const sized = (name, body, size) => { const head = Buffer.alloc(8); head.write(name, 0, 4, 'ascii'); head.writeUInt32LE(size, 4); return Buffer.concat([head, body]) }
+  const riff = Buffer.alloc(12); riff.write('RIFF', 0, 4, 'ascii'); riff.writeUInt32LE(0xffffffa6, 4); riff.write('WAVE', 8, 4, 'ascii')
+  return Buffer.concat([riff, chunk('fmt ', format()), ...extra, sized('data', payload, dataSize)])
+}
 const chunk = (name, payload, { unknown = false, pad = 0, missingPad = false } = {}) => {
   const body = Buffer.from(payload), header = Buffer.alloc(8)
   header.write(name, 0, 4, 'ascii'); header.writeUInt32LE(unknown ? 0xffffffff : body.length, 4)
@@ -276,6 +282,39 @@ await test('fact frame counts are updated before or after data while every other
     dataOptions: { unknown: true }, before: [chunk('fact', factPayload)] }))
   const wave = await inspect(await padWav(streamed))
   assert.equal(wave.chunks.find(c => c.name === 'fact').data.readUInt32LE(0), 2 + 8400)
+})
+
+await test('live CosyVoice2 placeholder sizes are padded instead of rejected outright', async () => {
+  // RIFF 0xffffffa6 and data 0xffffff00 arrive on every response from the service.
+  // A reader that only knew UINT32_MAX threw NANALY_INVALID_WAV for all of it, so the
+  // caller silently kept the unpadded audio and tail padding never ran in production.
+  const samples = Buffer.alloc(4800)
+  for (let offset = 0; offset < samples.length; offset += 2) samples.writeInt16LE(1234, offset)
+  const metadata = chunk('LIST', Buffer.alloc(122, 0x20))
+  const input = blob(liveHeader(samples, 0xffffff00, [metadata]))
+  const output = await padWav(input)
+  assert.notEqual(output, input, 'the live header must not fall through unpadded')
+  const wave = await inspect(output)
+  assert.equal(wave.bytes.readUInt32LE(4), wave.bytes.length - 8, 'the RIFF placeholder is backpatched')
+  assert.equal(wave.audio.size, samples.length + 8400 * 2, 'exactly 0.35s of frames is appended')
+  assert.deepEqual(wave.audio.data.subarray(0, samples.length), samples, 'every original sample survives')
+  assert.ok(wave.audio.data.subarray(samples.length).every(byte => byte === 0), 'the appended frames are silent')
+  assert.equal(wave.chunks.find(part => part.name === 'LIST').size, 122, 'service metadata survives')
+})
+
+await test('a truncated payload is still refused even when it carries the live placeholders', async () => {
+  // Only the declared size may be a placeholder. Real bytes that stop mid-frame are damage.
+  await assert.rejects(padWav(blob(liveHeader(Buffer.alloc(41), 41))), error => error.code === 'NANALY_INVALID_WAV')
+  await assert.rejects(padWav(blob(liveHeader(Buffer.alloc(41), 0xffffff00))), error => error.code === 'NANALY_INVALID_WAV')
+})
+
+await test('measure reports seconds for live and ordinary headers and stays quiet on anything else', async () => {
+  assert.equal(await measure(blob(liveHeader(Buffer.alloc(48000)))), 1, '24 kHz 16-bit mono')
+  assert.equal(await measure(blob(make({ data: Buffer.alloc(96000) }))), 2, 'an ordinary finite header')
+  assert.equal(await measure(await padWav(blob(liveHeader(Buffer.alloc(48000))))), 1.35, 'padding is included')
+  for (const junk of [null, undefined, blob(Buffer.from('not a wave at all')), blob(Buffer.alloc(4))])
+    assert.equal(await measure(junk), null, 'unreadable input reports no duration rather than throwing')
+  assert.equal(await measure(blob(Buffer.alloc(64), 'audio/mpeg')), null, 'a declared non-WAV type is left alone')
 })
 
 console.log(`\n${passed} WAV tail-padding regression groups passed`)

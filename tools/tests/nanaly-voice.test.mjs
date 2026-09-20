@@ -6,12 +6,12 @@ const source = readFileSync('source/js/nanaly-voice.js', 'utf8')
 const audioSource = readFileSync('source/js/nanaly-audio.js', 'utf8')
 const prosodySource = readFileSync('source/js/nanaly-prosody.js', 'utf8')
 const providerSource = readFileSync('source/js/nanaly-provider.js', 'utf8')
-const wave = () => {
-  const bytes = Buffer.alloc(44 + 4800)
+const wave = (payload = 4800) => {
+  const bytes = Buffer.alloc(44 + payload)
   bytes.write('RIFF'); bytes.writeUInt32LE(bytes.length - 8, 4); bytes.write('WAVEfmt ', 8)
   bytes.writeUInt32LE(16, 16); bytes.writeUInt16LE(1, 20); bytes.writeUInt16LE(1, 22)
   bytes.writeUInt32LE(24000, 24); bytes.writeUInt32LE(48000, 28)
-  bytes.writeUInt16LE(2, 32); bytes.writeUInt16LE(16, 34); bytes.write('data', 36); bytes.writeUInt32LE(4800, 40)
+  bytes.writeUInt16LE(2, 32); bytes.writeUInt16LE(16, 34); bytes.write('data', 36); bytes.writeUInt32LE(payload, 40)
   // The final sample is voiced: padding must keep it intact, not fade it away.
   for (let i = 44; i < bytes.length; i += 2) bytes.writeInt16LE(1234, i)
   return new Blob([bytes], { type: 'audio/wav' })
@@ -424,4 +424,54 @@ await test('stop during WAV preparation prevents fallback playback and stale cac
   assert.equal(h.audio.length, 0)
   assert.equal(h.notices.length, 0)
 })
+await test('audio far longer than its text is the prompt being spoken, so it is regenerated without one', async () => {
+  // CosyVoice2 reads the instruct prompt aloud instead of the reply often enough that a
+  // short prompt is not a fix on its own: measured 0/16 at 38 prompt characters but 8/8
+  // at 140 against a 9-character reply. Plain text with no prompt never did it.
+  const h = boot({ fetcher: async (url, init) => new Response(
+    JSON.parse(init.body).input.includes('<|endofprompt|>') ? wave(24000 * 2 * 9) : wave(),
+    { headers: { 'content-type': 'audio/wav' } }) })
+  const job = h.controller.speak('你好喵。'); await flush(); await flush()
+  assert.equal(h.requests.length, 2, 'one prompted attempt, then one bare retry')
+  assert.ok(JSON.parse(h.requests[0].init.body).input.includes('<|endofprompt|>'))
+  assert.equal(JSON.parse(h.requests[1].init.body).input, '你好喵。', 'the retry carries no prompt at all')
+  assert.deepEqual(h.notices, [], 'a recovery that worked stays silent')
+  h.audio[0].onended(); assert.equal(await job, true)
+  const played = Buffer.from(await h.blobs[0].arrayBuffer())
+  assert.equal(played.readUInt32LE(40), 4800 + 16800, 'the short retry is what reaches the player')
+})
+
+await test('ordinary length audio is played on the first attempt without a second request', async () => {
+  const h = boot()
+  const job = h.controller.speak('你好喵。'); await flush(); await flush()
+  assert.equal(h.requests.length, 1, 'normal speech must not trigger the runaway retry')
+  h.audio[0].onended(); assert.equal(await job, true)
+})
+
+await test('a retry that is also overlong still plays but says so', async () => {
+  const h = boot({ fetcher: async () => new Response(wave(24000 * 2 * 9), { headers: { 'content-type': 'audio/wav' } }) })
+  const job = h.controller.speak('你好喵。'); await flush(); await flush()
+  assert.equal(h.requests.length, 2, 'it retries once, not repeatedly')
+  assert.ok(h.notices.some(message => /生成异常/.test(message)), 'the reader is told the audio is suspect')
+  h.audio[0].onended(); assert.equal(await job, true)
+})
+
+await test('every voice and emotion combination keeps the instruct prompt inside its budget', async () => {
+  // The leak rate climbs with prompt length, so this is the ceiling the measurements
+  // above support. Lengthening any style or emotion phrase past it must fail here.
+  const h = boot(), prepared = h.planner.prepare('测试。')
+  for (const style of Object.values(h.api.STYLES))
+    for (const emotion of h.planner.EMOTIONS)
+      for (const intensity of [0.2, 0.5, 0.9]) {
+        const [segment] = h.planner.parse(JSON.stringify({ ranges: [{ from: 0, to: prepared.segments.length, emotion, intensity, confidence: 0.9 }] }), prepared).segments
+        const prompt = style.instruction + segment.instruction
+        assert.ok([...prompt].length <= 40, `${style.name}/${emotion}/${intensity} 用了 ${[...prompt].length} 字`)
+        const clauses = prompt.split('。').filter(Boolean)
+        assert.ok(clauses.length <= 2, `${style.name}/${emotion} 拆成了 ${clauses.length} 句，句数越多越容易被念出来`)
+        // Form matters as much as length: a clause without 请 reads as content to speak.
+        for (const clause of clauses)
+          assert.ok(clause.startsWith('请'), `${style.name}/${emotion} 里「${clause}」不是祈使句，会被念出来`)
+      }
+})
+
 console.log('\n' + passed + ' speech behavior groups passed')

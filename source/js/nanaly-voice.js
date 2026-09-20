@@ -90,6 +90,14 @@
       if (window.NANALY_PROVIDER?.responseError) return window.NANALY_PROVIDER.responseError(response)
       return new Error('声音生成失败（' + response.status + '），请检查密钥、额度或稍后重试。')
     }
+    /* 命中也要挪到队尾。原来只有写入排序，于是反复重播的那几段会因为
+     * 「进得早」被先淘汰，越常用的越留不住。 */
+    const recall = key => {
+      if (!cache.has(key)) return null
+      const blob = cache.get(key)
+      cache.delete(key); cache.set(key, blob)
+      return blob
+    }
     const remember = (key, blob) => {
       if (blob.size > 8 * 1024 * 1024) return
       if (cache.has(key)) audioBytes -= cache.get(key).size
@@ -108,7 +116,11 @@
       const fallback = () => splitText(text).map(text => ({ text, instruction: NEUTRAL }))
       const model = connection.model || 'Pro/moonshotai/Kimi-K2.6'
       const cacheKey = JSON.stringify([model, text, context])
-      if (plans.has(cacheKey)) return plans.get(cacheKey)
+      if (plans.has(cacheKey)) {
+        const cached = plans.get(cacheKey)
+        plans.delete(cacheKey); plans.set(cacheKey, cached)
+        return cached
+      }
       turn.phase = 'planning'; emit()
       const controller = new AbortController()
       const abort = () => controller.abort(turn.controller.signal.reason)
@@ -207,9 +219,12 @@
       try {
         const url = endpoint(connection.baseURL)
         // Cache belongs to one unlocked account; never reuse another account's audio.
-        if (cacheAccount?.url !== url || cacheAccount?.key !== connection.key || cacheAccount?.model !== connection.model) {
+        // 账号边界只看接口地址和密钥。换文字模型要重新理解语气（plans 的键里带着
+        // model，自己会错开），但音频只取决于声线、语速、语气指令和文本，
+        // 把它一起清掉等于为一模一样的声音再付一次钱。
+        if (cacheAccount?.url !== url || cacheAccount?.key !== connection.key) {
           cache.clear(); plans.clear(); audioBytes = 0
-          cacheAccount = { url, key: connection.key, model: connection.model }
+          cacheAccount = { url, key: connection.key }
         }
         const synthesize = async (prompt, utterance) => {
           const response = await fetcher(url, {
@@ -237,7 +252,7 @@
           // Past the budget the prompt leaks often enough to matter; keep the voice only.
           const instruction = [...composed].length <= PROMPT_BUDGET ? composed : style.instruction
           const cacheKey = JSON.stringify([url, settings.style, settings.speed, 'wav-guarded-v1', instruction, utterance])
-          let blob = cache.get(cacheKey)
+          let blob = recall(cacheKey)
           if (!blob) {
             turn.phase = 'loading'; emit()
             const timeout = setTimeout(() => turn.controller.abort(new DOMException('声音生成超时，请重试。', 'TimeoutError')), 60000)

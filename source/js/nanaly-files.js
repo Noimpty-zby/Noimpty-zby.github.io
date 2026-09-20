@@ -14,7 +14,12 @@
   }))
   const abort = signal => { if (signal?.aborted) throw new DOMException('文件处理已取消', 'AbortError') }
   const range = list => list.length ? list.join('、') : '无'
-  const memory = new Map()
+  const memory = new Map(), pending = new Map()
+  // 内存缓存的上限。条目握着原始 File，按原文件大小算账，不按解析出来的文字算 ——
+  // 所以真正当闸的是字节数，条数只用来兜住「很多份极小的文本」。
+  const MEM = Object.freeze({ count: 32, bytes: 24 * 1024 * 1024 })
+  const sizeOf = item => Math.max(Number(item?.size) || 0, item?.text?.length || 0)
+  let memoryBytes = 0
   let database, mammothPromise, pdfPromise
   const openDB = () => {
     if (!database) database = new Promise((resolve, reject) => {
@@ -35,12 +40,40 @@
       tx.onerror = tx.onabort = () => reject(tx.error || new Error('文件存储失败'))
     })
   }
+  const drop = id => {
+    const cached = memory.get(id)
+    if (!cached) return
+    memoryBytes -= sizeOf(cached); memory.delete(id)
+  }
+  /* 命中也要把条目挪到队尾。原来只在写入时排序，于是反复用到的那几份
+   * 会因为「进得早」被先淘汰，历史越长命中率越低。 */
+  const touch = item => {
+    if (!item || typeof item.id !== 'string') return item
+    drop(item.id)
+    memory.set(item.id, item); memoryBytes += sizeOf(item)
+    for (const [id, cached] of memory) {
+      if (memory.size <= MEM.count && memoryBytes <= MEM.bytes) break
+      // temporary 的条目只存在于内存里（IndexedDB 写失败），淘汰它就是丢文件。
+      if (!cached.temporary && id !== item.id) drop(id)
+    }
+    return item
+  }
   const load = async id => {
-    if (memory.has(id)) return memory.get(id)
-    try { return await transact('readonly', store => store.get(id)) } catch (_) { return null }
+    if (memory.has(id)) return touch(memory.get(id))
+    // 渲染历史和构造模型输入会各读一次同一份，合并成一次事务。
+    if (pending.has(id)) return pending.get(id)
+    const job = (async () => {
+      let item = null
+      try { item = await transact('readonly', store => store.get(id)) } catch (_) { item = null }
+      // 读取途中可能被 remove() 删掉。那就不该再把它放回内存，否则删过的又活了。
+      if (item && pending.get(id) === job) touch(item)
+      return item || null
+    })()
+    pending.set(id, job)
+    try { return await job } finally { if (pending.get(id) === job) pending.delete(id) }
   }
   const remove = async id => {
-    memory.delete(id)
+    drop(id); pending.delete(id)
     try { await transact('readwrite', store => store.delete(id)) } catch (_) {}
   }
   const prune = async (state, draft = []) => {
@@ -62,7 +95,6 @@
     try {
       const items = await transact('readonly', store => store.getAll())
       for (const item of items || []) if (!keep.has(item.id) && Date.now() - item.at > 3600000) await remove(item.id)
-      for (const [id, item] of memory) if (!item.temporary && memory.size > 4) memory.delete(id)
     } catch (_) {}
   }
   const validateFile = file => {
@@ -254,9 +286,11 @@
     }
     abort(signal)
     const item = { id: crypto.randomUUID(), name: String(file.name || '文件').slice(0, 160), type, size: file.size, source: file, at: Date.now(), ...parsed }
-    memory.set(item.id, item)
-    try { await transact('readwrite', store => store.put(item)) }
-    catch (_) { item.temporary = true }
+    // 先当作没落盘：这样它在写入期间不会被别的读取挤出内存。存进去的那份不带这个内存标记。
+    const stored = { ...item }
+    item.temporary = true
+    touch(item)
+    try { await transact('readwrite', store => store.put(stored)); delete item.temporary } catch (_) {}
     if (signal?.aborted) { await remove(item.id); abort(signal) }
     return item
   }

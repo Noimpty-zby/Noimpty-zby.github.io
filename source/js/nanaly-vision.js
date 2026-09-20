@@ -7,7 +7,12 @@
   const validRef = ref => ref && typeof ref.id === 'string' && /^[a-zA-Z0-9-]{8,80}$/.test(ref.id)
   const refs = items => (Array.isArray(items) ? items : []).filter(validRef).slice(0, MAX_FILES)
     .map(x => ({ id: x.id, name: String(x.name || '图片').slice(0, 160), type: 'image/jpeg' }))
-  const memory = new Map()
+  const memory = new Map(), pending = new Map()
+  // 内存缓存的上限。真正该当闸的是字节数：截图压完通常几百 KB，条数卡太死会让
+  // 长话题里的旧图反复回存储里取。条数只用来兜住「很多张极小的图」。
+  const MEM = Object.freeze({ count: 64, bytes: 24 * 1024 * 1024 })
+  const sizeOf = item => item?.dataURL?.length || 0
+  let memoryBytes = 0
   let database
   const openDB = () => {
     if (!database) database = new Promise((resolve, reject) => {
@@ -28,12 +33,40 @@
       tx.onerror = tx.onabort = () => reject(tx.error || new Error('图片存储失败'))
     })
   }
+  const drop = id => {
+    const cached = memory.get(id)
+    if (!cached) return
+    memoryBytes -= sizeOf(cached); memory.delete(id)
+  }
+  /* 命中也要把条目挪到队尾。原来只在写入时排序，于是反复用到的那几张
+   * 会因为「进得早」被先淘汰，历史越长命中率越低。 */
+  const touch = item => {
+    if (!item || typeof item.id !== 'string') return item
+    drop(item.id)
+    memory.set(item.id, item); memoryBytes += sizeOf(item)
+    for (const [id, cached] of memory) {
+      if (memory.size <= MEM.count && memoryBytes <= MEM.bytes) break
+      // temporary 的条目只存在于内存里（IndexedDB 写失败），淘汰它就是丢图片。
+      if (!cached.temporary && id !== item.id) drop(id)
+    }
+    return item
+  }
   const load = async id => {
-    if (memory.has(id)) return memory.get(id)
-    try { return await transact('readonly', store => store.get(id)) } catch (_) { return null }
+    if (memory.has(id)) return touch(memory.get(id))
+    // 渲染历史和构造模型输入会各读一次同一张，合并成一次事务。
+    if (pending.has(id)) return pending.get(id)
+    const job = (async () => {
+      let item = null
+      try { item = await transact('readonly', store => store.get(id)) } catch (_) { item = null }
+      // 读取途中可能被 remove() 删掉。那就不该再把它放回内存，否则删过的又活了。
+      if (item && pending.get(id) === job) touch(item)
+      return item || null
+    })()
+    pending.set(id, job)
+    try { return await job } finally { if (pending.get(id) === job) pending.delete(id) }
   }
   const remove = async id => {
-    memory.delete(id)
+    drop(id); pending.delete(id)
     try { await transact('readwrite', store => store.delete(id)) } catch (_) {}
   }
   // Clear only images no longer referenced by any topic, pending retry or undo record.
@@ -63,7 +96,6 @@
         if (!keep.has(item.id) && Date.now() - item.at > 3600000) await remove(item.id)
       }
       // IndexedDB retains history, the live heap only needs a few previews.
-      for (const [id, item] of memory) if (!item.temporary && memory.size > 4) memory.delete(id)
     } catch (_) {}
   }
   const validateFile = file => {
@@ -91,9 +123,11 @@
       if (dataURL.length > 2200000) dataURL = canvas.toDataURL('image/jpeg', 0.72)
       if (dataURL.length > 2600000) throw new Error('图片压缩后仍然过大，请裁剪后再试')
       const item = { id: crypto.randomUUID(), name: file.name || '粘贴的图片', type: 'image/jpeg', dataURL, at: Date.now() }
-      memory.set(item.id, item)
-      try { await transact('readwrite', store => store.put(item)) }
-      catch (_) { item.temporary = true }
+      // 先当作没落盘：这样它在写入期间不会被别的读取挤出内存。存进去的那份不带这个内存标记。
+      const stored = { ...item }
+      item.temporary = true
+      touch(item)
+      try { await transact('readwrite', store => store.put(stored)); delete item.temporary } catch (_) {}
       return item
     } finally { URL.revokeObjectURL(url) }
   }

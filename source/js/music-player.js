@@ -110,11 +110,15 @@
 
   const stage = (() => {
     const element = player.querySelector('.noimpty-music-stage')
-    if (!element) return { activate() {}, refresh() {}, waiting() {}, playing() {}, changeTrack() {} }
+    if (!element) return { activate() {}, refresh() {}, waiting() {}, playing() {}, changeTrack() {}, energy: () => 0 }
     const bars = Array.from(element.querySelectorAll('.noimpty-music-stage__bar'))
     const reduced = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null
     const connection = navigator.connection
     let context, analyser, capture, source, sourceTrack, samples, resuming
+    /* 这一帧的整体能量（0~1）。可视化条自己用不着留，但 Mao 要拿它驱动头发和
+       罩袍的摆动 —— 让她再建一套 AudioContext 是浪费，而且 captureStream 这条
+       侧路本来就只该开一份。 */
+    let lastEnergy = 0
     let frame = 0
     let lastPaint = -Infinity
     let disabled = false
@@ -134,6 +138,7 @@
       frame = 0
       lastPaint = -Infinity
       player.removeAttribute('data-stage-running')
+      lastEnergy = 0
       element.dataset.stage = disabled ? 'unavailable' : 'idle'
       element.style.setProperty('--stage-energy', '0')
       bars.forEach(bar => bar.style.setProperty('--level', '0.08'))
@@ -169,7 +174,8 @@
             energy += level
             bar.style.setProperty('--level', Math.max(0.08, level).toFixed(3))
           })
-          element.style.setProperty('--stage-energy', (energy / bars.length).toFixed(3))
+          lastEnergy = energy / bars.length
+          element.style.setProperty('--stage-energy', lastEnergy.toFixed(3))
           element.dataset.stage = 'live'
           player.setAttribute('data-stage-running', 'true')
           lastPaint = time
@@ -264,6 +270,7 @@
     stop()
     return {
       activate, refresh, changeTrack,
+      energy: () => lastEnergy,
       waiting: () => { buffering = true; refresh() },
       playing: () => { buffering = false; bindSource(); refresh() }
     }
@@ -535,6 +542,10 @@
   window.NOIMPTY_MUSIC_PLAYER = Object.freeze({
     tracks,
     audio,
+    /* 当前这一帧的整体能量 0~1，可视化条算好的那个值。没在放、可视化没起来
+       或者用户要求减少动效时都是 0。Mao 拿它驱动头发和罩袍摆动 ——
+       她**不该**自己再建一套 AudioContext：captureStream 这条侧路只该开一份。 */
+    energy: () => stage.energy(),
     play: tryPlay,
     pause,
     previous: () => previousTrack(),

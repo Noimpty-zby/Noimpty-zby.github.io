@@ -14,6 +14,31 @@
   --btn-color: #7f3f52;
   --btn-hover-color: #e95978;
   --scrollbar-color: #d75b78;
+
+  /* ── 左下角那一摞按钮 ──
+   * 从下往上：音乐（第 0 格）、娜娜莉的猫爪（第 1 格）、Mao 的帽子（第 2 格）。
+   * 三个按钮分别定义在 music-player.css / noimpty-ai.css / mao-pet.css 里，
+   * 以前各写各的坐标 —— 结果音乐那个有窄屏规则（挪到 left:12px），另外两个没有，
+   * 手机上就排不成一条竖线了。现在三家都从这几个变量算位置，想错位都难。
+   * 加一格：bottom 用 --corner-slot-N，N 是从下往上数的格号。 */
+  --corner-size: 54px;
+  --corner-gap: 14px;
+  --corner-left: 20px;
+  /* 刘海屏的小横条会压住最底下那一格，safe-area 兜住它 */
+  --corner-bottom: max(20px, env(safe-area-inset-bottom));
+  --corner-slot-0: var(--corner-bottom);
+  --corner-slot-1: calc(var(--corner-bottom) + (var(--corner-size) + var(--corner-gap)));
+  --corner-slot-2: calc(var(--corner-bottom) + (var(--corner-size) + var(--corner-gap)) * 2);
+}
+
+/* 窄屏整摞往边上靠一点，给正文让位。只改这里，三个按钮一起跟着动 */
+@media (max-width: 520px) {
+  :root {
+    /* 三个一起缩。只缩一个的话就会出现「48px 的挨着 54px 的」那种参差 */
+    --corner-size: 48px;
+    --corner-left: 12px;
+    --corner-bottom: max(12px, env(safe-area-inset-bottom));
+  }
 }
 
 html[data-theme='dark'] {

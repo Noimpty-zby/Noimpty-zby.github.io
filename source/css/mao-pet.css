@@ -3,21 +3,21 @@
  * 开关沿用音乐（bottom:20px）和对话（bottom:88px）那两个按钮的写法 —— 同样 54×54
  * 的圆、同样的粉色渐变，接在它们上面成第三格。
  *
- * 她的层级写在 nanaly-pet.js 的 CONFIG 里（8800），压在对话面板（9002）和三个按钮
+ * 她的层级写在 mao-pet.js 的 CONFIG 里（8800），压在对话面板（9002）和三个按钮
  * （9003）之下 —— 展开聊天时不该被一张脸挡住半个面板。
  */
 
 /* ── 开关 ── */
 
-#nanaly-pet-toggle {
+#mao-toggle {
   position: fixed;
-  left: 20px;
-  bottom: calc(20px + (54px + 14px) * 2);
+  left: var(--corner-left);
+  bottom: var(--corner-slot-2);
   z-index: 9003;
   display: grid;
   place-items: center;
-  width: 54px;
-  height: 54px;
+  width: var(--corner-size);
+  height: var(--corner-size);
   padding: 0;
   border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.25));
   border-radius: 50%;
@@ -27,12 +27,12 @@
   cursor: pointer;
   transition: transform .22s ease, opacity .22s ease, filter .22s ease;
 }
-#nanaly-pet-toggle:hover { transform: translateY(-3px) scale(1.05); }
+#mao-toggle:hover { transform: translateY(-3px) scale(1.05); }
 
 /* 正在取那两兆多的时候给点反馈，别让人以为按钮坏了 */
-#nanaly-pet-toggle[data-busy] { opacity: .6; cursor: progress; }
+#mao-toggle[data-busy] { opacity: .6; cursor: progress; }
 
-#nanaly-pet-toggle svg {
+#mao-toggle svg {
   width: 26px;
   height: 26px;
   fill: none;
@@ -42,10 +42,10 @@
   stroke-linejoin: round;
 }
 /* 帽带和那颗星星是填充的，小尺寸下描边立不住 */
-#nanaly-pet-toggle svg .solid { fill: currentColor; stroke: none; }
+#mao-toggle svg .solid { fill: currentColor; stroke: none; }
 
 /* 关着的时候按钮自己退成灰的，一眼看得出现在是关的 */
-#nanaly-pet-toggle[aria-pressed='false'] {
+#mao-toggle[aria-pressed='false'] {
   background: rgba(120, 104, 114, 0.5);
   filter: saturate(.25);
   opacity: .72;
@@ -53,7 +53,7 @@
 
 /* ── 她站的那块 ── */
 
-#nanaly-pet-stage {
+#mao-stage {
   position: fixed;
   /* 画布本身不吃指针事件，只有她身上的像素吃（PixiJS 按命中区判），
      这样她脚底那片空白不会挡住底下的正文和链接 */
@@ -63,8 +63,18 @@
   transform: translateY(18px);
   transition: opacity .6s ease, transform .6s cubic-bezier(.22, .75, .24, 1);
 }
-#nanaly-pet-stage[data-ready] { opacity: 1; transform: none; }
-#nanaly-pet-stage canvas { display: block; width: 100%; height: 100%; pointer-events: auto; cursor: pointer; }
+#mao-stage[data-ready] { opacity: 1; transform: none; }
+#mao-stage canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+  cursor: pointer;
+  /* 双击她要能叫出对话窗。默认 touch-action 下，手机浏览器会把第二下
+     当成「双击缩放」自己吃掉，页面反而放大一截 —— manipulation 把双击缩放
+     让开，同时保留在她身上滑动仍然能滚页面。 */
+  touch-action: manipulation;
+}
 
 /* Butterfly 右侧那一竖按钮（回顶、切暗色）和她站同一个角。
    它原本在 z-index 100，她在 8800 —— 不抬上来的话，滚一段之后
@@ -75,7 +85,7 @@
 
 /* 奶白底 + 梅紫描边，和首页那块时间牌同一套 —— 看着像原本就长在这儿，
    而不是哪个库自带的另一种审美 */
-#nanaly-pet-bubble {
+#mao-bubble {
   position: absolute;
   bottom: calc(100% - 46px);
   max-width: 260px;
@@ -96,23 +106,23 @@
   transform-origin: 0 100%;
   transition: opacity .28s ease, transform .28s cubic-bezier(.22, .9, .3, 1), visibility .28s;
 }
-#nanaly-pet-bubble[data-on] { opacity: 1; visibility: visible; transform: none; }
+#mao-bubble[data-on] { opacity: 1; visibility: visible; transform: none; }
 
 /* 她站右边时气泡靠右，尖角也跟着换边 */
-#nanaly-pet-stage[data-side='right'] #nanaly-pet-bubble {
+#mao-stage[data-side='right'] #mao-bubble {
   right: 8px;
   border-radius: 16px 16px 4px 16px;
   transform-origin: 100% 100%;
 }
-#nanaly-pet-stage[data-side='left'] #nanaly-pet-bubble { left: 8px; }
+#mao-stage[data-side='left'] #mao-bubble { left: 8px; }
 
 /* 窄屏：气泡跟着画布收窄，别越过屏幕边 */
 @media (max-width: 560px) {
-  #nanaly-pet-bubble { max-width: min(220px, 62vw); font-size: 12px; padding: 8px 11px; }
+  #mao-bubble { max-width: min(220px, 62vw); font-size: 12px; padding: 8px 11px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #nanaly-pet-toggle,
-  #nanaly-pet-stage,
-  #nanaly-pet-bubble { transition: none; }
+  #mao-toggle,
+  #mao-stage,
+  #mao-bubble { transition: none; }
 }

@@ -11,10 +11,10 @@
   /* 必须比面板（9002）高。低了的话面板会盖住猫爪，
      「再点一下猫爪收起面板」这个最自然的操作就点不到了，只能去按 ✕。 */
   z-index: 9003;
-  left: 20px;
-  bottom: calc(20px + 54px + 14px);
-  width: 54px;
-  height: 54px;
+  left: var(--corner-left);
+  bottom: var(--corner-slot-1);
+  width: var(--corner-size);
+  height: var(--corner-size);
   display: grid;
   place-items: center;
   border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.25));
@@ -428,10 +428,9 @@
   }
 
   #nanaly-launcher {
-    left: 14px;
-    bottom: calc(14px + 54px + 12px);
-    width: 48px;
-    height: 48px;
+    /* 坐标和大小都交给 custom.css 里那摞变量 —— 这里原本自己写着
+       left:14px / 48px，而音乐和 Mao 走的是 12px / 54px，手机上三个
+       按钮于是左边缘差 2px、大小差一圈，纵向间距也对不上。 */
     font-size: 19px;
   }
 }
@@ -745,7 +744,7 @@
 .nanaly-msg--her:hover .nanaly-usage { opacity: 0.8; }
 
 /* 保持浮动入口可点击，同时避免它盖住输入框；适应动态视口和系统键盘。 */
-#nanaly-panel { bottom: calc(20px + 54px + 14px + 54px + 12px); max-height: min(640px, calc(100dvh - 176px)); }
+#nanaly-panel { bottom: calc(var(--corner-slot-1) + var(--corner-size) + 12px); max-height: min(640px, calc(100dvh - 176px)); }
 .nanaly-head, .nanaly-quick, .nanaly-foot { flex-shrink: 0; }
 .nanaly-foot textarea { min-width: 0; }
 .nanaly-msg { min-width: 0; }

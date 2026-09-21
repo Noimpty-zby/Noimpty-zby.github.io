@@ -136,6 +136,26 @@
       '12-31': { face: '为难', lines: ['今年就剩这几个小时了。', '回头看看年初立的那些 flag 喵。'] }
     },
 
+    /* ── 她记得你上次什么时候来 ──
+     * 只用 localStorage，不碰任何被锁住的数据，所以哪怕没解锁也有效。 */
+    missYouAfterH: 20,   // 隔多久算「有一阵没见」（小时）
+    missLines: [
+      ['{隔}没见了，还以为你不来了呢。', '难过'],
+      ['{隔}没见。学得怎么样了喵？', '为难'],
+      ['哟，{隔}没见 —— 我一直在这儿站着呢。', '闭眼']
+    ],
+
+    /* ── 今天的日程 ──
+     * 数据来自 /schedule/data.json（加密的），没解锁就拿不到，这时候她不播报。
+     * busyLeft：剩这么多件没做就开始摆「为难」那张脸。 */
+    busyLeft: 3,
+    scheduleLines: {
+      发了文章: [['今天有产出喵，给你记一功。', '星星眼'], ['刚发了东西，值得歇一会儿。', '笑']],
+      全做完: [['今天的都勾掉了，可以了。', '笑'], ['一件不剩，难得喵 (=^w^=)', '星星眼']],
+      还剩: [['今天还有 {剩} 件没做喵。', '为难'], ['{剩} 件挂着呢，先挑最难那件。', '平静']],
+      堆着: [['{剩} 件没做，再拖就滚雪球了。', '生气'], ['{剩} 件……要不先做掉一件？', '难过']]
+    },
+
     // 文章页：读页面上的 <h1.post-title>，套进这几句里
     postLines: [
       ['《{题}》，这篇我看过。', '闭眼'],
@@ -209,7 +229,7 @@
   }
 
   let app = null, model = null, stage = null, bubble = null, button = null
-  let sulkUntil = 0, tapStreak = 0, lastTapAt = 0
+  let sulkUntil = 0, tapStreak = 0, lastTapAt = 0, greetTimer = null
   let loading = null, idleTimer = null, hideTimer = null, typeTimer = null, onMove = null, onResize = null
 
   const loadScript = src => new Promise((resolve, reject) => {
@@ -322,7 +342,7 @@
     // 台词可以写成 '一句话'，也可以写成 ['一句话', '表情']
     const [text, mood] = Array.isArray(line) ? line : [line, null]
     stopTalking()
-    face(mood || CONFIG.restFace)
+    face(mood || moodFace())
     bubble.textContent = ''
     bubble.dataset.on = '1'
     let i = 0
@@ -339,12 +359,37 @@
     hideTimer = setTimeout(() => {
       delete bubble.dataset.on
       stopTalking()
-      // 脸也收回去。不收的话她会一直顶着刚才那张，气泡早没了人还在生气
-      face(CONFIG.restFace)
+      // 脸也收回去。不收的话她会一直顶着刚才那张，气泡早没了人还在生气。
+      // 收回的是「当前心情」那张，不是固定的平静 —— 今天发了东西她就该一直精神着
+      face(moodFace())
     }, CONFIG.speakMs + text.length * CONFIG.typeMs)
   }
 
   const openChat = () => { window.NANALY?.open?.() }
+
+  /* 出场那一句。优先级：有一阵没见 > 今天的日程 > 普通招呼。
+   *
+   * 日程要等解密拿回来，所以这里等一下 —— 但最多等 1.5 秒，不能让她杵在那儿
+   * 半天不开口。锁着的时候 loadState() 立刻返回 null，这一等是没有的。 */
+  const greet = async () => {
+    const st = await Promise.race([
+      loadState(),
+      new Promise(resolve => {
+        greetTimer = setTimeout(() => { greetTimer = null; resolve(null) }, 1500)
+      })
+    ]).catch(() => null)
+    // 日程先回来的话那个闹钟还挂着，收掉 —— 不收就是一个没人管的定时器
+    if (greetTimer) { clearTimeout(greetTimer); greetTimer = null }
+    if (!model) return                   // 等的这一会儿她可能已经被关掉了
+
+    if (awayFor >= CONFIG.missYouAfterH) {
+      const [text, mood] = pick(CONFIG.missLines)
+      say([text.replace('{隔}', awayText()), mood])
+      return
+    }
+    const line = st ? scheduleLine() : null
+    say(line || pick(CONFIG.welcome))
+  }
 
   /* ── 她在哪一页 ──
    * 栏目认定借娜娜莉那张 SECTIONS 表（她本来就靠它导航），这边不另存一份。
@@ -363,6 +408,89 @@
   }
 
   const rightNow = () => new Date()
+  const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+
+  /* ── 她上次什么时候来 ── 只碰 localStorage，不受暗号影响。 */
+  const LAST_SEEN = 'mao-last-seen'
+  let awayFor = 0                        // 这次进来时，距上次多少小时
+  const rememberVisit = () => {
+    try {
+      const prev = Number(localStorage.getItem(LAST_SEEN)) || 0
+      awayFor = prev ? (Date.now() - prev) / 3600000 : 0
+      localStorage.setItem(LAST_SEEN, String(Date.now()))
+    } catch (_) { awayFor = 0 }
+  }
+  const awayText = () => {
+    const d = Math.floor(awayFor / 24)
+    if (d >= 1) return d + ' 天'
+    return Math.max(1, Math.round(awayFor)) + ' 个小时'
+  }
+
+  /* ── 今天的日程 ──
+   *
+   * 数据只有一处真相：source/_data/schedule.json，发布时整份加密成
+   * /schedule/data.json。**没解锁就拿不到** —— 这时候 loadState() 返回 null，
+   * 她不播报、也没有「心情」，只闲聊。那是对的，不是坏了。
+   *
+   * 解密走 NOIMPTY_SEARCH.decryptPayload，和 schedule.js 同一条路 ——
+   * 自己再写一份 AES-GCM 解密早晚会和它对不上。 */
+  let siteState = null, statePending = null
+
+  const summarize = data => {
+    const days = data && data.days
+    if (!days || typeof days !== 'object') return null
+    const today = Array.isArray(days[ymd(rightNow())]) ? days[ymd(rightNow())] : []
+    const done = today.filter(t => t && t.done).length
+    return {
+      total: today.length,
+      done,
+      left: today.length - done,
+      // 自动判定会把「你发了《…》」写进 autoWhy，等于一份现成的「今天发没发东西」
+      published: today.some(t => t && t.done && /^你发了/.test(String(t.autoWhy || '')))
+    }
+  }
+
+  const loadState = () => {
+    if (siteState) return Promise.resolve(siteState)
+    if (statePending) return statePending
+    try {
+      if (window.NOIMPTY_GATE && !window.NOIMPTY_GATE.unlocked()) return Promise.resolve(null)
+    } catch (_) { return Promise.resolve(null) }
+    statePending = (async () => {
+      try {
+        const res = await fetch('/schedule/data.json?t=' + Date.now(), { cache: 'no-store' })
+        if (!res.ok) return null
+        const payload = await res.json()
+        const raw = payload && payload.alg === 'AES-GCM'
+          ? JSON.parse(await window.NOIMPTY_SEARCH.decryptPayload(payload))
+          : payload
+        siteState = summarize(raw)
+        return siteState
+      } catch (_) { return null } finally { statePending = null }
+    })()
+    return statePending
+  }
+
+  /* 默认那张脸跟着站点的真实状况走：今天发了东西就精神，日程堆着就发愁。
+   * 拿不到状况（没解锁）就用 CONFIG.restFace，和以前一样。 */
+  const moodFace = () => {
+    const st = siteState
+    if (!st) return CONFIG.restFace
+    if (st.published) return '星星眼'
+    if (st.total && st.left === 0) return '笑'
+    if (st.left >= CONFIG.busyLeft) return '为难'
+    return CONFIG.restFace
+  }
+
+  const scheduleLine = () => {
+    const st = siteState
+    if (!st || !st.total) return null
+    const group = st.published ? '发了文章'
+      : st.left === 0 ? '全做完'
+        : st.left >= CONFIG.busyLeft ? '堆着' : '还剩'
+    const [text, mood] = pick(CONFIG.scheduleLines[group])
+    return [text.replace('{剩}', String(st.left)), mood]
+  }
 
   const festivalToday = () => {
     const d = rightNow()
@@ -508,7 +636,7 @@
       onResize = () => layout(true)
       window.addEventListener('resize', onResize)
 
-      say(pick(CONFIG.welcome))
+      greet()
       // 每次到点才算这一页说什么 —— pjax 翻页不会重建她，算早了会一直念旧页面
       idleTimer = setInterval(() => say(pick(linesHere())), CONFIG.idleEveryMs)
       requestAnimationFrame(() => stage && (stage.dataset.ready = '1'))
@@ -556,6 +684,7 @@
 
   const teardown = async () => {
     stopTalking()
+    clearTimeout(greetTimer); greetTimer = null
     clearInterval(idleTimer); idleTimer = null
     if (onMove) { document.removeEventListener('pointermove', onMove); onMove = null }
     if (onResize) { window.removeEventListener('resize', onResize); onResize = null }
@@ -630,6 +759,7 @@
     lines: () => linesHere()
   })
 
+  rememberVisit()
   document.addEventListener('pjax:complete', recover)
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot)
   else boot()

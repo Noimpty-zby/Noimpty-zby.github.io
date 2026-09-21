@@ -23,6 +23,7 @@ const base = fileURLToPath(new URL('../../', import.meta.url))
 const petSource = readFileSync(path.join(base, 'source/js/mao-pet.js'), 'utf8')
 const model = JSON.parse(readFileSync(path.join(base, 'source/live2d/mao/mao_pro.model3.json'), 'utf8'))
 
+const CLOCK0 = 1_700_000_000_000
 let passed = 0
 const test = async (name, fn) => {
   try { await fn(); passed++; console.log('  ✓ ' + name) }
@@ -31,10 +32,11 @@ const test = async (name, fn) => {
 
 // ────────────────── 一个够跑这段脚本的浏览器 ──────────────────
 
-const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2 } = {}) => {
+const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2, lastSeen = null } = {}) => {
   const doc = new Map()          // 事件类型 → 回调
   const win = new Map()
   const store = new Map(saved === null ? [] : [['nanaly-pet-visible', saved]])
+  if (lastSeen !== null) store.set('mao-last-seen', String(lastSeen))
   const attached = new Set()
   const scripts = []
   const timers = { interval: [], timeout: [] }
@@ -42,7 +44,7 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2 } = {}) 
   let pending = null
   /* 双击判定按 Date.now() 的间隔算，真表没法测「两下隔了 400ms」这种情况 ——
    * 给沙箱一块自己能拨的表，测试想隔多久就隔多久。 */
-  let clock = 1_700_000_000_000
+  let clock = CLOCK0
 
   const make = tag => ({
     tagName: tag.toUpperCase(), dataset: {}, innerHTML: '', textContent: '',
@@ -100,11 +102,12 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2 } = {}) 
     clearTimeout: id => { if (id) timers.timeout[id - 1] = null }
   }
   sandbox.globalThis = sandbox
+  sandbox.fetch = undefined
   vm.runInNewContext(petSource, sandbox)
 
   const stage = () => [...attached].find(n => n.id === 'mao-stage')
   return {
-    win: window_, document, scripts, timers, created, stage,
+    win: window_, sandbox, document, scripts, timers, created, stage,
     docListeners: doc, winListeners: win,
     advance: ms => { clock += ms },
     clockNow: () => clock,
@@ -712,6 +715,105 @@ await test('★★ 文章页要认出标题，太长的标题不往气泡里塞'
   assert.ok(cfg.postLines.every(([t]) => t.includes('{题}')), 'postLines 里有条没留 {题} 的位置')
   assert.ok(petSource.includes('h1.post-title'), '没去读文章标题')
   assert.ok(/length\s*<=\s*\d+/.test(petSource), '标题长度没设上限，长标题会把气泡撑成一坨')
+})
+
+console.log('\n她知道什么')
+
+/* 给沙箱装一个 fetch + 解密 + 暗号闸门，模拟站点解锁与否。 */
+const withSite = (env, { unlocked = true, days = null } = {}) => {
+  env.win.NOIMPTY_GATE = { unlocked: () => unlocked }
+  env.win.NOIMPTY_SEARCH = { decryptPayload: async p => p.cipher }
+  const f = async () => ({
+    ok: days !== null,
+    json: async () => ({ alg: 'AES-GCM', cipher: JSON.stringify({ days }) })
+  })
+  // 代码里写的是裸 fetch()，在 vm 里解析到 sandbox 而不是 sandbox.window
+  env.win.fetch = f
+  env.sandbox.fetch = f
+}
+const todayKey = env => {
+  const d = new Date(env.clockNow())
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+}
+
+await test('★★ 没解锁就不许播报日程 —— 那是锁在暗号后面的东西', async () => {
+  const env = boot()
+  withSite(env, { unlocked: false, days: { x: [{ text: 'a', done: false }] } })
+  let fetched = 0
+  const boom = async () => { fetched++; throw new Error('不该来这儿') }
+  env.win.fetch = boom; env.sandbox.fetch = boom
+  const { created } = await turnOn(env)
+  await new Promise(r => setImmediate(r))
+  assert.equal(fetched, 0, '锁着还去取日程了')
+  const welcome = env.win.MAO_PET.config().welcome.map(l => l[0])
+  env.timers.interval.filter(Boolean).pop().fn()
+  assert.ok(welcome.some(t => t.startsWith(env.bubble().textContent)),
+    '锁着的时候说的不是普通招呼：' + env.bubble().textContent)
+})
+
+await test('★★ 解锁之后，出场那句报今天还剩几件', async () => {
+  const env = boot()
+  const key = todayKey(env)
+  withSite(env, { days: { [key]: [
+    { text: 'a', done: true }, { text: 'b', done: false },
+    { text: 'c', done: false }, { text: 'd', done: false }
+  ] } })
+  await turnOn(env)
+  for (let i = 0; i < 6; i++) await new Promise(r => setImmediate(r))
+  env.timers.interval.filter(Boolean).pop().fn()
+  const text = env.bubble().textContent
+  const busy = env.win.MAO_PET.config().scheduleLines['堆着'].map(([t]) => t.replace('{剩}', '3'))
+  assert.ok(busy.some(t => t.startsWith(text)), '没报出「还剩 3 件」那一档，说的是：' + text)
+})
+
+await test('★★ 今天发了文章，脸要变成星星眼', async () => {
+  const env = boot()
+  const key = todayKey(env)
+  withSite(env, { days: { [key]: [
+    { text: '写博客', done: true, autoWhy: '你发了《Git 第三章》' }
+  ] } })
+  const { created } = await turnOn(env)
+  for (let i = 0; i < 6; i++) await new Promise(r => setImmediate(r))
+  const { faces } = env.win.MAO_PET.config()
+  // 状态到位之后再说一句，然后让气泡到点自己收 —— 复位的该是「当前心情」那张
+  env.win.MAO_PET.say('随便说点什么')
+  env.timers.timeout.filter(Boolean).pop().fn()
+  assert.equal(created.models[0].face, faces['星星眼'],
+    '今天发了东西，她的脸却是 ' + created.models[0].face)
+})
+
+await test('★★ 日程全做完是笑，堆着是为难', async () => {
+  const key = env0 => todayKey(env0)
+  for (const [days, want] of [
+    [[{ text: 'a', done: true }], '笑'],
+    [[{ text: 'a', done: false }, { text: 'b', done: false }, { text: 'c', done: false }], '为难']
+  ]) {
+    const env = boot()
+    withSite(env, { days: { [key(env)]: days } })
+    const { created } = await turnOn(env)
+    for (let i = 0; i < 6; i++) await new Promise(r => setImmediate(r))
+    env.win.MAO_PET.say('随便说点什么')
+    env.timers.timeout.filter(Boolean).pop().fn()
+    const { faces } = env.win.MAO_PET.config()
+    assert.equal(created.models[0].face, faces[want], '该是' + want + '，实际 ' + created.models[0].face)
+  }
+})
+
+await test('★★ 解密要走 NOIMPTY_SEARCH，不许自己再写一份 AES', () => {
+  assert.ok(petSource.includes('NOIMPTY_SEARCH'), '没走站里那份解密')
+  assert.ok(!/crypto\.subtle/.test(petSource), 'Mao 自己写解密了 —— 该和 schedule.js 走同一条路')
+  assert.ok(petSource.includes('NOIMPTY_GATE'), '没检查暗号闸门就去取数据')
+})
+
+await test('★★ 隔了一天再来，她要先说「好久没见」', async () => {
+  const env2 = boot({ lastSeen: CLOCK0 - 30 * 3600 * 1000 })   // 上次来是 30 小时前
+  withSite(env2, { days: null })
+  await turnOn(env2)
+  for (let i = 0; i < 4; i++) await new Promise(r => setImmediate(r))
+  env2.timers.interval.filter(Boolean).pop().fn()
+  const text = env2.bubble().textContent
+  const miss = env2.win.MAO_PET.config().missLines.map(([t]) => t.replace('{隔}', '1 天'))
+  assert.ok(miss.some(t => t.startsWith(text)), '隔了一天却没说想你那几句：' + text)
 })
 
 console.log('\n什么时候说什么')

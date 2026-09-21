@@ -1,6 +1,9 @@
-/* 页面角落里的 Live2D 看板娘。
+/* 页面角落里的 Live2D 看板娘 Mao。
  *
- * 模型是 Live2D 官方免费样例 Mao（mao_pro），按《Free Material License Agreement》
+ * 她叫 Mao，不是娜娜莉 —— 娜娜莉是左下角猫爪那个对话窗里的助手，
+ * Mao 只是站在角落的人偶，双击她可以把娜娜莉叫出来。两者别混。
+ *
+ * 模型是 Live2D 官方免费样例 Niziiro Mao（mao_pro），按《Free Material License Agreement》
  * 使用，授权原文在 source/live2d/mao/ReadMe.txt。贴图由 tools/build-live2d-model.mjs
  * 从官方包的 4096² 缩到 2048² 并转 webp —— 原图 7.9 MB，她在页面上只有三百来像素。
  * 三份运行时（Cubism Core / PixiJS / pixi-live2d-display）都自己存在 source/lib/l2d/，
@@ -34,17 +37,19 @@
 
     // ── 站在哪、多大 ──
     side: 'right',       // 'right' 或 'left'。左下角被音乐和对话两个按钮占了
-    width: 300,          // 画布宽（px）
-    height: 380,         // 画布高（px）。比宽高一些，站姿才不挤
+    width: 380,          // 画布宽（px）
+    height: 480,         // 画布高（px）。比宽高一些，站姿才不挤
     bottom: 0,           // 离底边多远（px）
     edge: 0,             // 离那一侧边缘多远（px）
-    widthCapRatio: 0.44, // 窄屏上限：画布不超过视口宽度的这个比例
+    widthCapRatio: 0.52, // 窄屏上限：画布不超过视口宽度的这个比例
     zIndex: 8800,        // 压在对话面板（9002）和左下角三个按钮（9003）之下
+    maxResolution: 3,    // 渲染分辨率上限（× CSS 像素）。手机普遍 3 倍屏，卡在 2 就是糊的来源
 
     // ── 怎么互动 ──
     followCursor: true,       // 视线跟着鼠标走（她会转头看你）
     tapToTalk: true,          // 戳她一下：随机动作 + 说一句
     openChatOnDoubleClick: true, // 双击她 = 叫出娜娜莉的对话窗
+    doubleTapMs: 320,         // 两下算一次双击的最大间隔。手指比鼠标慢，别调到 250 以下
     defaultVisible: false,    // 头一回来的人看不看得到她
 
     // ── 她说什么 ──
@@ -67,8 +72,10 @@
 
   // ────────────────────────────────────────────────────────────────
 
-  if (window.NANALY_PET) return
+  if (window.MAO_PET) return
 
+  // 键名保持原样。改了的话，已经把她打开过的人一回来又是关的 —— 存的是使用者的选择，
+  // 不该因为内部改名就作废。
   const PREF = 'nanaly-pet-visible'
   // 顺序不能换：display 要在加载时就看到 PIXI 和 Live2DCubismCore
   const LIBS = ['/lib/l2d/cubismcore.min.js', '/lib/l2d/pixi.min.js', '/lib/l2d/live2d-display.min.js']
@@ -112,7 +119,7 @@
     if (!button) return
     const on = !!app
     button.setAttribute('aria-pressed', String(on))
-    button.title = on ? '把娜娜莉收起来' : '把娜娜莉放出来'
+    button.title = on ? '把 Mao 收起来' : '把 Mao 放出来'
   }
 
   // ── 说话 ──
@@ -159,13 +166,13 @@
       const { w, h } = stageSize()
 
       stage = document.createElement('div')
-      stage.id = 'nanaly-pet-stage'
+      stage.id = 'mao-stage'
       stage.dataset.side = CONFIG.side
       stage.style.cssText = `width:${w}px;height:${h}px;bottom:${CONFIG.bottom}px;`
         + `${CONFIG.side}:${CONFIG.edge}px;z-index:${CONFIG.zIndex}`
 
       bubble = document.createElement('div')
-      bubble.id = 'nanaly-pet-bubble'
+      bubble.id = 'mao-bubble'
       stage.appendChild(bubble)
 
       const canvas = document.createElement('canvas')
@@ -175,8 +182,12 @@
       app = new window.PIXI.Application({
         view: canvas, width: w, height: h,
         backgroundAlpha: 0, antialias: true,
-        // 不跟着设备像素比走的话，高分屏上她就是糊的
-        resolution: Math.min(window.devicePixelRatio || 1, 2),
+        /* 不跟着设备像素比走的话，高分屏上她就是糊的。
+         * 上限原来是 2 —— 而手机普遍是 3 倍屏，等于她在手机上一直只按
+         * 2/3 的分辨率画（实测 390×844@3x 上画布 172×218 CSS，位图只有
+         * 344×436，屏幕实际能显示 516×654）。放到 3 补齐这一截。
+         * 不取消上限：4 倍屏上按 4 画就是 16 倍填充率，不值。 */
+        resolution: Math.min(window.devicePixelRatio || 1, CONFIG.maxResolution),
         autoDensity: true
       })
 
@@ -192,21 +203,36 @@
        * 命中区也不能用它的：Mao 的 HitArea 只盖住脑袋那一小块，
        * 戳身子不算数。所以自己把 eventMode 打开，按她的包围盒算命中。 */
       model.eventMode = 'static'
-      if (CONFIG.tapToTalk) {
-        model.on('pointertap', () => {
-          try { model.motion(CONFIG.tapGroup) } catch (_) {}
-          say(pick(CONFIG.tapLines))
-        })
-      }
-      if (CONFIG.openChatOnDoubleClick) {
-        canvas.addEventListener('dblclick', () => {
-          // 双击也会先触发一次单击，把那句刚起头的话收回去 ——
+
+      /* 戳一下说句话，戳两下把娜娜莉叫出来 —— 两件事共用这一个处理器。
+       *
+       * 这里**不能**用 canvas 的 dblclick：触屏上它基本等于不存在（iOS Safari
+       * 对 touch 根本不派发 dblclick，安卓那边双击多半先被浏览器当成缩放手势吃掉），
+       * 所以手机上双击她一直打不开对话窗。改成自己数 pointertap 的间隔 ——
+       * PixiJS 的 pointertap 鼠标和手指都会发，一套代码两边都算数。
+       * 配合 CSS 里画布那条 touch-action: manipulation，把浏览器的双击缩放让开。 */
+      let lastTap = 0
+      model.on('pointertap', () => {
+        const now = Date.now()
+        const isDouble = now - lastTap <= CONFIG.doubleTapMs
+        // 连击只认一次。不清零的话三连点会被数成两次双击，对话窗开两遍
+        lastTap = isDouble ? 0 : now
+
+        if (isDouble) {
+          if (!CONFIG.openChatOnDoubleClick) return
+          // 第一下已经让她开口了，把那句收回去 ——
           // 否则对话窗开了，她头顶还挂着句“干嘛戳我”
           stopTalking()
           if (bubble) delete bubble.dataset.on
           openChat()
-        })
-      }
+          return
+        }
+
+        if (!CONFIG.tapToTalk) return
+        // 单击不等双击窗口过去就先说 —— 等 320ms 再开口，手感是卡的
+        try { model.motion(CONFIG.tapGroup) } catch (_) {}
+        say(pick(CONFIG.tapLines))
+      })
 
       /* 视线跟随全页面，而不只是她那块画布 —— 鼠标在文章里划过时她也会转头看，
        * 「养在博客里」的感觉全靠这一条。 */
@@ -287,10 +313,10 @@
   }
 
   const mountToggle = () => {
-    const existing = document.getElementById('nanaly-pet-toggle')
+    const existing = document.getElementById('mao-toggle')
     if (existing) { button = existing; return }
     button = document.createElement('button')
-    button.id = 'nanaly-pet-toggle'
+    button.id = 'mao-toggle'
     button.type = 'button'
     button.setAttribute('aria-label', '显示或隐藏看板娘')
     /* 她那顶魔法帽，和左下角另外两个按钮一样是 54×54 的圆。
@@ -325,7 +351,7 @@
     if (read()) enable()
   }
 
-  window.NANALY_PET = Object.freeze({
+  window.MAO_PET = Object.freeze({
     show: () => { save(true); return enable() },
     hide: () => { save(false); return disable() },
     visible: () => !!app,

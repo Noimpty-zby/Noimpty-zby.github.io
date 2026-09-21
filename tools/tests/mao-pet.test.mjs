@@ -20,7 +20,7 @@ import path from 'node:path'
 import vm from 'node:vm'
 
 const base = fileURLToPath(new URL('../../', import.meta.url))
-const petSource = readFileSync(path.join(base, 'source/js/nanaly-pet.js'), 'utf8')
+const petSource = readFileSync(path.join(base, 'source/js/mao-pet.js'), 'utf8')
 const model = JSON.parse(readFileSync(path.join(base, 'source/live2d/mao/mao_pro.model3.json'), 'utf8'))
 
 let passed = 0
@@ -31,7 +31,7 @@ const test = async (name, fn) => {
 
 // ────────────────── 一个够跑这段脚本的浏览器 ──────────────────
 
-const boot = ({ saved = null, innerWidth = 1440, failAt = null } = {}) => {
+const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2 } = {}) => {
   const doc = new Map()          // 事件类型 → 回调
   const win = new Map()
   const store = new Map(saved === null ? [] : [['nanaly-pet-visible', saved]])
@@ -40,6 +40,9 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null } = {}) => {
   const timers = { interval: [], timeout: [] }
   const created = { apps: [], models: [] }
   let pending = null
+  /* 双击判定按 Date.now() 的间隔算，真表没法测「两下隔了 400ms」这种情况 ——
+   * 给沙箱一块自己能拨的表，测试想隔多久就隔多久。 */
+  let clock = 1_700_000_000_000
 
   const make = tag => ({
     tagName: tag.toUpperCase(), dataset: {}, innerHTML: '', textContent: '',
@@ -75,7 +78,7 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null } = {}) => {
   }
 
   const window_ = {
-    innerWidth, devicePixelRatio: 2, localStorage,
+    innerWidth, devicePixelRatio: dpr, localStorage,
     addEventListener: (t, fn) => win.set(t, fn),
     removeEventListener: t => win.delete(t)
   }
@@ -84,6 +87,7 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null } = {}) => {
     window: window_, document, localStorage,
     console: { warn: () => {} },
     Math, JSON, Object, Number, String, Set, Map, Promise, Error, Array, Boolean,
+    Date: { now: () => clock },
     requestAnimationFrame: fn => { fn(); return 1 },
     setInterval: (fn, ms) => { timers.interval.push({ fn, ms }); return timers.interval.length },
     clearInterval: id => { if (id) timers.interval[id - 1] = null },
@@ -93,13 +97,14 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null } = {}) => {
   sandbox.globalThis = sandbox
   vm.runInNewContext(petSource, sandbox)
 
-  const stage = () => [...attached].find(n => n.id === 'nanaly-pet-stage')
+  const stage = () => [...attached].find(n => n.id === 'mao-stage')
   return {
     win: window_, document, scripts, timers, created, stage,
     docListeners: doc, winListeners: win,
+    advance: ms => { clock += ms },
     stored: () => (store.has('nanaly-pet-visible') ? store.get('nanaly-pet-visible') : null),
-    button: () => document.getElementById('nanaly-pet-toggle'),
-    bubble: () => [...attached].find(n => n.id === 'nanaly-pet-bubble'),
+    button: () => document.getElementById('mao-toggle'),
+    bubble: () => [...attached].find(n => n.id === 'mao-bubble'),
     detachStage: () => { const s = stage(); if (s) attached.delete(s) },
     // 三份运行时只在脚本「跑完」的那一刻才出现，提前塞等于绕过「到底插没插 script」
     armLibs: () => {
@@ -251,13 +256,13 @@ await test('★★ 脚本取不到时开关要退回「关」，不能卡在「�
   const env = boot({ failAt: 'script' })
   await turnOn(env)
   assert.equal(env.button().getAttribute('aria-pressed'), 'false', '亮着开却什么都没有，最难查')
-  assert.equal(env.win.NANALY_PET.visible(), false)
+  assert.equal(env.win.MAO_PET.visible(), false)
 })
 
 await test('★★ 模型加载失败要把已经建好的画布收掉，不留一块空的', async () => {
   const env = boot({ failAt: 'model' })
   await turnOn(env)
-  assert.equal(env.win.NANALY_PET.visible(), false)
+  assert.equal(env.win.MAO_PET.visible(), false)
   assert.equal(env.stage(), undefined, '画布建了一半就该拆掉，不能把空壳留在页面上')
   assert.equal(env.button().getAttribute('aria-pressed'), 'false')
 })
@@ -286,14 +291,14 @@ await test('★★ 逐字上屏，嘴跟着开合，说完要闭上', async () =
   const env = boot()
   const { params } = await turnOn(env)
   const bubble = env.bubble()
-  env.win.NANALY_PET.say('喵')
+  env.win.MAO_PET.say('喵')
   assert.equal(bubble.dataset.on, '1', '气泡该露出来')
   const typing = env.timers.interval.filter(Boolean).pop()
   typing.fn(); assert.equal(bubble.textContent, '喵')
-  const mouth = env.win.NANALY_PET.config().mouthParam
+  const mouth = env.win.MAO_PET.config().mouthParam
   assert.equal(params.get(mouth), 0, '最后一个字落地时嘴该闭上')
 
-  env.win.NANALY_PET.say('喵喵')
+  env.win.MAO_PET.say('喵喵')
   env.timers.interval.filter(Boolean).pop().fn()
   assert.ok(params.get(mouth) > 0, '还在说的时候嘴得是张开的')
 
@@ -305,9 +310,9 @@ await test('★★ 逐字上屏，嘴跟着开合，说完要闭上', async () =
 await test('★★ 一句还没说完又来一句，不能两个打字器一起往上写', async () => {
   const env = boot()
   await turnOn(env)
-  env.win.NANALY_PET.say('前一句')
+  env.win.MAO_PET.say('前一句')
   const before = env.timers.interval.filter(Boolean).length
-  env.win.NANALY_PET.say('后一句')
+  env.win.MAO_PET.say('后一句')
   assert.equal(env.timers.interval.filter(Boolean).length, before,
     '旧的打字器没停掉，两句会交替往同一个气泡里写')
   assert.equal(env.bubble().textContent, '', '新的一句该从头开始打')
@@ -320,9 +325,9 @@ await test('★ 按钮图标里用到的 class，css 里得真的有', () => {
   const html = env.button().innerHTML
   const used = [...new Set([...html.matchAll(/class="([^"]+)"/g)].map(m => m[1]))]
   assert.ok(used.length, '图标里一个 class 都没用到，这条对照不算数')
-  const css = readFileSync(path.join(base, 'source/css/nanaly-pet.css'), 'utf8')
+  const css = readFileSync(path.join(base, 'source/css/mao-pet.css'), 'utf8')
   for (const cls of used)
-    assert.ok(css.includes('.' + cls), `图标用了 .${cls}，但 nanaly-pet.css 里没这个选择器`)
+    assert.ok(css.includes('.' + cls), `图标用了 .${cls}，但 mao-pet.css 里没这个选择器`)
 })
 
 console.log('\n看板娘 · 戳她一下')
@@ -341,9 +346,9 @@ await test('★★ 戳一下：随机播一段动作，再说一句', async () =
   const m = created.models[0]
   env.bubble().textContent = ''
   m.handlers.get('pointertap')()
-  assert.equal(m.played, env.win.NANALY_PET.config().tapGroup, '没播动作')
+  assert.equal(m.played, env.win.MAO_PET.config().tapGroup, '没播动作')
   assert.equal(env.bubble().dataset.on, '1', '没说话')
-  const lines = env.win.NANALY_PET.config().tapLines
+  const lines = env.win.MAO_PET.config().tapLines
   env.timers.interval.filter(Boolean).pop().fn()
   assert.ok(lines.some(l => l.startsWith(env.bubble().textContent)), '说的不是被戳时那几句')
 })
@@ -354,12 +359,51 @@ await test('★★ 双击开对话窗时，要把单击那句话收回去', asyn
   const { created } = await turnOn(env)
   let opened = 0
   env.win.NANALY = { open: () => { opened++ } }
-  created.models[0].handlers.get('pointertap')()
+  const tap = created.models[0].handlers.get('pointertap')
+  tap()
   assert.equal(env.bubble().dataset.on, '1')
-  env.stage().querySelector('canvas').fire('dblclick')
+  env.advance(120)
+  tap()
   assert.equal(opened, 1, '没把对话窗叫出来')
   assert.equal(env.bubble().dataset.on, undefined, '气泡还挂着')
   assert.ok(env.timers.interval.filter(Boolean).length === 1, '打字器没停，只该剩那个循环说话的')
+})
+
+await test('★★ 双击判定不能挂在 dblclick 上 —— 手机上那个事件根本不来', async () => {
+  /* 这是真撞过的：canvas 上监听 dblclick，桌面好好的，手机上双击她死活不开对话窗。
+   * iOS Safari 对 touch 不派发 dblclick，安卓那边双击先被当成缩放手势吃掉。
+   * 判定必须走 pointertap —— 那个鼠标和手指都会发。 */
+  const env = boot()
+  const { created } = await turnOn(env)
+  const canvas = env.stage().querySelector('canvas')
+  assert.ok(!canvas.handlers.has('dblclick'), '又把双击挂回 canvas 的 dblclick 上了')
+  assert.ok(created.models[0].handlers.has('pointertap'), 'pointertap 没接')
+})
+
+await test('★★ 两下隔得太久就是两次单击，不该把对话窗打开', async () => {
+  const env = boot()
+  const { created } = await turnOn(env)
+  let opened = 0
+  env.win.NANALY = { open: () => { opened++ } }
+  const tap = created.models[0].handlers.get('pointertap')
+  tap()
+  env.advance(900)          // 隔了快一秒，是两次独立的戳
+  tap()
+  assert.equal(opened, 0, '隔这么久也当成双击了')
+  assert.equal(env.bubble().dataset.on, '1', '第二下该照常说话')
+})
+
+await test('★ 连戳三下只开一次对话窗', async () => {
+  /* 不把计时清零的话，第三下会和第二下再凑成一次双击，对话窗开两遍。 */
+  const env = boot()
+  const { created } = await turnOn(env)
+  let opened = 0
+  env.win.NANALY = { open: () => { opened++ } }
+  const tap = created.models[0].handlers.get('pointertap')
+  tap(); env.advance(100)
+  tap(); env.advance(100)
+  tap()
+  assert.equal(opened, 1, '开了 ' + opened + ' 次')
 })
 
 await test('★★ 画布要按她的身体裁，旁边的空白不能拦点击', async () => {
@@ -369,16 +413,27 @@ await test('★★ 画布要按她的身体裁，旁边的空白不能拦点击'
   await turnOn(env)
   const clip = env.stage().querySelector('canvas').style.clipPath
   assert.ok(clip && clip.startsWith('inset('), '没给画布裁形：' + clip)
-  // 壳里的包围盒是 x50 y20 w220 h360，画布 300×380，留 6px 富余
+  /* 不写死四个数 —— 画布尺寸是 CONFIG 里随时会调的，写死的话调一次大小
+   * 这里就红一次。按「包围盒 + 6px 富余」当场算，守的才是那条规则。 */
+  const { width: cw, height: ch } = env.created.apps[0].opts
+  const b = env.created.models[0].getBounds()
+  const pad = 6
+  const want = [
+    Math.max(0, b.y - pad),
+    Math.max(0, cw - (b.x + b.width) - pad),
+    Math.max(0, ch - (b.y + b.height) - pad),
+    Math.max(0, b.x - pad)
+  ]
   const nums = clip.match(/-?[\d.]+/g).map(Number)
-  assert.deepEqual(nums, [14, 24, 0, 44], '裁出来的边距和包围盒对不上：' + clip)
+  assert.deepEqual(nums, want, '裁出来的边距和包围盒对不上：' + clip)
+  assert.ok(nums.every(n => n >= 0), '裁出负边距了：' + clip)
 })
 
 await test('★ Butterfly 右侧那竖按钮要抬到她之上，不然回顶点不到', () => {
-  const css = readFileSync(path.join(base, 'source/css/nanaly-pet.css'), 'utf8')
+  const css = readFileSync(path.join(base, 'source/css/mao-pet.css'), 'utf8')
   const hit = css.match(/#rightside\s*\{[^}]*z-index:\s*(\d+)/)
-  assert.ok(hit, 'nanaly-pet.css 里没把 #rightside 抬上去')
-  const petZ = Number(boot().win.NANALY_PET.config().zIndex)
+  assert.ok(hit, 'mao-pet.css 里没把 #rightside 抬上去')
+  const petZ = Number(boot().win.MAO_PET.config().zIndex)
   const ai = readFileSync(path.join(base, 'source/css/noimpty-ai.css'), 'utf8')
   const panel = Math.min(...[...ai.matchAll(/z-index:\s*(\d{4,})/g)].map(m => Number(m[1])))
   assert.ok(Number(hit[1]) > petZ, `右侧按钮在 ${hit[1]}，她在 ${petZ} —— 会被她的画布盖住`)
@@ -404,38 +459,55 @@ await test('★★ 她还在的时候，翻页不该重建一遍', async () => {
 
 console.log('\n看板娘 · 尺寸、层级与模型')
 
-await test('★★ 窄屏上不许糊一脸：画布不超过视口宽度的 44%', async () => {
-  for (const [width, expected] of [[1440, 300], [800, 300], [600, 264], [390, 172]]) {
+await test('★★ 窄屏上她得让位：画布不超过视口宽度的 widthCapRatio', async () => {
+  /* 不写死像素 —— 尺寸是 CONFIG 里随时会调的东西，写死的话每调一次大小
+   * 这个测试就红一次，而它真正要守的是「窄屏上不许糊一脸」这条规则。 */
+  for (const width of [1440, 800, 600, 390, 320]) {
     const env = boot({ innerWidth: width })
     const { created } = await turnOn(env)
-    assert.equal(created.apps[0].opts.width, expected, `视口 ${width}px 时画布宽该是 ${expected}px`)
-    assert.ok(created.apps[0].opts.width <= Math.max(150, width * 0.44) + 1)
+    const { width: full, widthCapRatio, height } = env.win.MAO_PET.config()
+    const got = created.apps[0].opts.width
+    assert.equal(got, Math.max(150, Math.min(full, Math.round(width * widthCapRatio))),
+      `视口 ${width}px 时画布宽算错了：${got}`)
+    assert.ok(got <= full, `视口 ${width}px 上比 CONFIG.width 还宽`)
+    assert.ok(got <= Math.max(150, width * widthCapRatio) + 1, `视口 ${width}px 上越过上限了`)
+    assert.equal(created.apps[0].opts.height, Math.round(got * height / full), '高没等比跟着缩')
   }
 })
 
 await test('★ 横向落点要听 CONFIG.anchorX 的', async () => {
   const env = boot()
   const { created } = await turnOn(env)
-  const { anchorX } = env.win.NANALY_PET.config()
+  const { anchorX } = env.win.MAO_PET.config()
   assert.equal(created.models[0].pos[0], created.apps[0].opts.width * anchorX)
   assert.equal(created.models[0].pos[1], created.apps[0].opts.height, '脚底要贴着下边站住')
 })
 
 await test('★★ 按设备像素比渲染，高分屏上她才不是糊的', async () => {
+  /* 上限曾经写死是 2，而手机普遍是 3 倍屏 —— 等于她在手机上一直只按 2/3 的
+   * 分辨率画。这一条守着「3 倍屏要按 3 画」，别再退回去。 */
   const env = boot()
   const { created } = await turnOn(env)
-  assert.equal(created.apps[0].opts.resolution, 2)
+  const { maxResolution } = env.win.MAO_PET.config()
+  assert.ok(maxResolution >= 3, `分辨率上限是 ${maxResolution}，手机 3 倍屏上就是糊的`)
+  assert.equal(created.apps[0].opts.resolution, 2, '2 倍屏上该按 2 画')
   assert.equal(created.apps[0].opts.autoDensity, true)
   assert.equal(created.apps[0].opts.backgroundAlpha, 0, '背景得是透的，不然她脚下一块方底')
+
+  for (const [dpr, want] of [[1, 1], [3, 3], [8, maxResolution]]) {
+    const e = boot({ dpr })
+    const { created: c } = await turnOn(e)
+    assert.equal(c.apps[0].opts.resolution, want, `${dpr} 倍屏上该按 ${want} 画`)
+  }
 })
 
 await test('★★ 她得压在对话面板和三个按钮下面', async () => {
   const env = boot()
   await turnOn(env)
-  const mine = Number(env.win.NANALY_PET.config().zIndex)
+  const mine = Number(env.win.MAO_PET.config().zIndex)
   assert.ok(env.stage().style.cssText.includes(`z-index:${mine}`), '层级没写到她那块 DOM 上')
   const css = readFileSync(path.join(base, 'source/css/noimpty-ai.css'), 'utf8')
-    + readFileSync(path.join(base, 'source/css/nanaly-pet.css'), 'utf8')
+    + readFileSync(path.join(base, 'source/css/mao-pet.css'), 'utf8')
   const others = [...css.matchAll(/z-index:\s*(\d{4,})/g)].map(m => Number(m[1]))
   assert.ok(others.length >= 2, '没从 css 里读到对话窗那几层，这条对比不算数')
   assert.ok(mine < Math.min(...others),
@@ -444,7 +516,7 @@ await test('★★ 她得压在对话面板和三个按钮下面', async () => {
 
 await test('★★ CONFIG 指的模型文件真的在，且它引用的每个文件都在', async () => {
   const env = boot()
-  const config = env.win.NANALY_PET.config()
+  const config = env.win.MAO_PET.config()
   const modelFile = path.join(base, 'source', config.model)
   assert.ok(existsSync(modelFile), '模型找不到：' + config.model)
   const dir = path.dirname(modelFile)
@@ -458,7 +530,7 @@ await test('★★ CONFIG 指的模型文件真的在，且它引用的每个文
 
 await test('★★ 待机和戳她的动作分组名，得是这个模型真有的', () => {
   const env = boot()
-  const { idleGroup, tapGroup } = env.win.NANALY_PET.config()
+  const { idleGroup, tapGroup } = env.win.MAO_PET.config()
   const groups = Object.keys(model.FileReferences.Motions || {})
   assert.ok(groups.includes(idleGroup), `待机分组 "${idleGroup}" 不在模型里，她会一直杵着不动。有的是：${groups.map(g => JSON.stringify(g))}`)
   assert.ok(groups.includes(tapGroup), `戳她的分组 "${tapGroup}" 不在模型里，点了不会有反应`)
@@ -468,8 +540,78 @@ await test('★ 嘴型参数得是这个模型 LipSync 组里那个', () => {
   const lip = (model.Groups || []).find(g => g.Name === 'LipSync')
   assert.ok(lip, '模型没有 LipSync 组')
   const env = boot()
-  assert.ok(lip.Ids.includes(env.win.NANALY_PET.config().mouthParam),
+  assert.ok(lip.Ids.includes(env.win.MAO_PET.config().mouthParam),
     `mouthParam 不在 LipSync 组里（组里是 ${lip.Ids.join(', ')}），说话时嘴不会动`)
+})
+
+console.log('\n左下角那一摞按钮')
+
+/* 三个按钮分别住在三个 css 文件里，以前各写各的坐标 —— 音乐那个有窄屏规则
+ * （挪到 left:12px / 48px），猫爪那个自己写了 left:14px / 48px，Mao 那个一条
+ * 窄屏规则都没有，于是手机上三个按钮左边缘差 2px、大小差一圈、纵向间距也对不上。
+ * 现在统一从 custom.css 那几个变量算，这一节守着「谁都别再自己写坐标」。 */
+
+/* 注释里可能带花括号，会把下面那个粗糙的分块正则带偏 —— 先剥掉 */
+const cssOf = f => readFileSync(path.join(base, 'source/css/', f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+
+// 取出选择器正好是这一个 id 的所有规则块（#a.b、#a canvas 这种不算）
+const blocksFor = (css, id) => {
+  const out = []
+  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    // m[1] 会把上一条规则到这条之间的空白/@media 头一起吃进来，取最后一段才是选择器
+    const sel = m[1].split(',').map(x => x.trim().split('\n').pop().trim()).filter(Boolean)
+    if (sel.includes(id)) out.push(m[2])
+  }
+  return out
+}
+
+await test('★★ custom.css 里得有那几个共用变量，三个按钮全靠它们对齐', () => {
+  const css = cssOf('custom.css')
+  for (const v of ['--corner-size', '--corner-gap', '--corner-left', '--corner-bottom',
+                   '--corner-slot-0', '--corner-slot-1', '--corner-slot-2'])
+    assert.ok(css.includes(v + ':'), `custom.css 里没定义 ${v}`)
+  assert.ok(/--corner-bottom:\s*max\([^)]*env\(safe-area-inset-bottom\)/.test(css),
+    '最底下那一格没兜住刘海屏的安全区')
+})
+
+await test('★★ 三个按钮谁都不许自己写 left / bottom，只能读变量', () => {
+  const targets = [
+    ['music-player.css', '#noimpty-music-player', '--corner-slot-0'],
+    ['noimpty-ai.css', '#nanaly-launcher', '--corner-slot-1'],
+    ['mao-pet.css', '#mao-toggle', '--corner-slot-2']
+  ]
+  for (const [file, id, slot] of targets) {
+    const blocks = blocksFor(cssOf(file), id)
+    assert.ok(blocks.length, `${file} 里找不到 ${id} 的规则`)
+    let sawLeft = false, sawBottom = false
+    for (const body of blocks) {
+      for (const d of body.split(';')) {
+        const hit = d.match(/^\s*(left|bottom)\s*:\s*(.+)$/s)
+        if (!hit) continue
+        const [, prop, value] = hit
+        assert.ok(value.includes('var(--corner-'),
+          `${file} 的 ${id} 自己写了 ${prop}:${value.trim()} —— 得走 var(--corner-…)`)
+        if (prop === 'left') sawLeft = true
+        if (prop === 'bottom') { sawBottom = true; assert.ok(value.includes(slot), `${id} 该站第 ${slot} 格，写的是 ${value.trim()}`) }
+      }
+    }
+    assert.ok(sawLeft && sawBottom, `${id} 没把 left / bottom 都定下来`)
+  }
+})
+
+await test('★ 窄屏只缩变量，不许单独缩其中一个按钮', () => {
+  /* 只把猫爪缩成 48px、另外两个留 54px，就是他看到的那种参差。 */
+  const css = cssOf('custom.css')
+  const narrow = css.match(/@media\s*\(max-width:\s*520px\)\s*\{([\s\S]*?)\n\}/)
+  assert.ok(narrow, 'custom.css 里没有窄屏那段')
+  assert.ok(narrow[1].includes('--corner-size'), '窄屏没有统一改 --corner-size')
+  for (const [file, id] of [['noimpty-ai.css', '#nanaly-launcher'], ['mao-pet.css', '#mao-toggle']])
+    for (const body of blocksFor(cssOf(file), id))
+      for (const d of body.split(';')) {
+        const hit = d.match(/^\s*(width|height)\s*:\s*(.+)$/s)
+        if (hit) assert.ok(hit[2].includes('var(--corner-size)'),
+          `${file} 的 ${id} 自己写死了 ${hit[1]}:${hit[2].trim()}`)
+      }
 })
 
 console.log(`\n${passed} 项通过`)

@@ -112,6 +112,7 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2, lastSee
     advance: ms => { clock += ms },
     clockNow: () => clock,
     stored: () => (store.has('nanaly-pet-visible') ? store.get('nanaly-pet-visible') : null),
+    storedVoice: () => (store.has('mao-voice') ? store.get('mao-voice') : null),
     button: () => document.getElementById('mao-toggle'),
     bubble: () => [...attached].find(n => n.id === 'mao-bubble'),
     detachStage: () => { const s = stage(); if (s) attached.delete(s) },
@@ -715,6 +716,148 @@ await test('★★ 文章页要认出标题，太长的标题不往气泡里塞'
   assert.ok(cfg.postLines.every(([t]) => t.includes('{题}')), 'postLines 里有条没留 {题} 的位置')
   assert.ok(petSource.includes('h1.post-title'), '没去读文章标题')
   assert.ok(/length\s*<=\s*\d+/.test(petSource), '标题长度没设上限，长标题会把气泡撑成一坨')
+})
+
+console.log('\n出声')
+
+/* 假声音控制器：记下被要求念了什么，并能手动推进状态。 */
+const fakeVoice = env => {
+  env.win.NOIMPTY_GATE = { unlocked: () => true }      // 出声要过暗号这关
+  const spoken = []
+  let listener = null, stopped = 0
+  env.win.NANALY = {
+    ...(env.win.NANALY || {}),
+    voice: () => ({
+      speak: (text, opt) => { spoken.push({ text, id: opt && opt.id }); return true },
+      stop: () => { stopped++ },
+      subscribe: fn => { listener = fn; return () => { listener = null } },
+      state: () => null
+    })
+  }
+  return { spoken, emit: st => listener && listener(st), stopped: () => stopped, id: () => spoken.at(-1)?.id }
+}
+
+await test('★★ 默认不出声 —— TTS 按次计费，别默认替人花钱', async () => {
+  const env = boot()
+  const v = fakeVoice(env)
+  const { created } = await turnOn(env)
+  for (let i = 0; i < 4; i++) await new Promise(r => setImmediate(r))
+  created.models[0].handlers.get('pointertap')()
+  assert.equal(env.win.MAO_PET.voice(), false, '默认就是开着的')
+  assert.equal(v.spoken.length, 0, '默认状态下就去念了：' + JSON.stringify(v.spoken))
+  assert.equal(env.win.MAO_PET.config().voiceDefault, false, 'voiceDefault 不是 false')
+})
+
+await test('★★ 开了之后，主动招呼她才出声；闲聊不出声', async () => {
+  const env = boot()
+  const v = fakeVoice(env)
+  const { created } = await turnOn(env)
+  for (let i = 0; i < 4; i++) await new Promise(r => setImmediate(r))
+  env.win.MAO_PET.voice(true)
+  v.spoken.length = 0
+
+  created.models[0].handlers.get('pointertap')()       // 戳她 = 主动招呼
+  assert.equal(v.spoken.length, 1, '戳了却没出声')
+
+  v.spoken.length = 0
+  env.timers.interval.find(t => t && t.ms === env.win.MAO_PET.config().idleEveryMs).fn()  // 闲聊
+  assert.equal(v.spoken.length, 0, '闲聊也出声了 —— 每 70 秒烧一次额度')
+  assert.equal(env.win.MAO_PET.config().voiceOnIdle, false, 'voiceOnIdle 不是 false')
+})
+
+await test('★★ 嘴跟着「真的有没有声音」动，不是跟着打字机', async () => {
+  const env = boot()
+  const v = fakeVoice(env)
+  const { created, params } = await turnOn(env)
+  for (let i = 0; i < 4; i++) await new Promise(r => setImmediate(r))
+  env.win.MAO_PET.voice(true)
+  const mouthParam = env.win.MAO_PET.config().mouthParam
+
+  created.models[0].handlers.get('pointertap')()
+  const id = v.id()
+  // 还在合成，嘴不该动
+  params.clear(); v.emit({ id, phase: 'loading' })
+  assert.equal(params.get(mouthParam), 0, '还没出声嘴就开始动了')
+  // 出声了：起一个跟着声音走的循环
+  v.emit({ id, phase: 'playing' })
+  const before = env.timers.interval.filter(Boolean).length
+  assert.ok(before > 0, '出声了却没有驱动嘴的循环')
+})
+
+await test('★★ 别人说话别跟着动嘴 —— 娜娜莉在对话窗里念不算她在说', async () => {
+  const env = boot()
+  const v = fakeVoice(env)
+  const { created, params } = await turnOn(env)
+  for (let i = 0; i < 4; i++) await new Promise(r => setImmediate(r))
+  env.win.MAO_PET.voice(true)
+  created.models[0].handlers.get('pointertap')()
+  /* 看的是「有没有为这次播报起驱动嘴的循环」，而不是嘴参数当前值 ——
+   * 循环刚建起来还没跑过一拍，参数是空的，只查参数会漏掉。 */
+  const before = env.timers.interval.filter(Boolean).length
+  v.emit({ id: 'voice-别人的-id', phase: 'playing' })
+  assert.equal(env.timers.interval.filter(Boolean).length, before,
+    '别人说话，她也起了驱动嘴的循环')
+
+  // 换成自己那条 id，就该起循环 —— 证明上面那条不是因为整个功能坏了才过
+  v.emit({ id: v.id(), phase: 'playing' })
+  assert.ok(env.timers.interval.filter(Boolean).length > before, '自己说话反而不动嘴')
+})
+
+await test('★★ 没解锁 / 没装声音模块，开了也不该炸', async () => {
+  const env = boot()
+  env.win.NANALY = { voice: () => null }
+  const { created } = await turnOn(env)
+  for (let i = 0; i < 4; i++) await new Promise(r => setImmediate(r))
+  env.win.MAO_PET.voice(true)
+  assert.doesNotThrow(() => created.models[0].handlers.get('pointertap')(), '没有控制器就崩')
+  env.win.NANALY = undefined
+  assert.doesNotThrow(() => created.models[0].handlers.get('pointertap')(), '没有 NANALY 就崩')
+})
+
+await test('★★ 借的是娜娜莉那个控制器，不许自己 create 一个', () => {
+  assert.ok(petSource.includes('NANALY?.voice'), 'Mao 没去借声音控制器')
+  assert.ok(!petSource.includes('NANALY_VOICE.create'), 'Mao 自己 create 了一个控制器 —— 那是第二份缓存和第二条取密钥的路')
+  const ai = readFileSync(path.join(base, 'source/js/noimpty-ai.js'), 'utf8')
+  assert.ok(/voice:\s*\(\)\s*=>\s*voiceController/.test(ai), 'noimpty-ai.js 没把控制器交出来')
+})
+
+await test('★★ 锁着就不出声 —— 否则戳一下会蹦出输密码的面板', async () => {
+  const env = boot()
+  const v = fakeVoice(env)
+  env.win.NOIMPTY_GATE = { unlocked: () => false }
+  const { created } = await turnOn(env)
+  for (let i = 0; i < 4; i++) await new Promise(r => setImmediate(r))
+  env.win.MAO_PET.voice(true)
+  v.spoken.length = 0
+  created.models[0].handlers.get('pointertap')()
+  assert.equal(v.spoken.length, 0, '锁着还去要声音了 —— 会触发 onNeedKey 弹面板')
+})
+
+await test('★★ 收起她的时候要退订声音控制器，不然回调一直挂着', async () => {
+  const env = boot()
+  let subs = 0, unsubs = 0
+  env.win.NANALY = {
+    voice: () => ({
+      speak: () => true, stop: () => {}, state: () => null,
+      subscribe: () => { subs++; return () => { unsubs++ } }
+    })
+  }
+  const { created } = await turnOn(env)
+  for (let i = 0; i < 4; i++) await new Promise(r => setImmediate(r))
+  env.win.MAO_PET.voice(true)
+  created.models[0].handlers.get('pointertap')()
+  assert.ok(subs > 0, '压根没订阅')
+  await env.win.MAO_PET.hide()
+  assert.equal(unsubs, subs, `订了 ${subs} 次只退了 ${unsubs} 次`)
+})
+
+await test('★ 出声开关记在本地，下次进来还是那个设置', async () => {
+  const env = boot()
+  fakeVoice(env)
+  await turnOn(env)
+  for (let i = 0; i < 4; i++) await new Promise(r => setImmediate(r))
+  env.win.MAO_PET.voice(true)
+  assert.equal(env.storedVoice(), 'true', '没存下来')
 })
 
 console.log('\n她知道什么')

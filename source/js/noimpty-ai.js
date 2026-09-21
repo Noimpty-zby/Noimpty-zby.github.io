@@ -2850,6 +2850,10 @@
     memory: () => JSON.parse(JSON.stringify(memory)),
     forgetMemory: () => { memory = memDefault(); saveMem(); return '她关于你的记忆已清空' },
     poke: () => { pokedPaths.delete(location.pathname); showPoke() },
+    /* 声音控制器本体。Mao 要出声时借它 —— 密钥、分句、缓存、打断都在里面，
+     * 她自己再 create() 一个就是第二份缓存和第二条取密钥的路。
+     * 没解锁 / 没装声音模块时是 null，调用方自己兜。 */
+    voice: () => voiceController,
     /* 当前路径落在哪个栏目里，最长前缀匹配。Mao 靠它知道自己站在哪一页 ——
      * SECTIONS 这张表只该有一份，抄第二份出去早晚会和这份对不上。 */
     sectionOf: (path = location.pathname) => {

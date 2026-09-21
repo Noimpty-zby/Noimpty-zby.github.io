@@ -197,6 +197,19 @@
     danceHz: 1.1,        // 摆动快慢
     danceGain: 1.6,      // 能量放大倍数，1 左右太蔫
 
+    /* ── 出声 ──
+     * 借娜娜莉那个声音控制器（window.NANALY.voice()）—— 密钥、分句、缓存、打断
+     * 都在里面，Mao 自己再建一个就是第二份缓存和第二条取密钥的路。
+     *
+     * **默认关，而且只在你主动招呼她的时候出声。** TTS 是按次计费的，
+     * 她每 70 秒闲聊一句，全接上语音就是每 70 秒烧一次额度。
+     * voiceOnIdle 留在这儿是为了写明这个决定，想开自己改，但那个账会很难看。 */
+    voiceDefault: false,
+    voiceOnIdle: false,
+    voiceVolume: 0.85,
+    voiceHoldMs: 600,    // 长按帽子按钮多久算「切换出声」
+    voiceLines: { on: ['好，我出声喵。', '听得见我吗？'], off: ['那我闭嘴。', '好吧，安静点也行。'] },
+
     speakMs: 4200,       // 一句话停留多久
     idleEveryMs: 70000,  // 隔多久自己说一句
     typeMs: 90           // 打字速度（ms/字），嘴也按这个开合
@@ -229,7 +242,7 @@
   }
 
   let app = null, model = null, stage = null, bubble = null, button = null
-  let sulkUntil = 0, tapStreak = 0, lastTapAt = 0, greetTimer = null
+  let sulkUntil = 0, tapStreak = 0, lastTapAt = 0, greetTimer = null, voiceTimer = null
   let loading = null, idleTimer = null, hideTimer = null, typeTimer = null, onMove = null, onResize = null
 
   const loadScript = src => new Promise((resolve, reject) => {
@@ -252,7 +265,9 @@
     if (!button) return
     const on = !!app
     button.setAttribute('aria-pressed', String(on))
-    button.title = on ? '把 Mao 收起来' : '把 Mao 放出来'
+    button.dataset.voice = voiceOn ? 'on' : 'off'
+    button.title = (on ? '把 Mao 收起来' : '把 Mao 放出来')
+      + '（长按' + (voiceOn ? '让她闭嘴' : '让她出声') + '）'
   }
 
   // ── 说话 ──
@@ -329,31 +344,97 @@
 
   const resetMood = () => { sulkUntil = 0; tapStreak = 0; lastTapAt = 0 }
 
+  /* ── 出声 ──
+   *
+   * 声音控制器是娜娜莉那一个，没解锁 / 没装声音模块时是 null。
+   * 她说话的时候嘴跟着动：接上语音之后，嘴的节奏跟的是**真的有没有声音在响**
+   * （订阅控制器的状态），而不是打字机打到第几个字。 */
+  const VOICE_PREF = 'mao-voice'
+  let voiceOn = (() => {
+    try {
+      const saved = localStorage.getItem(VOICE_PREF)
+      return saved === null ? CONFIG.voiceDefault : JSON.parse(saved)
+    } catch (_) { return CONFIG.voiceDefault }
+  })()
+  let voiceSeq = 0, voiceId = null, unsubVoice = null
+
+  const voiceCtl = () => {
+    try {
+      /* 锁着就别去要声音。控制器本身一直在，但它的密钥在保险箱里 ——
+       * 锁着调 speak() 会触发 onNeedKey，把对话窗弹出来问密码。
+       * 「戳一下看板娘，结果蹦出个输密码的面板」不是人想要的。 */
+      if (window.NOIMPTY_GATE && !window.NOIMPTY_GATE.unlocked()) return null
+      return window.NANALY?.voice?.() || null
+    } catch (_) { return null }
+  }
+
+  const mouth = v => {
+    if (!model) return
+    try { model.internalModel.coreModel.setParameterValueById(CONFIG.mouthParam, v) } catch (_) {}
+  }
+
+  /* 订阅控制器：只认自己那条 id，别把娜娜莉在对话窗里说的话也当成自己在说。 */
+  const watchVoice = () => {
+    const ctl = voiceCtl()
+    if (!ctl || unsubVoice) return
+    unsubVoice = ctl.subscribe(state => {
+      if (!model) return
+      const mine = state && state.id === voiceId
+      if (!mine) { if (!typeTimer) mouth(0); return }
+      // planning / loading 时还没出声，嘴先别动
+      if (state.phase === 'planning' || state.phase === 'loading') { mouth(0); return }
+      if (!voiceTimer) {
+        voiceTimer = setInterval(() => mouth(0.35 + Math.random() * 0.65), CONFIG.typeMs)
+      }
+    })
+  }
+
+  const stopVoiceMouth = () => {
+    clearInterval(voiceTimer); voiceTimer = null
+    mouth(0)
+  }
+
+  const setVoice = on => {
+    voiceOn = !!on
+    try { localStorage.setItem(VOICE_PREF, JSON.stringify(voiceOn)) } catch (_) {}
+    sync()
+    if (model) say(pick(CONFIG.voiceLines[voiceOn ? 'on' : 'off']), { aloud: voiceOn })
+    return voiceOn
+  }
+
   const stopTalking = () => {
     clearTimeout(hideTimer); clearInterval(typeTimer)
     hideTimer = typeTimer = null
-    if (model) { try { model.internalModel.coreModel.setParameterValueById(CONFIG.mouthParam, 0) } catch (_) {} }
+    stopVoiceMouth()
+    // 上一句还在放就掐掉，不然新台词的字和旧句子的声音对不上
+    if (voiceId) { try { voiceCtl()?.stop() } catch (_) {} voiceId = null }
   }
 
   /* 逐字上屏，嘴跟着开合。嘴型值取随机而不是定值 —— 匀速开合看着像机器人，
    * 随机幅度才有说话的样子。 */
-  const say = line => {
+  const say = (line, { aloud = false } = {}) => {
     if (!bubble) return
     // 台词可以写成 '一句话'，也可以写成 ['一句话', '表情']
     const [text, mood] = Array.isArray(line) ? line : [line, null]
     stopTalking()
     face(mood || moodFace())
+
+    /* 出声。只有主动招呼她的时候才给 aloud —— 闲聊一律不出声，
+     * 那是按次计费的，每 70 秒烧一次额度的账很难看。 */
+    const ctl = voiceOn && (aloud || CONFIG.voiceOnIdle) ? voiceCtl() : null
+    if (ctl) {
+      voiceId = 'mao-' + (++voiceSeq)
+      watchVoice()
+      try { ctl.speak(text, { id: voiceId }) } catch (_) {}
+    }
+
     bubble.textContent = ''
     bubble.dataset.on = '1'
     let i = 0
     typeTimer = setInterval(() => {
       bubble.textContent = text.slice(0, ++i)
-      if (model) {
-        try {
-          model.internalModel.coreModel.setParameterValueById(
-            CONFIG.mouthParam, i < text.length ? 0.4 + Math.random() * 0.6 : 0)
-        } catch (_) {}
-      }
+      // 有声音在响的时候，嘴归声音那条线管 —— 两边一起写会打架
+      if (model && !voiceTimer) mouth(i < text.length ? 0.4 + Math.random() * 0.6 : 0)
       if (i >= text.length) { clearInterval(typeTimer); typeTimer = null }
     }, CONFIG.typeMs)
     hideTimer = setTimeout(() => {
@@ -384,11 +465,11 @@
 
     if (awayFor >= CONFIG.missYouAfterH) {
       const [text, mood] = pick(CONFIG.missLines)
-      say([text.replace('{隔}', awayText()), mood])
+      say([text.replace('{隔}', awayText()), mood], { aloud: true })
       return
     }
     const line = st ? scheduleLine() : null
-    say(line || pick(CONFIG.welcome))
+    say(line || pick(CONFIG.welcome), { aloud: true })
   }
 
   /* ── 她在哪一页 ──
@@ -619,12 +700,12 @@
         if (tapStreak >= CONFIG.sulkAfter) {
           tapStreak = 0
           sulkUntil = now + CONFIG.sulkMs
-          say([pick(CONFIG.sulkLines), '生气'])
+          say([pick(CONFIG.sulkLines), '生气'], { aloud: true })
           return                       // 闹别扭的时候不播动作，不然刚扭开又被动作掰回来
         }
 
         try { model.motion(CONFIG.tapGroup) } catch (_) {}
-        say(pick(zoneAt(e).lines))
+        say(pick(zoneAt(e).lines), { aloud: true })
       })
 
       /* 视线跟随全页面，而不只是她那块画布 —— 鼠标在文章里划过时她也会转头看，
@@ -685,6 +766,8 @@
   const teardown = async () => {
     stopTalking()
     clearTimeout(greetTimer); greetTimer = null
+    // 订阅挂在娜娜莉那个控制器上，她被收起来之后不退订就是一直挂着的回调
+    if (unsubVoice) { try { unsubVoice() } catch (_) {} unsubVoice = null }
     clearInterval(idleTimer); idleTimer = null
     if (onMove) { document.removeEventListener('pointermove', onMove); onMove = null }
     if (onResize) { window.removeEventListener('resize', onResize); onResize = null }
@@ -727,6 +810,7 @@
       + '<path class="solid" d="M8.7 12.9q2.9 1.05 5.6.05l.3 1.6q-3.1 1.1-6.2 0Z"/>'
       + '<path class="solid" d="M19.9 4.4q.4 1.75 1.75 2.15-1.35.4-1.75 2.15-.4-1.75-1.75-2.15 1.35-.4 1.75-2.15Z"/>'
       + '</svg>'
+    bindHold(button)          // 长按切出声。必须在 click 之前挂，它要能拦下那一次 click
     button.addEventListener('click', toggle)
     document.body.appendChild(button)
     sync()
@@ -756,8 +840,32 @@
     model: () => model,
     config: () => CONFIG,
     // 这会儿她该说哪一组话。测试和调试都用它，省得等 70 秒
-    lines: () => linesHere()
+    lines: () => linesHere(),
+    // 出声开关。不给参数就是问现在开没开
+    voice: on => (on === undefined ? voiceOn : setVoice(on))
   })
+
+  /* 长按帽子按钮 = 切换出声。没有给它单独一个按钮 —— 左下角那一摞已经三个了，
+   * 手机上再加一格就该挤到正文里去。长按开始的那一下会吞掉随后的 click，
+   * 否则松手时会顺带把她关掉。 */
+  const bindHold = target => {
+    let timer = null, fired = false
+    const start = () => {
+      fired = false
+      clearTimeout(timer)
+      timer = setTimeout(() => { fired = true; timer = null; setVoice(!voiceOn) }, CONFIG.voiceHoldMs)
+    }
+    const cancel = () => { clearTimeout(timer); timer = null }
+    target.addEventListener('pointerdown', start)
+    target.addEventListener('pointerup', cancel)
+    target.addEventListener('pointerleave', cancel)
+    target.addEventListener('pointercancel', cancel)
+    target.addEventListener('click', e => {
+      if (!fired) return
+      fired = false
+      e.preventDefault(); e.stopImmediatePropagation()   // 长按过了就不再当成开关
+    }, true)
+  }
 
   rememberVisit()
   document.addEventListener('pjax:complete', recover)

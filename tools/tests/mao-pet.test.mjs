@@ -24,6 +24,20 @@ const petSource = readFileSync(path.join(base, 'source/js/mao-pet.js'), 'utf8')
 const model = JSON.parse(readFileSync(path.join(base, 'source/live2d/mao/mao_pro.model3.json'), 'utf8'))
 
 const CLOCK0 = 1_700_000_000_000
+/* 注释里可能带花括号，会把下面那个粗糙的分块正则带偏 —— 先剥掉 */
+const cssOf = f => readFileSync(path.join(base, 'source/css/', f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+
+// 取出选择器正好是这一个 id 的所有规则块（#a.b、#a canvas 这种不算）
+const blocksFor = (css, id) => {
+  const out = []
+  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    // m[1] 会把上一条规则到这条之间的空白/@media 头一起吃进来，取最后一段才是选择器
+    const sel = m[1].split(',').map(x => x.trim().split('\n').pop().trim()).filter(Boolean)
+    if (sel.includes(id)) out.push(m[2])
+  }
+  return out
+}
+
 let passed = 0
 const test = async (name, fn) => {
   try { await fn(); passed++; console.log('  ✓ ' + name) }
@@ -48,7 +62,9 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2, lastSee
 
   const make = tag => ({
     tagName: tag.toUpperCase(), dataset: {}, innerHTML: '', textContent: '',
-    parentElement: null, style: { cssText: '' }, attrs: new Map(), handlers: new Map(),
+    parentElement: null, attrs: new Map(), handlers: new Map(),
+    // 真元素的 style 上有 setProperty，长按那圈的时长是这么交给 CSS 的
+    style: { cssText: '', props: new Map(), setProperty (k, v) { this.props.set(k, v) }, getPropertyValue (k) { return this.props.get(k) || '' } },
     setAttribute(k, v) { this.attrs.set(k, v) },
     getAttribute(k) { return this.attrs.has(k) ? this.attrs.get(k) : null },
     addEventListener(t, fn) { this.handlers.set(t, fn) },
@@ -863,6 +879,42 @@ await test('★★ 收起她的时候要退订声音控制器，不然回调一�
   assert.equal(unsubs, subs, `订了 ${subs} 次只退了 ${unsubs} 次`)
 })
 
+await test('★★ 长按按钮必须挡掉浏览器自己的长按手势，否则真机上按了没反应', () => {
+  /* 真撞过：#mao-toggle 上没有 touch-action / user-select / touch-callout，
+   * iOS 长按弹选择菜单、安卓弹上下文菜单，浏览器一接管就发 pointercancel，
+   * 长按计时当场被清掉 —— 手上的感觉就是「按了半天没动静」。
+   * 模拟器不模拟这些菜单，所以这条只能靠静态检查守。 */
+  const css = cssOf('mao-pet.css')
+  const block = blocksFor(css, '#mao-toggle').join(';')
+  for (const [prop, why] of [
+    ['touch-action', '浏览器会把长按当成自己的手势'],
+    ['user-select', '长按会起选择'],
+    ['-webkit-touch-callout', 'iOS 会弹选择菜单']
+  ]) assert.ok(new RegExp(prop + '\\s*:').test(block), `#mao-toggle 少了 ${prop} —— ${why}`)
+  assert.ok(petSource.includes("'contextmenu'"), '没按掉 contextmenu，安卓上它会在长按判定之前弹出来')
+})
+
+await test('★★ 长按过程中要有看得见的反馈', async () => {
+  /* 没有反馈的话，「松手早了」和「功能坏了」在手上是一模一样的 ——
+   * 主人第一次反馈就是「长按了没反应，不知道是功能不行还是没抓到」。 */
+  const env = boot()
+  await turnOn(env)
+  const btn = env.button()
+  // 光查源码里出现过 dataset.holding 是不够的 —— 只留一句 delete 也能过。
+  // 按住的时候标记必须真的挂上，松手必须真的摘掉。
+  btn.fire('pointerdown')
+  assert.equal(btn.dataset.holding, '1', '按住了却没做标记，转圈根本不会出现')
+  btn.fire('pointerup')
+  assert.equal(btn.dataset.holding, undefined, '松手了标记还挂着，圈会一直转')
+
+  // 判定时长要交给 CSS，两边不能各写一个数
+  assert.equal(btn.style.getPropertyValue('--mao-hold-ms'),
+    env.win.MAO_PET.config().voiceHoldMs + 'ms', '转圈时长和判定时长对不上')
+  const css = cssOf('mao-pet.css')
+  assert.ok(/#mao-toggle\[data-holding\]/.test(css), 'CSS 里没有长按时的样式')
+  assert.ok(/var\(--mao-hold-ms/.test(css), '转圈时长没跟着 --mao-hold-ms 走')
+})
+
 await test('★ 出声开关记在本地，下次进来还是那个设置', async () => {
   const env = boot()
   fakeVoice(env)
@@ -1121,20 +1173,6 @@ console.log('\n左下角那一摞按钮')
  * （挪到 left:12px / 48px），猫爪那个自己写了 left:14px / 48px，Mao 那个一条
  * 窄屏规则都没有，于是手机上三个按钮左边缘差 2px、大小差一圈、纵向间距也对不上。
  * 现在统一从 custom.css 那几个变量算，这一节守着「谁都别再自己写坐标」。 */
-
-/* 注释里可能带花括号，会把下面那个粗糙的分块正则带偏 —— 先剥掉 */
-const cssOf = f => readFileSync(path.join(base, 'source/css/', f), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
-
-// 取出选择器正好是这一个 id 的所有规则块（#a.b、#a canvas 这种不算）
-const blocksFor = (css, id) => {
-  const out = []
-  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    // m[1] 会把上一条规则到这条之间的空白/@media 头一起吃进来，取最后一段才是选择器
-    const sel = m[1].split(',').map(x => x.trim().split('\n').pop().trim()).filter(Boolean)
-    if (sel.includes(id)) out.push(m[2])
-  }
-  return out
-}
 
 await test('★★ custom.css 里得有那几个共用变量，三个按钮全靠它们对齐', () => {
   const css = cssOf('custom.css')

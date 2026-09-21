@@ -85,9 +85,14 @@
 }
 
 /* 独立 translate 为展开的播放器让位，不覆盖猫爪的 hover transform。
-   不支持 :has 的浏览器继续使用原来位置。 */
-#nanaly-launcher, #nanaly-poke { translate: 0 0; }
-body:has(#noimpty-music-player:not(.is-collapsed)) :is(#nanaly-launcher, #nanaly-poke) {
+   不支持 :has 的浏览器继续使用原来位置。
+
+   Mao 的帽子（第 2 格）也必须一起抬。只抬猫爪的话，音乐面板一展开
+   （实测手机上从 bottom:12 一直长到 236），帽子还钉在 bottom:136 —— 正好落在
+   面板身上，而它 z-index 9003 比播放器的 9000 高，于是压着面板内容画。
+   三个按钮是一摞，让位要整摞让。 */
+#nanaly-launcher, #nanaly-poke, #mao-toggle { translate: 0 0; }
+body:has(#noimpty-music-player:not(.is-collapsed)) :is(#nanaly-launcher, #nanaly-poke, #mao-toggle) {
   translate: 0 -180px;
 }
 /* 面板的可用高度与避让同步生效，避免收起音乐时顶端短暂越出视口。 */

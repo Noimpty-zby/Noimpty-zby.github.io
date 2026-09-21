@@ -52,19 +52,84 @@
     doubleTapMs: 320,         // 两下算一次双击的最大间隔。手指比鼠标慢，别调到 250 以下
     defaultVisible: false,    // 头一回来的人看不看得到她
 
+    /* ── 她的八张脸 ──
+     * 名字是把 expressions/*.exp3.json 里的参数读出来命名的，不是看图猜的：
+     *   exp_01 眼睛正常睁开、其余全归零      → 平静（也是复位用的那张）
+     *   exp_02 闭眼 + EyeSmile=1             → 笑眯眯
+     *   exp_03 只闭眼、不笑                   → 闭眼
+     *   exp_04 睁大 1.2 倍 + EyeEffect=1      → 星星眼
+     *   exp_05 眉毛内压 + 嘴角向下            → 难过
+     *   exp_06 ParamCheek=1                  → 脸红
+     *   exp_07 睁大 + 眼球变形 + 嘴角向下     → 为难
+     *   exp_08 MouthAngry + MouthAngryLine   → 生气 */
+    faces: {
+      平静: 'exp_01', 笑: 'exp_02', 闭眼: 'exp_03', 星星眼: 'exp_04',
+      难过: 'exp_05', 脸红: 'exp_06', 为难: 'exp_07', 生气: 'exp_08'
+    },
+    restFace: '平静',    // 一句话说完之后回到哪张脸
+    /* 一条实测出来的脾气：待机动作（Idle 组的 mtn_01）是一直循环播着的，
+     * 而它动了表情用到的全部 28 个参数。表情是叠在动作之上生效的，所以能看见，
+     * 但 EyeOpen 这几个是 Multiply 混合 —— 星星眼的 ×1.2 撞上动作正在眨眼那一帧
+     * 就是 0×1.2=0，于是看着成了「笑眯眯」。同一张脸在不同时刻不完全一样，
+     * 这是模型自己的做法，不是这边的 bug。 */
+
     // ── 她说什么 ──
-    // 沿用对话窗口那版人设：自称「我」，毒舌但可靠，偶尔带喵和颜文字。
-    // 间隔拉得很开 —— 每隔几秒说一句的看板娘是骚扰，不是陪伴。
-    welcome: ['来啦。今天想看点什么喵？', '哟，又见面了 (=^w^=)', '我在这儿等你有一会儿了。'],
-    idleLines: [
-      '又在看这一页喵？',
-      '累了就去翻翻生活那一栏。',
-      '双击我，有事直接问。',
-      '别熬太晚，明天还要学。',
-      '这段卡住了？说出来我帮你理。',
-      '左下角那个粉色的按钮能把我关掉，不过你舍得吗 (ovo)'
+    // 每条写成 ['台词', '表情']，表情名取上面 faces 里的键；只写字符串也行，
+    // 那就用 restFace 那张脸。间隔拉得很开 —— 每隔几秒说一句的是骚扰，不是陪伴。
+    welcome: [
+      ['来啦。今天想看点什么喵？', '笑'],
+      ['哟，又见面了 (=^w^=)', '星星眼'],
+      ['我在这儿等你有一会儿了。', '难过']
     ],
+    idleLines: [
+      ['又在看这一页喵？', '闭眼'],
+      ['累了就去翻翻生活那一栏。', '笑'],
+      ['双击我，有事直接问。', '星星眼'],
+      ['别熬太晚，明天还要学。', '生气'],
+      ['这段卡住了？说出来我帮你理。', '平静'],
+      ['左下角那个粉色的按钮能把我关掉，不过你舍得吗 (ovo)', '脸红']
+    ],
+    /* 被戳时的台词**不带表情**，这是实测之后定的：
+     * 七段动作每一段都动了表情用到的全部 28 个参数（Curves 里逐个比对过），
+     * 而动作 3.5~9.4 秒、气泡才 4.7 秒 —— 戳她的时候设表情是白设的，
+     * 截图里她照样是动作自带的那张脸，连衣服颜色都被动作的 ParamAllColor 改了。
+     * 所以这里的规矩是：**播动作的时候，脸归动作管。**
+     * 表情只用在不播动作的场合 —— 出场、闲聊、页面台词、双击。 */
     tapLines: ['干嘛戳我。', '喵！', '别闹，我在看你写的东西。', '再戳就收你钱了 (ovo)', '……好吧，再戳一下也行。'],
+
+    /* ── 她知道自己站在哪一页 ──
+     * 栏目不在这里认，走 window.NANALY.sectionOf() —— 那张 SECTIONS 表是娜娜莉
+     * 导航用的，抄一份到这儿早晚会和它对不上（左下角三个按钮的坐标就是这么散的）。
+     * 这里只按栏目的 url 配台词；配不到就退回上面那组通用的 idleLines。 */
+    pageLines: {
+      '/': [
+        ['从这儿往下翻，能看到他都在学什么。', '笑'],
+        ['首页这张图是他挑的，好看吧 (=^w^=)', '星星眼']
+      ],
+      '/in-class/': [
+        ['课内这两门是硬骨头，慢慢啃。', '平静'],
+        ['数据结构写到第二章了，后面还长着呢。', '为难']
+      ],
+      '/extra/': [
+        ['课外这条线是他自己挑的，没人逼。', '笑'],
+        ['一门一门来，别跳着看。', '闭眼']
+      ],
+      '/extra/ai-infra/': ['AI Infra 这条线刚铺开，Go 还一行没写呢 (ovo)'],
+      '/extra/ai-infra/git/': [
+        ['分支就是个 41 字节的文件，知道这个之后好懂多了。', '星星眼'],
+        ['冲突不可怕，看清楚共同祖先就行。', '平静']
+      ],
+      '/extra/ai-infra/linux/': ['命令行这东西，敲熟了比什么都快。'],
+      '/life/': [['这一栏轻松点，歇会儿再学。', '笑']],
+      '/news/': [['这些是我每周捞回来的，挑着看。', '星星眼']],
+      '/schedule/': [['日程排得挺满，今天的做完了吗喵？', '为难']]
+    },
+    // 文章页：读页面上的 <h1.post-title>，套进这几句里
+    postLines: [
+      ['《{题}》，这篇我看过。', '闭眼'],
+      ['又在翻《{题}》喵？', '笑'],
+      ['《{题}》这篇有点长，慢慢看。', '为难']
+    ],
     speakMs: 4200,       // 一句话停留多久
     idleEveryMs: 70000,  // 隔多久自己说一句
     typeMs: 90           // 打字速度（ms/字），嘴也按这个开合
@@ -124,6 +189,15 @@
 
   // ── 说话 ──
 
+  /* 换一张脸。名字认不出来就什么都不做 —— 与其挂着上一张脸不如别动，
+   * 至少不会出现「说着难过的话顶着星星眼」。 */
+  const face = name => {
+    if (!model) return
+    const id = CONFIG.faces[name]
+    if (!id) return
+    try { model.expression(id) } catch (_) {}
+  }
+
   const stopTalking = () => {
     clearTimeout(hideTimer); clearInterval(typeTimer)
     hideTimer = typeTimer = null
@@ -132,9 +206,12 @@
 
   /* 逐字上屏，嘴跟着开合。嘴型值取随机而不是定值 —— 匀速开合看着像机器人，
    * 随机幅度才有说话的样子。 */
-  const say = text => {
+  const say = line => {
     if (!bubble) return
+    // 台词可以写成 '一句话'，也可以写成 ['一句话', '表情']
+    const [text, mood] = Array.isArray(line) ? line : [line, null]
     stopTalking()
+    face(mood || CONFIG.restFace)
     bubble.textContent = ''
     bubble.dataset.on = '1'
     let i = 0
@@ -151,10 +228,40 @@
     hideTimer = setTimeout(() => {
       delete bubble.dataset.on
       stopTalking()
+      // 脸也收回去。不收的话她会一直顶着刚才那张，气泡早没了人还在生气
+      face(CONFIG.restFace)
     }, CONFIG.speakMs + text.length * CONFIG.typeMs)
   }
 
   const openChat = () => { window.NANALY?.open?.() }
+
+  /* ── 她在哪一页 ──
+   * 栏目认定借娜娜莉那张 SECTIONS 表（她本来就靠它导航），这边不另存一份。
+   * 她没加载好、或者这一页不在表里，就返回 null，调用方退回通用台词。 */
+  const whereAmI = () => {
+    try { return window.NANALY?.sectionOf?.() || null } catch (_) { return null }
+  }
+
+  const postTitle = () => {
+    try {
+      const h = document.querySelector('h1.post-title')
+      const t = h && (h.textContent || '').trim()
+      // 太长的标题塞进气泡会撑成一坨，这种就当认不出来
+      return t && t.length <= 24 ? t : null
+    } catch (_) { return null }
+  }
+
+  /* 这一页该说什么。优先级：文章标题 > 栏目台词 > 通用闲聊。
+   * 每一档都可能落空（她不在表里、标题太长、栏目没配台词），
+   * 所以是一路 fallback 下来的，最后那档保证有东西可说。 */
+  const linesHere = () => {
+    const title = postTitle()
+    if (title) return CONFIG.postLines.map(([t, mood]) => [t.replace('{题}', title), mood])
+    const here = whereAmI()
+    const own = here && CONFIG.pageLines[here.url]
+    if (own && own.length) return own
+    return CONFIG.idleLines
+  }
 
   // ── 出场 ──
 
@@ -224,6 +331,7 @@
           // 否则对话窗开了，她头顶还挂着句“干嘛戳我”
           stopTalking()
           if (bubble) delete bubble.dataset.on
+          face('星星眼')     // 被叫出来干活了，精神一点
           openChat()
           return
         }
@@ -244,7 +352,8 @@
       window.addEventListener('resize', onResize)
 
       say(pick(CONFIG.welcome))
-      idleTimer = setInterval(() => say(pick(CONFIG.idleLines)), CONFIG.idleEveryMs)
+      // 每次到点才算这一页说什么 —— pjax 翻页不会重建她，算早了会一直念旧页面
+      idleTimer = setInterval(() => say(pick(linesHere())), CONFIG.idleEveryMs)
       requestAnimationFrame(() => stage && (stage.dataset.ready = '1'))
     } catch (error) {
       console.warn('[看板娘]', error && error.message)

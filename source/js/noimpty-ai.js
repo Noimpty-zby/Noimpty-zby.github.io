@@ -2850,6 +2850,17 @@
     memory: () => JSON.parse(JSON.stringify(memory)),
     forgetMemory: () => { memory = memDefault(); saveMem(); return '她关于你的记忆已清空' },
     poke: () => { pokedPaths.delete(location.pathname); showPoke() },
+    /* 当前路径落在哪个栏目里，最长前缀匹配。Mao 靠它知道自己站在哪一页 ——
+     * SECTIONS 这张表只该有一份，抄第二份出去早晚会和这份对不上。 */
+    sectionOf: (path = location.pathname) => {
+      let best = null
+      for (const s of SECTIONS) {
+        if (s.url === '/') continue
+        if (path.startsWith(s.url) && (!best || s.url.length > best.url.length)) best = s
+      }
+      if (!best && (path === '/' || path === '/index.html')) best = SECTIONS.find(s => s.url === '/')
+      return best ? { label: best.label, url: best.url } : null
+    },
     // 传 'auto' / 'on' / 'off'；也认老写法 true / false
     deepThink: v => {
       const m = v === true ? 'on' : v === false ? 'off' : String(v)

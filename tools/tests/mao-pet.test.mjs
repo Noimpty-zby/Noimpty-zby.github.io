@@ -131,7 +131,9 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2 } = {}) 
                   // 包围盒：画布 300×380 里她占中间那一块
                   getBounds: () => ({ x: 50, y: 20, width: 220, height: 360 }),
                   eventMode: 'auto',
-                  motion: g => { m.played = g }, destroy: () => { m.destroyed = true }
+                  motion: g => { m.played = g },
+                  expression: id => { m.face = id; (m.faces = m.faces || []).push(id) },
+                  destroy: () => { m.destroyed = true }
                 }
                 created.models.push(m)
                 return m
@@ -350,7 +352,8 @@ await test('★★ 戳一下：随机播一段动作，再说一句', async () =
   assert.equal(env.bubble().dataset.on, '1', '没说话')
   const lines = env.win.MAO_PET.config().tapLines
   env.timers.interval.filter(Boolean).pop().fn()
-  assert.ok(lines.some(l => l.startsWith(env.bubble().textContent)), '说的不是被戳时那几句')
+  const textOf = l => (Array.isArray(l) ? l[0] : l)
+  assert.ok(lines.some(l => textOf(l).startsWith(env.bubble().textContent)), '说的不是被戳时那几句')
 })
 
 await test('★★ 双击开对话窗时，要把单击那句话收回去', async () => {
@@ -544,6 +547,111 @@ await test('★ 嘴型参数得是这个模型 LipSync 组里那个', () => {
     `mouthParam 不在 LipSync 组里（组里是 ${lip.Ids.join(', ')}），说话时嘴不会动`)
 })
 
+console.log('\n八张脸')
+
+await test('★★ faces 里每个名字都得是模型真有的表情', () => {
+  const cfg = JSON.parse(readFileSync(path.join(base, 'source/live2d/mao/mao_pro.model3.json'), 'utf8'))
+  const have = new Set((cfg.FileReferences.Expressions || []).map(e => e.Name))
+  const env = boot()
+  const { faces, restFace } = env.win.MAO_PET.config()
+  for (const [name, id] of Object.entries(faces))
+    assert.ok(have.has(id), `faces.${name} 指着 ${id}，模型里没有这张脸`)
+  assert.ok(faces[restFace], `restFace 写的是 ${restFace}，faces 里没这个名字`)
+  assert.equal(Object.keys(faces).length, have.size, `模型有 ${have.size} 张脸，只接了 ${Object.keys(faces).length} 张`)
+})
+
+await test('★★ 每句台词的表情名都得在 faces 里 —— 写错了是静默失效', () => {
+  /* face() 认不出名字就什么都不做，不报错。所以打错一个字的后果是
+   * 那句话永远顶着上一张脸，而且一声不吭。 */
+  const env = boot()
+  const cfg = env.win.MAO_PET.config()
+  const groups = { welcome: cfg.welcome, idleLines: cfg.idleLines, tapLines: cfg.tapLines, postLines: cfg.postLines }
+  for (const [k, v] of Object.entries(cfg.pageLines)) groups['pageLines[' + k + ']'] = v
+  for (const [where, list] of Object.entries(groups))
+    for (const line of list) {
+      if (!Array.isArray(line)) continue      // 只写字符串是允许的，用 restFace
+      const [text, mood] = line
+      assert.equal(typeof text, 'string', `${where} 里有条台词第一项不是字符串`)
+      assert.ok(cfg.faces[mood], `${where} 里「${text}」的表情名 ${mood} 不在 faces 里`)
+    }
+})
+
+await test('★★ 说话时换脸，说完把脸收回去', async () => {
+  const env = boot()
+  const { created } = await turnOn(env)
+  const m = created.models[0]
+  const { faces, restFace } = env.win.MAO_PET.config()
+  m.faces = []
+  // 直接戳一下，看她换没换脸
+  m.handlers.get('pointertap')()
+  assert.ok(m.faces.length, '说话的时候一张脸都没换')
+  assert.ok(Object.values(faces).includes(m.face), '换上的不是 faces 里的表情：' + m.face)
+  // 气泡到点自己收，脸也该跟着回去
+  const hide = env.timers.timeout.filter(Boolean).pop()
+  hide.fn()
+  assert.equal(m.face, faces[restFace], '说完没把脸收回 ' + restFace + '，还顶着 ' + m.face)
+})
+
+await test('★ 表情名认不出来就别动脸，不许抛', async () => {
+  const env = boot()
+  const { created } = await turnOn(env)
+  const m = created.models[0]
+  m.expression = () => { throw new Error('这张脸没有') }
+  assert.doesNotThrow(() => m.handlers.get('pointertap')(), '模型拒绝换脸时把整个处理器带崩了')
+})
+
+await test('★★ 八张脸每张都得有台词用到，没用上的等于没接', () => {
+  const env = boot()
+  const cfg = env.win.MAO_PET.config()
+  const all = [...cfg.welcome, ...cfg.idleLines, ...cfg.postLines, ...Object.values(cfg.pageLines).flat()]
+  const used = new Set(all.filter(Array.isArray).map(l => l[1]))
+  used.add(cfg.restFace)                       // 说完复位那张
+  if (/face\('([^']+)'\)/.test(petSource))
+    for (const m of petSource.matchAll(/face\('([^']+)'\)/g)) used.add(m[1])
+  for (const name of Object.keys(cfg.faces))
+    assert.ok(used.has(name), `faces 里的「${name}」没有任何台词用到 —— 接了等于没接`)
+})
+
+await test('★★ 被戳的台词不许带表情 —— 动作会把脸整个盖掉', () => {
+  /* 实测：七段动作每一段都动了表情用到的全部 28 个参数，动作 3.5~9.4 秒、
+   * 气泡才 4.7 秒。戳她时设表情是白设的，截图里她顶着的是动作自带的脸。
+   * 规矩：播动作的时候脸归动作管。这条拦着别人「顺手」把表情加回 tapLines。 */
+  const env = boot()
+  const { tapLines } = env.win.MAO_PET.config()
+  for (const l of tapLines)
+    assert.equal(typeof l, 'string', `tapLines 里「${Array.isArray(l) ? l[0] : l}」带了表情，可是戳她会播动作，表情看不见`)
+})
+
+console.log('\n她在哪一页')
+
+await test('★★ 栏目不许在这边再抄一张表，得走 NANALY.sectionOf', () => {
+  const src = petSource
+  assert.ok(src.includes('NANALY?.sectionOf'), 'Mao 没有调 NANALY.sectionOf')
+  // 卡词首，否则 antialias: true 会被当成 alias
+  assert.ok(!/(^|[^A-Za-z])alias\s*:/m.test(src), 'Mao 里出现了 alias —— 八成是把 SECTIONS 抄过来了')
+  const ai = readFileSync(path.join(base, 'source/js/noimpty-ai.js'), 'utf8')
+  assert.ok(/sectionOf:\s*\(/.test(ai), 'noimpty-ai.js 没把 sectionOf 暴露出来')
+})
+
+await test('★★ pageLines 的每个 url 都得是 SECTIONS 里真有的栏目', () => {
+  /* 写错一个 url 不会报错，只是那一栏永远用不上自己的台词 —— 和表情名写错一样静默。 */
+  const ai = readFileSync(path.join(base, 'source/js/noimpty-ai.js'), 'utf8')
+  const block = ai.slice(ai.indexOf('const SECTIONS'), ai.indexOf('const SECTIONS') + 6000)
+  const urls = new Set([...block.matchAll(/url:\s*'([^']+)'/g)].map(m => m[1]))
+  const env = boot()
+  for (const url of Object.keys(env.win.MAO_PET.config().pageLines))
+    assert.ok(urls.has(url), `pageLines 里的 ${url} 不在 SECTIONS 那张表里`)
+})
+
+await test('★★ 文章页要认出标题，太长的标题不往气泡里塞', async () => {
+  const env = boot()
+  await turnOn(env)
+  const cfg = env.win.MAO_PET.config()
+  assert.ok(cfg.postLines.every(([t]) => t.includes('{题}')), 'postLines 里有条没留 {题} 的位置')
+  assert.ok(petSource.includes('h1.post-title'), '没去读文章标题')
+  assert.ok(/length\s*<=\s*\d+/.test(petSource), '标题长度没设上限，长标题会把气泡撑成一坨')
+})
+
 console.log('\n左下角那一摞按钮')
 
 /* 三个按钮分别住在三个 css 文件里，以前各写各的坐标 —— 音乐那个有窄屏规则
@@ -612,6 +720,23 @@ await test('★ 窄屏只缩变量，不许单独缩其中一个按钮', () => {
         if (hit) assert.ok(hit[2].includes('var(--corner-size)'),
           `${file} 的 ${id} 自己写死了 ${hit[1]}:${hit[2].trim()}`)
       }
+})
+
+await test('★★ 音乐面板一展开，整摞按钮要一起让位 —— 少抬一个就压在面板上', () => {
+  /* 实测：手机上音乐面板展开后从 bottom:12 长到 236，而帽子钉在 bottom:136，
+   * 正好落在面板身上；帽子 z-index 9003 比播放器 9000 高，于是压着面板内容画。
+   * 抬的时候三个要一起抬，间距才不乱。 */
+  const css = cssOf('sakura-components.css')
+  const lift = css.match(/body:has\(#noimpty-music-player:not\(\.is-collapsed\)\)\s*:is\(([^)]*)\)\s*\{([^}]*)\}/)
+  assert.ok(lift, 'sakura-components.css 里找不到「为展开的播放器让位」那条')
+  for (const id of ['#nanaly-launcher', '#mao-toggle'])
+    assert.ok(lift[1].includes(id), `让位那条里没带上 ${id}`)
+  assert.ok(/translate:\s*0\s+-\d+px/.test(lift[2]), '让位没用 translate：' + lift[2].trim())
+
+  // 抬起来的那一摞要能滑过去，不是瞬移
+  const petCss = cssOf('mao-pet.css')
+  const block = blocksFor(petCss, '#mao-toggle').join(';')
+  assert.ok(/transition:[^;]*\btranslate\b/.test(block), '#mao-toggle 的 transition 里没有 translate，它会瞬间跳上去')
 })
 
 console.log(`\n${passed} 项通过`)

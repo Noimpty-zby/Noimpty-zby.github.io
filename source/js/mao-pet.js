@@ -810,16 +810,27 @@
    * 否则松手时会顺带把她关掉。 */
   const bindHold = target => {
     let timer = null, fired = false
+    // 转圈的时长和判定的时长必须是同一个数，交给 CSS 而不是两边各写一遍
+    target.style.setProperty('--mao-hold-ms', CONFIG.voiceHoldMs + 'ms')
     const start = () => {
       fired = false
       clearTimeout(timer)
-      timer = setTimeout(() => { fired = true; timer = null; setVoice(!voiceOn) }, CONFIG.voiceHoldMs)
+      target.dataset.holding = '1'         // 转圈开始，让人看得见「按住了」
+      timer = setTimeout(() => {
+        fired = true; timer = null
+        delete target.dataset.holding
+        setVoice(!voiceOn)
+      }, CONFIG.voiceHoldMs)
     }
-    const cancel = () => { clearTimeout(timer); timer = null }
+    const cancel = () => { clearTimeout(timer); timer = null; delete target.dataset.holding }
     target.addEventListener('pointerdown', start)
     target.addEventListener('pointerup', cancel)
     target.addEventListener('pointerleave', cancel)
     target.addEventListener('pointercancel', cancel)
+    /* 长按时把浏览器自己那套收掉。CSS 里的 touch-action / user-select /
+     * touch-callout 挡住大部分，contextmenu 这一下还得在这儿按掉 ——
+     * 安卓上它会在判定时长到达之前弹出来，把整个长按吃掉。 */
+    target.addEventListener('contextmenu', e => e.preventDefault())
     target.addEventListener('click', e => {
       if (!fired) return
       fired = false

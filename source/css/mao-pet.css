@@ -25,11 +25,35 @@
   box-shadow: var(--noimpty-shadow, 0 12px 34px rgba(75, 43, 56, 0.28));
   color: #fff;
   cursor: pointer;
+  /* 长按这个按钮要能切出声。不挡住浏览器自己的长按手势的话，iOS 会弹选择菜单、
+     安卓会弹上下文菜单 —— 浏览器一接管就发 pointercancel，长按计时当场被清掉，
+     手上的感觉就是「按了半天没反应」。这三条缺一不可。 */
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   /* translate 也要进过渡 —— 音乐面板展开时整摞按钮会往上让，
      猫爪那两个有这条，帽子没有的话它是瞬间跳上去的，一摞里一个不同步 */
   transition: transform .22s ease, opacity .22s ease, filter .22s ease, translate .3s cubic-bezier(.22, .75, .24, 1);
 }
 #mao-toggle:hover { transform: translateY(-3px) scale(1.05); }
+
+/* 长按时转一圈。没有这个的话，松手早了和功能坏了在手上是一模一样的 ——
+   「我按了没反应」有一半其实是没按够时长。 */
+#mao-toggle[data-holding]::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: #fff;
+  animation: mao-hold var(--mao-hold-ms, 600ms) linear forwards;
+}
+#mao-toggle[data-holding] { transform: scale(.93); }
+@keyframes mao-hold {
+  from { transform: rotate(0turn); opacity: .35; }
+  to { transform: rotate(1turn); opacity: 1; }
+}
 
 /* 正在取那两兆多的时候给点反馈，别让人以为按钮坏了 */
 #mao-toggle[data-busy] { opacity: .6; cursor: progress; }

@@ -25,7 +25,9 @@
   box-shadow: var(--noimpty-shadow, 0 12px 34px rgba(75, 43, 56, 0.28));
   color: #fff;
   cursor: pointer;
-  transition: transform .22s ease, opacity .22s ease, filter .22s ease;
+  /* translate 也要进过渡 —— 音乐面板展开时整摞按钮会往上让，
+     猫爪那两个有这条，帽子没有的话它是瞬间跳上去的，一摞里一个不同步 */
+  transition: transform .22s ease, opacity .22s ease, filter .22s ease, translate .3s cubic-bezier(.22, .75, .24, 1);
 }
 #mao-toggle:hover { transform: translateY(-3px) scale(1.05); }
 

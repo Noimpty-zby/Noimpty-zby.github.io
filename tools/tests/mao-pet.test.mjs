@@ -718,6 +718,18 @@ await test('★★ 文章页要认出标题，太长的标题不往气泡里塞'
   assert.ok(/length\s*<=\s*\d+/.test(petSource), '标题长度没设上限，长标题会把气泡撑成一坨')
 })
 
+await test('★★ CONFIG 里不许有没人读的键 —— 死配置看着像能调，其实调了没用', () => {
+  /* voiceVolume 就这么来的：定义了，但控制器的 speak() 根本不收音量参数。
+   * 谁把它从 0.85 调到 0.2 都不会有任何反应，而且一声不吭。 */
+  const cfg = petSource.slice(petSource.indexOf('const CONFIG = {'))
+  const head = cfg.slice(0, cfg.indexOf('\n  }'))
+  const keys = [...head.matchAll(/^    ([A-Za-z_][A-Za-z0-9_]*):/gm)].map(m => m[1])
+  const body = petSource.slice(petSource.indexOf('\n  }', petSource.indexOf('const CONFIG = {')))
+  const dead = keys.filter(k => !new RegExp('CONFIG\\.' + k + '\\b').test(body))
+  assert.deepEqual(dead.join(','), '', '这些键定义了但没人读：' + dead.join(', '))
+  assert.ok(keys.length > 30, '只数出 ' + keys.length + ' 个键，正则八成没对上')
+})
+
 console.log('\n出声')
 
 /* 假声音控制器：记下被要求念了什么，并能手动推进状态。 */
@@ -940,6 +952,24 @@ await test('★★ 日程全做完是笑，堆着是为难', async () => {
     const { faces } = env.win.MAO_PET.config()
     assert.equal(created.models[0].face, faces[want], '该是' + want + '，实际 ' + created.models[0].face)
   }
+})
+
+await test('★★ 标签页开着跨过午夜，日程摘要要重算', async () => {
+  const env = boot()
+  const today = todayKey(env)
+  withSite(env, { days: { [today]: [{ text: 'a', done: false }, { text: 'b', done: false }, { text: 'c', done: false }] } })
+  const { created } = await turnOn(env)
+  for (let i = 0; i < 6; i++) await new Promise(r => setImmediate(r))
+  const { faces } = env.win.MAO_PET.config()
+  env.win.MAO_PET.say('随便说点什么')
+  env.timers.timeout.filter(Boolean).pop().fn()
+  assert.equal(created.models[0].face, faces['为难'], '今天堆着三件，脸该是为难')
+
+  env.advance(26 * 3600 * 1000)          // 过了一天，昨天那三件不作数了
+  env.win.MAO_PET.say('新的一天')        // 说一句就会取一次当前心情
+  env.timers.timeout.filter(Boolean).pop().fn()
+  assert.notEqual(created.models[0].face, faces['为难'],
+    '跨过午夜还顶着昨天的脸')
 })
 
 await test('★★ 解密要走 NOIMPTY_SEARCH，不许自己再写一份 AES', () => {

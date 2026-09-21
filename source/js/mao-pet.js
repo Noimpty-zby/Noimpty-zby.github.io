@@ -206,7 +206,6 @@
      * voiceOnIdle 留在这儿是为了写明这个决定，想开自己改，但那个账会很难看。 */
     voiceDefault: false,
     voiceOnIdle: false,
-    voiceVolume: 0.85,
     voiceHoldMs: 600,    // 长按帽子按钮多久算「切换出声」
     voiceLines: { on: ['好，我出声喵。', '听得见我吗？'], off: ['那我闭嘴。', '好吧，安静点也行。'] },
 
@@ -515,7 +514,7 @@
    *
    * 解密走 NOIMPTY_SEARCH.decryptPayload，和 schedule.js 同一条路 ——
    * 自己再写一份 AES-GCM 解密早晚会和它对不上。 */
-  let siteState = null, statePending = null
+  let siteState = null, statePending = null, stateRaw = null, stateDay = ''
 
   const summarize = data => {
     const days = data && data.days
@@ -531,8 +530,20 @@
     }
   }
 
+  /* 摘要是按「今天」算的。标签页开着跨过午夜，昨天那份就不作数了 ——
+   * 原始数据还在手里，重算一遍即可，不用再取一次。
+   * 读状态的地方都得先过这里，只在 loadState 里查是不够的：
+   * moodFace() 是直接读 siteState 的，它才是跨夜之后最容易挂着旧脸的地方。 */
+  const freshState = () => {
+    if (siteState && stateDay !== ymd(rightNow())) {
+      stateDay = ymd(rightNow())
+      siteState = summarize(stateRaw)
+    }
+    return siteState
+  }
+
   const loadState = () => {
-    if (siteState) return Promise.resolve(siteState)
+    if (freshState()) return Promise.resolve(siteState)
     if (statePending) return statePending
     try {
       if (window.NOIMPTY_GATE && !window.NOIMPTY_GATE.unlocked()) return Promise.resolve(null)
@@ -545,6 +556,8 @@
         const raw = payload && payload.alg === 'AES-GCM'
           ? JSON.parse(await window.NOIMPTY_SEARCH.decryptPayload(payload))
           : payload
+        stateRaw = raw
+        stateDay = ymd(rightNow())
         siteState = summarize(raw)
         return siteState
       } catch (_) { return null } finally { statePending = null }
@@ -555,7 +568,7 @@
   /* 默认那张脸跟着站点的真实状况走：今天发了东西就精神，日程堆着就发愁。
    * 拿不到状况（没解锁）就用 CONFIG.restFace，和以前一样。 */
   const moodFace = () => {
-    const st = siteState
+    const st = freshState()
     if (!st) return CONFIG.restFace
     if (st.published) return '星星眼'
     if (st.total && st.left === 0) return '笑'
@@ -564,7 +577,7 @@
   }
 
   const scheduleLine = () => {
-    const st = siteState
+    const st = freshState()
     if (!st || !st.total) return null
     const group = st.published ? '发了文章'
       : st.left === 0 ? '全做完'
@@ -792,6 +805,28 @@
     else await disable()
   }
 
+  /* 长按帽子按钮 = 切换出声。没有给它单独一个按钮 —— 左下角那一摞已经三个了，
+   * 手机上再加一格就该挤到正文里去。长按开始的那一下会吞掉随后的 click，
+   * 否则松手时会顺带把她关掉。 */
+  const bindHold = target => {
+    let timer = null, fired = false
+    const start = () => {
+      fired = false
+      clearTimeout(timer)
+      timer = setTimeout(() => { fired = true; timer = null; setVoice(!voiceOn) }, CONFIG.voiceHoldMs)
+    }
+    const cancel = () => { clearTimeout(timer); timer = null }
+    target.addEventListener('pointerdown', start)
+    target.addEventListener('pointerup', cancel)
+    target.addEventListener('pointerleave', cancel)
+    target.addEventListener('pointercancel', cancel)
+    target.addEventListener('click', e => {
+      if (!fired) return
+      fired = false
+      e.preventDefault(); e.stopImmediatePropagation()   // 长按过了就不再当成开关
+    }, true)
+  }
+
   const mountToggle = () => {
     const existing = document.getElementById('mao-toggle')
     if (existing) { button = existing; return }
@@ -844,28 +879,6 @@
     // 出声开关。不给参数就是问现在开没开
     voice: on => (on === undefined ? voiceOn : setVoice(on))
   })
-
-  /* 长按帽子按钮 = 切换出声。没有给它单独一个按钮 —— 左下角那一摞已经三个了，
-   * 手机上再加一格就该挤到正文里去。长按开始的那一下会吞掉随后的 click，
-   * 否则松手时会顺带把她关掉。 */
-  const bindHold = target => {
-    let timer = null, fired = false
-    const start = () => {
-      fired = false
-      clearTimeout(timer)
-      timer = setTimeout(() => { fired = true; timer = null; setVoice(!voiceOn) }, CONFIG.voiceHoldMs)
-    }
-    const cancel = () => { clearTimeout(timer); timer = null }
-    target.addEventListener('pointerdown', start)
-    target.addEventListener('pointerup', cancel)
-    target.addEventListener('pointerleave', cancel)
-    target.addEventListener('pointercancel', cancel)
-    target.addEventListener('click', e => {
-      if (!fired) return
-      fired = false
-      e.preventDefault(); e.stopImmediatePropagation()   // 长按过了就不再当成开关
-    }, true)
-  }
 
   rememberVisit()
   document.addEventListener('pjax:complete', recover)

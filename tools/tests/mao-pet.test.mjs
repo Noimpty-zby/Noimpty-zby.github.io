@@ -87,7 +87,12 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2 } = {}) 
     window: window_, document, localStorage,
     console: { warn: () => {} },
     Math, JSON, Object, Number, String, Set, Map, Promise, Error, Array, Boolean,
-    Date: { now: () => clock },
+    /* 真 Date，但「现在」由上面那块表说了算：new Date() 不给参数就取 clock。
+     * 只给 { now } 是不够的 —— 她按时段换话时要 new Date().getHours()。 */
+    Date: class extends Date {
+      constructor (...args) { super(...(args.length ? args : [clock])) }
+      static now () { return clock }
+    },
     requestAnimationFrame: fn => { fn(); return 1 },
     setInterval: (fn, ms) => { timers.interval.push({ fn, ms }); return timers.interval.length },
     clearInterval: id => { if (id) timers.interval[id - 1] = null },
@@ -102,6 +107,7 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2 } = {}) 
     win: window_, document, scripts, timers, created, stage,
     docListeners: doc, winListeners: win,
     advance: ms => { clock += ms },
+    clockNow: () => clock,
     stored: () => (store.has('nanaly-pet-visible') ? store.get('nanaly-pet-visible') : null),
     button: () => document.getElementById('mao-toggle'),
     bubble: () => [...attached].find(n => n.id === 'mao-bubble'),
@@ -125,7 +131,10 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2 } = {}) 
                   anchor: { set: () => {} }, position: { set: (x, y) => { m.pos = [x, y] } },
                   internalModel: {
                     originalHeight: 2400,
-                    coreModel: { setParameterValueById: (id, v) => params.set(id, v) }
+                    coreModel: { setParameterValueById: (id, v) => params.set(id, v) },
+                    // 每帧钩子。测试要能拿到它挂在哪个事件上、以及手动跑一帧
+                    hooks: new Map(),
+                    on (t, fn) { this.hooks.set(t, fn); return this }
                   },
                   on: (t, fn) => m.handlers.set(t, fn), handlers: new Map(),
                   // 包围盒：画布 300×380 里她占中间那一块
@@ -350,10 +359,62 @@ await test('★★ 戳一下：随机播一段动作，再说一句', async () =
   m.handlers.get('pointertap')()
   assert.equal(m.played, env.win.MAO_PET.config().tapGroup, '没播动作')
   assert.equal(env.bubble().dataset.on, '1', '没说话')
-  const lines = env.win.MAO_PET.config().tapLines
+  const all = env.win.MAO_PET.config().zones.flatMap(z => z.lines)
   env.timers.interval.filter(Boolean).pop().fn()
   const textOf = l => (Array.isArray(l) ? l[0] : l)
-  assert.ok(lines.some(l => textOf(l).startsWith(env.bubble().textContent)), '说的不是被戳时那几句')
+  assert.ok(all.some(l => textOf(l).startsWith(env.bubble().textContent)), '说的不是被戳时那几句')
+})
+
+await test('★★ 戳头 / 戳身 / 戳裙，说的话得不一样', async () => {
+  /* 模型自带的 HitArea 只盖住脑袋，所以分区是自己按包围盒算的。
+   * 壳里的包围盒是 y20 h360，取每一段中点往回推 global.y。 */
+  const env = boot()
+  const { created } = await turnOn(env)
+  const m = created.models[0]
+  const box = m.getBounds()
+  const zones = env.win.MAO_PET.config().zones
+  const said = []
+  let from = 0
+  for (const z of zones) {
+    const t = (from + Math.min(z.until, 1)) / 2
+    from = z.until
+    m.handlers.get('pointertap')({ global: { y: box.y + box.height * t } })
+    env.timers.interval.filter(Boolean).pop().fn()
+    const text = env.bubble().textContent
+    assert.ok(z.lines.some(l => l.startsWith(text)), `戳「${z.name}」说出了别的段的话：${text}`)
+    said.push(z.name)
+  }
+  // 沙箱里的 Array 和宿主不是同一个 realm，deepEqual 会因为原型不同而失败 —— 比字符串
+  assert.equal(said.join(','), zones.map(z => z.name).join(','), '三段没有各自命中')
+})
+
+await test('★★ 连戳到阈值她要闹别扭：不播动作、扭开头', async () => {
+  const env = boot()
+  const { created } = await turnOn(env)
+  const m = created.models[0]
+  const { sulkAfter, sulkLines } = env.win.MAO_PET.config()
+  // 每下隔 400ms：比双击窗口(320ms)长，不然会被当成双击；比连戳窗口(4000ms)短
+  for (let i = 0; i < sulkAfter - 1; i++) { m.handlers.get('pointertap')(); env.advance(400) }
+  m.played = null                      // 只看最后那一下，前面几下本来就该播动作
+  m.handlers.get('pointertap')()
+  env.timers.interval.filter(Boolean).pop().fn()
+  assert.ok(sulkLines.some(l => l.startsWith(env.bubble().textContent)),
+    '到阈值没说闹别扭那几句，说的是：' + env.bubble().textContent)
+  assert.equal(m.played, null, '闹别扭还播动作 —— 动作会把扭开的头掰回来')
+})
+
+await test('★ 隔太久再戳不算连戳', async () => {
+  const env = boot()
+  const { created } = await turnOn(env)
+  const m = created.models[0]
+  const { sulkAfter, sulkWindowMs, sulkLines } = env.win.MAO_PET.config()
+  for (let i = 0; i < sulkAfter + 2; i++) {
+    m.handlers.get('pointertap')()
+    env.advance(sulkWindowMs + 500)          // 每次都隔很久
+  }
+  env.timers.interval.filter(Boolean).pop().fn()
+  assert.ok(!sulkLines.some(l => l.startsWith(env.bubble().textContent)),
+    '隔这么久也被数成连戳了')
 })
 
 await test('★★ 双击开对话窗时，要把单击那句话收回去', async () => {
@@ -565,7 +626,8 @@ await test('★★ 每句台词的表情名都得在 faces 里 —— 写错了�
    * 那句话永远顶着上一张脸，而且一声不吭。 */
   const env = boot()
   const cfg = env.win.MAO_PET.config()
-  const groups = { welcome: cfg.welcome, idleLines: cfg.idleLines, tapLines: cfg.tapLines, postLines: cfg.postLines }
+  const groups = { welcome: cfg.welcome, idleLines: cfg.idleLines, postLines: cfg.postLines, sulkLines: cfg.sulkLines }
+  for (const z of cfg.zones) groups['zones.' + z.name] = z.lines
   for (const [k, v] of Object.entries(cfg.pageLines)) groups['pageLines[' + k + ']'] = v
   for (const [where, list] of Object.entries(groups))
     for (const line of list) {
@@ -615,11 +677,11 @@ await test('★★ 八张脸每张都得有台词用到，没用上的等于没�
 await test('★★ 被戳的台词不许带表情 —— 动作会把脸整个盖掉', () => {
   /* 实测：七段动作每一段都动了表情用到的全部 28 个参数，动作 3.5~9.4 秒、
    * 气泡才 4.7 秒。戳她时设表情是白设的，截图里她顶着的是动作自带的脸。
-   * 规矩：播动作的时候脸归动作管。这条拦着别人「顺手」把表情加回 tapLines。 */
+   * 规矩：播动作的时候脸归动作管。这条拦着别人「顺手」给分区台词加表情。 */
   const env = boot()
-  const { tapLines } = env.win.MAO_PET.config()
-  for (const l of tapLines)
-    assert.equal(typeof l, 'string', `tapLines 里「${Array.isArray(l) ? l[0] : l}」带了表情，可是戳她会播动作，表情看不见`)
+  for (const z of env.win.MAO_PET.config().zones)
+    for (const l of z.lines)
+      assert.equal(typeof l, 'string', `zones.${z.name} 里「${Array.isArray(l) ? l[0] : l}」带了表情，可是戳她会播动作，表情看不见`)
 })
 
 console.log('\n她在哪一页')
@@ -650,6 +712,132 @@ await test('★★ 文章页要认出标题，太长的标题不往气泡里塞'
   assert.ok(cfg.postLines.every(([t]) => t.includes('{题}')), 'postLines 里有条没留 {题} 的位置')
   assert.ok(petSource.includes('h1.post-title'), '没去读文章标题')
   assert.ok(/length\s*<=\s*\d+/.test(petSource), '标题长度没设上限，长标题会把气泡撑成一坨')
+})
+
+console.log('\n什么时候说什么')
+
+/* 把沙箱的表拨到指定时刻。clock 是毫秒，直接构造本地时间。 */
+const atLocal = (env, y, mo, d, h) => env.advance(new Date(y, mo - 1, d, h, 0, 0).getTime() - env.clockNow())
+
+await test('★★ 深夜只劝睡，压过页面台词', async () => {
+  const env = boot()
+  await turnOn(env)
+  atLocal(env, 2026, 6, 10, 2)          // 凌晨两点
+  const lines = env.win.MAO_PET.lines()
+  const night = env.win.MAO_PET.config().dayParts.find(p => p.name === '深夜')
+  assert.ok(lines.every(([t]) => night.lines.includes(t)),
+    '深夜说的不是劝睡那几句：' + JSON.stringify(lines.map(l => l[0])))
+})
+
+await test('★★ 节日压过一切，包括深夜', async () => {
+  const env = boot()
+  await turnOn(env)
+  atLocal(env, 2026, 1, 1, 2)           // 元旦凌晨两点：节日该赢
+  const lines = env.win.MAO_PET.lines()
+  const fest = env.win.MAO_PET.config().festivals['01-01']
+  assert.ok(lines.every(([t]) => fest.lines.includes(t)),
+    '元旦没说节日的话：' + JSON.stringify(lines.map(l => l[0])))
+})
+
+await test('★★ 白天没有栏目台词时退到时段，永远有话可说', async () => {
+  const env = boot()
+  await turnOn(env)
+  for (const h of [8, 14, 21]) {
+    atLocal(env, 2026, 6, 10, h)
+    const lines = env.win.MAO_PET.lines()
+    assert.ok(Array.isArray(lines) && lines.length, `${h} 点一句话都给不出来`)
+    for (const l of lines) {
+      assert.equal(typeof l[0], 'string', `${h} 点给出的不是台词：` + JSON.stringify(l))
+      assert.ok(l[1] === undefined || env.win.MAO_PET.config().faces[l[1]], `${h} 点的表情名不认识：` + l[1])
+    }
+  }
+})
+
+await test('★★ 节日和时段的表情名也得在 faces 里', () => {
+  const env = boot()
+  const cfg = env.win.MAO_PET.config()
+  for (const p of cfg.dayParts)
+    assert.ok(cfg.faces[p.face], `dayParts.${p.name} 的表情 ${p.face} 不在 faces 里`)
+  for (const [k, f] of Object.entries(cfg.festivals))
+    assert.ok(cfg.faces[f.face], `festivals['${k}'] 的表情 ${f.face} 不在 faces 里`)
+})
+
+console.log('\n跟着音乐摆 / 闹别扭')
+
+const frameOf = m => m.internalModel.hooks.get('afterMotionUpdate')
+
+await test('★★ 每帧参数必须挂在 afterMotionUpdate 上，早一步就是白写', () => {
+  /* 动作每帧会把 128 个参数重刷一遍，表情也在 afterMotionUpdate 之前算完。
+   * 挂 beforeMotionUpdate 或者在外面定时写，下一帧就被冲掉了。 */
+  const env = boot()
+  assert.ok(petSource.includes("'afterMotionUpdate'"), '没挂 afterMotionUpdate')
+  assert.ok(!petSource.includes("'beforeMotionUpdate'"), '挂到 beforeMotionUpdate 上了，会被动作冲掉')
+})
+
+await test('★★ 音乐能量驱动头发和罩袍，不许自己再建一套 AudioContext', async () => {
+  const env = boot()
+  const { created, params } = await turnOn(env)
+  const m = created.models[0]
+  const frame = frameOf(m)
+  assert.ok(frame, '没挂每帧钩子')
+
+  // 没在放音乐：一个摆动参数都不该被写
+  env.win.NOIMPTY_MUSIC_PLAYER = { energy: () => 0 }
+  params.clear(); frame()
+  const swayIds = env.win.MAO_PET.config().danceWith.map(([id]) => id)
+  assert.ok(swayIds.every(id => !params.has(id)), '没放音乐也在摆')
+
+  // 放起来：摆动参数得被写上
+  env.win.NOIMPTY_MUSIC_PLAYER = { energy: () => 0.8 }
+  params.clear(); frame()
+  assert.ok(swayIds.some(id => params.has(id)), '音乐响着却不摆')
+
+  // 能量不是数字 / 取不到，也不能炸
+  env.win.NOIMPTY_MUSIC_PLAYER = { energy: () => { throw new Error('播放器坏了') } }
+  assert.doesNotThrow(() => frame(), '播放器抛错把整帧带崩了')
+  env.win.NOIMPTY_MUSIC_PLAYER = undefined
+  assert.doesNotThrow(() => frame(), '没有播放器就崩')
+
+  assert.ok(!/new\s+(window\.)?(webkit)?AudioContext/.test(petSource),
+    'Mao 自己建了 AudioContext —— 该搭播放器那份便车')
+  assert.ok(!petSource.includes('captureStream'), 'Mao 自己去 captureStream 了')
+})
+
+await test('★★ 播放器得把 energy() 暴露出来', () => {
+  const mp = readFileSync(path.join(base, 'source/js/music-player.js'), 'utf8')
+  assert.ok(/energy:\s*\(\)\s*=>\s*stage\.energy\(\)/.test(mp), 'NOIMPTY_MUSIC_PLAYER 上没有 energy()')
+  assert.ok(/energy:\s*\(\)\s*=>\s*lastEnergy/.test(mp), 'stage 没把 lastEnergy 交出来')
+  assert.ok(/lastEnergy\s*=\s*0/.test(mp), '停下来没把能量归零，她会对着静音继续摆')
+})
+
+await test('★★ 闹别扭的时候要扭开头，过去了要自己收回来', async () => {
+  const env = boot()
+  const { created, params } = await turnOn(env)
+  const m = created.models[0]
+  const frame = frameOf(m)
+  const { sulkAfter, sulkMs } = env.win.MAO_PET.config()
+  env.win.NOIMPTY_MUSIC_PLAYER = { energy: () => 0 }
+
+  params.clear(); frame()
+  assert.ok(!params.has('ParamAngleY'), '还没闹就开始扭了')
+
+  for (let i = 0; i < sulkAfter; i++) { m.handlers.get('pointertap')(); env.advance(400) }
+  params.clear(); frame()
+  assert.ok(params.has('ParamAngleY'), '闹别扭了却没扭头')
+  assert.ok(params.get('ParamAngleY') < 0, '扭的方向不对：' + params.get('ParamAngleY'))
+
+  env.advance(sulkMs + 100)
+  params.clear(); frame()
+  assert.ok(!params.has('ParamAngleY'), '别扭过去了还扭着不回来')
+})
+
+await test('★ 关掉再打开，她不该还在闹别扭', async () => {
+  const env = boot()
+  const { created } = await turnOn(env)
+  const { sulkAfter } = env.win.MAO_PET.config()
+  for (let i = 0; i < sulkAfter; i++) { created.models[0].handlers.get('pointertap')(); env.advance(400) }
+  await env.win.MAO_PET.hide()
+  assert.ok(petSource.includes('resetMood()'), '收起来的时候没清掉情绪状态')
 })
 
 console.log('\n左下角那一摞按钮')

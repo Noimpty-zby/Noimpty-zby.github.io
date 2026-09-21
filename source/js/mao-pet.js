@@ -89,13 +89,6 @@
       ['这段卡住了？说出来我帮你理。', '平静'],
       ['左下角那个粉色的按钮能把我关掉，不过你舍得吗 (ovo)', '脸红']
     ],
-    /* 被戳时的台词**不带表情**，这是实测之后定的：
-     * 七段动作每一段都动了表情用到的全部 28 个参数（Curves 里逐个比对过），
-     * 而动作 3.5~9.4 秒、气泡才 4.7 秒 —— 戳她的时候设表情是白设的，
-     * 截图里她照样是动作自带的那张脸，连衣服颜色都被动作的 ParamAllColor 改了。
-     * 所以这里的规矩是：**播动作的时候，脸归动作管。**
-     * 表情只用在不播动作的场合 —— 出场、闲聊、页面台词、双击。 */
-    tapLines: ['干嘛戳我。', '喵！', '别闹，我在看你写的东西。', '再戳就收你钱了 (ovo)', '……好吧，再戳一下也行。'],
 
     /* ── 她知道自己站在哪一页 ──
      * 栏目不在这里认，走 window.NANALY.sectionOf() —— 那张 SECTIONS 表是娜娜莉
@@ -124,12 +117,66 @@
       '/news/': [['这些是我每周捞回来的，挑着看。', '星星眼']],
       '/schedule/': [['日程排得挺满，今天的做完了吗喵？', '为难']]
     },
+    /* ── 按时段换话 ──
+     * until 是「几点之前」，24 小时制，本地时间。深夜那档是有意留的：
+     * 她这时候只劝你睡，不聊别的。 */
+    dayParts: [
+      { until: 5, name: '深夜', face: '难过', lines: ['几点了还不睡喵。', '明天起不来我可不管。', '这个点写的代码，明天自己都看不懂。'] },
+      { until: 11, name: '早上', face: '笑', lines: ['早喵。今天想学点什么？', '趁脑子还清醒，先啃难的那块。'] },
+      { until: 18, name: '下午', face: '平静', lines: ['下午容易困，起来走两步。', '这会儿适合把上午没写完的补掉。'] },
+      { until: 24, name: '晚上', face: '闭眼', lines: ['晚上安静，正好写东西。', '别又刷到半夜喵。'] }
+    ],
+
+    /* ── 节日 ──
+     * 键是 'MM-DD'，只认公历。农历的要另算，现在没接。
+     * 想加生日就在这儿加一行 —— 我不知道是哪天，没替你编。 */
+    festivals: {
+      '01-01': { face: '星星眼', lines: ['新年好喵！今年也一起加油。', '又长一岁了，博客也是。'] },
+      '12-25': { face: '笑', lines: ['圣诞快乐喵 (=^w^=)', '今天可以不学，就今天。'] },
+      '12-31': { face: '为难', lines: ['今年就剩这几个小时了。', '回头看看年初立的那些 flag 喵。'] }
+    },
+
     // 文章页：读页面上的 <h1.post-title>，套进这几句里
     postLines: [
       ['《{题}》，这篇我看过。', '闭眼'],
       ['又在翻《{题}》喵？', '笑'],
       ['《{题}》这篇有点长，慢慢看。', '为难']
     ],
+    /* ── 戳哪儿算哪儿 ──
+     * 按她包围盒的纵向比例切三段（0 是头顶，1 是脚底）。模型自带的 HitArea
+     * 只盖住脑袋那一小块，戳身子不算数，所以这里自己分。
+     *
+     * 这三段的台词**都不带表情**，是实测之后定的：七段动作每一段都动了表情
+     * 用到的全部 28 个参数，而动作 3.5~9.4 秒、气泡才 4.7 秒 —— 戳她的时候
+     * 设表情是白设的，截图里她顶着的还是动作自带的脸。
+     * 规矩：**播动作的时候，脸归动作管。** 表情只用在不播动作的场合 ——
+     * 出场、闲聊、页面台词、双击、闹别扭。 */
+    zones: [
+      { until: 0.34, name: '头', lines: ['别摸头，帽子要歪了。', '喵！吓我一跳。', '……摸吧摸吧，就一下。'] },
+      { until: 0.72, name: '身', lines: ['干嘛戳我。', '别闹，我在看你写的东西。', '再戳就收你钱了 (ovo)'] },
+      { until: 1.01, name: '裙', lines: ['喂！往哪儿戳呢。', '再往下就不理你了。', '……你故意的吧。'] }
+    ],
+
+    /* ── 戳太多次她会转过头去 ──
+     * 2D 模型转不了身，能做的是把头和身子扭到最大再别回来，读起来就是「不理你了」。 */
+    sulkAfter: 6,        // 连戳几下开始闹别扭
+    sulkWindowMs: 4000,  // 连戳判定：两下之间超过这个就重新数
+    sulkMs: 5000,        // 闹多久
+    sulkLines: ['不理你了。', '哼。', '自己玩去吧 (ovo)'],
+
+    /* ── 跟着音乐摆 ──
+     * 能量取 NOIMPTY_MUSIC_PLAYER.energy()，那是播放器给自己可视化条算的值，
+     * 这边只是搭个便车 —— 别再建第二套 AudioContext。
+     * 驱动的是头发/帽子/罩袍这些摆动参数，比只晃身子自然得多。 */
+    danceWith: [
+      ['ParamHairFront', 0.6], ['ParamHairSideL', 1], ['ParamHairSideR', -1],
+      ['ParamHairBack', 0.8], ['ParamRibbon', 1], ['ParamHatBrim', 0.5],
+      ['ParamHatTop', 0.7], ['ParamRobeL', 1], ['ParamRobeR', -1], ['ParamWing', 0.8]
+    ],
+    danceBody: 0.45,     // 身体跟着晃的幅度（0 就是只动头发和衣服）
+    danceHz: 1.1,        // 摆动快慢
+    danceGain: 1.6,      // 能量放大倍数，1 左右太蔫
+
     speakMs: 4200,       // 一句话停留多久
     idleEveryMs: 70000,  // 隔多久自己说一句
     typeMs: 90           // 打字速度（ms/字），嘴也按这个开合
@@ -162,6 +209,7 @@
   }
 
   let app = null, model = null, stage = null, bubble = null, button = null
+  let sulkUntil = 0, tapStreak = 0, lastTapAt = 0
   let loading = null, idleTimer = null, hideTimer = null, typeTimer = null, onMove = null, onResize = null
 
   const loadScript = src => new Promise((resolve, reject) => {
@@ -197,6 +245,69 @@
     if (!id) return
     try { model.expression(id) } catch (_) {}
   }
+
+  /* 戳到哪一段了。把指针的纵坐标换算成她包围盒里的比例，再查 CONFIG.zones。
+   * 拿不到坐标（比如脚本触发的点击）就当戳在身上。 */
+  const zoneAt = e => {
+    const mid = CONFIG.zones[Math.min(1, CONFIG.zones.length - 1)]
+    try {
+      const box = model.getBounds()
+      if (!box || !box.height) return mid
+      const y = e && e.global ? e.global.y : null
+      if (y === null) return mid
+      // e.global 和 getBounds() 都是画布内坐标，同一套，直接比
+      const t = (y - box.y) / box.height
+      return CONFIG.zones.find(z => t < z.until) || CONFIG.zones[CONFIG.zones.length - 1]
+    } catch (_) { return mid }
+  }
+
+  /* ── 每帧往模型里写参数 ──
+   *
+   * 挂在 afterMotionUpdate 上，这个时机很要紧：动作和表情都是在它之前算完的，
+   * 在这里写的值盖在最上面，不会被下一帧的动作冲掉。挂 beforeMotionUpdate
+   * 或者在外面定时写都是白写 —— 动作每帧都会把 128 个参数重新刷一遍。
+   *
+   * 这里只写两件事，都是「叠加在动作之上」而不是接管：
+   *   跟着音乐摆 —— 头发、帽子、罩袍这些摆动参数
+   *   闹别扭     —— 把头和身子扭开
+   */
+  const driveFrame = () => {
+    if (!model) return
+    const core = model.internalModel && model.internalModel.coreModel
+    if (!core) return
+    const set = (id, v) => { try { core.setParameterValueById(id, v) } catch (_) {} }
+
+    if (sulkUntil > Date.now()) {
+      // 越靠近结束扭得越轻，别在别扭结束那一刻「啪」地弹回来
+      const left = Math.min(1, (sulkUntil - Date.now()) / 600)
+      set('ParamAngleY', -28 * left)
+      set('ParamAngleX', -22 * left)
+      set('ParamBodyAngleX', -8 * left)
+      set('ParamEyeBallX', -1 * left)
+    }
+
+    const energy = musicEnergy()
+    if (energy > 0.02) {
+      const phase = Date.now() / 1000 * CONFIG.danceHz * Math.PI * 2
+      const wave = Math.sin(phase) * Math.min(1, energy * CONFIG.danceGain)
+      for (const [id, weight] of CONFIG.danceWith) set(id, wave * weight)
+      if (CONFIG.danceBody) {
+        set('ParamBodyAngleZ', wave * 6 * CONFIG.danceBody)
+        set('ParamAngleZ', wave * 8 * CONFIG.danceBody)
+      }
+    }
+  }
+
+  /* 播放器给它自己的可视化条算好的能量，搭个便车。它没在放、可视化没起来、
+   * 或者用户要求减少动效，拿到的都是 0，这边自然就不动。 */
+  const musicEnergy = () => {
+    try {
+      const v = window.NOIMPTY_MUSIC_PLAYER?.energy?.()
+      return typeof v === 'number' && v > 0 ? v : 0
+    } catch (_) { return 0 }
+  }
+
+  const resetMood = () => { sulkUntil = 0; tapStreak = 0; lastTapAt = 0 }
 
   const stopTalking = () => {
     clearTimeout(hideTimer); clearInterval(typeTimer)
@@ -251,15 +362,46 @@
     } catch (_) { return null }
   }
 
-  /* 这一页该说什么。优先级：文章标题 > 栏目台词 > 通用闲聊。
-   * 每一档都可能落空（她不在表里、标题太长、栏目没配台词），
-   * 所以是一路 fallback 下来的，最后那档保证有东西可说。 */
+  const rightNow = () => new Date()
+
+  const festivalToday = () => {
+    const d = rightNow()
+    const key = String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+    return CONFIG.festivals[key] || null
+  }
+
+  const dayPartNow = () => {
+    const h = rightNow().getHours()
+    return CONFIG.dayParts.find(p => h < p.until) || CONFIG.dayParts[CONFIG.dayParts.length - 1]
+  }
+
+  /* 这一页、这个时候该说什么。
+   *
+   * 按优先级一档档往下试，第一个给得出话的赢：
+   *   节日   —— 一年就那么几天，压过一切
+   *   深夜   —— 「快睡」比「这篇讲合并」要紧，所以排在页面前面
+   *   文章   —— 读得出标题就念标题
+   *   栏目   —— 这一栏自己的话
+   *   时段   —— 早上 / 下午 / 晚上
+   *   通用   —— 兜底，保证永远有东西可说
+   * 每一档都可能落空（她不在表里、标题太长、这一栏没配话），所以最后那档不能空。 */
   const linesHere = () => {
+    const withFace = (lines, face) => lines.map(l => (Array.isArray(l) ? l : [l, face]))
+
+    const fest = festivalToday()
+    if (fest) return withFace(fest.lines, fest.face)
+
+    const part = dayPartNow()
+    if (part.name === '深夜') return withFace(part.lines, part.face)
+
     const title = postTitle()
     if (title) return CONFIG.postLines.map(([t, mood]) => [t.replace('{题}', title), mood])
+
     const here = whereAmI()
     const own = here && CONFIG.pageLines[here.url]
     if (own && own.length) return own
+
+    if (part.lines && part.lines.length) return withFace(part.lines, part.face)
     return CONFIG.idleLines
   }
 
@@ -311,6 +453,11 @@
        * 戳身子不算数。所以自己把 eventMode 打开，按她的包围盒算命中。 */
       model.eventMode = 'static'
 
+      /* 每帧的额外参数挂在这里。时机是关键：动作和表情都在 afterMotionUpdate
+       * 之前算完，所以这里写的值盖在最上面；挂 beforeMotionUpdate 或者在外面
+       * 定时写都会被下一帧的动作冲掉（动作每帧重刷 128 个参数）。 */
+      try { model.internalModel.on('afterMotionUpdate', driveFrame) } catch (_) {}
+
       /* 戳一下说句话，戳两下把娜娜莉叫出来 —— 两件事共用这一个处理器。
        *
        * 这里**不能**用 canvas 的 dblclick：触屏上它基本等于不存在（iOS Safari
@@ -319,7 +466,7 @@
        * PixiJS 的 pointertap 鼠标和手指都会发，一套代码两边都算数。
        * 配合 CSS 里画布那条 touch-action: manipulation，把浏览器的双击缩放让开。 */
       let lastTap = 0
-      model.on('pointertap', () => {
+      model.on('pointertap', e => {
         const now = Date.now()
         const isDouble = now - lastTap <= CONFIG.doubleTapMs
         // 连击只认一次。不清零的话三连点会被数成两次双击，对话窗开两遍
@@ -337,9 +484,19 @@
         }
 
         if (!CONFIG.tapToTalk) return
-        // 单击不等双击窗口过去就先说 —— 等 320ms 再开口，手感是卡的
+
+        // 连着戳：超过 sulkWindowMs 没动静就重新数
+        tapStreak = now - lastTapAt <= CONFIG.sulkWindowMs ? tapStreak + 1 : 1
+        lastTapAt = now
+        if (tapStreak >= CONFIG.sulkAfter) {
+          tapStreak = 0
+          sulkUntil = now + CONFIG.sulkMs
+          say([pick(CONFIG.sulkLines), '生气'])
+          return                       // 闹别扭的时候不播动作，不然刚扭开又被动作掰回来
+        }
+
         try { model.motion(CONFIG.tapGroup) } catch (_) {}
-        say(pick(CONFIG.tapLines))
+        say(pick(zoneAt(e).lines))
       })
 
       /* 视线跟随全页面，而不只是她那块画布 —— 鼠标在文章里划过时她也会转头看，
@@ -406,6 +563,8 @@
     try { app?.destroy(false, { children: true }) } catch (_) {}
     try { stage?.remove() } catch (_) {}
     app = model = stage = bubble = null
+    // 别留着「正在闹别扭」跨过这一次关闭 —— 下次打开她该是好好的
+    resetMood()
   }
 
   const disable = async () => {
@@ -466,7 +625,9 @@
     visible: () => !!app,
     say,
     model: () => model,
-    config: () => CONFIG
+    config: () => CONFIG,
+    // 这会儿她该说哪一组话。测试和调试都用它，省得等 70 秒
+    lines: () => linesHere()
   })
 
   document.addEventListener('pjax:complete', recover)

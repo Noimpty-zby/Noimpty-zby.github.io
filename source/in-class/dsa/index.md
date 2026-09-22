@@ -21,7 +21,7 @@ description: Abdul Bari《Mastering Data Structures & Algorithms using C and C++
   <div><b>讲师</b><span>Abdul Bari</span></div>
   <div><b>时长</b><span>约 53 小时视频</span></div>
   <div><b>语言</b><span>英文授课 · C / C++ 实现</span></div>
-  <div><b>进度</b><span>递归 · {% section_progress DSA %}</span></div>
+  <div><b>进度</b><span>数组 · {% section_progress DSA %}</span></div>
 </div>
 
 <div class="noimpty-plan">

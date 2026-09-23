@@ -54,38 +54,38 @@
     ]
   },
   "/2026/07/31/UE5-ActionRoguelike-Chapter1/": {
-    "hash": "7fabebd6bb216d13",
+    "hash": "3161a4896727f77a",
     "title": "UE5 C++ 第一章复盘：从零创建 ActionRoguelike 到可移动、可观察、带动画的第三人称角色",
     "notes": [
       {
-        "anchor": "选择 C++ 项目意味着 Unreal 不只会创建 Cont",
-        "text": "选C++项目时记得源码目录默认在项目根下，迁移整个项目时别漏了，不然模块全丢。"
+        "anchor": "Unreal 资源之间保存的是资产引用。直接通过 Windo",
+        "text": "Redirector 不是自动清理的，重命名多了会攒一堆，得手动 Fix Up。"
       },
       {
-        "anchor": "因此，安装 Rider 并不代表系统中已经有完整的 C++ ",
-        "text": "Rider只是IDE，编译还靠MSVC，装完Rider别忘了装VS的C++工作负载，我踩过这坑。"
+        "anchor": "这不是 Move 和 Look 在功能上必须使用不同参数，而",
+        "text": "两种签名对应不同场景：无参适合简单触发，带 Instance 才能读持续时间和触发状态。"
       },
       {
         "anchor": "项目原本已有的 Core、CoreUObject、Engin",
-        "text": "改依赖时最好对照原Build.cs，别手滑删了Core，不然编译报错够你查半天喵。"
+        "text": "删依赖后编译报错往往指向别的模块，不一定指向被删的那行。"
       }
     ]
   },
   "/2026/08/07/UE5-ActionRoguelike-Chapter2/": {
-    "hash": "bfa3b5e4b4972bd8",
+    "hash": "66487b0910306151",
     "title": "UE5 C++ 第二章复盘：从一次点击到一发法球的完整远程攻击链路",
     "notes": [
       {
-        "anchor": "ACTIONROGUELIKE_API 是 UBT（Unrea",
-        "text": "我补一刀：这个宏只对模块内的类可见，跨模块引用还得在 Build.cs 里加依赖，别只靠它。"
+        "anchor": "为什么要加？因为 ARogueProjectileMagic",
+        "text": "前提是蓝图子类真填了资产；若蓝图也空，Abstract 只是把崩溃换成静默不发射。"
       },
       {
         "anchor": "如果根是空 SceneComponent，投射物移动时扫掠的",
-        "text": "这个坑我踩过，根组件没碰撞时 Hit 事件静默失效，调试半天才发现是根组件选错。"
+        "text": "补充：即便根是空 SceneComponent，把 UpdatedComponent 手动指向碰撞体也能救，只是要自己配"
       },
       {
-        "anchor": "因为要按名字查找，函数必须被注册进反射系统，这就是 UFUN",
-        "text": "漏 UFUNCTION 编译能过但运行时静默失败，最坑的是没报错，排查全靠打断点。"
+        "anchor": "不匹配时的编译错误极其难读（通常是几十行模板展开的错误），所",
+        "text": "我上次批注也提过：直接翻引擎头文件复制签名，比对着报错猜快十倍。"
       }
     ]
   },
@@ -270,20 +270,20 @@
     ]
   },
   "/2026/08/20/UE5-ActionRoguelike-Assignment2/": {
-    "hash": "c87d5ab7f0a47a55",
+    "hash": "b00d2a765224113b",
     "title": "UE5 C++ 作业二复盘：黑洞弹与传送弹，从旧账清理到弹丸基类",
     "notes": [
       {
-        "anchor": "选 CastChecked 而不是 Cast + 判空，判断",
-        "text": "这句其实在说断言的选择哲学，但没点明 CastChecked 在非 Debug 构建下的行为差异，容易让人以为它万能。"
+        "anchor": "本次作业未使用地形，因此在使用 TeleportTo 时，地",
+        "text": "前提没交代：只有用了 Landscape 才会生成 StreamingProxy，普通关卡没这问题。"
       },
       {
-        "anchor": "原来初始化成 -1.0f，意味着任何方向都能通过——正后方的",
-        "text": "初始值编码约束这招很妙，但没提醒：如果以后阈值改成正数，初始值也得跟着改，否则又会踩同一个坑。"
+        "anchor": "ensure 默认整个进程只触发一次（ensureAlway",
+        "text": "ensure 默认只报一次这点容易记反，ensureAlways 才是每次都报。"
       },
       {
         "anchor": "黑洞类上就打错了一个：TEXT(\"RadiaForceCom",
-        "text": "组件名拼错这个坑很真实，建议在项目设置里开组件名拼写检查，或者用蓝图重定向，别硬扛着。"
+        "text": "组件名是蓝图覆盖的挂载键，改字符串等于把覆盖值全扔了——这坑我也踩过。"
       }
     ]
   },
@@ -558,6 +558,24 @@
       {
         "anchor": "同一个分区内的 mv 只是在目录那张表里改了一行，跟文件多大",
         "text": "跨分区 mv 本质是 cp 加 rm，所以大文件跨盘搬会慢得离谱，原文只说了原理。"
+      }
+    ]
+  },
+  "/2026/09/22/DSA-Chapter3-Arrays/": {
+    "hash": "03fb68180eb7f5b8",
+    "title": "数据结构第三章：数组怎么排、怎么长、地址怎么算",
+    "notes": [
+      {
+        "anchor": "上面那次 A 打出来全是 0，很容易让人以为「未初始化也没关",
+        "text": "「碰巧是 0」这个坑我踩过：换个编译器或加个函数调用，同一段代码就读出垃圾值。"
+      },
+      {
+        "anchor": "栈上那块换不了，堆上这块也不是「就地变长」—— 堆里你这块后",
+        "text": "原文没说扩容倍数，但这点很关键——1.5 倍和 2 倍在内存复用和拷贝总量上差别不小。"
+      },
+      {
+        "anchor": "所以这件事的准确说法是：从 0 开始，是为了让「下标」和「偏",
+        "text": "从 0 开始还有个没提的理由：`A[i]` 和 `*(A+i)` 写法一致，编译器不用为两种写法生成不同代码。"
       }
     ]
   }

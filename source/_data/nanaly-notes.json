@@ -90,38 +90,38 @@
     ]
   },
   "/2026/08/11/UE5-ActionRoguelike-Chapter3/": {
-    "hash": "f7ed2174724c843c",
+    "hash": "fa78c33e5c4e0713",
     "title": "UE5 C++ 第三章复盘：从每帧筛选目标到接口解耦的完整交互系统",
     "notes": [
       {
         "anchor": "代价是：PC 自己没有世界位置（它不在关卡里），拿位置必须绕",
-        "text": "PC 没有世界位置这一点，新手最容易在拿位置时踩坑，绕 GetPawn() 这层别忘了。"
+        "text": "补充前提：UActorComponent 无变换，所以组件自身坐标不可用，必须借宿主 Actor 的位置。"
       },
       {
-        "anchor": "GetSafeNormal() 而不是 GetNormal(",
-        "text": "GetSafeNormal 防 NaN 的坑很实用，零向量在重叠检测里真实存在，别省这一步。"
+        "anchor": "然后是关键：APlayerController 不能被拖进关",
+        "text": "这里结论依赖「PC 不会被放进关卡」这个前提，若换成可放置的 Actor，Anywhere 与 DefaultsOnly"
       },
       {
-        "anchor": "如果换成 FInterpTo，IsNearlyEqual 的",
-        "text": "FInterpTo 末尾空转这个观察很细，实际项目里容易忽略，建议直接换 FInterpConstantTo。"
+        "anchor": "DrawDebugString 有个特殊之处：它不是直接画的",
+        "text": "注意：没 HUD 时 DrawDebugString 会静默不显示，排查时容易误判成代码没跑。"
       }
     ]
   },
   "/2026/08/12/UE5-ActionRoguelike-Chapter4/": {
-    "hash": "c77accb44ead643b",
+    "hash": "4b2dc42ec47b0bb7",
     "title": "UE5 C++ 第四章复盘：第一次用蓝图，以及 C++ 与蓝图的分工边界",
     "notes": [
       {
-        "anchor": "这条好一点，但还是有代价：策划想把\"一个粒子\"改成\"两个粒子",
-        "text": "这其实就是最常见的「改需求成本」问题，C++ 字段的每次变更都要求重编译，蓝图侧改动则零编译，这正是分工边界的现实意义。"
+        "anchor": "LidMeshComp 必须在 C++，因为 Tick 里有",
+        "text": "判断标准其实是「C++ 需不需要知道它」，不是「能不能用蓝图做」——原文这句容易读成后者。"
       },
       {
         "anchor": "宝箱刚放进关卡、还没被交互时，CurrentAnimatio",
-        "text": "初始化即触发的坑很隐蔽，建议在构造函数里先设 `bChestOpened = true` 或让 `IsNearlyEqual` 带容差，避免首帧误判。"
+        "text": "这个坑我巡逻时见过同类：默认值让状态判断第一帧就成立，构造函数里初始化能挡掉。"
       },
       {
-        "anchor": "如果某个类是纯蓝图实现的接口（在 Class Setting",
-        "text": "纯蓝图接口的 Cast 盲区是新手高频坑，排查时若发现 `if` 静默跳过，优先检查接口是否真的挂在了 C++ 类上。"
+        "anchor": "这个节点等价于 C++ 里的 Super::Interact",
+        "text": "蓝图不警告这点比 C++ 危险——C++ 至少还有编译器盯着，这边全靠自己记得。"
       }
     ]
   },
@@ -288,42 +288,38 @@
     ]
   },
   "/2026/08/21/UE5-ActionRoguelike-Chapter5/": {
-    "hash": "76b199675a9d7e5f",
+    "hash": "cf64d8c6735a0cfa",
     "title": "UE5 C++ 第五章复盘：属性组件、多播委托，以及从轮询到事件驱动",
     "notes": [
       {
-        "anchor": "玩家能用了。然后敌人也要血量——敌人是 APawn 派生的，",
-        "text": "AActor 是 APawn 的父类，敌人如果不需要移动，直接挂 AActor 也行，别死磕 ACharacter。"
+        "anchor": "问题更大：ACharacter 已经是 APawn → AA",
+        "text": "补个前提：UE 的 Gameplay Framework 基类固定这条，指的是 ACharacter/APawn/AAc"
       },
       {
         "anchor": "AActor::TakeDamage 的基类实现目前是原样返",
-        "text": "基类原样返回伤害不代表以后也这样，引擎版本升级或子类重写都可能改，别依赖这个行为。"
+        "text": "这里说「测不出区别」有坑：基类实现是原样返回，但一旦有别的系统也重写了 TakeDamage，行为立刻分叉。"
       },
       {
-        "anchor": "留空时 UMG 会回退到\"第一个本地玩家\"，单机能跑。但控件",
-        "text": "分屏 bug 的根因是 PlayerOwner 未显式传入，单机掩盖了问题，联机必炸。"
+        "anchor": "纯节点不排队执行，而是被下游拉取时才求值。当执行流走到 Se",
+        "text": "纯节点倒着求值这点容易误解：只有纯节点不排队，带执行引脚的节点仍按执行流顺序走。"
       }
     ]
   },
   "/2026/08/21/UE5-ActionRoguelike-Chapter6/": {
-    "hash": "b8ce5e1cdc3fbe7a",
+    "hash": "f390cd33abe5089b",
     "title": "UE5 C++ 第六章复盘：把前五章欠的债还掉——准星、碰撞通道、控制台变量与弹道修正",
     "notes": [
       {
-        "anchor": "这一章最大的收获是意识到：优化不是锦上添花，而是把之前偷的懒",
-        "text": "优化是还债，但债主是你自己——没人逼你，所以最容易拖到玩法崩了才想起来。"
+        "anchor": "这条契约在这一节还兑现不了（第四节才补上），但它必须先立起来",
+        "text": "契约先立、兑现放后面，读者容易以为这节已经能用了——建议明说准星此刻是摆设。"
       },
       {
-        "anchor": "这是实际使用中最关键的差别：你转动视角时，SocketOff",
-        "text": "我补充：调试时把两个偏移都设成 Y=80 转一圈视角，肉眼比文档快十倍。"
+        "anchor": "引擎官方在 SocketOffset 的 tooltip 里",
+        "text": "tooltip 说的是射线检测，但没说清是哪条射线；不熟弹簧臂的人会以为是武器射线。"
       },
       {
-        "anchor": "把这五步串起来看：唯一的关键是 Pawn 预设那一格 —— ",
-        "text": "胶囊体和 Mesh 共用 Pawn 预设是坑，改一边忘了另一边，子弹就穿模了。"
-      },
-      {
-        "anchor": "第三条要多说两句：两者刚被赋值成相等，跑起来完全正常，但读代",
-        "text": "我的经验：命名重复这种小事，Review 时提一次就够，提三次会挨揍。"
+        "anchor": "角色 Mesh 现在阻挡 projectile，而子弹是从角",
+        "text": "生成点在自身 Mesh 附近，子弹初帧就可能和角色重叠——这里没提前几章的碰撞忽略是怎么兜住的。"
       }
     ]
   },

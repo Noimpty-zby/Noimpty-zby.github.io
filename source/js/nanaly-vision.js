@@ -1,6 +1,7 @@
 /* 图片只在本机保存；发送问题时才传给配置的视觉服务。 */
 (() => {
   'use strict'
+  if (window.NANALY_BACKUP_PENDING) return
   if (window.NANALY_VISION) return
   const DEFAULTS = Object.freeze({ baseURL: 'https://api.siliconflow.cn/v1', model: 'Pro/moonshotai/Kimi-K2.6' })
   const MAX_FILES = 2, MAX_BYTES = 10 * 1024 * 1024

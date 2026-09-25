@@ -86,7 +86,8 @@
     const actionLabels = [
       ['explain-selection', '解释选中内容', '帮我读懂这一段'],
       ['summarize', '总结当前文章', '整理这一页的要点'],
-      ['schedule', '打开学习日程', '看看接下来学什么']
+      ['schedule', '打开学习日程', '看看接下来学什么'],
+      ['play', '陪 Mao 玩一会儿', '零食、纸条、合影和小游戏']
     ]
     for (const [action, label, detail] of actionLabels) {
       const node = makeButton('', 'mao-controls-action')

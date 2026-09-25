@@ -1,0 +1,11 @@
+---
+layout: false
+title: 本机数据备份与恢复
+---
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>本机数据备份与恢复</title><link rel="stylesheet" href="/css/nanaly-backup.css"><script src="/js/protected-manifest.js"></script><script src="/js/privacy-gate.js"></script></head>
+<body><main><a href="/">← 返回网站</a><h1>本机数据备份与恢复</h1><p>当前域名：<strong id="backup-origin"></strong></p><p>文件只在此浏览器加密、校验和恢复，不上传到服务器。换域名前先在旧域名下载并校验；之后到新域名打开本页恢复。</p>
+<section><h2>包含哪些数据</h2><p>API 密钥保险箱的原密文、模型设置、聊天话题与草稿、确认记忆与阅读记录、日程未同步修改、练习草稿与记录、文章检查任务、Mao 纸条收藏与模型用量账本，以及浏览器已保存的图片和文件内容。</p><p class="muted">附件是站内保存的 JPEG 图片、文档解析文字与页图，不是原 PDF / DOCX。已经丢失或尚未成功存入浏览器的附件无法补回。声音与外观偏好、站点解锁状态、服务器上的目标/笔记/运行环境不在本机备份范围。</p><p class="muted">工作室中的“导出私有记录备份”只备份已连接后端的记录，与本页用途不同。</p></section>
+<section><h2>1. 导出本机加密文件</h2><p>请先关闭本站其他标签页，避免备份过程中记录变化。备份密码用于保护整个文件，不能找回；原 API 保险箱密码保持不变。</p><label>备份密码（至少10个字符）<input id="backup-new-password" type="password" minlength="10" maxlength="256" autocomplete="new-password"></label><label>再次输入备份密码<input id="backup-repeat-password" type="password" minlength="10" maxlength="256" autocomplete="new-password"></label><button id="backup-export" type="button">加密并下载备份</button><a id="backup-download" class="backup-download" hidden>保存加密备份</a></section>
+<section><h2>2. 校验文件，或在新域名恢复</h2><p>可在旧域名校验下载的文件，不会改动任何记录。恢复仅支持空白目标；已有聊天、密钥或附件时会停止，不会合并或覆盖。</p><label>选择备份文件<input id="backup-file" type="file" accept=".json,application/json"></label><label>此文件的备份密码<input id="backup-password" type="password" minlength="10" maxlength="256" autocomplete="off"></label><button id="backup-verify" type="button">校验文件（不写入）</button><div id="backup-summary"></div><label><input id="backup-close-tabs" type="checkbox"> 我已关闭当前域名下的其他标签页</label><button id="backup-restore" type="button" disabled>恢复到当前域名</button><button id="backup-recover" type="button" hidden>处理上次未完成的恢复</button></section>
+<p id="backup-status" role="status" aria-live="polite">导出前请保留好原保险箱密码。无需解锁 API 密钥即可备份或恢复。</p><p class="muted">为避免浏览器内存不足，完整备份正文上限为64MB；超过上限会停止并说明，不会省略附件后假装完整。恢复中请保持页面打开。</p></main><script src="/js/nanaly-backup.js"></script><script src="/js/nanaly-backup-page.js"></script></body></html>

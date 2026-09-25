@@ -1,0 +1,66 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import vm from 'node:vm';
+import { fileURLToPath } from 'node:url';
+import { PrivateStore } from '../../../server/lib/store.mjs';
+import { DockerRunner } from '../../../server/lib/runner.mjs';
+import { validateRun } from '../../../server/lib/validation.mjs';
+
+test('real Docker execution, diagnostics, boundaries and persisted workspaces', { skip: process.env.NANALY_DOCKER_TESTS !== '1', timeout: 300000 }, async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'nanaly-docker-'));
+  const store = await new PrivateStore(directory).init();
+  const runner = new DockerRunner(store);
+  t.after(async () => { await runner.close(); await store.close(); await fs.rm(directory, { recursive: true, force: true }); });
+  assert.equal((await runner.health()).ready, true, 'Build image and ensure cgroup v2 controllers first.');
+  const run = value => runner.run(validateRun(value));
+  const cpp = await run({ language: 'cpp', code: '#include <iostream>\nint main(){int a,b;std::cin>>a>>b;std::cout<<a+b<<"\\n";}', tests: [{ input: '2 3', expectedOutput: '5' }, { input: '-1 2', expectedOutput: '1' }] });
+  assert.equal(cpp.status, 'accepted'); assert.equal(cpp.tests.length, 2);
+  const c = await run({ language: 'c', code: '#include <stdio.h>\nint main(){puts("C");}' });
+  assert.equal(c.stdout.trim(), 'C');
+  const go = await run({ language: 'go', code: 'package main\nimport "fmt"\nfunc main(){fmt.Println("Go")}' });
+  assert.equal(go.stdout.trim(), 'Go');
+  const broken = await run({ language: 'cpp', code: 'int main(){unknown;}' });
+  assert.equal(broken.status, 'compile_error'); assert.ok(broken.diagnostics.some(item => item.line === 1));
+  const timeout = await run({ language: 'c', code: 'int main(){for(;;){}}' });
+  assert.equal(timeout.status, 'timeout');
+  const limited = await run({ language: 'c', code: '#include <stdio.h>\nint main(){while(1)puts("too much output");}' });
+  assert.equal(limited.status, 'output_limit');
+  const linux = await run({ language: 'linux', code: 'printf hello > note.txt; id -u; test ! -e /var/run/docker.sock; test ! -w /etc/passwd' });
+  assert.equal(linux.status, 'accepted'); assert.equal(linux.stdout.trim(), '10001'); assert.equal(linux.workspaceCommitted, true);
+  const resumed = await run({ language: 'linux', code: 'cat note.txt', workspaceId: linux.workspaceId, workspaceRevision: linux.workspaceRevision });
+  assert.equal(resumed.stdout, 'hello');
+  const check = await run({ language: 'linux', code: 'touch should-not-exist', mode: 'check', workspaceId: linux.workspaceId, workspaceRevision: resumed.workspaceRevision });
+  assert.equal(check.status, 'checked'); assert.equal(check.workspaceCommitted, false);
+  const checked = await run({ language: 'linux', code: 'test ! -e should-not-exist', workspaceId: linux.workspaceId, workspaceRevision: resumed.workspaceRevision });
+  assert.equal(checked.status, 'accepted');
+  const git = await run({ language: 'git', code: 'echo lesson > lesson.txt; git add .; git commit -m lesson; git branch lesson' });
+  assert.equal(git.status, 'accepted');
+  const gitResume = await run({ language: 'git', code: 'git branch --list lesson', workspaceId: git.workspaceId, workspaceRevision: git.workspaceRevision });
+  assert.match(gitResume.stdout, /lesson/);
+  const sql = await run({ language: 'mysql', code: 'CREATE TABLE lesson (id INT PRIMARY KEY); INSERT INTO lesson VALUES (7); SELECT * FROM lesson;' });
+  assert.equal(sql.status, 'accepted'); assert.match(sql.stdout, /7/); assert.equal(sql.workspaceCommitted, true);
+  const definitions = await run({ language: 'mysql', code: 'CREATE PROCEDURE answer() SELECT 42; CREATE EVENT tomorrow ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 DAY DO INSERT INTO lesson VALUES (9);', workspaceId: sql.workspaceId, workspaceRevision: sql.workspaceRevision });
+  assert.equal(definitions.status, 'accepted'); assert.equal(definitions.workspaceCommitted, true);
+  const objects = await run({ language: 'mysql', code: "CALL answer(); SHOW EVENTS; SELECT ROUTINE_NAME FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA='practice';", workspaceId: sql.workspaceId, workspaceRevision: definitions.workspaceRevision });
+  assert.equal(objects.status, 'accepted'); assert.match(objects.stdout, /42/); assert.match(objects.stdout, /tomorrow/); assert.match(objects.stdout, /answer/);
+  const sqlResume = await run({ language: 'mysql', code: 'SELECT COUNT(*) FROM lesson;', workspaceId: sql.workspaceId, workspaceRevision: objects.workspaceRevision });
+  assert.equal(sqlResume.status, 'accepted'); assert.match(sqlResume.stdout, /1/);
+  const denied = await run({ language: 'mysql', code: 'SELECT * FROM mysql.user;', workspaceId: sql.workspaceId, workspaceRevision: sqlResume.workspaceRevision });
+  assert.equal(denied.status, 'runtime_error');
+  const unsafe = await run({ language: 'mysql', code: 'SELECT 1 INTO OUTFILE "/tmp/forbidden";', workspaceId: sql.workspaceId, workspaceRevision: denied.workspaceRevision });
+  assert.equal(unsafe.status, 'runtime_error');
+  const sandbox = { window: { addEventListener() {} }, document: { readyState: 'loading', addEventListener() {} } };
+  const lessonFile = fileURLToPath(new URL('../../../source/js/learning-lab.js', import.meta.url));
+  vm.runInNewContext(await fs.readFile(lessonFile, 'utf8'), sandbox);
+  for (const lesson of sandbox.window.NOIMPTY_LEARNING.lessons) {
+    await t.test('actual frontend reference lesson: ' + lesson.language, async () => {
+      const result = await run({ language: lesson.language, code: lesson.code, stdin: lesson.stdin, tests: lesson.tests });
+      assert.equal(result.status, 'accepted', JSON.stringify(result));
+      if (lesson.tests.length) assert.equal(result.tests.length, lesson.tests.length);
+      if (lesson.language === 'mysql') assert.match(result.stdout, /小周/);
+    });
+  }
+});

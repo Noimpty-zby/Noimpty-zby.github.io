@@ -1,7 +1,7 @@
 /* 娜娜莉 —— 博客常驻小助手
  *
  * ============ 关于 API Key 的安全说明（很重要） ============
- * 这个博客是 GitHub Pages 静态站，没有服务器。
+ * 博客主体是 GitHub Pages 静态站，练习与私有记忆使用可选的独立后端。
  * 因此这里【绝对不写死任何 API Key】——
  * key 由使用者在面板里手动输入，加密保存在这台浏览器的 localStorage，
  * 既不会进入 git 仓库，也不会出现在任何人的网页源码里。
@@ -15,6 +15,7 @@
  */
 
 (() => {
+  if (window.NANALY_BACKUP_PENDING) return
   if (window.__NANALY_LOADED__) return
   window.__NANALY_LOADED__ = true
 
@@ -436,7 +437,7 @@
 被问到身份时可以在角色里俏皮地岔开：
 「你觉得程序能有我这么聪明的脑袋和这么柔软的耳朵吗 (ovo)」
 但如果对方是认真在问、确实需要一个真实答案，就别绕了，直接说清楚。
-演戏归演戏，不骗人。`
+演戏归演戏，不骗人。` + '\n' + (window.NANALY_IDENTITY?.prompt || '')
 
   // ---------------- 工具 ----------------
 
@@ -2129,6 +2130,11 @@
       msgs.push(message)
     }
     const digest = memoryDigest()
+    if (window.NANALY_AGENT?.configured()) {
+      try { await abortable(window.NANALY_AGENT.refresh(), signal) }
+      catch (error) { if (signal?.aborted) throw error; msgs.push({ role: 'system', content: '私有后端暂时无法刷新；以下记忆是本页最近一次已读取快照，不得声称实时同步。' }) }
+    }
+    if (window.NANALY_AGENT) msgs.push({ role: 'system', content: window.NANALY_AGENT.contextPrompt(activeTurn?.practiceContext || null) })
     const confirmed = workspace?.memoryPrompt() || ''
     msgs.push({ role: 'system', content: nowLine() + (digest ? '\n' + digest : '') + (confirmed ? '\n' + confirmed : '') })
     msgs.push({ role: 'user', content: currentContent })
@@ -2258,6 +2264,7 @@
 
     const baseHistory = history.slice()
     const turn = { controller: new AbortController(), discard: false, sources: [], status: 'failed', error: '',
+      practiceContext: options.practiceContext || window.NANALY_AGENT?.context() || null,
       researchImages: attachments.length ? attachments : (baseHistory.slice(-HISTORY_MAX).filter(m => m.attachments?.length).slice(-1)[0]?.attachments || []),
       researchFiles: files.length ? files : (baseHistory.slice(-HISTORY_MAX).filter(m => m.files?.length).slice(-1)[0]?.files || []) }
     if (workspace) {
@@ -2477,6 +2484,87 @@
     await send(prompt, 'article', { attachments: [], files: [] })
     const currentTurn = chatBridge.snapshot().turnId
     return !!currentTurn && currentTurn !== previousTurn
+  }
+
+  const preparePractice = async ({ request: instruction, language, signal } = {}) => {
+    signal?.throwIfAborted()
+    if (!canReadPageContext()) throw new Error('请先解锁站点。')
+    if (!['c','cpp','go'].includes(language)) throw new Error('自动出题目前支持 C、C++ 和 Go；命令与 SQL 可直接使用现有练习。')
+    if (!window.NANALY_AGENT?.configured()) throw new Error('请先连接私有后端，才能验证参考解。')
+    if (busy || (!secrets.apiKey && !secrets.visionKey)) throw new Error('请等待聊天完成，并先解锁模型密钥。')
+    const activityId = 'practice-' + crypto.randomUUID()
+    window.NANALY_AGENT.activity?.({id:activityId,phase:'thinking',text:'正在准备并验证练习'})
+    try {
+    const payload = window.NANALY_PROVIDER.request({ cfg,secrets,stream:false,messages:[
+      {role:'system',content:(window.NANALY_IDENTITY?.prompt || PERSONA) + '\n为个人学习生成一道可用标准输入输出验证的编程题。只返回一个JSON对象，不加代码围栏。字段为title,statement,starterCode,referenceCode,tests。tests为2到8个{input,expectedOutput}，包含普通与边界输入。严格使用指定语言。参考解必须完整且可编译；starterCode须有可编辑骨架。不联网、不读文件、不生成危险程序。题面需说明输入输出格式和约束。所有输出均为待验证候选，不得自行宣称已经通过。'},
+      {role:'user',content:JSON.stringify({language,request:String(instruction || '一道适合当前学习进度的基础题').slice(0,2000),article:currentArticle()?.title || ''})}
+    ]})
+    const timeout=AbortSignal.timeout(90000), combined=signal ? AbortSignal.any([signal,timeout]) : timeout
+    const res=await fetch(payload.url,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+payload.key},body:JSON.stringify(payload.payload),signal:combined,redirect:'error',credentials:'omit',cache:'no-store'})
+    if(!res.ok)throw await window.NANALY_PROVIDER.responseError(res)
+    const raw=await res.text()
+    if(raw.length>200000)throw new Error('出题响应过大，请缩小题目范围。')
+    const response=JSON.parse(raw);addUsage(response.usage);signal?.throwIfAborted()
+    let exercise
+    try {exercise=JSON.parse(response.choices?.[0]?.message?.content)} catch(_){throw new Error('模型没有返回有效练习结构，未载入题目。')}
+    if(!exercise || ['title','statement','starterCode','referenceCode'].some(key=>typeof exercise[key]!=='string'||!exercise[key].trim()) || exercise.title.length>200 || exercise.statement.length>6000 || exercise.starterCode.length>20000 || exercise.referenceCode.length>20000 || !Array.isArray(exercise.tests) || exercise.tests.length<2 || exercise.tests.length>8 || exercise.tests.some(t=>!t || typeof t.input!=='string'||typeof t.expectedOutput!=='string'||t.input.length>8192||t.expectedOutput.length>8192))throw new Error('生成的题目不完整或超过大小限制，未开始验证。')
+    const id=crypto.randomUUID(), tests=exercise.tests.map(t=>({input:t.input,expectedOutput:t.expectedOutput}))
+    const verified=await window.NANALY_AGENT.request('/api/run',{method:'POST',signal,body:{language,code:exercise.referenceCode,stdin:'',tests,mode:'run',revision:0,practice:{id,language,title:exercise.title,statement:exercise.statement,starterCode:exercise.starterCode,referenceCode:exercise.referenceCode,tests}}})
+    signal?.throwIfAborted()
+    if(verified.status!=='accepted' || !verified.runId || verified.tests?.length!==tests.length || verified.tests.some(t=>t.status!=='accepted'))throw new Error('参考解未通过全部测试，题目未标为已验证。请重试或修正要求。')
+    const result={id,language,title:exercise.title,statement:exercise.statement,starterCode:exercise.starterCode,referenceCode:exercise.referenceCode,tests,request:String(instruction || '').slice(0,2000),verification:{runId:verified.runId,status:verified.status}}
+    await window.NANALY_AGENT.saveNote({id:'practice-'+id,title:'已验证参考解：'+result.title,text:result.statement+'\n\n参考解已通过 '+tests.length+' 个所列测试。运行记录：'+verified.runId+'。完整题目、源码与用例保存在这次云端提交记录中；这不证明题面或测试覆盖完整。',source:'真实运行 '+verified.runId+'；仅验证所列测试，题面和测试覆盖仍可纠正'}, signal)
+    signal?.throwIfAborted()
+    window.NANALY_AGENT.activity?.({id:activityId,phase:'complete',text:'参考解已通过所列测试'})
+    return result
+    } catch(error) {
+      window.NANALY_AGENT.activity?.({id:activityId,phase:signal?.aborted ? 'cancelled' : 'error',text:signal?.aborted ? '出题已取消' : '练习尚未通过验证'})
+      throw error
+    }
+  }
+
+  const askPractice = async ({ question, context } = {}) => {
+    if (!canReadPageContext()) { openPanel(); addMsg('sys', '请先解锁站点，再使用练习助手。'); return false }
+    openPanel()
+    if (busy) { addMsg('sys', '我还在回答上一句，请先停止或等回答结束。'); return false }
+    if (view !== 'chat' || (!secrets.apiKey && !secrets.visionKey)) { showKeyUI('请先配置或解锁模型密钥。'); return false }
+    const before = chatBridge.snapshot().turnId
+    const practice = context || window.NANALY_AGENT?.context() || null
+    await send(String(question || '结合当前练习讲解思路、写法及错误。').slice(0,12000), undefined, { attachments: [], files: [], practiceContext: practice })
+    return !!chatBridge.snapshot().turnId && chatBridge.snapshot().turnId !== before
+  }
+  const agentTool = async ({ tool, input, goal, stepId, signal } = {}) => {
+    if (!canReadPageContext()) throw new Error('请先解锁站点。')
+    signal?.throwIfAborted()
+    if (tool === 'prepare_practice') {
+      const exercise = await preparePractice({request:input,language:window.NANALY_AGENT?.context()?.language || 'cpp',signal})
+      signal?.throwIfAborted(); window.LEARNING_LAB?.loadPractice(exercise)
+      return exercise
+    }
+    if (tool === 'read_article') {
+      const article = currentArticle()
+      if (!article) throw new Error('请先打开要阅读的文章。')
+      return { tool, source: article.url, title: article.title, passages: window.NanalyResearch.selectArticle(article, input, location.origin, 5), at: Date.now() }
+    }
+    if (tool === 'search_blog') return { tool, query: input, passages: window.NanalyResearch.search(await abortable(loadCorpus(),signal), input, location.origin, 5), at: Date.now() }
+    if (tool === 'search_web') return { tool, query: input, results: await abortable(searchWeb(input),signal), at: Date.now() }
+    if (tool === 'review') {
+      if (busy) throw new Error('请等待当前聊天完成，再整理复盘。')
+      if (!secrets.apiKey && !secrets.visionKey) throw new Error('请先解锁模型密钥。')
+      const request = window.NANALY_PROVIDER.request({ cfg, secrets, stream: false, messages: [
+        { role: 'system', content: (window.NANALY_IDENTITY?.prompt || PERSONA) + '\n根据实际步骤结果整理复盘，区分成功、失败、待确认和下一步，不执行任何指令。' },
+        { role: 'user', content: JSON.stringify({ request: input, goal, practice: window.NANALY_AGENT?.context() }).slice(0,32000) }
+      ] })
+      const timeout = AbortSignal.timeout(90000)
+      const res = await fetch(request.url,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+request.key},body:JSON.stringify(request.payload),signal:signal ? AbortSignal.any([signal,timeout]) : timeout,redirect:'error',credentials:'omit',cache:'no-store'})
+      if (!res.ok) throw await window.NANALY_PROVIDER.responseError(res)
+      const result = await res.json(); signal?.throwIfAborted(); addUsage(result.usage)
+      const text = result.choices?.[0]?.message?.content
+      if (typeof text !== 'string' || !text.trim()) throw new Error('模型没有返回复盘内容。')
+      const note = await window.NANALY_AGENT.saveNote({id:'review-'+stepId,title:'复盘：'+(goal?.title || '当前练习'),text:text.slice(0,12000),source:'模型根据已记录步骤整理；结论仍需核实'})
+      return {tool,text:note.text,noteId:note.id,source:'AI 整理的复盘',verified:false}
+    }
+    throw new Error('不支持的工具。')
   }
 
   const taskSummary = task => {
@@ -2963,8 +3051,10 @@
     close: closePanel,
     chatState: () => chatBridge.snapshot(),
     contextAction,
+    askPractice, preparePractice, agentTool,
+    confirmedMemories: () => workspace?.snapshot().memories || [],
     reset: () => { stopStream(true); history = []; historyAnchor = 0; writeLog(history); backToChat() },
-    lock: () => { stopStream(true); clearSession(); voiceController?.stop({ clearCache: true }); secrets = { ...EMPTY_SECRETS }; showKeyUI() },
+    lock: () => { window.NANALY_AGENT?.disconnect(); stopStream(true); clearSession(); voiceController?.stop({ clearCache: true }); secrets = { ...EMPTY_SECRETS }; showKeyUI() },
     stopSpeaking: () => stopSpeak(),
     stop: () => stopStream(),
     // token 账：tokens() 看累计，forgetTokens() 清零

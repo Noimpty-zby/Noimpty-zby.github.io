@@ -26,6 +26,7 @@
  */
 (() => {
   'use strict'
+  if (window.NANALY_BACKUP_PENDING) return
 
   if (window.NOIMPTY_SCHEDULE) return
 

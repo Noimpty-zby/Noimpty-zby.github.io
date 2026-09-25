@@ -142,6 +142,9 @@ jobs:
           NANALY_GIT_EMAIL: ${{ secrets.NANALY_GIT_EMAIL }}
           NANALY_GIT_NAME: ${{ secrets.NANALY_GIT_NAME }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          # 可选：独立私有记忆后端；只有允许公开的记忆进入公开内容提示词
+          NANALY_AGENT_URL: ${{ secrets.NANALY_AGENT_URL }}
+          NANALY_AGENT_TOKEN: ${{ secrets.NANALY_AGENT_TOKEN }}
         run: |
           dry_args=()
           if [ "$DRY_FLAG" = "--dry" ]; then dry_args+=(--dry); fi

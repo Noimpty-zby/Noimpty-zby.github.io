@@ -2,6 +2,7 @@
 // 没有 DEEPSEEK_API_KEY 时全部降级成模板文字，报告照发。
 
 import { digest } from '../nanaly/journal.mjs'
+import { identity, sharedContext } from '../nanaly/agent-client.mjs'
 
 const KEY = process.env.DEEPSEEK_API_KEY || ''
 const BASE = (process.env.DEEPSEEK_API_BASE || 'https://api.deepseek.com').replace(/\/$/, '')
@@ -136,6 +137,9 @@ export const ask = async (system, user, maxTokens = 700, opts = {}) => {
   // 没 key 时也要留下原因：否则调用方读到的是上一次调用留下的陈值，
   // 而这条路径一个请求都不发，日志上什么都不会出现。
   if (!KEY) { MODEL_STATE.why = '没有配置 DEEPSEEK_API_KEY'; return null }
+  let privateContext = ''
+  try { privateContext = await sharedContext() } catch (_) { console.warn('[nanaly] 私有记忆不可用，本轮仅使用已提供的资料') }
+  system = system + '\n' + identity.prompt + (privateContext ? '\n' + privateContext : '')
   MODEL_STATE.calls++
   const deep = !!opts.deep
   const thinking = deep ? 'enabled' : THINKING

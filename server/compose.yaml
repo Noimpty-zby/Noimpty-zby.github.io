@@ -1,0 +1,18 @@
+# Build the execution image only. The private API runs as a restricted host service.
+# Docker's socket is never mounted inside untrusted execution containers.
+services:
+  runner-image:
+    image: nanaly-runner:1
+    build:
+      context: ./runner
+    profiles: ["build"]
+    network_mode: none
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    user: "10001:10001"
+    pids_limit: 96
+    mem_limit: 1g
+    memswap_limit: 1g
+    cpus: 1
+    command: ["true"]

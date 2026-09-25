@@ -15,7 +15,9 @@
     "voicecheck": "node tools/checks/voice-check.mjs",
     "svgcheck": "node tools/checks/svg-check.mjs",
     "emotioncheck": "node tools/checks/emotion-check.mjs",
-    "vendor:live2d": "node tools/assets/vendor-live2d.mjs"
+    "vendor:live2d": "node tools/assets/vendor-live2d.mjs",
+    "server:agent": "node server/index.mjs",
+    "test:runner": "NANALY_DOCKER_TESTS=1 node --test tools/tests/server/docker*.integration.test.mjs"
   },
   "hexo": {
     "version": "8.1.2"

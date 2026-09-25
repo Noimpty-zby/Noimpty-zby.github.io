@@ -1,0 +1,33 @@
+# Replace @NANALY_UID@ with the numeric result of `id -u nanaly` before installing.
+# The API connects to nanaly's rootless Docker socket via /etc/nanaly.env.
+[Unit]
+Description=Nanaly private state and isolated learning API
+Wants=network-online.target
+Requires=user@@NANALY_UID@.service
+After=network-online.target user@@NANALY_UID@.service
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+User=nanaly
+Group=nanaly
+WorkingDirectory=/opt/blog
+EnvironmentFile=/etc/nanaly.env
+ExecStartPre=/usr/bin/docker info --format {{.ID}}
+ExecStart=/usr/local/bin/node /opt/blog/server/index.mjs
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/srv/nanaly-private
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+[Install]
+WantedBy=multi-user.target

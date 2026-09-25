@@ -73,7 +73,7 @@
   // A late run may enter history, but can never overwrite a newer editor revision.
   const createSession = ({ request, available = () => true, permitted = () => true, storage, changed = () => {} }) => {
     const cached = permitted() ? safeRead(storage) : null
-    const state = { lessonId: 'c', revision: 0, code: '', stdin: '', tests: [], exercise: null, result: null, checked: null, history: [], backups: [], drafts: {}, workspaces: {}, busy: false, checking: false, error: '', notice: '', storageError: '', persist: cached?.persist !== false, autoCheck: cached?.autoCheck !== false }
+    const state = { lessonId: lessonFor(cached?.lessonId).id, revision: 0, code: '', stdin: '', tests: [], exercise: null, result: null, checked: null, history: [], backups: [], drafts: {}, workspaces: {}, busy: false, checking: false, error: '', notice: '', storageError: '', persist: cached?.persist !== false, autoCheck: cached?.autoCheck === true }
     let activeRun = null
     let activeCheck = null
     let activeReset = null
@@ -95,7 +95,7 @@
     const save = () => {
       if (!permitted()) return
       state.drafts[state.lessonId] = draft()
-      try { storage?.setItem(STORE, JSON.stringify(state.persist ? { version: 1, persist: true, autoCheck: state.autoCheck, drafts: state.drafts, history: state.history, backups: state.backups } : { version: 1, persist: false, autoCheck: state.autoCheck })); state.storageError = storage ? '' : '浏览器存储不可用，关闭页面后草稿和历史将丢失。' }
+      try { storage?.setItem(STORE, JSON.stringify(state.persist ? { version: 1, persist: true, lessonId: state.lessonId, autoCheck: state.autoCheck, drafts: state.drafts, history: state.history, backups: state.backups } : { version: 1, persist: false, autoCheck: state.autoCheck })); state.storageError = storage ? '' : '浏览器存储不可用，关闭页面后草稿和历史将丢失。' }
       catch (_) { state.storageError = '浏览器存储不可用或空间不足，当前记录仅保留到关闭页面。请下载记录备份。' }
     }
     const cancelCheck = () => { activeCheck?.controller.abort(); activeCheck = null; state.checking = false }
@@ -113,9 +113,9 @@
       save(); cancelCheck()
       const lesson = lessonFor(id)
       state.lessonId = lesson.id
-      const source = state.drafts[lesson.id] || lesson
+      const source = state.drafts[lesson.id] || { code: '', stdin: '', tests: [], exercise: null }
       state.code = source.code; state.stdin = source.stdin; state.tests = cleanTests(source.tests); state.exercise = optionalPractice(source.exercise)
-      state.revision++; state.result = null; state.checked = null; state.error = ''; state.notice = ''; emit()
+      state.revision++; state.result = null; state.checked = null; state.error = ''; state.notice = ''; save(); emit()
       return true
     }
     const preflight = () => {
@@ -188,7 +188,7 @@
         if (!permitted() || !available()) throw new Error('请先解锁页面并连接隔离执行服务。')
         cancelCheck()
         const lesson = lessonFor(state.lessonId)
-        if (!STATEFUL.has(lesson.language)) { edit({ code: lesson.code, stdin: lesson.stdin, tests: lesson.tests, exercise: null }); return true }
+        if (!STATEFUL.has(lesson.language)) { edit({ code: '', stdin: '', tests: [], exercise: null }); return true }
         operation = { controller: new AbortController(), language: lesson.language }; activeReset = operation
         state.busy = true; state.error = ''; emit()
         const previous = state.workspaces[lesson.language]
@@ -265,7 +265,7 @@
       } finally { if (activeSync === controller) activeSync = null }
     }
     const dispose = () => { save(); cancel(); activeSync?.abort(); closed = true }
-    const initial = state.drafts.c || LESSONS[0]
+    const initial = state.drafts[state.lessonId] || { code: '', stdin: '', tests: [], exercise: null }
     state.code = initial.code; state.stdin = initial.stdin; state.tests = cleanTests(initial.tests); state.exercise = optionalPractice(initial.exercise)
     return { state, edit, select, run, cancel, reset, restore, loadPractice, restoreBackup, persistence, setAutoCheck, canAutoCheck, autoCheckCurrent, clearHistory, syncHistory, dispose }
   }
@@ -276,320 +276,243 @@
   let mounted = null
   let launch = null
 
+  const LANGUAGE_NAMES = { c: 'C', cpp: 'C++', go: 'Go', git: 'Git', linux: 'Bash', mysql: 'MySQL' }
+  const FILE_NAMES = { c: 'main.c', cpp: 'main.cpp', go: 'main.go', git: 'commands.sh', linux: 'script.sh', mysql: 'query.sql' }
+  const resultLabel = result => result?.status === 'accepted' ? '运行完成' : STATUS[result?.status] || ''
   const mountLab = (container, article = null, onClose = null) => {
     const lifetime = new AbortController()
-    const root = node('section', `learning-lab${article ? ' learning-lab--article' : ''}`)
-    root.setAttribute('aria-label', '交互式学习平台')
-    if (onClose) {
-      root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true')
-      root.addEventListener('keydown', event => {
-        if (event.key === 'Escape') { event.preventDefault(); onClose(); return }
-        if (event.key !== 'Tab') return
-        const focusable = Array.from(root.querySelectorAll('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], summary')).filter(el => el.getClientRects().length > 0)
-        if (!focusable.length) return
-        if (event.shiftKey && document.activeElement === focusable[0]) { event.preventDefault(); focusable.at(-1).focus() }
-        else if (!event.shiftKey && document.activeElement === focusable.at(-1)) { event.preventDefault(); focusable[0].focus() }
+    const root = node('section', 'learning-lab')
+    root.setAttribute('aria-label', '代码小屋')
+    root.dataset.editorTheme = 'light'
+    try { if (window.localStorage.getItem('noimpty-code-theme') === 'dark') root.dataset.editorTheme = 'dark' } catch (_) {}
+    const heading = node('header', 'learning-heading')
+    const brand = node('div', 'learning-brand')
+    const flower = node('span', 'learning-flower', '✿'); flower.setAttribute('aria-hidden', 'true')
+    brand.append(flower, node('span', '', '代码小屋'), node('small', '', 'CODE STUDIO'))
+    const controls = node('div', 'learning-controls')
+    const select = node('select', 'learning-select'); select.setAttribute('aria-label', '编程语言')
+    Object.entries(LANGUAGE_NAMES).forEach(([id, name]) => { const option = node('option', '', name); option.value = id; select.append(option) })
+    const connectButton = button('连接后端', () => {
+      if (window.NANALY_AGENT?.open) window.NANALY_AGENT.open()
+      else { error.textContent = '后端设置尚未加载，请稍后重试。'; error.hidden = false }
+    }, 'learning-connect-button')
+    controls.append(select, connectButton)
+    if (onClose) controls.append(button('收起分屏', onClose, 'learning-close'))
+    heading.append(brand, controls)
+    const toolbar = node('div', 'learning-toolbar')
+    const filename = node('span', 'learning-file-name')
+    const actions = node('div', 'learning-actions')
+    const runButton = button('▶ 运行', () => run(), 'learning-run')
+    runButton.title = 'Ctrl / ⌘ + Enter'
+    const stopButton = button('■ 停止', () => session.cancel(), 'learning-stop')
+    const more = node('details', 'learning-more'); more.append(node('summary', '', '更多 ···'))
+    const menu = node('div', 'learning-menu')
+    const autoLabel = node('label', 'learning-checkbox'); const autoCheck = node('input'); autoCheck.type = 'checkbox'
+    autoLabel.append(autoCheck, document.createTextNode('自动语法检查'))
+    const persistLabel = node('label', 'learning-checkbox'); const persist = node('input'); persist.type = 'checkbox'
+    persistLabel.append(persist, document.createTextNode('保留本机草稿与记录'))
+    const themeLabel = node('label', 'learning-theme-label', '编辑器配色')
+    const themeSelect = node('select', 'learning-select learning-theme-select'); themeSelect.setAttribute('aria-label', '编辑器配色')
+    for (const [value, label] of [['light', '奶油樱粉'], ['dark', '夜樱紫']]) { const option = node('option', '', label); option.value = value; themeSelect.append(option) }
+    themeSelect.value = root.dataset.editorTheme; themeLabel.append(themeSelect)
+    themeSelect.addEventListener('change', () => { root.dataset.editorTheme = themeSelect.value; try { window.localStorage.setItem('noimpty-code-theme', themeSelect.value) } catch (_) {} })
+    const assistantButton = button('请教娜娜莉', () => { more.open = false; window.NANALY?.open?.() })
+    const checkButton = button('检查语法', () => { window.clearTimeout(timer); setPanel('output'); session.run('check'); more.open = false })
+    const resetButton = button('重置运行环境', async () => {
+      more.open = false
+      if (window.confirm('重置将删除当前语言运行环境里的文件、仓库或表数据。编辑器代码仍保留。继续吗？')) await session.reset()
+    })
+    const downloadButton = button('下载代码', () => {
+      if (!unlocked()) return
+      const url = URL.createObjectURL(new Blob([session.state.code], { type: 'text/plain;charset=utf-8' }))
+      const link = node('a'); link.href = url; link.download = FILE_NAMES[session.state.lessonId]; link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000); more.open = false
+    })
+    const clearButton = button('清空编辑器', () => {
+      more.open = false
+      if (session.state.code && !window.confirm('清空当前语言的代码和输入？运行记录仍保留。')) return
+      session.edit({ code: '', stdin: '', tests: [], exercise: null }); syncEditor(); focusEditor()
+    })
+    menu.append(themeLabel, autoLabel, persistLabel, assistantButton, checkButton, downloadButton, clearButton, resetButton)
+    more.append(menu); actions.append(stopButton, runButton, more); toolbar.append(filename, actions)
+    const editorPane = node('main', 'learning-editor-pane')
+    const editorWrap = node('div', 'learning-editor-wrap')
+    const editorHost = node('div', 'learning-code-editor')
+    const fallback = node('textarea', 'learning-editor'); fallback.setAttribute('aria-label', '代码编辑器'); fallback.spellcheck = false; fallback.maxLength = MAX_CODE; fallback.wrap = 'off'
+    editorWrap.append(editorHost, fallback); editorPane.append(editorWrap)
+    const consolePane = node('section', 'learning-console')
+    const tabs = node('div', 'learning-console-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', '输入与运行结果')
+    const panels = {}; const tabButtons = {}; let currentPanel = 'input'
+    for (const [id, label] of [['input', '输入'], ['output', '终端'], ['history', '记录']]) {
+      const tab = button(label, () => setPanel(id), 'learning-console-tab'); tab.setAttribute('role', 'tab'); tab.id = `learning-tab-${id}`; tab.setAttribute('aria-controls', `learning-panel-${id}`)
+      const panel = node('div', 'learning-console-panel'); panel.dataset.panel = id; panel.id = `learning-panel-${id}`; panel.setAttribute('role', 'tabpanel'); panel.setAttribute('aria-labelledby', tab.id)
+      panels[id] = panel; tabButtons[id] = tab; tabs.append(tab)
+      tab.addEventListener('keydown', event => {
+        const ids = Object.keys(tabButtons); const index = ids.indexOf(id)
+        const next = event.key === 'ArrowRight' ? ids[(index + 1) % 3] : event.key === 'ArrowLeft' ? ids[(index + 2) % 3] : event.key === 'Home' ? ids[0] : event.key === 'End' ? ids[2] : null
+        if (next) { event.preventDefault(); setPanel(next); tabButtons[next].focus() }
       })
     }
-    const heading = node('div', 'learning-heading')
-    heading.append(node('span', 'learning-kicker', 'LEARN · RUN · REFLECT'), node('h2', '', '边读边练'))
-    const controls = node('div', 'learning-controls')
-    const selectLabel = node('label', '', '练习语言 ')
-    const select = node('select', 'learning-select')
-    select.setAttribute('aria-label', '选择练习语言')
-    LESSONS.forEach(lesson => { const option = node('option', '', lesson.name); option.value = lesson.id; select.append(option) })
-    selectLabel.append(select); controls.append(selectLabel)
-    if (onClose) controls.append(button('关闭练习', onClose))
-    heading.append(controls); root.append(heading)
-    const connectivity = node('p', 'learning-connectivity')
-    const connectActions = node('div', 'learning-actions')
-    connectActions.append(button('连接 / 管理个人后端', () => { if (window.NANALY_AGENT?.open) window.NANALY_AGENT.open(); else connectivity.textContent = '个人后端暂未就绪，请打开娜娜莉工作室。' }))
-    root.append(connectivity, connectActions)
-    const split = node('div', 'learning-split')
-    const reading = node('section', 'learning-reading')
-    const title = node('h3')
-    const description = node('p')
-    const rules = node('p', 'learning-muted', '只有隔离环境返回的结果才会显示为执行结果。工具诊断与娜娜莉的解释分开显示。')
-    reading.append(title, description, rules)
-    const reference = node('details', 'learning-reference')
-    reference.append(node('summary', '', '参考解与验证记录（尝试后再看）'))
-    const verification = node('p', 'learning-muted')
-    const referenceCode = node('pre')
-    const verifiedTests = node('pre')
-    reference.append(verification, referenceCode, node('h4', '', '参考解已通过的原始测试'), verifiedTests)
-    reading.append(reference)
-    let articleMarker = null
-    if (article) {
-      const articleTitle = node('h3', '', article.title)
-      reading.append(articleTitle)
-      if (article.element?.parentNode) {
-        articleMarker = document.createComment('learning-original-article')
-        article.element.before(articleMarker)
-        reading.append(article.element)
-      } else reading.append(node('div', 'learning-article-excerpt', article.text))
-    }
-    const editorPane = node('section', 'learning-editor-pane')
-    const editorLabel = node('label', 'learning-editor-label', '代码 / 命令')
-    const revision = node('span', 'learning-revision')
-    const editorWrap = node('div', 'learning-editor-wrap')
-    const gutter = node('div', 'learning-gutter'); gutter.setAttribute('aria-hidden', 'true')
-    const editor = node('textarea', 'learning-editor'); editor.spellcheck = false; editor.maxLength = MAX_CODE
-    editor.setAttribute('aria-label', '代码或命令编辑器'); editor.setAttribute('aria-describedby', 'learning-editor-help'); editor.wrap = 'off'
-    const help = node('p', 'learning-muted', 'Ctrl / ⌘ + Enter 运行。Tab 保持键盘导航；可直接输入或粘贴缩进。')
-    help.id = 'learning-editor-help'
-    editorLabel.append(revision); editorWrap.append(gutter, editor)
-    editorPane.append(editorLabel, editorWrap, help)
-    const inputLabel = node('label', 'learning-field', '标准输入')
-    const stdin = node('textarea', 'learning-input'); stdin.rows = 3; stdin.maxLength = 8192; stdin.setAttribute('aria-label', '标准输入'); inputLabel.append(stdin)
-    editorPane.append(inputLabel)
-    const testDetails = node('details', 'learning-tests-editor')
-    testDetails.append(node('summary', '', '测试用例（每次提交最多 10 个）'))
-    const testsList = node('div', 'learning-test-list')
-    testDetails.append(testsList)
-    const addTest = button('添加测试', () => { session.edit({ tests: [...session.state.tests, { input: '', expectedOutput: '' }] }); renderTests() })
-    testDetails.append(addTest, node('p', 'learning-muted', '期望输出按执行服务的比较规则判定；留空代表期望空输出。每个用例都会真正运行。Git、Linux 和 MySQL 使用当前工作区执行，不进行重复测试。'))
-    editorPane.append(testDetails)
-    const actions = node('div', 'learning-actions')
-    const runButton = button('运行当前输入', () => session.run())
-    const testButton = button('提交全部测试', () => session.run('run', true))
-    const checkButton = button('工具检查', () => session.run('check'))
-    const cancelButton = button('停止等待', () => session.cancel())
-    actions.append(runButton, testButton, checkButton, cancelButton)
-    const autoLabel = node('label', 'learning-checkbox')
-    const autoCheck = node('input'); autoCheck.type = 'checkbox'
-    autoLabel.append(autoCheck, document.createTextNode('编辑后自动工具检查（仅发送至个人后端，不调用付费 AI）'))
-    const autoHint = node('p', 'learning-muted')
-    editorPane.append(actions, autoLabel, autoHint)
-    const status = node('p', 'learning-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite')
-    const error = node('p', 'learning-error'); error.setAttribute('role', 'alert')
+    const resultState = node('span', 'learning-result-state'); tabs.append(resultState)
+    const stdin = node('textarea', 'learning-input'); stdin.maxLength = 8192; stdin.spellcheck = false; stdin.setAttribute('aria-label', '标准输入'); stdin.placeholder = '需要输入时，写在这里…'
+    const inputHint = node('p', 'learning-muted', 'MySQL 直接执行编辑器中的 SQL。'); inputHint.hidden = true
+    panels.input.append(stdin, inputHint)
     const diagnostics = node('div', 'learning-diagnostics')
     const output = node('div', 'learning-output')
-    editorPane.append(status, error, diagnostics, output)
-    split.append(reading, editorPane); root.append(split)
-    const footer = node('div', 'learning-footer')
-    const assistant = node('section', 'learning-assistant')
-    assistant.append(node('h3', '', '请教娜娜莉'))
-    const question = node('textarea', 'learning-question'); question.rows = 2; question.maxLength = 4000; question.placeholder = '例如：为什么这个用例失败？解释一下这条命令，或者带我一步步写。'; question.setAttribute('aria-label', '向娜娜莉提问')
-    const askStatus = node('p', 'learning-muted'); askStatus.setAttribute('role', 'status')
-    let asking = false
-    const ask = async text => {
-      if (asking || !unlocked()) return
-      if (!window.NANALY?.askPractice) { askStatus.textContent = '娜娜莉暂未就绪，请先打开聊天并完成设置。'; return }
-      if (!text.trim()) { askStatus.textContent = '先写下你的问题吧。'; question.focus(); return }
-      asking = true; askStatus.textContent = '正在把当前练习交给娜娜莉…'
-      try { const opened = await window.NANALY.askPractice({ question: text.trim(), context: context() }); if (!lifetime.signal.aborted) askStatus.textContent = opened ? '已在娜娜莉聊天中继续。AI 的推断需要通过实际运行验证。' : '尚未发送，请检查娜娜莉的连接设置。' }
-      catch (_) { if (!lifetime.signal.aborted) askStatus.textContent = '发送失败，问题与代码仍保留，请稍后重试。' }
-      finally { asking = false }
-    }
-    const askActions = node('div', 'learning-actions')
-    askActions.append(button('发送问题', () => ask(question.value)), button('讲解怎么写', () => ask('请结合当前题目与我的代码，解释实现思路和具体写法，给出可以操作的步骤与示例。')), button('解释当前错误', () => ask('请区分工具已确认的问题和你的逻辑推测，解释当前诊断或真实执行失败的原因，定位对应行并给出修改建议；如果尚未执行请明确说明。')))
-    let preparation = null
-    let pendingPractice = null
-    const prepareStatus = node('p', 'learning-muted'); prepareStatus.setAttribute('role', 'status')
-    const loadPending = button('载入已验证练习', () => {
-      if (!pendingPractice) return
-      try { loadPractice(pendingPractice); pendingPractice = null; loadPending.hidden = true; prepareStatus.textContent = '练习已载入，原草稿保留在恢复点中。' }
-      catch (error) { prepareStatus.textContent = clip(error.message, 1000) }
-    })
-    loadPending.hidden = true
-    const prepareButton = button('请娜娜莉出题并验证', async () => {
-      if (preparation || !unlocked()) return
-      if (!window.NANALY?.preparePractice) { prepareStatus.textContent = '娜娜莉的出题功能暂未就绪，请检查连接设置。'; return }
-      const language = lessonFor(session.state.lessonId).language
-      if (!['c', 'cpp', 'go'].includes(language)) { prepareStatus.textContent = '参考解自动验证目前支持 C、C++ 和 Go；Git、Linux 与 MySQL 可在聊天中请求练习指导。'; return }
-      const controller = new AbortController(); preparation = controller
-      const revision = session.state.revision
-      prepareButton.disabled = true; prepareStatus.textContent = '正在生成题目，并在隔离环境中编译参考解、验证每个用例…'
-      try {
-        const exercise = await window.NANALY.preparePractice({ request: question.value.trim() || `请结合当前${session.state.exercise?.title || lessonFor(session.state.lessonId).title}，准备一道适合继续练习的题目。`, language, signal: controller.signal })
-        if (controller.signal.aborted || lifetime.signal.aborted || !unlocked()) return
-        const prepared = cleanPractice(exercise)
-        if (session.state.revision === revision && !session.state.busy) {
-          loadPractice(prepared); prepareStatus.textContent = '参考解已通过所列测试。题面、参考解和测试覆盖仍可纠正；你的起始代码尚未运行。'
-        } else {
-          pendingPractice = prepared; loadPending.hidden = false; prepareStatus.textContent = '参考解验证完成。你已修改当前草稿，点击“载入已验证练习”后再切换；会保留原草稿。'
-        }
-      } catch (error) { if (!controller.signal.aborted && !lifetime.signal.aborted) prepareStatus.textContent = `出题或验证未完成：${clip(error.message, 1200)}。当前草稿保留。` }
-      finally { if (preparation === controller) preparation = null; if (!lifetime.signal.aborted) render() }
-    })
-    askActions.append(prepareButton, loadPending)
-    assistant.append(node('p', 'learning-muted', '也可以在问题框描述练习要求，再点击出题。只有参考解实际通过测试后才会载入；AI 生成的题面与测试覆盖仍可纠正。'))
-    assistant.append(question, askActions, askStatus)
-    assistant.append(prepareStatus)
-    const historyPane = node('section', 'learning-history')
-    historyPane.append(node('h3', '', '练习记录'))
-    const localLabel = node('label', 'learning-checkbox')
-    const persist = node('input'); persist.type = 'checkbox'; localLabel.append(persist, document.createTextNode('在此浏览器保存代码与最近 40 次提交（共享设备可关闭）'))
-    const storageStatus = node('p', 'learning-muted'); storageStatus.setAttribute('role', 'status')
-    const historyList = node('div', 'learning-history-list')
-    const backupsList = node('details', 'learning-backups'); backupsList.append(node('summary', '', '准备练习前的草稿恢复点'))
-    const backupsItems = node('div'); backupsList.append(backupsItems)
+    panels.output.append(diagnostics, output)
     const historyActions = node('div', 'learning-actions')
-    const restoreSample = button('恢复示例代码', () => { const lesson = lessonFor(session.state.lessonId); if (window.confirm('恢复当前语言的示例代码？已有提交历史会保留。')) { session.edit({ ...lesson, exercise: null }); syncEditor(); renderTests() } })
-    const resetWorkspace = button('重置练习环境', async () => { if (window.confirm('重置会删除当前语言练习环境中的文件、仓库或表数据。代码和提交历史会保留。继续吗？')) await session.reset() })
-    const exportButton = button('下载记录', () => {
-      if (!unlocked()) return
-      const blob = new Blob([JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), drafts: session.state.drafts, history: session.state.history, backups: session.state.backups }, null, 2)], { type: 'application/json' })
-      const url = URL.createObjectURL(blob); const link = node('a'); link.href = url; link.download = 'learning-records.json'; link.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-    })
-    historyActions.append(restoreSample, resetWorkspace, exportButton, button('同步云端记录', () => session.syncHistory()), button('清空本机提交历史', () => { if (window.confirm('清空本浏览器的所有提交历史？云端副本仍保留，可通过同步找回。')) session.clearHistory() }), button('删除云端提交历史', async () => {
-      if (!unlocked() || !window.NANALY_AGENT?.configured() || !window.confirm('永久删除个人后端上的全部提交历史？本机副本仍保留，需要时可单独清空。')) return
-      try { await request('/api/runs', { method: 'DELETE' }); storageStatus.textContent = '云端提交历史已删除。' } catch (error) { storageStatus.textContent = `删除失败：${clip(error.message, 400)}` }
-    }))
-    historyPane.append(localLabel, storageStatus, historyActions, backupsList, historyList)
-    footer.append(assistant, historyPane); root.append(footer); container.append(root)
-
-    let storage
-    try { storage = window.localStorage } catch (_) {}
-    let timer = null
-    let renderedHistory = null
-    let renderedResult = null
-    let renderedChecks = null
-    let renderedBackups = null
-    let renderedExercise = undefined
-    let lastAutoRevision = null
+    historyActions.append(button('同步记录', () => session.syncHistory()), button('清空本机记录', () => { if (window.confirm('清空本机运行记录？代码草稿和云端记录会保留。')) session.clearHistory() }))
+    const historyList = node('div', 'learning-history-list'); const backupsList = node('details', 'learning-backups'); backupsList.append(node('summary', '', '草稿恢复点'))
+    const backupItems = node('div'); backupsList.append(backupItems)
+    panels.history.append(historyActions, historyList, backupsList)
+    consolePane.append(tabs, ...Object.values(panels))
+    const statusbar = node('div', 'learning-statusbar')
+    const connectivity = node('span', 'learning-connectivity'); const cursor = node('span', 'learning-cursor', 'Ln 1, Col 1'); const saved = node('span', 'learning-save-state')
+    statusbar.append(connectivity, node('span', 'learning-shortcut', 'Ctrl / ⌘ ↵ 运行'), cursor, saved)
+    const status = node('p', 'learning-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite')
+    const error = node('p', 'learning-error'); error.setAttribute('role', 'alert')
+    const storageStatus = node('p', 'learning-storage-status'); storageStatus.setAttribute('role', 'status')
+    root.append(heading, toolbar, editorPane, consolePane, statusbar, status, error, storageStatus); container.append(root)
+    let storage; try { storage = window.localStorage } catch (_) {}
+    let timer = null; let adapter = null; let lastAutoRevision = null; let lastResult; let lastChecked; let lastHistory; let lastBackups
     const request = (path, options) => window.NANALY_AGENT.request(path, options)
     const session = createSession({ request, storage, available: () => !!window.NANALY_AGENT?.configured(), permitted: unlocked, changed: () => render() })
     const context = () => {
       if (!unlocked()) return null
-      const state = session.state; const lesson = lessonFor(state.lessonId)
-      return { kind: 'practice', lessonId: lesson.id, title: state.exercise?.title || lesson.title, problem: state.exercise?.statement || lesson.description, exercise: state.exercise, article: article ? { title: article.title, url: article.url, text: article.text.slice(0, 12000) } : null, language: lesson.language, code: state.code, revision: state.revision, stdin: state.stdin, tests: cleanTests(state.tests), result: state.result, diagnostics: state.checked, workspace: state.workspaces[lesson.language] || null, verified: !!state.result, pending: state.busy }
+      const state = session.state; const language = state.lessonId
+      return { kind: 'practice', lessonId: language, title: FILE_NAMES[language], problem: state.exercise?.statement || '', exercise: state.exercise, article: article ? { title: article.title, url: article.url, text: article.text.slice(0, 12000) } : null, language, code: state.code, revision: state.revision, stdin: state.stdin, tests: cleanTests(state.tests), result: state.result, diagnostics: state.checked, workspace: state.workspaces[language] || null, verified: !!state.result, pending: state.busy }
     }
-    let publishedContext = ''
-    const publish = () => { if (unlocked()) { try { const data = context(); const signature = JSON.stringify(data); if (signature !== publishedContext) { publishedContext = signature; window.NANALY_AGENT?.setContext?.(data) } } catch (_) {} } }
-    const syncEditor = () => { editor.value = session.state.code; stdin.value = session.state.stdin; select.value = session.state.lessonId }
-    const loadPractice = exercise => { const loaded = session.loadPractice(exercise); syncEditor(); renderTests(); render(); return loaded }
-    const renderTests = () => {
-      testsList.replaceChildren()
-      session.state.tests.forEach((test, index) => {
-        const row = node('fieldset', 'learning-test-row'); row.append(node('legend', '', `用例 ${index + 1}`))
-        const input = node('textarea', 'learning-input'); input.rows = 2; input.maxLength = 8192; input.value = test.input; input.setAttribute('aria-label', `用例 ${index + 1} 输入`)
-        const expected = node('textarea', 'learning-input'); expected.rows = 2; expected.maxLength = 8192; expected.value = test.expectedOutput || ''; expected.setAttribute('aria-label', `用例 ${index + 1} 期望输出`)
-        const change = () => { const tests = cleanTests(session.state.tests); tests[index] = { input: input.value, expectedOutput: expected.value }; session.edit({ tests }) }
-        input.addEventListener('input', change); expected.addEventListener('input', change)
-        const inputField = node('label', 'learning-field', '输入'); inputField.append(input)
-        const expectedField = node('label', 'learning-field', '期望输出'); expectedField.append(expected)
-        row.append(inputField, expectedField, button('删除用例', () => { session.edit({ tests: session.state.tests.filter((_, i) => i !== index) }); renderTests() }))
-        testsList.append(row)
-      })
-    }
-    const pre = (label, text) => { const wrapper = node('div', 'learning-output-block'); wrapper.append(node('h4', '', label), node('pre', '', text || '（空）')); return wrapper }
+    let published = ''
+    const publish = () => { if (unlocked()) { try { const data = context(); const signature = JSON.stringify(data); if (signature !== published) { published = signature; window.NANALY_AGENT?.setContext?.(data) } } catch (_) {} } }
+    const setPanel = id => { currentPanel = id; for (const key of Object.keys(panels)) { panels[key].hidden = key !== id; tabButtons[key].setAttribute('aria-selected', String(key === id)); tabButtons[key].tabIndex = key === id ? 0 : -1 } }
+    const focusEditor = () => adapter ? adapter.focus() : fallback.focus()
+    const syncEditor = () => { const state = session.state; if (adapter) { adapter.setLanguage(state.lessonId); adapter.setValue(state.code) } fallback.value = state.code; stdin.value = state.stdin; select.value = state.lessonId }
+    const loadPractice = exercise => { const result = session.loadPractice(exercise); syncEditor(); render(); return result }
+    const run = () => { window.clearTimeout(timer); setPanel('output'); session.run() }
     const jump = diagnostic => {
       if (!diagnostic.line) return
-      const lines = editor.value.split('\n'); const row = Math.min(diagnostic.line, lines.length) - 1
-      const start = lines.slice(0, row).reduce((sum, line) => sum + line.length + 1, 0)
-      editor.focus(); editor.setSelectionRange(start, start + lines[row].length); editor.scrollTop = Math.max(0, row - 3) * 23; gutter.scrollTop = editor.scrollTop
+      if (adapter) return adapter.jump(diagnostic)
+      const lines = fallback.value.split('\n'); const row = Math.min(diagnostic.line, lines.length) - 1; const start = lines.slice(0, row).reduce((sum, line) => sum + line.length + 1, 0)
+      fallback.focus(); fallback.setSelectionRange(start, start + lines[row].length)
+    }
+    const pre = (text, className = '') => node('pre', className, text)
+    const scheduleCheck = () => {
+      window.clearTimeout(timer)
+      if (!lifetime.signal.aborted && session.canAutoCheck()) timer = window.setTimeout(() => {
+        if (lifetime.signal.aborted || session.state.busy || !session.canAutoCheck()) return
+        lastAutoRevision = session.state.revision; session.autoCheckCurrent()
+      }, 900)
     }
     const render = () => {
       if (lifetime.signal.aborted) return
-      const state = session.state; const lesson = lessonFor(state.lessonId); const stateful = STATEFUL.has(lesson.language)
-      let connected = false
-      try { connected = window.NANALY_AGENT?.configured() === true } catch (_) {}
-      connectivity.textContent = connected ? '个人执行服务已配置。点击运行或检查会发送当前代码和输入；首次执行将验证连接与环境。' : '执行服务未连接：可以编辑和阅读，尚不能编译或执行。请在娜娜莉工作室中连接个人后端。'
-      title.textContent = state.exercise?.title || lesson.title; description.textContent = state.exercise?.statement || lesson.description
-      if (renderedExercise !== state.exercise) {
-        reference.hidden = !state.exercise; reference.open = false
-        verification.textContent = state.exercise ? `AI 生成练习 · 参考解通过所列测试 · 验证记录 ${state.exercise.verification.runId}。这不能全面证明算法正确，题面与覆盖仍可纠正。` : ''
-        referenceCode.textContent = state.exercise?.referenceCode || ''
-        verifiedTests.textContent = state.exercise ? state.exercise.tests.map((test, index) => `用例 ${index + 1}\n输入：\n${test.input}\n期望：\n${test.expectedOutput}`).join('\n\n') : ''
-        renderedExercise = state.exercise
-      }
-      revision.textContent = `版本 ${state.revision}${state.result ? ' · 已执行' : ' · 尚未执行'}`
-      status.textContent = state.notice; error.textContent = state.error; storageStatus.textContent = state.storageError
-      persist.checked = state.persist; select.disabled = state.busy; restoreSample.disabled = state.busy
-      resetWorkspace.hidden = !stateful; resetWorkspace.disabled = state.busy || !connected
-      runButton.disabled = state.busy || !connected; testButton.disabled = state.busy || !connected || !state.tests.length; testButton.hidden = stateful
-      checkButton.disabled = state.busy || state.checking || !connected; cancelButton.disabled = !state.busy && !state.checking
-      prepareButton.disabled = !!preparation || state.busy || !connected || !['c', 'cpp', 'go'].includes(lesson.language)
-      autoCheck.checked = state.autoCheck; autoCheck.disabled = !connected || !CHECKABLE.has(lesson.language)
-      autoHint.textContent = lesson.language === 'mysql' ? 'MySQL 不进行自动 SQL 执行；请明确点击运行，由真实数据库返回结果与错误。' : '默认在停止编辑 900 毫秒后进行编译或语法检查；Git / Linux 只检查脚本语法，不执行命令。'
-      testDetails.hidden = stateful; inputLabel.hidden = lesson.language === 'mysql'; addTest.disabled = state.tests.length >= 10
+      const state = session.state; const connected = window.NANALY_AGENT?.configured() === true
+      filename.textContent = FILE_NAMES[state.lessonId]
+      connectivity.textContent = connected ? '● 后端已连接' : '○ 离线编辑'; connectivity.dataset.connected = String(connected)
+      connectButton.textContent = connected ? '已连接' : '连接后端'
+      saved.textContent = state.persist ? (state.storageError ? '保存异常' : '草稿已保存') : '临时草稿'
+      select.disabled = state.busy; select.value = state.lessonId
+      runButton.disabled = state.busy || !connected || !state.code.trim(); runButton.textContent = state.busy ? '运行中…' : '▶ 运行'
+      stopButton.hidden = !state.busy && !state.checking
+      clearButton.disabled = state.busy; checkButton.disabled = state.busy || state.checking || !connected || !state.code.trim() || !CHECKABLE.has(state.lessonId)
+      resetButton.hidden = !STATEFUL.has(state.lessonId); resetButton.disabled = state.busy || !connected
+      autoCheck.checked = state.autoCheck; autoCheck.disabled = !CHECKABLE.has(state.lessonId); persist.checked = state.persist
+      stdin.hidden = state.lessonId === 'mysql'; inputHint.hidden = state.lessonId !== 'mysql'
+      status.textContent = state.notice; status.hidden = !state.notice || state.notice.startsWith('版本 ') || state.notice.startsWith('正在执行版本 ')
+      error.textContent = state.error; error.hidden = !state.error; storageStatus.textContent = state.storageError; storageStatus.hidden = !state.storageError
       const diagnosticResult = state.checked || state.result
-      if (renderedChecks !== diagnosticResult || renderedResult !== state.result) {
-        diagnostics.replaceChildren()
-        if (diagnosticResult?.diagnostics.length) {
-          diagnostics.append(node('h4', '', '工具确认的诊断'))
-          diagnosticResult.diagnostics.forEach(d => diagnostics.append(button(`${d.line ? `第 ${d.line} 行${d.column ? `:${d.column}` : ''} · ` : ''}${d.message}`, () => jump(d), `learning-diagnostic learning-diagnostic--${d.severity}`)))
-        }
-        output.replaceChildren()
+      resultState.textContent = state.busy ? '运行中…' : state.checking ? '检查中…' : resultLabel(diagnosticResult)
+      resultState.dataset.status = diagnosticResult?.status || ''
+      if (lastResult !== state.result || lastChecked !== state.checked) {
+        diagnostics.replaceChildren(); output.replaceChildren()
+        for (const d of diagnosticResult?.diagnostics || []) diagnostics.append(button(`${d.line ? `L${d.line}${d.column ? ':' + d.column : ''}  ` : ''}${d.message}`, () => jump(d), 'learning-diagnostic'))
         if (state.result) {
-          const result = state.result; output.append(node('h3', '', `真实执行结果 · ${STATUS[result.status]}`), pre('标准输出', result.stdout), pre('错误输出', result.stderr))
-          if (result.workspaceSummary) output.append(pre('执行后的真实工作区状态', result.workspaceSummary))
-          if (!result.workspaceCommitted) output.append(node('p', 'learning-error', '本次工作区更改未保存，下次执行从上次成功保存的状态开始。'))
-          result.warnings.forEach(warning => output.append(node('p', 'learning-muted', warning)))
-          result.tests.forEach((test, index) => { const panel = node('details', 'learning-test-result'); panel.open = test.status !== 'accepted'; panel.append(node('summary', '', `用例 ${index + 1} · ${STATUS[test.status] || test.status}`), pre('输入', state.tests[index]?.input ?? state.stdin), pre('实际输出', test.stdout)); if (Object.hasOwn(test, 'expectedOutput')) panel.append(pre('期望输出', test.expectedOutput)); if (test.stderr) panel.append(pre('错误信息', test.stderr)); output.append(panel) })
-        } else if (state.checked) output.append(node('h4', '', `工具检查 · ${STATUS[state.checked.status]}`), pre('检查输出', state.checked.stderr || state.checked.stdout || state.checked.warnings.join('\n')), node('p', 'learning-muted', '工具检查没有验证程序运行行为。'))
-        renderedChecks = diagnosticResult; renderedResult = state.result
+          if (state.result.stdout) output.append(pre(state.result.stdout, 'learning-stdout'))
+          if (state.result.stderr) output.append(pre(state.result.stderr, 'learning-stderr'))
+          if (!state.result.stdout && !state.result.stderr) output.append(node('p', 'learning-muted', '运行结束，没有输出。'))
+          if (!state.result.workspaceCommitted) output.append(node('p', 'learning-error', '本次运行环境的更改未保存。'))
+          for (const warning of state.result.warnings) output.append(node('p', 'learning-muted', warning))
+        } else if (state.checked) output.append(pre(state.checked.stderr || state.checked.stdout || state.checked.warnings.join('\n') || '语法检查完成。'))
+        else output.append(node('p', 'learning-empty', '运行结果会出现在这里 ✧'))
+        lastResult = state.result; lastChecked = state.checked
       }
-      const marked = new Set((diagnosticResult?.diagnostics || []).map(item => item.line))
-      gutter.replaceChildren(...state.code.split('\n').slice(0, 5000).map((_, index) => node('span', marked.has(index + 1) ? 'has-diagnostic' : '', index + 1)))
-      gutter.scrollTop = editor.scrollTop
-      if (renderedHistory !== state.history) {
+      if (lastHistory !== state.history) {
         historyList.replaceChildren()
-        if (!state.history.length) historyList.append(node('p', 'learning-muted', '还没有实际提交记录。运行后会保留当时的代码、输入、失败信息与输出。'))
-        state.history.forEach(record => {
-          const entry = node('details', 'learning-history-entry')
-          const time = new Date(record.at); const dateText = Number.isNaN(time.getTime()) ? record.at : time.toLocaleString()
-          entry.append(node('summary', '', `${record.exercise?.title || lessonFor(record.lessonId).name} · ${record.referenceValidation ? '参考解验证 · ' : ''}${STATUS[record.result.status]} · ${dateText}`), pre(`历史版本 ${record.revision} 的代码`, record.code), pre('历史输入', record.stdin), pre('历史输出', record.result.stdout), pre('历史错误', record.result.stderr), button(record.referenceValidation ? '从起始代码重做这道题' : '恢复这个版本', () => { if (session.restore(record.id)) { syncEditor(); renderTests(); editor.focus() } }))
-          if (record.result.historyOutputTruncated) entry.append(node('p', 'learning-muted', '历史输出已截断；完整判定来自原运行。恢复代码不会恢复本次执行状态，需重新运行。'))
-          record.result.tests.forEach((test, index) => { entry.append(pre(`用例 ${index + 1} 输入`, record.tests[index]?.input || ''), pre(`用例 ${index + 1} 实际输出`, test.stdout)); if (Object.hasOwn(test, 'expectedOutput')) entry.append(pre(`用例 ${index + 1} 期望输出`, test.expectedOutput)) })
+        if (!state.history.length) historyList.append(node('p', 'learning-muted', '还没有运行记录。'))
+        for (const record of state.history) {
+          const entry = node('details', 'learning-history-entry'); const time = new Date(record.at)
+          entry.append(node('summary', '', `${FILE_NAMES[record.lessonId]} · ${resultLabel(record.result)} · ${Number.isNaN(time.getTime()) ? record.at : time.toLocaleString()}`), pre(record.code), button('恢复代码', () => { if (session.restore(record.id)) { syncEditor(); focusEditor() } }))
+          if (record.result.stdout) entry.append(pre(record.result.stdout))
+          if (record.result.stderr) entry.append(pre(record.result.stderr, 'learning-stderr'))
           historyList.append(entry)
-        })
-        renderedHistory = state.history
+        }
+        lastHistory = state.history
       }
-      if (renderedBackups !== state.backups) {
-        backupsItems.replaceChildren(); backupsList.hidden = !state.backups.length
-        state.backups.forEach(record => backupsItems.append(button(`恢复 ${record.exercise?.title || lessonFor(record.lessonId).title} · ${record.at}`, () => { if (session.restoreBackup(record.id)) { syncEditor(); renderTests() } })))
-        renderedBackups = state.backups
+      if (lastBackups !== state.backups) {
+        backupItems.replaceChildren(); backupsList.hidden = !state.backups.length
+        for (const record of state.backups) backupItems.append(button(`${FILE_NAMES[record.lessonId]} · ${record.at}`, () => { if (session.restoreBackup(record.id)) { syncEditor(); focusEditor() } }))
+        lastBackups = state.backups
       }
       publish()
       if (state.result || state.checked) lastAutoRevision = state.revision
       if (!state.busy && !state.checking && state.revision !== lastAutoRevision && session.canAutoCheck()) scheduleCheck()
     }
-    const scheduleCheck = () => {
-      window.clearTimeout(timer)
-      if (!lifetime.signal.aborted && session.canAutoCheck()) timer = window.setTimeout(() => {
-        if (lifetime.signal.aborted || session.state.busy || !session.canAutoCheck()) return
-        lastAutoRevision = session.state.revision
-        session.autoCheckCurrent()
-      }, 900)
-    }
-    editor.addEventListener('input', () => { session.edit({ code: editor.value }); scheduleCheck() })
+    try {
+      if (window.NOIMPTY_CODE_EDITOR) adapter = window.NOIMPTY_CODE_EDITOR.create(editorHost, { value: session.state.code, language: session.state.lessonId, onChange: value => { session.edit({ code: value }); scheduleCheck() }, onRun: run, onCursor: position => { cursor.textContent = `Ln ${position.line}, Col ${position.column}` } })
+    } catch (_) { editorHost.replaceChildren() }
+    fallback.hidden = !!adapter; editorHost.hidden = !adapter
+    fallback.addEventListener('input', () => { session.edit({ code: fallback.value }); scheduleCheck() })
+    fallback.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); run() } })
     stdin.addEventListener('input', () => session.edit({ stdin: stdin.value }))
-    editor.addEventListener('scroll', () => { gutter.scrollTop = editor.scrollTop })
-    editor.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); window.clearTimeout(timer); session.run() } })
-    select.addEventListener('change', () => { window.clearTimeout(timer); session.select(select.value); syncEditor(); renderTests() })
+    select.addEventListener('change', () => { window.clearTimeout(timer); session.select(select.value); syncEditor(); focusEditor() })
     autoCheck.addEventListener('change', () => { window.clearTimeout(timer); lastAutoRevision = null; session.setAutoCheck(autoCheck.checked); if (autoCheck.checked) scheduleCheck() })
     persist.addEventListener('change', () => session.persistence(persist.checked))
+    root.addEventListener('keydown', event => { if (event.key === 'Escape' && more.open) { more.open = false; more.querySelector('summary').focus() } })
+    document.addEventListener('pointerdown', event => { if (!more.contains(event.target)) more.open = false }, { signal: lifetime.signal })
     let wasConnected = false
     const connectionChanged = () => { const connected = window.NANALY_AGENT?.configured() === true; if (connected !== wasConnected) { wasConnected = connected; render(); if (connected) session.syncHistory() } }
     const unsubscribe = window.NANALY_AGENT?.subscribe?.(connectionChanged)
     window.addEventListener('nanaly:agent-configured', connectionChanged, { signal: lifetime.signal })
-    window.addEventListener('focus', render, { signal: lifetime.signal })
-    syncEditor(); renderTests(); render(); connectionChanged()
-    return { session, context, loadPractice, dispose: () => { window.clearTimeout(timer); preparation?.abort(); lifetime.abort(); unsubscribe?.(); session.dispose(); if (articleMarker?.parentNode && article.element) articleMarker.replaceWith(article.element); root.remove(); try { window.NANALY_AGENT?.setContext?.(null) } catch (_) {} } }
+    syncEditor(); setPanel('input'); render(); connectionChanged()
+    return { session, context, loadPractice, dispose: () => { window.clearTimeout(timer); lifetime.abort(); unsubscribe?.(); session.dispose(); adapter?.destroy(); root.remove(); try { window.NANALY_AGENT?.setContext?.(null) } catch (_) {} } }
   }
 
-  const cleanup = () => { mounted?.dispose(); mounted = null; launch?.remove(); launch = null; document.documentElement.classList.remove('learning-is-open') }
+  const cleanup = () => { mounted?.dispose(); mounted = null; launch?.remove(); launch = null; document.documentElement.classList.remove('learning-is-open', 'learning-page'); delete document.documentElement.dataset.learningPane }
   const mount = () => {
     cleanup()
     if (!unlocked()) return
     const host = document.getElementById('learning-lab')
-    if (host) { mounted = mountLab(host); return }
+    if (host) { document.documentElement.classList.add('learning-page'); mounted = mountLab(host); return }
     const article = document.querySelector('#post #article-container')
-    if (!article) return
-    launch = button('边读边练', () => {
+    const post = document.getElementById('post'); const layout = post?.parentElement
+    if (!article || !layout) return
+    launch = button('边学边练 ↗', () => {
       if (!unlocked()) return
-      if (mounted) { mounted.dispose(); mounted = null; document.documentElement.classList.remove('learning-is-open'); launch.focus(); return }
-      const data = { title: document.querySelector('h1.post-title')?.textContent || document.title, url: window.location.href, text: clip(article.textContent, 20000), element: article }
-      const holder = node('div', 'learning-article-holder'); document.body.append(holder)
-      const close = () => { mounted?.dispose(); mounted = null; holder.remove(); document.documentElement.classList.remove('learning-is-open'); launch?.focus() }
+      if (mounted) { mounted.dispose(); mounted = null; launch.focus(); return }
+      const scrollY = window.scrollY
+      const data = { title: document.querySelector('h1.post-title')?.textContent || document.title, url: window.location.href, text: clip(article.textContent, 20000) }
+      const holder = node('aside', 'learning-article-holder')
+      const articleTitle = node('h1', 'learning-article-title', data.title); post.prepend(articleTitle)
+      const divider = button('⋮', () => {}, 'learning-divider'); divider.setAttribute('role', 'separator'); divider.setAttribute('aria-label', '调整文章与编辑器宽度'); divider.setAttribute('aria-orientation', 'vertical'); divider.setAttribute('aria-valuemin', '30'); divider.setAttribute('aria-valuemax', '70'); divider.setAttribute('aria-valuenow', '50'); divider.type = 'button'
+      const mobileSwitch = node('div', 'learning-mobile-switch')
+      const readTab = button('阅读文章', () => setPane('article')); const codeTab = button('编写代码', () => setPane('code'))
+      const setPane = pane => { document.documentElement.dataset.learningPane = pane; readTab.setAttribute('aria-pressed', String(pane === 'article')); codeTab.setAttribute('aria-pressed', String(pane === 'code')) }
+      mobileSwitch.append(readTab, codeTab); post.after(divider, holder); layout.prepend(mobileSwitch)
+      let percentage = 50
+      const resize = value => { percentage = Math.max(30, Math.min(70, value)); layout.style.setProperty('--learning-reading-width', `${percentage}%`); divider.setAttribute('aria-valuenow', String(Math.round(percentage))) }
+      divider.addEventListener('pointerdown', event => { divider.setPointerCapture(event.pointerId); event.preventDefault() })
+      divider.addEventListener('pointermove', event => { if (divider.hasPointerCapture(event.pointerId)) { const box = layout.getBoundingClientRect(); resize((event.clientX - box.left) / box.width * 100) } })
+      divider.addEventListener('pointerup', event => { if (divider.hasPointerCapture(event.pointerId)) divider.releasePointerCapture(event.pointerId) })
+      divider.addEventListener('keydown', event => { if (['ArrowLeft', 'ArrowRight', 'Home'].includes(event.key)) { event.preventDefault(); resize(event.key === 'Home' ? 50 : percentage + (event.key === 'ArrowLeft' ? -3 : 3)) } })
+      const close = () => { mounted?.dispose(); mounted = null; launch?.focus(); window.scrollTo({ top: scrollY, behavior: 'instant' }) }
+      document.documentElement.classList.add('learning-is-open'); setPane('code')
       mounted = mountLab(holder, data, close)
-      const originalDispose = mounted.dispose; mounted.dispose = () => { originalDispose(); holder.remove() }
-      document.documentElement.classList.add('learning-is-open'); holder.querySelector('select')?.focus()
+      const originalDispose = mounted.dispose
+      mounted.dispose = () => { originalDispose(); holder.remove(); divider.remove(); mobileSwitch.remove(); articleTitle.remove(); layout.style.removeProperty('--learning-reading-width'); document.documentElement.classList.remove('learning-is-open'); delete document.documentElement.dataset.learningPane; post.scrollTop = 0 }
+      layout.scrollIntoView({ block: 'start', behavior: 'instant' }); holder.querySelector('select')?.focus({ preventScroll: true })
     }, 'learning-launch')
     article.before(launch)
   }
+
   window.NOIMPTY_LEARNING = Object.freeze({ createSession, lessons: LESSONS, mount, context: () => unlocked() ? mounted?.context() || null : null })
   window.LEARNING_LAB = Object.freeze({
     context: () => unlocked() ? mounted?.context() || null : null,

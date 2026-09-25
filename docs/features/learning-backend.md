@@ -1,6 +1,6 @@
 # 娜娜莉私有后端与隔离练习
 
-该服务为博客聊天、目标、笔记与 OJ 提供同一份私有状态；C、C++、Go、Git、Linux 和 MySQL 的代码由真实工具在独立 Docker 容器中执行。前端静态站点不保存访问令牌到仓库；运行依赖未就绪时，服务返回明确错误，不在宿主机直接执行用户代码。
+该服务为博客聊天、目标、笔记与代码小屋提供同一份私有状态；C、C++、Go、Git、Linux 和 MySQL 的代码由真实工具在独立 Docker 容器中执行。前端静态站点不保存访问令牌到仓库；运行依赖未就绪时，服务返回明确错误，不在宿主机直接执行用户代码。
 
 ## 本次验证范围
 
@@ -13,9 +13,11 @@
 
 同日已在腾讯云新加坡 Ubuntu 24.04、2 核 8 GB 主机完成 rootless Docker 生产部署：`https://api.noimpty-zby.cn` 已通过公网 HTTPS、健康检查、鉴权、精确 CORS、私有状态、真实 C 两用例和执行中的 HTTPS 取消验收；云端 8 项 Docker 集成测试全部通过、无跳过，覆盖六种语言、隔离、取消和持久化。完整部署与验收范围见 [生产部署记录](../maintenance/2026-09-25-production-deployment.md)。
 
-后端上线不代表前端升级已经公开发布：当前前端改动尚未推送，博客主域名仍待迁移，真实浏览器跨设备接续和付费模型体验需要后续验收。持久数据位于主机磁盘；本地前一版备份不等于已经配置异机灾备。
+主站使用 `https://noimpty-zby.cn`。持久数据位于后端主机磁盘；本地前一版备份不等于已经配置异机灾备。
 
 `NANALY_DOCKER_TESTS=1` 用于显式开启真实集成；未运行该命令的环境不能引用本机或生产机结果声称它也已通过。
+
+2026-09-25 本次 Linux/Git 更新另在候选镜像 `nanaly-runner:shell-20260925` 上通过真实 Docker 集成 13/13 项，无跳过，覆盖六种语言、隔离/取消以及新增的 5 项行为回归：`ncal` 与常用命令、跨次目录/变量/别名/函数/权限、Linux 与 Git 新建子仓库提交、非零退出码和失败前文件恢复。此结果独立于上面的首次部署验收记录。
 
 ## 部署条件
 
@@ -95,6 +97,7 @@ service 依赖实际 `user@UID.service`，启动前通过同一 `DOCKER_HOST` �
 | POST /api/run | `{language,code,stdin?,tests?,revision?,mode?,workspaceId?,workspaceRevision?,saveHistory?,practice?}` |
 | GET /api/runs?limit=50 | `{runs:[...]}`，按最新在前排列；保留代码、输入、testCases、真实结果及时间 |
 | DELETE /api/runs | 清空服务器历史及其前一版备份，不影响浏览器自己的草稿和历史 |
+| GET /api/workspaces | 返回 `{workspaces:[{workspaceId,language,revision,updatedAt,busy,broken?,...}]}`，按最近更新时间排列，供前端权威恢复环境 |
 | POST /api/workspaces/reset | `{language,workspaceId?}`，返回全新 `{workspaceId,language,revision:0}` |
 | GET /api/workspaces/:id | 返回 language、revision、busy、updatedAt |
 | DELETE /api/workspaces/:id | 删除此工作区与快照，忙碌时返回 409 |
@@ -131,12 +134,13 @@ status 可为 accepted、wrong_answer、compile_error、runtime_error、timeout�
 
 - 容器无网络、无端口发布、无 capability、禁止新增权限，以 UID/GID 10001 运行，根文件系统只读，保持 Docker 默认 seccomp。
 - 只挂载本次代码与已有快照的只读输入目录；不挂载 Docker socket、私有状态目录或宿主可写目录。
-- 工作目录为 256 MiB tmpfs，临时目录为 128 MiB tmpfs；每条命令输出上限 128 KiB，快照上限 32 MiB。Git/Linux 默认执行 8 秒，算法每个用例 3 秒，C/C++编译 30 秒、Go编译 45 秒。容器还有 150 秒固定生存期限。
+- 工作目录为 256 MiB tmpfs，临时目录为 128 MiB tmpfs；每条命令输出上限 128 KiB，快照上限 32 MiB。Git/Linux 每次脚本最多执行 30 秒，算法每个用例 3 秒，C/C++编译 30 秒、Go编译 45 秒。容器还有 150 秒固定生存期限。
 - C/C++/Go 先编译，再为每个测试新建容器。用例之间不共享可写文件系统或进程。超时或输出超限时杀死容器，并在 finally 中删除容器。
-- Git/Linux 每次执行新的 shell，工作目录文件跨次保存；cd 和环境变量不跨脚本。后台残留进程清理后才生成快照。Git 状态或文件列表通过 workspaceSummary 返回。
+- Git/Linux 每次执行独立 Bash 脚本；同一工作区会恢复上次保存的当前目录、导出的环境变量、umask、别名、函数及 `/work` 下的文件和权限。普通未导出变量、后台进程及 `/tmp` 文件不跨次保留；工作目录已不存在时回到 `/work` 并给出提示。后台残留进程清理后才生成快照。结果中的 `cwd` 为本次结束目录，`exitCode` 为实际脚本退出码；Git 状态或文件列表通过 workspaceSummary 返回。
+- Linux 工具包括 `ncal` / `cal`、文本过滤、压缩解压、`jq`、`bc`、进程/文件查看及 `man`。Linux 与 Git 工作区均提供默认 Git 提交身份，可在新建子仓库中直接提交，并可用 `git config` 修改。`curl` / `wget` / `ssh` 已安装，但执行容器仍无外网；没有 root / sudo、交互式 PTY 或长期后台服务，不能将此脚本运行区当成完整远程主机。
 - MySQL 每次建立禁用 TCP 的独立实例，仅开放容器内 Unix socket；learner 账户只有 practice 数据库权限，禁止 FILE、SUPER、LOCAL INFILE 和服务端文件导出。mysql 客户端使用 binary-mode，禁用非交互输入中的 shell 客户端命令。表/行通过私有 SQL 快照跨次恢复。
 - 工作区采用“执行 → 有界快照 → 原子提交 metadata”的顺序。执行被终止、快照超限或保存失败时保留上个已保存版本，并返回 workspaceCommitted:false。SQL/命令产生了输出不代表其变化已持久化；以此字段及 workspaceRevision 为准。
-- 客户端断开会触发取消并杀死本次容器，后端在下一执行/快照阶段停止，取消后不再启动新测试；若断开发生在提交完成之后，提交仍可能已生效。恢复时读取工作区 revision 和 busy，或者显式重置。不要直接重复有副作用的命令。
+- 客户端断开会触发取消并杀死本次容器，后端在下一执行/快照阶段停止，取消后不再启动新测试；若断开发生在提交完成之后，提交仍可能已生效。前端通过 `GET /api/workspaces` 恢复当前列表；已知工作区在取消或网络异常后再读取 revision、busy 与 broken。空闲且完好即可继续使用，无需强制重置；忙碌时等待，损坏时要求重置。不会自动重跑有副作用的命令。
 - 服务重启仅清理同时带 nanaly.runner 与本私有目录哈希 nanaly.owner 标签的遗留容器和临时输入，不会清理其他后端实例。持久文件有校验和、前一版备份与单实例锁；主文件损坏时恢复合法备份并在 health 中标记 recovered。两份均损坏时拒绝覆盖，需管理员从备份恢复。
 - 常规状态和元数据备份保留前一版；删除重要私有内容后，如果要求物理清除所有旧副本，应同时遵循托管商快照/备份保留策略。清空运行历史会同步清空本地历史备份文件。
 

@@ -22,10 +22,10 @@
       description: '用 fmt.Fscan 从标准输入读取两个 int64 整数，输出它们的和。比较 C 与 Go 的错误处理方式。',
       code: 'package main\n\nimport (\n    "fmt"\n    "os"\n)\n\nfunc main() {\n    var a, b int64\n    if _, err := fmt.Fscan(os.Stdin, &a, &b); err != nil {\n        fmt.Fprintln(os.Stderr, err)\n        os.Exit(1)\n    }\n    fmt.Println(a + b)\n}\n', stdin: '2 3\n', tests: [{ input: '2 3\n', expectedOutput: '5\n' }, { input: '-4 7\n', expectedOutput: '3\n' }] },
     { id: 'git', name: 'Git · 分支与提交', title: '在独立练习仓库中观察 Git', language: 'git',
-      description: '每次运行都会在自己的练习目录中执行命令，仓库文件会保留。先初始化仓库并查看状态，再把编辑器中的命令改为 git add notes.txt、git commit 或 git switch。每次执行是一个新 shell；cd 与环境变量只在本次脚本内有效。',
+      description: '每次运行都会在自己的练习目录中执行命令，仓库文件会保留。先初始化仓库并查看状态，再把编辑器中的命令改为 git add notes.txt、git commit 或 git switch。文件、当前目录和 export 变量跨次保留；每次点击会执行编辑器中的完整脚本。',
       code: 'git init\ngit config user.name "Learner"\ngit config user.email "learner@example.invalid"\nprintf "My first practice\\n" > notes.txt\ngit status --short --branch\n', stdin: '', tests: [] },
     { id: 'linux', name: 'Linux · 文件与管道', title: '操作练习文件系统', language: 'linux',
-      description: '在隔离目录中练习文件、管道和文本处理。运行下面的脚本，然后尝试 cat、sort、grep 与 find。文件跨次执行保留；每次执行是新 shell，请在同一脚本内使用 cd。这里的文件与博客服务器、你的电脑文件相互隔离。',
+      description: '在隔离目录中练习文件、管道和文本处理。运行下面的脚本，然后尝试 cat、sort、grep 与 find。文件、当前目录和 export 变量跨次保留；每次点击会执行编辑器中的完整脚本。这里的文件与博客服务器、你的电脑文件相互隔离。',
       code: 'mkdir -p practice\nprintf "orange\\napple\\norange\\n" > practice/fruit.txt\nsort practice/fruit.txt | uniq -c\nprintf "\\nFiles:\\n"\nfind practice -maxdepth 2 -type f\n', stdin: '', tests: [] },
     { id: 'mysql', name: 'MySQL · 查询与表结构', title: '建立表并查询', language: 'mysql',
       description: 'SQL 在独立的 MySQL 练习数据库中实际执行，表和数据跨次运行保留。先运行示例，再修改 WHERE、ORDER BY 或 GROUP BY，并用 SHOW TABLES、DESCRIBE 检查真实结构。重置会清空这个练习数据库。',
@@ -42,6 +42,7 @@
       diagnostics: Array.isArray(value.diagnostics) ? value.diagnostics.slice(0, 100).filter(plain).map(d => ({ severity: d.severity === 'warning' ? 'warning' : 'error', message: clip(d.message, 2000), line: Number.isInteger(d.line) && d.line > 0 ? d.line : null, column: Number.isInteger(d.column) && d.column > 0 ? d.column : null })) : [],
       tests: Array.isArray(value.tests) ? value.tests.slice(0, 10).filter(plain).map(test => ({ status: clip(test.status, 64), input: clip(test.input, 8192), stdout: clip(test.stdout), stderr: clip(test.stderr), ...(typeof test.expectedOutput === 'string' ? { expectedOutput: clip(test.expectedOutput, 8192) } : {}) })) : [],
       warnings: Array.isArray(value.warnings) ? value.warnings.slice(0, 10).map(item => clip(item, 2000)) : [],
+      cwd: typeof value.cwd === 'string' ? clip(value.cwd, 4096) : '', exitCode: Number.isInteger(value.exitCode) ? value.exitCode : null,
       workspaceSummary: clip(value.workspaceSummary), workspaceCommitted: value.workspaceCommitted !== false, historyOutputTruncated: value.historyOutputTruncated === true,
       ...(typeof value.workspaceId === 'string' ? { workspaceId: clip(value.workspaceId, 128) } : {}),
       ...(Number.isInteger(value.workspaceRevision) ? { workspaceRevision: value.workspaceRevision } : {}) }
@@ -73,11 +74,14 @@
   // A late run may enter history, but can never overwrite a newer editor revision.
   const createSession = ({ request, available = () => true, permitted = () => true, storage, changed = () => {} }) => {
     const cached = permitted() ? safeRead(storage) : null
-    const state = { lessonId: lessonFor(cached?.lessonId).id, revision: 0, code: '', stdin: '', tests: [], exercise: null, result: null, checked: null, history: [], backups: [], drafts: {}, workspaces: {}, busy: false, checking: false, error: '', notice: '', storageError: '', persist: cached?.persist !== false, autoCheck: cached?.autoCheck === true }
+    const state = { lessonId: lessonFor(cached?.lessonId).id, revision: 0, code: '', stdin: '', tests: [], exercise: null, result: null, lastOutput: null, checked: null, history: [], backups: [], drafts: {}, workspaces: {}, restoring: false, busy: false, checking: false, error: '', notice: '', storageError: '', persist: cached?.persist !== false, autoCheck: cached?.autoCheck === true }
     let activeRun = null
     let activeCheck = null
     let activeReset = null
     let activeSync = null
+    let activeRecovery = null
+    let workspacesReady = false
+    let workspaceEpoch = 0
     let closed = false
     let sequence = 0
     const emit = () => { if (!closed) changed(state) }
@@ -115,7 +119,7 @@
       state.lessonId = lesson.id
       const source = state.drafts[lesson.id] || { code: '', stdin: '', tests: [], exercise: null }
       state.code = source.code; state.stdin = source.stdin; state.tests = cleanTests(source.tests); state.exercise = optionalPractice(source.exercise)
-      state.revision++; state.result = null; state.checked = null; state.error = ''; state.notice = ''; save(); emit()
+      state.revision++; state.result = null; state.lastOutput = null; state.checked = null; state.error = ''; state.notice = ''; save(); emit()
       return true
     }
     const preflight = () => {
@@ -123,27 +127,80 @@
       if (!available()) throw new Error('尚未连接隔离执行服务。请在娜娜莉工作室中连接个人后端；当前代码尚未执行。')
       if (!state.code.trim()) throw new Error('请先输入代码、命令或 SQL。')
     }
+    const workspaceState = value => {
+      if (!plain(value) || typeof (value.workspaceId || value.id) !== 'string' || !(value.workspaceId || value.id) || !Number.isInteger(value.revision) || value.revision < 0) throw new Error('工作区响应无效，请重试。')
+      return { id: value.workspaceId || value.id, revision: value.revision, busy: value.busy === true, broken: value.broken === true, uncertain: value.busy === true || value.broken === true }
+    }
+    const restoreWorkspaces = async (force = false) => {
+      if (closed || !permitted() || !available()) return false
+      if (activeRecovery) return activeRecovery.promise
+      if (workspacesReady && !force) return true
+      const recovery = { controller: new AbortController(), epoch: workspaceEpoch }
+      activeRecovery = recovery; state.restoring = true
+      recovery.promise = (async () => {
+        try {
+          const response = await request('/api/workspaces', { signal: recovery.controller.signal })
+          if (closed || recovery.controller.signal.aborted || !permitted()) return false
+          if (!Array.isArray(response?.workspaces)) throw new Error('工作区列表响应无效，请检查后端版本。')
+          const restored = {}
+          const ordered = [...response.workspaces].sort((a, b) => (Date.parse(b?.updatedAt) || 0) - (Date.parse(a?.updatedAt) || 0))
+          for (const value of ordered) {
+            if (!plain(value) || !STATEFUL.has(value.language)) continue
+            const workspace = workspaceState(value)
+            if (!restored[value.language]) restored[value.language] = workspace
+          }
+          if (recovery.epoch === workspaceEpoch) { state.workspaces = restored; workspacesReady = true }
+          return true
+        } catch (error) {
+          if (!closed && !recovery.controller.signal.aborted) state.error = `工作区尚未恢复：${clip(error.message, 300)}。请重试，现有文件不会被清空。`
+          return false
+        } finally {
+          if (activeRecovery === recovery) { activeRecovery = null; state.restoring = false; emit() }
+        }
+      })()
+      emit()
+      return recovery.promise
+    }
+    const refreshWorkspace = async (language, workspace, signal) => {
+      const response = await request(`/api/workspaces/${encodeURIComponent(workspace.id)}`, { signal })
+      if (closed || signal?.aborted || !permitted()) return null
+      const refreshed = workspaceState(response)
+      if (refreshed.id !== workspace.id || (response.language && response.language !== language)) throw new Error('工作区响应不匹配，请重试。')
+      state.workspaces[language] = refreshed
+      return refreshed
+    }
+    const invalidateWorkspaces = () => { workspacesReady = false; workspaceEpoch++; activeRecovery?.controller.abort(); activeRecovery = null; state.restoring = false }
     const run = async (mode = 'run', useTests = false) => {
       if (closed || state.busy) return null
       try { preflight() } catch (error) { state.error = error.message; emit(); return null }
       const lesson = lessonFor(state.lessonId)
-      const workspace = state.workspaces[lesson.language]
-      if (mode === 'run' && workspace?.uncertain) { state.error = '上次执行被中断，工作区状态尚不确定。请先重置练习环境，再继续运行。'; emit(); return null }
+      let workspace = state.workspaces[lesson.language]
       cancelCheck()
-      const operation = { controller: new AbortController(), seq: ++sequence, revision: state.revision, lessonId: state.lessonId, draft: draft() }
+      const operation = { controller: new AbortController(), seq: ++sequence, revision: state.revision, lessonId: state.lessonId, draft: draft(), started: false }
       if (mode === 'check') { activeCheck = operation; state.checking = true }
       else { activeRun = operation; state.busy = true }
       state.error = ''; state.notice = mode === 'check' ? '正在使用语言工具检查当前版本…' : `正在执行版本 ${operation.revision}…`; emit()
       const current = () => !closed && !operation.controller.signal.aborted && (mode === 'check' ? activeCheck === operation : activeRun === operation)
       try {
+        if (mode === 'run' && STATEFUL.has(lesson.language)) {
+          if (!await restoreWorkspaces()) return null
+          if (!current() || !permitted()) return null
+          workspace = state.workspaces[lesson.language]
+          if (workspace?.uncertain) workspace = await refreshWorkspace(lesson.language, workspace, operation.controller.signal)
+          if (!current() || !permitted()) return null
+          if (workspace?.broken) throw new Error('工作区快照损坏，请重置运行环境后重试。')
+          if (workspace?.busy) throw new Error('工作区仍在执行上一条命令，请稍后重试。')
+        }
+        operation.started = true
         const response = await request('/api/run', { method: 'POST', signal: operation.controller.signal, body: { language: lesson.language, code: operation.draft.code, stdin: operation.draft.stdin, ...(operation.draft.exercise ? { practice: operation.draft.exercise } : {}), tests: useTests ? operation.draft.tests : [], revision: operation.revision, mode, ...(workspace?.id ? { workspaceId: workspace.id, workspaceRevision: workspace.revision } : {}) } })
         if (!current() || !permitted()) return null
         const result = cleanResult(response)
         if (result.revision !== operation.revision) throw new Error('执行结果版本不匹配，已丢弃，未更新当前诊断。')
-        if (mode === 'run' && result.workspaceId) state.workspaces[lesson.language] = { id: result.workspaceId, revision: result.workspaceRevision, uncertain: false }
+        if (mode === 'run' && result.workspaceId) { workspaceEpoch++; state.workspaces[lesson.language] = { id: result.workspaceId, revision: result.workspaceRevision, uncertain: false } }
         if (mode === 'run') {
           state.history.unshift({ id: result.runId || `${Date.now()}-${operation.seq}`, at: new Date().toISOString(), lessonId: operation.lessonId, revision: operation.revision, ...operation.draft, result })
           state.history = state.history.slice(0, MAX_HISTORY)
+          if (state.lessonId === operation.lessonId) state.lastOutput = result
           if (state.revision === operation.revision && state.lessonId === operation.lessonId) state.result = result
           state.notice = state.revision === operation.revision ? `版本 ${operation.revision}：${STATUS[result.status]}` : `版本 ${operation.revision} 已完成并保存到历史；当前版本 ${state.revision} 尚未运行。`
           save()
@@ -155,7 +212,15 @@
         if (!current()) return null
         state.error = clip(error?.message || '执行服务暂时无法连接，代码未得到可验证结果。', 2000)
         state.notice = ''
-        if (mode === 'run' && STATEFUL.has(lesson.language)) state.workspaces[lesson.language] = { ...workspace, uncertain: true }
+        if (mode === 'run' && operation.started && STATEFUL.has(lesson.language)) {
+          if (workspace?.id) {
+            state.workspaces[lesson.language] = { ...workspace, uncertain: true }
+            try {
+              const refreshed = await refreshWorkspace(lesson.language, workspace, operation.controller.signal)
+              if (current() && refreshed && !refreshed.uncertain) state.notice = '工作区已核对，可重新运行；文件和仓库仍保留。'
+            } catch (_) { /* Retry verifies the workspace again instead of deleting it. */ }
+          } else workspacesReady = false
+        }
         return null
       } finally {
         if (mode === 'run' && activeRun === operation) { activeRun = null; state.busy = false }
@@ -166,18 +231,21 @@
     const cancel = () => {
       cancelCheck()
       if (activeRun) {
-        if (STATEFUL.has(lessonFor(activeRun.lessonId).language)) {
+        if (activeRun.started && STATEFUL.has(lessonFor(activeRun.lessonId).language)) {
           const language = lessonFor(activeRun.lessonId).language
-          state.workspaces[language] = { ...state.workspaces[language], uncertain: true }
+          if (state.workspaces[language]?.id) state.workspaces[language] = { ...state.workspaces[language], uncertain: true }
+          else workspacesReady = false
         }
+        const started = activeRun.started
         activeRun.controller.abort(); activeRun = null; state.busy = false
-        state.notice = '已停止等待结果。服务端可能已执行部分命令；有状态环境需要重置后继续。'
+        state.notice = started ? '已停止等待结果。服务端可能已执行部分命令；下次运行前会核对工作区。' : '已取消，尚未发送执行命令。'
       }
       if (activeReset) {
         const language = activeReset.language
         state.workspaces[language] = { ...state.workspaces[language], uncertain: true }
         activeReset.controller.abort(); activeReset = null; state.busy = false
-        state.notice = '已停止等待重置结果；工作区状态尚不确定，请重新重置后继续。'
+        workspacesReady = false
+        state.notice = '已停止等待重置结果；下次运行前会重新读取工作区。'
       }
       emit()
     }
@@ -191,14 +259,19 @@
         if (!STATEFUL.has(lesson.language)) { edit({ code: '', stdin: '', tests: [], exercise: null }); return true }
         operation = { controller: new AbortController(), language: lesson.language }; activeReset = operation
         state.busy = true; state.error = ''; emit()
+        if (!await restoreWorkspaces()) return false
+        if (closed || operation.controller.signal.aborted || activeReset !== operation || !permitted()) return false
         const previous = state.workspaces[lesson.language]
         const result = await request('/api/workspaces/reset', { method: 'POST', signal: operation.controller.signal, body: { language: lesson.language, ...(previous?.id ? { workspaceId: previous.id } : {}) } })
         if (closed || !permitted() || operation.controller.signal.aborted || activeReset !== operation) return false
         if (!plain(result) || typeof result.workspaceId !== 'string') throw new Error('重置响应无效。')
-        state.workspaces[lesson.language] = { id: result.workspaceId, revision: result.revision, uncertain: false }
-        state.revision++; state.result = null; state.checked = null; state.notice = '隔离练习环境已重置。代码和提交历史仍保留。'
+        workspaceEpoch++; state.workspaces[lesson.language] = workspaceState(result)
+        state.revision++; state.result = null; state.lastOutput = null; state.checked = null; state.notice = '隔离练习环境已重置。代码和提交历史仍保留。'
         return true
-      } catch (error) { if (!closed && !operation?.controller.signal.aborted) state.error = clip(error.message, 2000); return false }
+      } catch (error) {
+        if (!closed && !operation?.controller.signal.aborted) { workspacesReady = false; state.error = clip(error.message, 2000) }
+        return false
+      }
       finally { if (!operation || activeReset === operation) { activeReset = null; state.busy = false; emit() } }
     }
     const restore = id => {
@@ -249,25 +322,16 @@
         const merged = new Map(state.history.map(record => [record.id, record]))
         for (const record of records) if (record.id && !merged.has(record.id)) merged.set(record.id, record)
         state.history = [...merged.values()].sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0)).slice(0, MAX_HISTORY)
-        for (const language of STATEFUL) {
-          if (state.busy || state.workspaces[language]) continue
-          const record = records.find(item => item.lessonId === language && item.result.workspaceId)
-          if (!record) continue
-          try {
-            const workspace = await request(`/api/workspaces/${encodeURIComponent(record.result.workspaceId)}`, { signal: controller.signal })
-            if (!closed && !controller.signal.aborted && permitted() && !state.busy && !state.workspaces[language] && workspace?.workspaceId === record.result.workspaceId) state.workspaces[language] = { id: workspace.workspaceId, revision: workspace.revision, uncertain: !!workspace.busy || !!workspace.broken }
-          } catch (_) { /* An expired workspace never invalidates the saved submission. */ }
-        }
         save(); emit(); return true
       } catch (error) {
         if (!closed && !controller.signal.aborted) { state.storageError = `云端历史尚未同步：${clip(error.message, 300)}。当前本机记录仍保留。`; emit() }
         return false
       } finally { if (activeSync === controller) activeSync = null }
     }
-    const dispose = () => { save(); cancel(); activeSync?.abort(); closed = true }
+    const dispose = () => { save(); cancel(); activeSync?.abort(); invalidateWorkspaces(); closed = true }
     const initial = state.drafts[state.lessonId] || { code: '', stdin: '', tests: [], exercise: null }
     state.code = initial.code; state.stdin = initial.stdin; state.tests = cleanTests(initial.tests); state.exercise = optionalPractice(initial.exercise)
-    return { state, edit, select, run, cancel, reset, restore, loadPractice, restoreBackup, persistence, setAutoCheck, canAutoCheck, autoCheckCurrent, clearHistory, syncHistory, dispose }
+    return { state, edit, select, run, cancel, reset, restore, loadPractice, restoreBackup, persistence, setAutoCheck, canAutoCheck, autoCheckCurrent, clearHistory, syncHistory, restoreWorkspaces, invalidateWorkspaces, dispose }
   }
 
   const unlocked = () => { try { return window.NOIMPTY_GATE?.unlocked() === true && !document.documentElement.classList.contains('noimpty-private-locked') } catch (_) { return false } }
@@ -378,7 +442,7 @@
     const storageStatus = node('p', 'learning-storage-status'); storageStatus.setAttribute('role', 'status')
     root.append(heading, toolbar, editorPane, consolePane, statusbar, status, error, storageStatus); container.append(root)
     let storage; try { storage = window.localStorage } catch (_) {}
-    let timer = null; let adapter = null; let lastAutoRevision = null; let lastResult; let lastChecked; let lastHistory; let lastBackups
+    let timer = null; let adapter = null; let lastAutoRevision = null; let lastResult; let lastChecked; let lastOutputRevision; let lastHistory; let lastBackups
     let connectionState = window.NANALY_AGENT?.snapshot?.().connection || (window.NANALY_AGENT?.configured() ? 'connected' : 'disconnected')
     const request = (path, options) => window.NANALY_AGENT.request(path, options)
     const session = createSession({ request, storage, available: () => !!window.NANALY_AGENT?.configured(), permitted: unlocked, changed: () => render() })
@@ -420,29 +484,38 @@
       if (connectionAnnouncement.textContent !== connectionText) connectionAnnouncement.textContent = connectionText
       saved.textContent = state.persist ? (state.storageError ? '保存异常' : '草稿已保存') : '临时草稿'
       select.disabled = state.busy; select.value = state.lessonId
-      runButton.disabled = state.busy || !connected || !state.code.trim(); runButton.textContent = state.busy ? '运行中…' : '▶ 运行'
+      runButton.disabled = state.busy || !connected || !state.code.trim(); runButton.textContent = state.restoring && state.busy ? '恢复环境…' : state.busy ? '运行中…' : ['git', 'linux'].includes(state.lessonId) ? '▶ 执行脚本' : '▶ 运行'
       stopButton.hidden = !state.busy && !state.checking
       clearButton.disabled = state.busy; checkButton.disabled = state.busy || state.checking || !connected || !state.code.trim() || !CHECKABLE.has(state.lessonId)
       resetButton.hidden = !STATEFUL.has(state.lessonId); resetButton.disabled = state.busy || !connected
       autoCheck.checked = state.autoCheck; autoCheck.disabled = !CHECKABLE.has(state.lessonId); persist.checked = state.persist
       stdin.hidden = state.lessonId === 'mysql'; inputHint.hidden = state.lessonId !== 'mysql'
-      status.textContent = state.notice; status.hidden = !state.notice || state.notice.startsWith('版本 ') || state.notice.startsWith('正在执行版本 ')
+      status.textContent = state.notice; status.hidden = !state.notice || (state.notice.startsWith('版本 ') && !state.notice.includes('尚未运行')) || state.notice.startsWith('正在执行版本 ')
       error.textContent = state.error; error.hidden = !state.error; storageStatus.textContent = state.storageError; storageStatus.hidden = !state.storageError
       const diagnosticResult = state.checked || state.result
-      resultState.textContent = state.busy ? '运行中…' : state.checking ? '检查中…' : resultLabel(diagnosticResult)
-      resultState.dataset.status = diagnosticResult?.status || ''
-      if (lastResult !== state.result || lastChecked !== state.checked) {
+      const visibleResult = state.result || state.lastOutput
+      const staleOutput = !!visibleResult && visibleResult.revision !== state.revision
+      resultState.textContent = state.restoring ? '恢复环境…' : state.busy ? '运行中…' : state.checking ? '检查中…' : resultLabel(diagnosticResult || visibleResult) + (staleOutput ? ' · 上次运行' : '')
+      resultState.dataset.status = (diagnosticResult || visibleResult)?.status || ''
+      if (lastResult !== visibleResult || lastChecked !== state.checked || lastOutputRevision !== state.revision) {
         diagnostics.replaceChildren(); output.replaceChildren()
         for (const d of diagnosticResult?.diagnostics || []) diagnostics.append(button(`${d.line ? `L${d.line}${d.column ? ':' + d.column : ''}  ` : ''}${d.message}`, () => jump(d), 'learning-diagnostic'))
-        if (state.result) {
-          if (state.result.stdout) output.append(pre(state.result.stdout, 'learning-stdout'))
-          if (state.result.stderr) output.append(pre(state.result.stderr, 'learning-stderr'))
-          if (!state.result.stdout && !state.result.stderr) output.append(node('p', 'learning-muted', '运行结束，没有输出。'))
-          if (!state.result.workspaceCommitted) output.append(node('p', 'learning-error', '本次运行环境的更改未保存。'))
-          for (const warning of state.result.warnings) output.append(node('p', 'learning-muted', warning))
+        if (visibleResult) {
+          if (staleOutput) output.append(node('p', 'learning-muted', '上次运行的输出 · 当前修改尚未运行'))
+          if (['git', 'linux'].includes(state.lessonId)) output.append(node('p', 'learning-muted', `${visibleResult.cwd ? `目录 ${visibleResult.cwd} · ` : ''}退出码 ${visibleResult.exitCode == null ? '未返回' : visibleResult.exitCode}`))
+          if (visibleResult.stdout) output.append(pre(visibleResult.stdout, 'learning-stdout'))
+          if (visibleResult.stderr) output.append(pre(visibleResult.stderr, 'learning-stderr'))
+          if (!visibleResult.stdout && !visibleResult.stderr) output.append(node('p', 'learning-muted', visibleResult.status === 'accepted' ? '命令已完成，没有标准输出。' : '本次运行没有标准输出。'))
+          if (visibleResult.workspaceSummary) {
+            const summary = node('details', 'learning-workspace-summary')
+            summary.append(node('summary', '', state.lessonId === 'git' ? '仓库状态' : '工作区文件'), pre(visibleResult.workspaceSummary))
+            output.append(summary)
+          }
+          if (!visibleResult.workspaceCommitted) output.append(node('p', 'learning-error', '本次运行环境的更改未保存。'))
+          for (const warning of visibleResult.warnings) output.append(node('p', 'learning-muted', warning))
         } else if (state.checked) output.append(pre(state.checked.stderr || state.checked.stdout || state.checked.warnings.join('\n') || '语法检查完成。'))
         else output.append(node('p', 'learning-empty', '运行结果会出现在这里 ✧'))
-        lastResult = state.result; lastChecked = state.checked
+        lastResult = visibleResult; lastChecked = state.checked; lastOutputRevision = state.revision
       }
       if (lastHistory !== state.history) {
         historyList.replaceChildren()
@@ -485,7 +558,8 @@
       const sync = connected && !wasConnected
       connectionState = next; wasConnected = connected
       if (changed) render()
-      if (sync) session.syncHistory()
+      if (!connected && changed) session.invalidateWorkspaces()
+      if (sync) { session.restoreWorkspaces(); session.syncHistory() }
     }
     const unsubscribe = window.NANALY_AGENT?.subscribe?.(connectionChanged)
     window.addEventListener('nanaly:agent-configured', connectionChanged, { signal: lifetime.signal })

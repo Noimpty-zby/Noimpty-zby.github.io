@@ -17,7 +17,7 @@ const storage = () => { const data = new Map(); return { data, getItem: key => d
 const setup = options => {
   const calls = []
   const disk = options?.storage || storage()
-  const request = async (path, args) => { calls.push({ path, ...args }); return options?.request ? options.request(path, args) : result(args.body.revision) }
+  const request = async (path, args) => { calls.push({ path, ...args }); if (path === '/api/workspaces') return options?.workspaces ? options.workspaces(args) : { workspaces: [] }; return options?.request ? options.request(path, args) : result(args.body.revision) }
   return { session: api.createSession({ storage: disk, request, ...options, ...(options?.request ? { request } : {}) }), calls, storage: disk }
 }
 // Execution fixtures are explicit; a real new IDE session always starts blank.
@@ -138,6 +138,7 @@ await check('an old run enters history but cannot overwrite a newer editor revis
   pending.resolve(result(runRevision, { status: 'compile_error', diagnostics: [{ message: 'old syntax error', line: 2 }] }))
   await run
   assert.equal(session.state.result, null); assert.equal(session.state.checked, null)
+  assert.equal(session.state.lastOutput.status, 'compile_error')
   assert.equal(session.state.history.length, 1); assert.equal(session.state.history[0].code.includes('#include'), true)
   assert.match(session.state.notice, new RegExp(`当前版本 ${session.state.revision} 尚未运行`))
 })
@@ -172,22 +173,28 @@ await check('concurrent runs and language switches cannot race a live workspace 
   assert.equal(await session.run(), null); assert.equal(session.select('git'), false); assert.equal(calls.length, 1)
   pending.resolve(result(runRevision)); await first; assert.equal(session.state.busy, false)
 })
-await check('cancellation never claims execution was undone and requires workspace reset', async () => {
-  const pending = deferred()
-  const { session, calls } = setup({ request: () => pending.promise })
+await check('cancellation keeps files and verifies the workspace before retrying', async () => {
+  const pending = deferred(); let executions = 0
+  const known = { workspaceId: 'git-space', language: 'git', revision: 3, busy: false }
+  const { session, calls } = setup({ workspaces: async () => ({ workspaces: [known] }), request: (path, args) => path.startsWith('/api/workspaces/') ? { ...known, revision: 4 } : ++executions === 1 ? pending.promise : result(args.body.revision, { workspaceId: known.workspaceId, workspaceRevision: 5 }) })
   session.select('git'); session.edit({ code: 'git status' }); const revision = session.state.revision
-  const run = session.run(); session.cancel()
-  assert.equal(calls[0].signal.aborted, true)
+  await session.restoreWorkspaces()
+  const run = session.run(); await Promise.resolve(); session.cancel()
+  assert.equal(calls.find(call => call.path === '/api/run').signal.aborted, true)
   assert.match(session.state.notice, /服务端可能已执行/)
-  assert.equal(await session.run(), null); assert.match(session.state.error, /先重置/)
+  const retry = await session.run()
+  assert.equal(retry.status, 'accepted')
+  const retryBody = calls.filter(call => call.path === '/api/run')[1].body
+  assert.equal(retryBody.workspaceId, 'git-space'); assert.equal(retryBody.workspaceRevision, 4)
   pending.resolve(result(revision, { workspaceId: 'old', workspaceRevision: 1 })); await run
-  assert.equal(session.state.history.length, 0); assert.equal(session.state.result, null)
+  assert.equal(session.state.history.length, 1); assert.equal(session.state.workspaces.git.id, 'git-space')
 })
 await check('workspace revision is carried across successful runs and reset preserves code/history', async () => {
   let revision = 0
   const { session, calls } = setup({ request: async (path, args) => path === '/api/workspaces/reset' ? { workspaceId: 'fresh', revision: 0 } : result(args.body.revision, { workspaceId: 'git-space', workspaceRevision: ++revision, workspaceSummary: '## main' }) })
   session.select('git'); session.edit({ code: 'git init' }); await session.run(); session.edit({ code: 'git status' }); await session.run()
-  assert.equal(calls[1].body.workspaceId, 'git-space'); assert.equal(calls[1].body.workspaceRevision, 1)
+  const runs = calls.filter(call => call.path === '/api/run')
+  assert.equal(runs[1].body.workspaceId, 'git-space'); assert.equal(runs[1].body.workspaceRevision, 1)
   const code = session.state.code; await session.reset()
   assert.equal(session.state.code, code); assert.equal(session.state.history.length, 2); assert.equal(session.state.result, null)
   assert.equal(session.state.workspaces.git.id, 'fresh'); assert.equal(session.state.workspaces.git.revision, 0)
@@ -195,8 +202,8 @@ await check('workspace revision is carried across successful runs and reset pres
 await check('an interrupted workspace reset cannot lock the UI or overwrite a later reset', async () => {
   const pending = deferred(); let resets = 0
   const { session, calls } = setup({ request: async () => ++resets === 1 ? pending.promise : { workspaceId: 'newer-reset', revision: 0 } })
-  session.select('linux'); const first = session.reset(); session.cancel()
-  assert.equal(calls[0].signal.aborted, true); assert.equal(session.state.busy, false)
+  session.select('linux'); await session.restoreWorkspaces(); const first = session.reset(); await Promise.resolve(); session.cancel()
+  assert.equal(calls.find(call => call.path === '/api/workspaces/reset').signal.aborted, true); assert.equal(session.state.busy, false)
   assert.equal(session.state.workspaces.linux.uncertain, true)
   assert.equal(await session.reset(), true)
   pending.resolve({ workspaceId: 'late-old-reset', revision: 0 }); assert.equal(await first, false)
@@ -219,12 +226,12 @@ await check('quota errors preserve in-memory submissions; reload and persistence
 })
 await check('private cloud history restores exact test inputs and latest workspace revision across devices', async () => {
   const remote = { ...result(7, { runId: 'cloud-run', workspaceId: 'remote-git', workspaceRevision: 1 }), language: 'git', code: 'git status', stdin: '', testCases: [{ input: 'cloud input', expectedOutput: 'cloud output' }], createdAt: '2026-09-25T03:00:00Z' }
-  const { session, calls } = setup({ request: async path => path.startsWith('/api/runs?') ? { runs: [remote] } : { workspaceId: 'remote-git', language: 'git', revision: 9, busy: false } })
-  await session.syncHistory(); await session.syncHistory()
+  const { session, calls } = setup({ workspaces: async () => ({ workspaces: [{ workspaceId: 'remote-git', language: 'git', revision: 9, busy: false }] }), request: async () => ({ runs: [remote] }) })
+  await session.restoreWorkspaces(); await session.syncHistory(); await session.syncHistory()
   assert.equal(session.state.history.length, 1); assert.equal(session.state.history[0].tests[0].input, 'cloud input')
   assert.equal(session.state.workspaces.git.revision, 9); assert.equal(session.restore('cloud-run'), true)
   assert.equal(session.state.code, 'git status'); assert.equal(session.state.result, null)
-  assert.ok(calls.some(call => call.path === '/api/workspaces/remote-git'))
+  assert.ok(calls.some(call => call.path === '/api/workspaces'))
 })
 await check('disposing cancels work and late results cannot mutate history or publish an outcome', async () => {
   const pending = deferred(); let changes = 0
@@ -277,4 +284,98 @@ await check('cloud reference validation restores a new exercise only from matchi
     assert.equal(app.session.state.history[0].referenceValidation, false); assert.equal(app.session.state.history[0].exercise, null)
   }
 })
+
+await check('a first run waits for authoritative workspace recovery even when history is empty', async () => {
+  const recovery = deferred()
+  const { session, calls } = setup({ workspaces: () => recovery.promise, request: async (path, args) => path.startsWith('/api/runs?') ? { runs: [] } : result(args.body.revision, { workspaceId: 'latest-linux', workspaceRevision: 8, cwd: '/work/docs', exitCode: 0 }) })
+  session.select('linux'); session.edit({ code: 'pwd' })
+  const restoring = session.restoreWorkspaces(); const running = session.run()
+  await session.syncHistory()
+  assert.equal(calls.filter(call => call.path === '/api/workspaces').length, 1)
+  assert.equal(calls.some(call => call.path === '/api/run'), false); assert.equal(session.state.busy, true)
+  recovery.resolve({ workspaces: [{ workspaceId: 'older-linux', language: 'linux', revision: 2, updatedAt: '2026-09-24T00:00:00Z' }, { workspaceId: 'latest-linux', language: 'linux', revision: 7, updatedAt: '2026-09-25T00:00:00Z' }] })
+  await restoring; await running
+  const submitted = calls.find(call => call.path === '/api/run').body
+  assert.equal(submitted.workspaceId, 'latest-linux'); assert.equal(submitted.workspaceRevision, 7)
+  assert.equal(session.state.result.cwd, '/work/docs'); assert.equal(session.state.result.exitCode, 0)
+  session.edit({ code: 'ls' })
+  assert.equal(session.state.result, null); assert.equal(session.state.lastOutput.cwd, '/work/docs')
+})
+await check('workspace listing failures never silently create an empty environment and can be retried', async () => {
+  let attempts = 0
+  const { session, calls } = setup({ workspaces: async () => { if (++attempts === 1) throw new Error('offline'); return { workspaces: [{ workspaceId: 'kept', language: 'linux', revision: 4 }] } }, request: async (_, args) => result(args.body.revision, { workspaceId: 'kept', workspaceRevision: 5 }) })
+  session.select('linux'); session.edit({ code: 'cat saved.txt' })
+  assert.equal(await session.run(), null); assert.match(session.state.error, /尚未恢复/)
+  assert.equal(calls.some(call => call.path === '/api/run'), false)
+  assert.equal((await session.run()).status, 'accepted')
+  assert.equal(calls.find(call => call.path === '/api/run').body.workspaceId, 'kept')
+})
+await check('temporary execution errors refresh known workspace revisions without forcing a destructive reset', async () => {
+  let executions = 0
+  const { session, calls } = setup({ workspaces: async () => ({ workspaces: [{ workspaceId: 'kept-git', language: 'git', revision: 2 }] }), request: async (path, args) => {
+    if (path.startsWith('/api/workspaces/')) return { workspaceId: 'kept-git', language: 'git', revision: 3, busy: false }
+    if (++executions === 1) throw new Error('RUNNER_BUSY')
+    return result(args.body.revision, { workspaceId: 'kept-git', workspaceRevision: 4 })
+  } })
+  session.select('git'); session.edit({ code: 'git status' })
+  assert.equal(await session.run(), null)
+  assert.equal(session.state.workspaces.git.uncertain, false); assert.match(session.state.notice, /可重新运行/)
+  assert.equal((await session.run()).status, 'accepted')
+  assert.equal(calls.filter(call => call.path === '/api/run')[1].body.workspaceRevision, 3)
+  assert.equal(calls.some(call => call.path.endsWith('/reset')), false)
+})
+await check('an in-flight server workspace blocks execution only until it is idle', async () => {
+  let busy = true
+  const { session, calls } = setup({ workspaces: async () => ({ workspaces: [{ workspaceId: 'busy-linux', language: 'linux', revision: 2, busy: true }] }), request: async (path, args) => path.startsWith('/api/workspaces/') ? { workspaceId: 'busy-linux', language: 'linux', revision: 3, busy } : result(args.body.revision) })
+  session.select('linux'); session.edit({ code: 'pwd' })
+  assert.equal(await session.run(), null); assert.match(session.state.error, /稍后重试/)
+  assert.equal(calls.some(call => call.path === '/api/run'), false)
+  busy = false; assert.equal((await session.run()).status, 'accepted')
+})
+await check('cancelling recovery never dispatches a late command or marks an idle workspace uncertain', async () => {
+  const recovery = deferred()
+  const { session, calls } = setup({ workspaces: () => recovery.promise })
+  session.select('linux'); session.edit({ code: 'touch unwanted' })
+  const running = session.run(); session.cancel()
+  recovery.resolve({ workspaces: [{ workspaceId: 'kept', language: 'linux', revision: 4 }] })
+  await running
+  assert.equal(calls.some(call => call.path === '/api/run'), false)
+  assert.equal(session.state.workspaces.linux.uncertain, false); assert.equal(session.state.busy, false)
+})
+await check('reset waits for recovery and deletes the intended current workspace only', async () => {
+  const recovery = deferred()
+  const { session, calls } = setup({ workspaces: () => recovery.promise, request: async () => ({ workspaceId: 'new-empty', revision: 0 }) })
+  session.select('git'); const resetting = session.reset()
+  assert.equal(calls.some(call => call.path.endsWith('/reset')), false)
+  recovery.resolve({ workspaces: [{ workspaceId: 'current-git', language: 'git', revision: 6 }] })
+  assert.equal(await resetting, true)
+  assert.equal(calls.find(call => call.path.endsWith('/reset')).body.workspaceId, 'current-git')
+  assert.equal(session.state.workspaces.git.id, 'new-empty')
+})
+
+
+await check('a lost first-run response rediscovers the server workspace instead of creating another', async () => {
+  let listings = 0; let executions = 0
+  const { session, calls } = setup({ workspaces: async () => ({ workspaces: ++listings === 1 ? [] : [{ workspaceId: 'created-before-disconnect', language: 'linux', revision: 1 }] }), request: async (_, args) => {
+    if (++executions === 1) throw new Error('connection closed')
+    return result(args.body.revision, { workspaceId: 'created-before-disconnect', workspaceRevision: 2 })
+  } })
+  session.select('linux'); session.edit({ code: 'pwd' })
+  assert.equal(await session.run(), null)
+  assert.equal((await session.run()).status, 'accepted')
+  assert.equal(listings, 2)
+  assert.equal(calls.filter(call => call.path === '/api/run')[1].body.workspaceId, 'created-before-disconnect')
+})
+await check('a lost reset response refreshes the workspace list before the next execution', async () => {
+  let listings = 0
+  const { session, calls } = setup({ workspaces: async () => ({ workspaces: [{ workspaceId: ++listings === 1 ? 'old-workspace' : 'reset-created-workspace', language: 'git', revision: 0 }] }), request: async (path, args) => {
+    if (path.endsWith('/reset')) throw new Error('connection closed after reset')
+    return result(args.body.revision, { workspaceId: 'reset-created-workspace', workspaceRevision: 1 })
+  } })
+  session.select('git'); session.edit({ code: 'git status' })
+  assert.equal(await session.reset(), false)
+  assert.equal((await session.run()).status, 'accepted')
+  assert.equal(calls.find(call => call.path === '/api/run').body.workspaceId, 'reset-created-workspace')
+})
+
 console.log(`\n${count} learning controller behavior checks passed`)

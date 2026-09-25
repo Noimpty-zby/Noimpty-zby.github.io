@@ -117,7 +117,7 @@ jobs:
         env:
           TASK: ${{ steps.pick.outputs.what }}
           DRY_FLAG: ${{ steps.pick.outputs.dry }}
-          SITE_URL: https://noimpty-zby.github.io
+          SITE_URL: https://noimpty-zby.cn
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # 想让她用自己的 GitHub 账号发言（而不是显示成 github-actions 机器人），
           # 就建一个小号、拿它的 PAT 存成这个 secret。不配也能跑。

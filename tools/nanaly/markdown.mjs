@@ -67,7 +67,7 @@ const plain = tokens => tokens.map(token => token.children ? plain(token.childre
     : ['softbreak', 'hardbreak'].includes(token.type) ? ' ' : '').join('')
 const escapeLabel = text => text.replace(/[\\`*_\[\]<>]/g, '\\$&')
 
-export const stripOutboundLinks = (value, site = process.env.SITE_URL || 'https://noimpty-zby.github.io') => {
+export const stripOutboundLinks = (value, site = process.env.SITE_URL || 'https://noimpty-zby.cn') => {
   let base
   try { base = new URL(site) } catch (_) {}
   const inside = value => {

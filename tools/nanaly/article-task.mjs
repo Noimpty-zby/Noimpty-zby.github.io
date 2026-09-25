@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { listPosts } from './posts.mjs'
 import { postPath } from './permalink.mjs'
 
-export const SITE = 'https://noimpty-zby.github.io'
+export const SITE = 'https://noimpty-zby.cn'
 export const LIMIT = 24
 export const validRequestId = id => /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(String(id || ''))
 export const normalizeArticlePath = value => {

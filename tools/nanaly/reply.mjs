@@ -13,7 +13,7 @@ import { ask } from '../daily-report/narrate.mjs'
 import { stripAngles, stripOutboundLinks } from './git.mjs'
 import { note, digest } from './journal.mjs'
 
-const SITE = (process.env.SITE_URL || 'https://noimpty-zby.github.io').replace(/\/$/, '')
+const SITE = (process.env.SITE_URL || 'https://noimpty-zby.cn').replace(/\/$/, '')
 const DRY = process.argv.includes('--dry')
 // 默认值要和 nanaly.yml 里配的那个一致 —— 不一致的话，本地跑出来的
 // 「该接手几条」和线上不是一回事。那边还记着这个数怎么和班次一起算。
@@ -156,7 +156,7 @@ export const autoReply = async () => {
   for (const item of todo) {
     const { disc, comment, ageHours } = item
     // giscus 的讨论标题按约定是没有前导斜杠的（2026/08/13/xxx/），
-    // 直接拼在站点域名后面会变成 https://noimpty-zby.github.io2026/... 这种主机名，
+    // 直接拼在站点域名后面会变成 https://noimpty-zby.cn2026/... 这种主机名，
     // DNS 直接失败 —— 而失败被静默吞掉，于是她每一条回复其实都是没读文章瞎答的。
     const article = await fetchArticle('/' + String(disc.title || '').replace(/^\/+/, ''))
 

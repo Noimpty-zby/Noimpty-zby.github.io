@@ -16,7 +16,7 @@ import vm from 'node:vm'
 const md = new MarkdownIt({ html: true, linkify: true })
 const siteRenderer = new SiteRenderer({ config: { markdown: { render: { html: true, linkify: true } } }, execFilterSync() {} })
 const renderers = [md, siteRenderer.parser]
-const site = 'https://noimpty-zby.github.io'
+const site = 'https://noimpty-zby.cn'
 let passed = 0
 const check = async (name, fn) => {
   await fn()
@@ -51,8 +51,8 @@ await check('real fenced, indented and multiline inline code retains its text', 
 await check('all outbound link syntaxes and tracking images become text', () => {
   for (const raw of [
     '[external](//evil.example/x)',
-    '[external](https://noimpty-zby.github.io.evil.example/x)',
-    '[external](https://noimpty-zby.github.io@evil.example/x)',
+    '[external](https://noimpty-zby.cn.evil.example/x)',
+    '[external](https://noimpty-zby.cn@evil.example/x)',
     '[external](https://evil.example/a_(b))',
     '[external][ref]\n\n[ref]: https://evil.example/x',
     '[external]\n\n[external]: //evil.example/x',
@@ -95,7 +95,7 @@ await check('outbound filtering preserves literal URLs in code and adjacent punc
 await check('same-origin absolute, relative, fragment and reference links survive', () => {
   for (const raw of [
     '[inside](/2026/09/19/post/)', '[inside](../other/)', '[inside](#heading)',
-    '[inside](https://noimpty-zby.github.io/2026/09/19/post/)',
+    '[inside](https://noimpty-zby.cn/2026/09/19/post/)',
     '[inside][ref]\n\n[ref]: /2026/09/19/post/'
   ]) assert.match(md.render(stripOutboundLinks(raw, site)), /<a href=/, raw)
 })
@@ -182,8 +182,8 @@ await check('corrupt existing notes fail before any model request or overwrite',
 })
 
 await check('patrol uses the origin, and releases unused GET fallback bodies', async () => {
-  assert.equal(isInternal('https://noimpty-zby.github.io/post/'), true)
-  assert.equal(isInternal('https://noimpty-zby.github.io.evil.example/post/'), false)
+  assert.equal(isInternal('https://noimpty-zby.cn/post/'), true)
+  assert.equal(isInternal('https://noimpty-zby.cn.evil.example/post/'), false)
   const fetch = globalThis.fetch
   let released = false
   globalThis.fetch = async (url, init) => init.method === 'HEAD'

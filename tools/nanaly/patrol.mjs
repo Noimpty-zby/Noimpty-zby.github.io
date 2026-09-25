@@ -10,7 +10,7 @@ import { hit, probeUrl, mapLimit, sleep, looksThrottled, sitePages, PAGE_RE } fr
 import { note, digest } from './journal.mjs'
 import { createHash } from 'node:crypto'
 
-const SITE = (process.env.SITE_URL || 'https://noimpty-zby.github.io').replace(/\/$/, '')
+const SITE = (process.env.SITE_URL || 'https://noimpty-zby.cn').replace(/\/$/, '')
 const T = (ms = 15000) => AbortSignal.timeout(ms)
 const DRY = process.argv.includes('--dry')
 

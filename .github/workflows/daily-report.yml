@@ -46,7 +46,7 @@ jobs:
       - name: 生成并发送日报
         env:
           INPUT_DRY: ${{ inputs.dry }}
-          SITE_URL: https://noimpty-zby.github.io
+          SITE_URL: https://noimpty-zby.cn
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
           # 访问统计：GoatCounter 与 Umami 二选一，配了哪个用哪个，都不配就跳过这一格

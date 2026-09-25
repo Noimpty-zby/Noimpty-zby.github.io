@@ -1172,6 +1172,7 @@ inject:
     - <script src="/js/nanaly-voice.js"></script>
     - <script src="/js/noimpty-ai.js"></script>
     - <script src="/js/nanaly-agent-ui.js"></script>
+    - <script src="/js/learning-editor.js"></script>
     - <script src="/js/learning-lab.js"></script>
     - <script src="/js/schedule.js"></script>
     - <script src="/js/site-clock.js"></script>

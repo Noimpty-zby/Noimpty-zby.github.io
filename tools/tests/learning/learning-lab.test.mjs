@@ -20,6 +20,8 @@ const setup = options => {
   const request = async (path, args) => { calls.push({ path, ...args }); return options?.request ? options.request(path, args) : result(args.body.revision) }
   return { session: api.createSession({ storage: disk, request, ...options, ...(options?.request ? { request } : {}) }), calls, storage: disk }
 }
+// Execution fixtures are explicit; a real new IDE session always starts blank.
+const setupWithCode = options => { const app = setup(options); app.session.edit(api.lessons[0]); return app }
 let count = 0
 const check = async (name, fn) => { await fn(); count++; console.log(`  ✓ ${name}`) }
 
@@ -30,6 +32,53 @@ await check('six real-language lessons contain executable source and explicit al
     if (['c', 'cpp', 'go'].includes(lesson.language)) assert.ok(lesson.tests.length > 1)
     else assert.equal(lesson.tests.length, 0)
   }
+})
+await check('new sessions and every untouched language start blank without exercises or test cases', async () => {
+  const { session, calls } = setup()
+  assert.equal(session.state.lessonId, 'c')
+  for (const lesson of api.lessons) {
+    assert.equal(session.select(lesson.id), true)
+    assert.equal(session.state.code, ''); assert.equal(session.state.stdin, '')
+    assert.equal(session.state.tests.length, 0); assert.equal(session.state.exercise, null)
+    assert.equal(await session.run(), null)
+    assert.equal(session.state.result, null); assert.equal(session.state.history.length, 0)
+  }
+  assert.equal(calls.length, 0, 'empty files must never reach the execution service')
+})
+await check('language drafts remain independent and reload restores the last selected language', () => {
+  const disk = storage(); const first = setup({ storage: disk })
+  first.session.edit({ code: 'C draft', stdin: 'C input' })
+  first.session.select('go'); first.session.edit({ code: 'Go draft', stdin: 'Go input' })
+  first.session.select('c')
+  assert.equal(first.session.state.code, 'C draft'); assert.equal(first.session.state.stdin, 'C input')
+  first.session.select('go')
+  const reloaded = setup({ storage: disk })
+  assert.equal(reloaded.session.state.lessonId, 'go')
+  assert.equal(reloaded.session.state.code, 'Go draft'); assert.equal(reloaded.session.state.stdin, 'Go input')
+  reloaded.session.select('c'); assert.equal(reloaded.session.state.code, 'C draft')
+  reloaded.session.select('cpp')
+  const untouched = setup({ storage: disk })
+  assert.equal(untouched.session.state.lessonId, 'cpp'); assert.equal(untouched.session.state.code, '')
+  untouched.session.select('go'); untouched.session.edit({ code: '', stdin: '', tests: [] })
+  untouched.session.select('c'); untouched.session.select('go')
+  assert.equal(untouched.session.state.code, '', 'a deliberately empty draft must not bring back an example')
+  const cleared = setup({ storage: disk })
+  assert.equal(cleared.session.state.lessonId, 'go'); assert.equal(cleared.session.state.code, '')
+})
+await check('editing does not enable automatic checks or send code without the saved opt-in', async () => {
+  const { session, calls } = setupWithCode()
+  assert.equal(session.state.autoCheck, false); assert.equal(session.canAutoCheck(), false)
+  assert.equal(await session.autoCheckCurrent(), null); assert.equal(calls.length, 0)
+})
+await check('resetting a compiled-language file clears code and input while retaining run history', async () => {
+  const { session, calls } = setupWithCode()
+  await session.run()
+  assert.equal(session.state.history.length, 1)
+  assert.equal(await session.reset(), true)
+  assert.equal(session.state.code, ''); assert.equal(session.state.stdin, '')
+  assert.equal(session.state.tests.length, 0); assert.equal(session.state.exercise, null)
+  assert.equal(session.state.result, null); assert.equal(session.state.history.length, 1)
+  assert.equal(calls.length, 1, 'clearing a local source file must not reset a server workspace')
 })
 await check('locked pages cannot read persisted code, execute, edit or write history', async () => {
   let reads = 0, writes = 0
@@ -45,9 +94,11 @@ await check('a missing backend never produces simulated output or a submission',
   assert.equal(calls.length, 0); assert.equal(session.state.result, null); assert.equal(session.state.history.length, 0)
   assert.match(session.state.error, /尚未连接/)
 })
-await check('automatic tool checking defaults on and preserves an explicitly saved off preference', () => {
+await check('automatic tool checking defaults off and preserves explicit on and off preferences', () => {
   const disk = storage(); const first = setup({ storage: disk })
-  assert.equal(first.session.state.autoCheck, true)
+  assert.equal(first.session.state.autoCheck, false)
+  first.session.setAutoCheck(true)
+  assert.equal(setup({ storage: disk }).session.state.autoCheck, true)
   first.session.setAutoCheck(false)
   const next = setup({ storage: disk }); assert.equal(next.session.state.autoCheck, false)
   next.session.persistence(false); next.session.edit({ code: 'must not persist code' })
@@ -58,13 +109,14 @@ await check('automatic tool checking defaults on and preserves an explicitly sav
 })
 await check('automatic checking only sends supported connected language checks and never executes SQL or runs code', async () => {
   const { session, calls } = setup({ request: async (_, args) => result(args.body.revision, { status: 'checked' }) })
-  for (const language of ['c', 'cpp', 'go', 'git', 'linux']) { session.select(language); await session.autoCheckCurrent() }
+  session.setAutoCheck(true)
+  for (const language of ['c', 'cpp', 'go', 'git', 'linux']) { session.select(language); session.edit(api.lessons.find(lesson => lesson.language === language)); await session.autoCheckCurrent() }
   assert.equal(calls.length, 5); assert.ok(calls.every(call => call.path === '/api/run' && call.body.mode === 'check' && call.body.tests.length === 0))
   assert.equal(session.state.history.length, 0)
-  session.select('mysql'); assert.equal(await session.autoCheckCurrent(), null); assert.equal(calls.length, 5)
+  session.select('mysql'); session.edit({ code: 'SELECT 1;' }); assert.equal(await session.autoCheckCurrent(), null); assert.equal(calls.length, 5)
   session.select('c'); session.setAutoCheck(false); assert.equal(await session.autoCheckCurrent(), null); assert.equal(calls.length, 5)
-  const offline = setup({ available: () => false }); await offline.session.autoCheckCurrent(); assert.equal(offline.calls.length, 0)
-  const locked = setup({ permitted: () => false }); await locked.session.autoCheckCurrent(); assert.equal(locked.calls.length, 0)
+  const offline = setupWithCode({ available: () => false }); offline.session.setAutoCheck(true); await offline.session.autoCheckCurrent(); assert.equal(offline.calls.length, 0)
+  const locked = setup({ permitted: () => false }); locked.session.setAutoCheck(true); await locked.session.autoCheckCurrent(); assert.equal(locked.calls.length, 0)
 })
 await check('submitting test cases sends the exact snapshot and restores failed code as unverified', async () => {
   const { session, calls } = setup({ request: async (_, args) => result(args.body.revision, { status: 'wrong_answer', stdout: '4\n', tests: [{ status: 'wrong_answer', stdout: '4\n', expectedOutput: '5\n' }] }) })
@@ -79,48 +131,51 @@ await check('submitting test cases sends the exact snapshot and restores failed 
 })
 await check('an old run enters history but cannot overwrite a newer editor revision', async () => {
   const pending = deferred()
-  const { session } = setup({ request: () => pending.promise })
+  const { session } = setupWithCode({ request: () => pending.promise })
+  const runRevision = session.state.revision
   const run = session.run()
   session.edit({ code: 'new code' })
-  pending.resolve(result(0, { status: 'compile_error', diagnostics: [{ message: 'old syntax error', line: 2 }] }))
+  pending.resolve(result(runRevision, { status: 'compile_error', diagnostics: [{ message: 'old syntax error', line: 2 }] }))
   await run
   assert.equal(session.state.result, null); assert.equal(session.state.checked, null)
   assert.equal(session.state.history.length, 1); assert.equal(session.state.history[0].code.includes('#include'), true)
-  assert.match(session.state.notice, /当前版本 1 尚未运行/)
+  assert.match(session.state.notice, new RegExp(`当前版本 ${session.state.revision} 尚未运行`))
 })
 await check('editing aborts old checks and ignores stale responses even if transport ignores abort', async () => {
   const pending = deferred()
-  const { session, calls } = setup({ request: () => pending.promise })
+  const { session, calls } = setupWithCode({ request: () => pending.promise })
+  const runRevision = session.state.revision
   const checkRun = session.run('check')
   session.edit({ code: 'fixed' })
   assert.equal(calls[0].signal.aborted, true)
-  pending.resolve(result(0, { status: 'compile_error', diagnostics: [{ message: 'stale' }] }))
+  pending.resolve(result(runRevision, { status: 'compile_error', diagnostics: [{ message: 'stale' }] }))
   await checkRun
   assert.equal(session.state.checked, null); assert.equal(session.state.history.length, 0)
 })
 await check('current diagnostics are tool output and are invalidated by input changes', async () => {
-  const { session } = setup({ request: async (_, args) => result(args.body.revision, { status: 'compile_error', diagnostics: [{ message: '<img onerror=alert(1)>', line: 4, column: 3 }] }) })
+  const { session } = setupWithCode({ request: async (_, args) => result(args.body.revision, { status: 'compile_error', diagnostics: [{ message: '<img onerror=alert(1)>', line: 4, column: 3 }] }) })
   await session.run('check')
   assert.equal(session.state.checked.diagnostics[0].line, 4); assert.equal(session.state.history.length, 0)
   session.edit({ stdin: 'new input' }); assert.equal(session.state.checked, null)
 })
 await check('unsupported MySQL checks are not represented as executed or accepted', async () => {
   const { session } = setup({ request: async (_, args) => result(args.body.revision, { status: 'unsupported_check', warnings: ['仅实际执行才能验证'] }) })
-  session.select('mysql'); await session.run('check')
+  session.select('mysql'); session.edit({ code: 'SELECT 1;' }); await session.run('check')
   assert.equal(session.state.result, null); assert.equal(session.state.history.length, 0)
   assert.equal(session.state.checked.status, 'unsupported_check'); assert.match(session.state.notice, /暂不支持/)
 })
 await check('concurrent runs and language switches cannot race a live workspace operation', async () => {
   const pending = deferred()
-  const { session, calls } = setup({ request: () => pending.promise })
+  const { session, calls } = setupWithCode({ request: () => pending.promise })
+  const runRevision = session.state.revision
   const first = session.run()
   assert.equal(await session.run(), null); assert.equal(session.select('git'), false); assert.equal(calls.length, 1)
-  pending.resolve(result(0)); await first; assert.equal(session.state.busy, false)
+  pending.resolve(result(runRevision)); await first; assert.equal(session.state.busy, false)
 })
 await check('cancellation never claims execution was undone and requires workspace reset', async () => {
   const pending = deferred()
   const { session, calls } = setup({ request: () => pending.promise })
-  session.select('git'); const revision = session.state.revision
+  session.select('git'); session.edit({ code: 'git status' }); const revision = session.state.revision
   const run = session.run(); session.cancel()
   assert.equal(calls[0].signal.aborted, true)
   assert.match(session.state.notice, /服务端可能已执行/)
@@ -131,7 +186,7 @@ await check('cancellation never claims execution was undone and requires workspa
 await check('workspace revision is carried across successful runs and reset preserves code/history', async () => {
   let revision = 0
   const { session, calls } = setup({ request: async (path, args) => path === '/api/workspaces/reset' ? { workspaceId: 'fresh', revision: 0 } : result(args.body.revision, { workspaceId: 'git-space', workspaceRevision: ++revision, workspaceSummary: '## main' }) })
-  session.select('git'); await session.run(); session.edit({ code: 'git status' }); await session.run()
+  session.select('git'); session.edit({ code: 'git init' }); await session.run(); session.edit({ code: 'git status' }); await session.run()
   assert.equal(calls[1].body.workspaceId, 'git-space'); assert.equal(calls[1].body.workspaceRevision, 1)
   const code = session.state.code; await session.reset()
   assert.equal(session.state.code, code); assert.equal(session.state.history.length, 2); assert.equal(session.state.result, null)
@@ -149,12 +204,12 @@ await check('an interrupted workspace reset cannot lock the UI or overwrite a la
 })
 await check('malformed/mismatched backend results never create a verified submission', async () => {
   for (const response of [{ status: 'fantasy', revision: 0 }, result(99)]) {
-    const { session } = setup({ request: async () => response }); await session.run()
+    const { session } = setupWithCode({ request: async () => response }); await session.run()
     assert.equal(session.state.result, null); assert.equal(session.state.history.length, 0); assert.ok(session.state.error)
   }
 })
 await check('quota errors preserve in-memory submissions; reload and persistence opt-out behave safely', async () => {
-  const broken = setup({ storage: { getItem: () => 'not json', setItem: () => { throw new Error('quota') } } })
+  const broken = setupWithCode({ storage: { getItem: () => 'not json', setItem: () => { throw new Error('quota') } } })
   await broken.session.run(); assert.equal(broken.session.state.history.length, 1); assert.match(broken.session.state.storageError, /存储不可用/)
   const disk = storage(); const first = setup({ storage: disk }); first.session.edit({ code: 'my draft' }); await first.session.run()
   const reloaded = setup({ storage: disk }); assert.equal(reloaded.session.state.code, 'my draft'); assert.equal(reloaded.session.state.history.length, 1)
@@ -173,9 +228,10 @@ await check('private cloud history restores exact test inputs and latest workspa
 })
 await check('disposing cancels work and late results cannot mutate history or publish an outcome', async () => {
   const pending = deferred(); let changes = 0
-  const { session, calls } = setup({ changed: () => changes++, request: () => pending.promise })
+  const { session, calls } = setupWithCode({ changed: () => changes++, request: () => pending.promise })
+  const runRevision = session.state.revision
   const run = session.run(); session.dispose(); const afterDispose = changes
-  pending.resolve(result(0)); await run
+  pending.resolve(result(runRevision)); await run
   assert.equal(calls[0].signal.aborted, true); assert.equal(session.state.history.length, 0); assert.equal(changes, afterDispose)
 })
 const practice = () => ({ id: 'exercise-1', language: 'c', title: '生成的求和题', statement: '输入两个整数，输出和。', starterCode: 'int main(void) {\n\n}', referenceCode: api.lessons[0].code, tests: [{ input: '2 3\n', expectedOutput: '5\n' }], verification: { runId: 'verified-reference-run', status: 'accepted' } })

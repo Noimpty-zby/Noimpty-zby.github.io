@@ -1,12 +1,284 @@
-.learning-lab{--lab-ink:#283a4a;--lab-muted:#687889;--lab-accent:#655b96;--lab-border:#dfe4ee;--lab-surface:#fff;color:var(--lab-ink);font-size:14px;line-height:1.6;text-align:left}
-[data-theme=dark] .learning-lab{--lab-ink:#e0e6ed;--lab-muted:#aeb8c6;--lab-accent:#b7a3ee;--lab-border:#424959;--lab-surface:#252a34}
-.learning-heading,.learning-controls,.learning-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.learning-heading{justify-content:space-between;margin-bottom:14px}.learning-heading h2{margin:0!important;font-size:24px}.learning-kicker{font-size:11px;letter-spacing:.16em;color:var(--lab-muted)}
-.learning-lab h3{font-size:17px;margin:0 0 12px!important}.learning-lab h4{font-size:13px;margin:10px 0 5px!important}.learning-lab p{margin:8px 0!important}.learning-split{display:grid;grid-template-columns:minmax(220px,.85fr) minmax(320px,1.25fr);gap:22px;align-items:start}.learning-reading{padding:22px;border:1px solid var(--lab-border);border-radius:12px;background:var(--lab-surface);max-height:780px;overflow:auto}.learning-reading p{line-height:1.85}.learning-editor-pane{min-width:0}.learning-editor-label{display:flex;justify-content:space-between;font-weight:600;margin-bottom:7px}.learning-revision{font-weight:400;font-size:12px;color:var(--lab-muted)}
-.learning-editor-wrap{display:flex;height:360px;border:1px solid var(--lab-border);border-radius:10px;overflow:hidden;background:var(--lab-surface)}.learning-gutter{padding:12px 7px;min-width:43px;overflow:hidden;user-select:none;text-align:right;font:12px/23px Consolas,monospace;color:var(--lab-muted);border-right:1px solid var(--lab-border)}.learning-gutter span{display:block;height:23px}.learning-gutter .has-diagnostic{background:#b938381c;color:#b93838;font-weight:700;border-radius:3px}.learning-editor{display:block;flex:1;min-width:0;width:100%;height:100%;margin:0;padding:12px;font:13px/23px Consolas,"SFMono-Regular",monospace;tab-size:4;color:var(--lab-ink);background:transparent;border:0;resize:none;white-space:pre;overflow:auto}.learning-editor:focus{outline:2px solid var(--lab-accent);outline-offset:-2px}
-.learning-field{display:block;margin:12px 0}.learning-input,.learning-question{display:block;box-sizing:border-box;width:100%;padding:10px;margin-top:5px;border:1px solid var(--lab-border);border-radius:8px;background:var(--lab-surface);color:var(--lab-ink);font:13px/1.6 Consolas,monospace;resize:vertical}.learning-select{max-width:100%;border:1px solid var(--lab-border);border-radius:7px;padding:7px;background:var(--lab-surface);color:var(--lab-ink)}
-.learning-button{display:inline-flex;justify-content:center;align-items:center;padding:7px 12px;border:1px solid var(--lab-border);border-radius:7px;background:var(--lab-surface);color:var(--lab-ink);font:inherit;font-size:12px;line-height:1.5;cursor:pointer;min-height:35px}.learning-button:hover:not(:disabled){border-color:var(--lab-accent);color:var(--lab-accent)}.learning-button:focus-visible,.learning-lab summary:focus-visible,.learning-lab textarea:focus-visible,.learning-lab select:focus-visible{outline:2px solid var(--lab-accent);outline-offset:2px}.learning-button:disabled{opacity:.45;cursor:not-allowed}.learning-actions{margin:12px 0}.learning-checkbox{display:flex;align-items:flex-start;gap:7px;color:var(--lab-muted);font-size:12px;line-height:1.6}.learning-checkbox input{margin-top:4px;accent-color:var(--lab-accent)}.learning-muted,.learning-connectivity{font-size:12px;color:var(--lab-muted)}.learning-connectivity{border-left:3px solid var(--lab-accent);padding:8px 12px;margin-bottom:18px!important}.learning-error{color:#c44545;white-space:pre-wrap;overflow-wrap:anywhere}.learning-status{color:var(--lab-accent);font-size:12px}.learning-diagnostic{display:block;width:100%;text-align:left;margin:5px 0;color:#bd4242;white-space:pre-wrap;overflow-wrap:anywhere}.learning-diagnostic--warning{color:#a46912}
-.learning-lab pre{max-height:280px;overflow:auto;padding:12px;margin:0!important;border:1px solid var(--lab-border);border-radius:7px;color:var(--lab-ink);background:var(--lab-surface);font:12px/1.7 Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}.learning-output-block{margin:10px 0}.learning-lab summary{cursor:pointer;font-size:12px;padding:9px 0}.learning-test-row{min-width:0;border:1px solid var(--lab-border);border-radius:8px;padding:10px;margin:8px 0}.learning-test-row legend{font-size:12px}.learning-footer{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:25px;margin-top:28px;padding-top:24px;border-top:1px solid var(--lab-border)}.learning-history-list{max-height:520px;overflow:auto}.learning-history-entry{border-bottom:1px solid var(--lab-border);padding:4px 0 10px}.learning-article-excerpt{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.8}.learning-launch{margin:8px 0 18px;background:#eee9fa;color:#514679;border-color:#d9cee9}.learning-article-holder{position:fixed;inset:65px 20px 20px;z-index:1000;overflow:auto;background:var(--card-bg,#fff);border:1px solid var(--tab-border-color,#ddd);border-radius:14px;padding:24px;box-shadow:0 15px 65px #0004}.learning-is-open{overflow:hidden}.learning-lab--article .learning-reading{max-height:calc(100vh - 210px)}.learning-lab [hidden]{display:none!important}.noimpty-private-locked .learning-article-holder,.noimpty-private-locked .learning-launch,.noimpty-private-locked #learning-lab{display:none!important}
-.learning-reading #article-container{font-size:14px;overflow-wrap:anywhere}.learning-reading #article-container img{max-width:100%;height:auto}.learning-reading #article-container table{display:block;overflow:auto}.learning-reading #article-container pre{white-space:pre;max-height:none}.learning-gutter{white-space:pre}
-@media(min-width:1500px){.learning-article-holder{inset:75px max(25px,calc((100vw - 1500px)/2)) 25px}.learning-editor-wrap{height:420px}}
-@media(max-width:900px){.learning-split,.learning-footer{grid-template-columns:minmax(0,1fr)}.learning-reading,.learning-lab--article .learning-reading{max-height:330px}.learning-article-holder{inset:60px 8px 8px;padding:15px}.learning-heading{gap:8px}.learning-editor-wrap{height:320px}.learning-controls{width:100%}.learning-footer{gap:20px}.learning-button{min-height:40px}.learning-article-excerpt{font-size:12px}}
-@media(prefers-reduced-motion:reduce){.learning-lab *{scroll-behavior:auto!important}}
+/* Code Studio: opaque cream, blossom pink, and lavender surfaces. */
+.learning-lab, .learning-article-holder, .learning-mobile-switch {
+  --lab-surface: #fffdfb;
+  --lab-editor: #fffdf9;
+  --lab-ink: #443449;
+  --lab-muted: #7e6c82;
+  --lab-accent: #ba547d;
+  --lab-accent-hover: #a73f69;
+  --lab-border: #ecdce6;
+  --lab-pink: #fbebf1;
+  --lab-lilac: #f1eafa;
+  --lab-gutter: #fbf5f6;
+  --lab-selection: #eedaf2;
+  --lab-error: #bd4256;
+  --lab-success: #4e806f;
+  --lab-warning: #956625;
+  --lab-editor-bg: var(--lab-editor);
+  --lab-editor-text: #46364f;
+  --lab-editor-gutter: var(--lab-gutter);
+  --lab-editor-muted: #947c95;
+  --lab-editor-border: var(--lab-border);
+  --lab-editor-line: #faf0f5;
+  --lab-editor-selection: var(--lab-selection);
+  --lab-editor-cursor: #b94779;
+  --lab-syntax-keyword: #ac438a;
+  --lab-syntax-string: #3b8167;
+  --lab-syntax-number: #ad5925;
+  --lab-syntax-comment: #826a89;
+  --lab-syntax-function: #616bac;
+  --lab-syntax-type: #357989;
+  --lab-syntax-operator: #a2597a;
+  color: var(--lab-ink);
+  color-scheme: light;
+}
+.learning-lab[data-editor-theme='dark'], [data-theme='dark'] .learning-article-holder, [data-theme='dark'] .learning-mobile-switch {
+  --lab-surface: #28212e;
+  --lab-editor: #231e29;
+  --lab-ink: #f1e5ee;
+  --lab-muted: #b5a1b7;
+  --lab-accent: #f0a4c1;
+  --lab-accent-hover: #ffc2d9;
+  --lab-border: #48364d;
+  --lab-pink: #3b293a;
+  --lab-lilac: #362b46;
+  --lab-gutter: #2a2231;
+  --lab-selection: #584267;
+  --lab-error: #ff9fab;
+  --lab-success: #9aceb8;
+  --lab-warning: #eac18e;
+  --lab-editor-text: #f0e0ed;
+  --lab-editor-muted: #a48bae;
+  --lab-editor-line: #33283b;
+  --lab-editor-cursor: #f8accf;
+  --lab-syntax-keyword: #eea3d0;
+  --lab-syntax-string: #a5d7b3;
+  --lab-syntax-number: #edb77f;
+  --lab-syntax-comment: #95819f;
+  --lab-syntax-function: #b9bcff;
+  --lab-syntax-type: #8ed2dc;
+  --lab-syntax-operator: #dea2c8;
+  color-scheme: dark;
+}
+.learning-lab, .learning-lab *, .learning-article-holder, .learning-mobile-switch { box-sizing: border-box; }
+.learning-lab {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid var(--lab-border);
+  border-radius: 20px;
+  background: var(--lab-surface);
+  box-shadow: 0 12px 36px #8c567315, 0 2px 6px #8c56730a;
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  letter-spacing: 0;
+  text-align: left;
+  scrollbar-color: var(--lab-border) var(--lab-editor);
+  scrollbar-width: thin;
+}
+.learning-heading, .learning-controls, .learning-actions, .learning-toolbar, .learning-brand, .learning-console-tabs, .learning-statusbar { display: flex; align-items: center; }
+.learning-heading {
+  flex: none;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 72px;
+  padding: 16px 21px;
+  border-bottom: 1px solid var(--lab-border);
+  background: linear-gradient(105deg, var(--lab-pink), var(--lab-surface) 52%, var(--lab-lilac));
+}
+.learning-brand { flex: none; flex-wrap: wrap; gap: 9px; font-size: 16px; font-weight: 700; letter-spacing: .035em; }
+.learning-flower, .learning-brand-icon { display: grid; place-items: center; width: 33px; height: 33px; border-radius: 12px; background: var(--lab-surface); color: var(--lab-accent); font-size: 25px; font-weight: 400; line-height: 1; box-shadow: 0 2px 6px #b6759412; }
+.learning-brand small { margin: 2px 0 0 2px; color: var(--lab-muted); font-size: 9px; font-weight: 600; letter-spacing: .14em; }
+.learning-controls { justify-content: flex-end; gap: 8px; min-width: 0; }
+.learning-actions { gap: 7px; }
+.learning-lab button, .learning-lab select, .learning-lab summary, .learning-launch, .learning-mobile-switch button { -webkit-tap-highlight-color: transparent; }
+.learning-button, .learning-lab .learning-connect-button, .learning-lab .learning-close, .learning-lab .learning-run, .learning-lab .learning-stop, .learning-mobile-switch button, .learning-launch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  margin: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--lab-border, #ecdce6);
+  border-radius: 10px;
+  background: var(--lab-surface, #fffdfb);
+  color: var(--lab-ink, #443449);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+}
+.learning-lab button:hover:not(:disabled), .learning-lab summary:hover, .learning-mobile-switch button:hover, .learning-launch:hover { border-color: var(--lab-accent, #ba547d); background: var(--lab-pink, #fbebf1); color: var(--lab-accent, #ba547d); }
+.learning-lab .learning-run { min-width: 83px; border-color: var(--lab-accent); background: var(--lab-accent); color: #fff; font-weight: 600; box-shadow: 0 3px 8px #b9577f1a; }
+.learning-lab .learning-run:hover:not(:disabled) { border-color: var(--lab-accent-hover); background: var(--lab-accent-hover); color: #fff; }
+.learning-lab[data-editor-theme='dark'] .learning-run, .learning-lab[data-editor-theme='dark'] .learning-run:hover:not(:disabled) { color: #302130; }
+.learning-lab .learning-stop { min-width: 34px; color: var(--lab-muted); }
+.learning-lab button:disabled { opacity: .42; cursor: not-allowed; box-shadow: none; }
+.learning-select { min-width: 118px; max-width: 100%; min-height: 36px; margin: 0; padding: 6px 30px 6px 12px; border: 1px solid var(--lab-border); border-radius: 10px; background-color: var(--lab-surface); color: var(--lab-ink); font: inherit; font-size: 13px; cursor: pointer; }
+.learning-lab :is(button, summary, select, textarea, a):focus-visible, .learning-launch:focus-visible, .learning-divider:focus-visible, .learning-mobile-switch button:focus-visible { outline: 2px solid var(--lab-accent, #ba547d); outline-offset: 3px; }
+.learning-toolbar { flex: none; justify-content: space-between; gap: 12px; min-height: 53px; padding: 8px 18px; border-bottom: 1px solid var(--lab-border); background: var(--lab-surface); }
+.learning-file-name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; color: var(--lab-ink); font: 12px/1.5 'Cascadia Code', 'SFMono-Regular', Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.learning-file-name::before { content: '</>'; color: var(--lab-accent); font-size: 11px; font-weight: 700; }
+.learning-more { position: relative; flex: none; }
+.learning-more > summary { display: flex; align-items: center; justify-content: center; min-width: 34px; min-height: 34px; padding: 5px 9px; border: 1px solid var(--lab-border); border-radius: 10px; color: var(--lab-muted); font-size: 12px; list-style: none; cursor: pointer; }
+.learning-more > summary::-webkit-details-marker { display: none; }
+.learning-more[open] > summary { border-color: var(--lab-accent); background: var(--lab-pink); }
+.learning-menu { position: absolute; z-index: 15; top: calc(100% + 8px); right: 0; display: grid; gap: 7px; width: 224px; padding: 12px; border: 1px solid var(--lab-border); border-radius: 13px; background: var(--lab-surface); box-shadow: 0 10px 30px #38243924; }
+.learning-menu .learning-button { justify-content: flex-start; width: 100%; }
+.learning-checkbox { display: flex; align-items: center; gap: 8px; padding: 5px 2px; font-size: 12px; }
+.learning-checkbox input { flex: none; width: 15px; height: 15px; margin: 0; accent-color: var(--lab-accent); }
+.learning-theme-label { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 3px 2px 8px; font-size: 12px; }
+.learning-theme-select { min-width: 91px; min-height: 32px; padding: 4px 24px 4px 8px; border: 1px solid var(--lab-border); border-radius: 8px; background: var(--lab-surface); color: var(--lab-ink); font: inherit; font-size: 12px; cursor: pointer; }
+
+/* The editor owns its scrolling. CodeMirror receives the palette above. */
+.learning-editor-pane { display: flex; flex: 1 1 auto; min-width: 0; min-height: 220px; background: var(--lab-editor); }
+.learning-editor-wrap { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; background: var(--lab-editor); }
+.learning-code-editor { flex: 1; min-width: 0; width: 100%; height: 100%; overflow: hidden; }
+.learning-code-editor .cm-editor { height: 100%; background: var(--lab-editor); }
+.learning-code-editor .cm-scroller { overflow: auto; overscroll-behavior: contain; }
+.learning-code-editor .cm-content { min-height: 100%; }
+.learning-code-editor .cm-gutters { background: var(--lab-gutter); }
+.learning-code-editor .cm-tooltip { border-color: var(--lab-border); background: var(--lab-surface); color: var(--lab-ink); }
+.learning-editor { display: block; flex: 1; width: 100%; height: 100%; min-height: 220px; margin: 0; padding: 17px 20px; border: 0; border-radius: 0; background: var(--lab-editor); color: var(--lab-ink); font: 14px/1.7 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; letter-spacing: 0; tab-size: 4; white-space: pre; resize: none; overscroll-behavior: contain; }
+.learning-editor:focus-visible, .learning-input:focus-visible { outline-offset: -3px !important; }
+.learning-console { flex: 0 0 187px; min-height: 0; overflow: hidden; border-top: 1px solid var(--lab-border); background: var(--lab-surface); }
+.learning-console-tabs { gap: 19px; height: 42px; padding: 0 19px; border-bottom: 1px solid var(--lab-border); background: var(--lab-gutter); }
+.learning-lab .learning-console-tab { align-self: stretch; position: relative; margin: 0; padding: 0 1px; border: 0; border-radius: 0; background: none; color: var(--lab-muted); font: inherit; font-size: 12px; cursor: pointer; }
+.learning-lab .learning-console-tab:hover { background: none; }
+.learning-lab .learning-console-tab[aria-selected='true'] { color: var(--lab-accent); font-weight: 600; }
+.learning-console-tab[aria-selected='true']::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; border-radius: 2px; background: var(--lab-accent); content: ''; }
+.learning-result-state { min-width: 0; margin-left: auto; overflow: hidden; color: var(--lab-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.learning-result-state[data-status='accepted'] { color: var(--lab-success); }
+.learning-result-state[data-status='compile_error'], .learning-result-state[data-status='runtime_error'] { color: var(--lab-error); }
+.learning-console-panel { height: calc(100% - 42px); padding: 12px 18px; overflow: auto; overscroll-behavior: contain; }
+.learning-console-panel[data-panel='input'] { padding: 0; }
+.learning-input { display: block; width: 100%; height: 100%; min-height: 100px; margin: 0; padding: 13px 20px; border: 0; border-radius: 0; background: var(--lab-surface); color: var(--lab-ink); font: 12px/1.7 'Cascadia Code', 'SFMono-Regular', Consolas, monospace; resize: none; }
+.learning-input::placeholder { color: var(--lab-muted); opacity: .85; }
+.learning-output { color: var(--lab-ink); font: 12px/1.75 'Cascadia Code', 'SFMono-Regular', Consolas, monospace; }
+.learning-lab .learning-output p { margin: 0 0 6px; }
+#learning-lab .learning-lab pre, .learning-article-holder .learning-lab pre { max-height: none; margin: 0; padding: 0; border: 0; border-radius: 0; background: var(--lab-surface); color: var(--lab-ink); font: 12px/1.75 'Cascadia Code', 'SFMono-Regular', Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.learning-output-block + .learning-output-block { margin-top: 12px; }
+.learning-lab .learning-output-block h4 { margin: 0 0 4px; color: var(--lab-muted); font-size: 11px; font-weight: 500; }
+.learning-muted, .learning-empty { color: var(--lab-muted); font-size: 12px; }
+.learning-console-panel[data-panel='input'] > .learning-muted { padding: 0 20px; }
+.learning-diagnostics:empty { display: none; }
+.learning-lab .learning-diagnostic { display: block; width: 100%; margin: 0 0 7px; padding: 7px 9px; border: 1px solid var(--lab-border); border-radius: 7px; background: var(--lab-pink); color: var(--lab-error); font: inherit; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; cursor: pointer; }
+.learning-lab .learning-diagnostic--warning { color: var(--lab-warning); }
+.learning-history-list { min-width: 0; }
+.learning-console-panel[data-panel='history'] > .learning-actions { margin-bottom: 12px; }
+.learning-history-entry { margin: 0 0 8px; padding: 0 0 8px; border-bottom: 1px solid var(--lab-border); }
+.learning-history-entry summary, .learning-backups > summary { padding: 3px 0; color: var(--lab-muted); font-size: 12px; cursor: pointer; }
+.learning-history-entry .learning-button { min-height: 28px; margin-top: 7px; padding: 3px 9px; font-size: 11px; }
+.learning-history-entry pre { margin-top: 8px !important; }
+.learning-statusbar { flex: none; gap: 14px; min-height: 30px; padding: 5px 18px; border-top: 1px solid var(--lab-border); background: var(--lab-lilac); color: var(--lab-muted); font-size: 10px; }
+.learning-connectivity { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.learning-connectivity[data-connected='true'] { color: var(--lab-success); }
+.learning-cursor { margin-left: auto; white-space: nowrap; }
+.learning-save-state, .learning-shortcut { white-space: nowrap; }
+.learning-lab p.learning-status, .learning-lab p.learning-error, .learning-lab p.learning-storage-status { flex: none; margin: 0 !important; padding: 6px 18px; border-top: 1px solid var(--lab-border); background: var(--lab-surface); color: var(--lab-muted); font-size: 11px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.learning-lab p.learning-error { color: var(--lab-error); }
+.learning-lab p.learning-status:empty, .learning-lab p.learning-error:empty, .learning-lab p.learning-storage-status:empty { display: none; }
+
+/* Standalone mode keeps the site's navigation and gives the canvas its width. */
+html.learning-page #page-header, html.learning-is-open #page-header { flex: none; height: 66px !important; min-height: 66px !important; margin: 0; background: #241d2a !important; box-shadow: none; transition: none; }
+html.learning-page #page-header::before, html.learning-is-open #page-header::before, html.learning-page #page-site-info, html.learning-page #page > .page-title, html.learning-is-open #page-header > #post-info { display: none; }
+html.learning-page #page-header #nav, html.learning-is-open #page-header #nav { position: absolute; top: 0; height: 66px; transform: none; background: #241d2a; box-shadow: none; backdrop-filter: none; }
+html.learning-page #content-inner.layout { width: 100%; max-width: 1740px; padding: 16px 22px 20px; }
+html.learning-page #content-inner.layout > #page { width: 100% !important; min-width: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+html.learning-page #page #article-container { margin: 0; }
+html.learning-page #learning-lab { min-width: 0; }
+html.learning-page .learning-lab { height: max(630px, calc(100dvh - 102px)); }
+html.learning-page #aside-content, html.learning-page #footer, html.learning-page #rightside { display: none; }
+
+/* Article mode changes the existing document layout, with independent scroll. */
+.learning-launch { gap: 8px; margin: 8px 0 18px; border-color: #e5cade; background: #f9edf4; color: #975175; }
+[data-theme='dark'] .learning-launch { border-color: #61405b; background: #3b293a; color: #f0a4c1; }
+html.learning-is-open { overflow: hidden; }
+html.learning-is-open #body-wrap { height: 100dvh; min-height: 0; overflow: hidden; }
+html.learning-is-open #content-inner.layout { display: grid; grid-template-columns: minmax(0, var(--learning-reading-width, 50%)) 8px minmax(0, 1fr); align-items: stretch; gap: 0; flex: 1 1 auto; width: 100%; max-width: none; min-height: 0; height: calc(100dvh - 66px); margin: 0; padding: 14px 18px 18px; }
+html.learning-is-open #content-inner.layout > #post { grid-column: 1; grid-row: 1; align-self: stretch; width: 100% !important; min-width: 0; min-height: 0; height: 100%; margin: 0; padding: 24px clamp(18px, 3vw, 42px); overflow: auto; overscroll-behavior: contain; border: 1px solid #ecdce6; border-radius: 18px; background: #fffdfb; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; transition: none; scrollbar-width: thin; scrollbar-color: #e2cbdc #fffdfb; }
+html[data-theme='dark'].learning-is-open #content-inner.layout > #post { border-color: #48364d; background: #28212e; scrollbar-color: #614b66 #28212e; }
+html.learning-is-open #post > .learning-launch { display: none; }
+html.learning-is-open #post > .learning-article-title { margin: 0 0 23px; padding: 0 0 16px; border-bottom: 1px solid #ecdce6; font-size: clamp(21px, 2vw, 28px); line-height: 1.45; }
+html[data-theme='dark'].learning-is-open #post > .learning-article-title { border-color: #48364d; }
+.learning-article-holder { position: relative; grid-column: 3; grid-row: 1; min-width: 0; min-height: 0; height: 100%; margin: 0; padding: 0; overflow: auto; border-radius: 18px; background: var(--lab-surface); overscroll-behavior: contain; }
+.learning-article-holder .learning-lab { height: 100%; min-height: 540px; border-radius: 18px; box-shadow: none; }
+.learning-article-holder .learning-heading { flex-wrap: wrap; gap: 8px; min-height: 68px; padding: 13px 16px; }
+.learning-article-holder .learning-brand { font-size: 14px; }
+.learning-article-holder .learning-brand small { display: none; }
+.learning-article-holder .learning-controls { margin-left: auto; }
+.learning-article-holder .learning-editor-pane { min-height: 180px; }
+.learning-article-holder .learning-console { flex-basis: 174px; }
+.learning-article-holder .learning-toolbar { padding-right: 14px; padding-left: 16px; }
+.learning-divider { position: relative; grid-column: 2; grid-row: 1; display: block; width: 8px; min-width: 8px; height: 100%; padding: 0; border: 0; background: none; color: transparent; font-size: 0; cursor: col-resize; touch-action: none; }
+.learning-divider::after { position: absolute; top: calc(50% - 22px); left: 2px; width: 4px; height: 44px; border-radius: 4px; background: #dec6d9; content: ''; }
+.learning-divider:hover::after, .learning-divider:focus-visible::after { background: #ba547d; }
+[data-theme='dark'] .learning-divider::after { background: #755e7b; }
+.learning-mobile-switch { display: none; }
+html.learning-is-open #aside-content, html.learning-is-open #footer, html.learning-is-open #rightside { display: none !important; }
+
+/* Coding mode keeps the canvas clear. These are only the floating dock surfaces;
+   the existing chat panel remains available from the editor's help action. */
+html:is(.learning-page, .learning-is-open) :is(#noimpty-music-player, #mao-toggle, #mao-stage, .mao-controls-trigger, #nanaly-launcher, #nanaly-poke) { display: none !important; }
+
+@media (max-width: 1100px) and (min-width: 800px) {
+  .learning-article-holder .learning-flower, .learning-article-holder .learning-brand-icon { width: 26px; height: 26px; border-radius: 9px; font-size: 20px; }
+  .learning-article-holder .learning-controls { gap: 5px; }
+  .learning-article-holder .learning-select { min-width: 93px; padding-left: 8px; }
+  .learning-article-holder .learning-connect-button { padding-right: 8px; padding-left: 8px; }
+  .learning-article-holder .learning-shortcut { display: none; }
+}
+@media (max-width: 799px) {
+  html.learning-page #content-inner.layout { padding: 10px 10px 14px; }
+  html.learning-page .learning-lab { height: max(570px, calc(100dvh - 90px)); border-radius: 15px; }
+  .learning-heading { flex-wrap: wrap; gap: 10px; min-height: 66px; padding: 13px 14px; }
+  .learning-brand { gap: 7px; font-size: 15px; }
+  .learning-brand small { display: none; }
+  .learning-flower, .learning-brand-icon { width: 29px; height: 29px; border-radius: 10px; font-size: 23px; }
+  .learning-controls { gap: 6px; margin-left: auto; }
+  .learning-select { min-width: 96px; max-width: 136px; padding-left: 9px; }
+  .learning-toolbar { min-height: 51px; padding: 8px 13px; }
+  .learning-actions { gap: 5px; }
+  .learning-button, .learning-lab .learning-connect-button, .learning-lab .learning-close, .learning-lab .learning-stop { padding-right: 9px; padding-left: 9px; }
+  .learning-console { flex-basis: 168px; }
+  .learning-console-tabs { gap: 17px; padding-right: 14px; padding-left: 14px; }
+  .learning-console-panel { padding-right: 14px; padding-left: 14px; }
+  .learning-statusbar { gap: 9px; padding-right: 13px; padding-left: 13px; font-size: 9px; }
+  .learning-cursor, .learning-shortcut { display: none; }
+  .learning-save-state { margin-left: auto; }
+  html.learning-is-open #content-inner.layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: 42px minmax(0, 1fr); gap: 8px; padding: 8px 10px 12px; }
+  html.learning-is-open #content-inner.layout > .learning-mobile-switch { grid-column: 1; grid-row: 1; display: flex; gap: 4px; align-self: center; justify-self: center; width: max-content !important; margin: 0; padding: 4px; border: 1px solid var(--lab-border); border-radius: 12px; background: var(--lab-surface); box-shadow: none; backdrop-filter: none; }
+  .learning-mobile-switch button { min-width: 89px; min-height: 28px; padding: 3px 16px; border-color: transparent; border-radius: 8px; color: var(--lab-muted); }
+  .learning-mobile-switch button[aria-pressed='true'], .learning-mobile-switch button[aria-selected='true'] { background: var(--lab-pink); color: var(--lab-accent); font-weight: 600; }
+  html.learning-is-open #content-inner.layout > #post, .learning-article-holder { grid-column: 1; grid-row: 2; border-radius: 15px; }
+  html.learning-is-open #content-inner.layout > #post { padding: 21px 17px; }
+  .learning-article-holder .learning-lab { min-height: 520px; border-radius: 15px; }
+  .learning-article-holder .learning-heading { padding: 12px 13px; }
+  .learning-article-holder .learning-console { flex-basis: 151px; }
+  .learning-divider { display: none; }
+  html.learning-is-open[data-learning-pane='code'] #content-inner.layout > #post { display: none; }
+  html.learning-is-open[data-learning-pane='article'] .learning-article-holder { display: none; }
+}
+@media (max-width: 420px) {
+  .learning-heading { gap: 8px; }
+  .learning-brand { gap: 5px; font-size: 14px; }
+  .learning-flower, .learning-brand-icon { width: 25px; height: 25px; font-size: 20px; }
+  .learning-lab .learning-connect-button { max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
+  .learning-select { min-width: 84px; max-width: 98px; padding-right: 22px; font-size: 12px; }
+  .learning-file-name { max-width: 116px; }
+  .learning-lab .learning-run { min-width: 67px; }
+  .learning-toolbar { gap: 6px; }
+  .learning-console-tabs { gap: 15px; }
+  .learning-result-state { max-width: 128px; }
+}
+.learning-lab [hidden], .learning-article-holder[hidden], .learning-mobile-switch[hidden], .learning-divider[hidden] { display: none !important; }
+.noimpty-private-locked .learning-article-holder, .noimpty-private-locked .learning-launch, .noimpty-private-locked #learning-lab, .noimpty-private-locked .learning-mobile-switch, .noimpty-private-locked .learning-divider { display: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .learning-lab *, .learning-launch, .learning-mobile-switch *, html.learning-is-open #post { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}

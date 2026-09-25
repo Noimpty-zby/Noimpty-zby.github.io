@@ -24,12 +24,12 @@
     f.append(...fields.map(x => x.box),b); f.addEventListener('submit',event => { event.preventDefault(); perform(b,submit) }); container.append(f); return f
   }
   const connection = section('连接私有后端',true)
-  connection.append(node('p','连接后，记忆、目标和笔记保存在你的私有服务中，可跨设备接续。令牌只保留在当前页面内存，刷新后需重新连接。'))
+  connection.append(node('p','连接一次，本标签页内切换页面或刷新会自动恢复；点击断开会清除会话。'))
   let savedURL = ''; try { savedURL = localStorage.getItem('nanaly-agent-url') || '' } catch (_) {}
   const url = field('后端地址','input',savedURL || 'https://api.noimpty-zby.cn','url'), token = field('访问令牌','input','','password')
   url.input.placeholder = 'https://你的后端地址'; url.input.required = true; token.input.required = true; token.input.autocomplete = 'off'
   form(connection,[url,token],'连接并读取',async () => { const address=url.input.value; await agent.connect(address,token.input.value); token.input.value = ''; renderLists(); try { localStorage.setItem('nanaly-agent-url',address) } catch (_) {} })
-  connection.append(button('重新读取最新记录',() => agent.refresh()),button('断开并清除本页私有数据',() => agent.disconnect()))
+  connection.append(button('重新读取最新记录',() => agent.configured() ? agent.refresh() : agent.resume()),button('断开并清除本页私有数据',() => agent.disconnect()))
   const memory = section('统一记忆'), kind = field('记忆类型','select'), content = field('确认要记住的内容','textarea'), publicMemory = field('允许用于公开回复与随笔','input','','checkbox')
   for (const [value,label] of Object.entries({ preference:'偏好',goal:'学习目标',fact:'确认事实',todo:'未解决问题',correction:'纠正记录',progress:'学习进度' })) { const o = node('option',label); o.value = value; kind.input.append(o) }
   content.input.required = true; content.input.maxLength = 800
@@ -62,10 +62,10 @@
   const date = value => Number.isFinite(value) ? new Date(value).toLocaleString() : ''
   const states = { todo:'待启动',active:'进行中',paused:'已暂停',cancelled:'已取消',completed:'已完成',running:'上次执行中（需显式重试）',failed:'失败，待修正' }
   const renderLists = () => {
-    const {data,problem,connection,revision} = agent.snapshot()
+    const {data,problem,connection,revision,sessionIssue} = agent.snapshot()
     const state = connection || (agent.configured() ? 'connected' : 'disconnected')
     status.dataset.connection = state
-    status.textContent = problem || (state === 'connecting' ? '正在连接后端…' : state === 'connected' ? '● 后端已连接 · 记录版本 ' + revision : '尚未连接私有后端。')
+    status.textContent = problem || sessionIssue || (state === 'connecting' ? '正在连接后端…' : state === 'connected' ? '● 后端已连接 · 记录版本 ' + revision : '尚未连接私有后端。')
     for (const el of [memoryList,goalList,noteList,experienceList,eventList]) el.replaceChildren()
     for (const m of data.memories) {
       const row = node('article'); row.append(node('p',m.text),node('small',(m.source || '用户确认') + ' · ' + date(m.updatedAt)),button('编辑',() => { memoryId=m.id; kind.input.value=m.kind; content.input.value=m.text; publicMemory.input.checked=m.publicAllowed===true; content.input.focus() }),button('删除',() => agent.remove('memories',m.id))); memoryList.append(row)
@@ -106,6 +106,7 @@
     if(!state.connected){clearPrivateDrafts();if(modal.open)renderLists()}
     else if(state.connection==='connecting')status.textContent='正在连接后端…'
     else if(state.problem)status.textContent=state.problem
+    else if(state.sessionIssue)status.textContent=state.sessionIssue
     else if(state.connection==='connected'&&previous!=='connected')status.textContent='● 后端已连接 · 记录版本 '+state.revision
   })
   const attach = () => {

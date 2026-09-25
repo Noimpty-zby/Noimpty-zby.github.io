@@ -10,13 +10,13 @@ const response = (value,status=200) => ({ok:status<400,status,headers:{get:()=>n
 const deferred = () => { let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});return {promise,resolve,reject} }
 const flush = async () => { for(let i=0;i<30;i++)await Promise.resolve() }
 function environment (fetch, additions={}, timers={}) {
-  const events=[]
-  const window={fetch,crypto:{randomUUID:()=>String(Math.random())},location:{href:'https://blog.test/lesson'},addEventListener(){},
+  const events=[],listeners=new Map()
+  const window={fetch,crypto:{randomUUID:()=>String(Math.random())},location:{href:'https://blog.test/lesson'},addEventListener(type,fn){const list=listeners.get(type)||[];list.push(fn);listeners.set(type,list)},
     CustomEvent:class{constructor(type,options){this.type=type;this.detail=options.detail}},dispatchEvent:event=>events.push(copy(event)),...additions}
   vm.runInNewContext(source,{window,URL,AbortController,setTimeout,clearTimeout,console,...timers})
   let id=0,now=2_000_000_000_000
-  const create=()=>window.NANALY_AGENT_FACTORY.create({fetch,now:()=>now,id:()=>String(++id)})
-  return {window,create,events,advance:ms=>{now+=ms},now:()=>now}
+  const create=(options={})=>window.NANALY_AGENT_FACTORY.create({fetch,now:()=>now,id:()=>String(++id),...options})
+  return {window,create,events,fire:(type,event={})=>{for(const fn of listeners.get(type)||[])fn(event)},advance:ms=>{now+=ms},now:()=>now}
 }
 const token='test-token-of-at-least-24-characters'
 function backend (data=empty()) {
@@ -109,6 +109,151 @@ await test('caller cancellation preserves connection health, while request timeo
   assert.equal(agent.snapshot().connection,'connected');assert.equal(agent.snapshot().problem,'')
   const timed=agent.request('/api/runs');timeout();await assert.rejects(timed,/后端请求超时/)
   assert.equal(agent.snapshot().connection,'error');assert.equal(agent.configured(),true)
+})
+const sessionKey='nanaly-agent-session-v1'
+const savedSession=(base='https://test',secret=token)=>JSON.stringify({version:1,base,token:secret})
+function sessionStorage(initial={}) {
+  const entries=new Map(Object.entries(initial)),reads=[],writes=[]
+  return {entries,reads,writes,getItem:key=>{reads.push(key);return entries.get(key)??null},setItem:(key,value)=>{writes.push([key,value]);entries.set(key,String(value))},removeItem:key=>entries.delete(key)}
+}
+await test('only verified credentials enter session storage and never enter snapshots or local storage',async()=>{
+  const hold=deferred(),storage=sessionStorage(),env=environment(()=>hold.promise,{localStorage:{setItem(){throw Error('must not use localStorage')}}}),agent=env.create({sessionStorage:storage})
+  const pending=agent.connect('https://test/',token)
+  assert.equal(storage.entries.has(sessionKey),false);assert.equal(storage.writes.length,0)
+  hold.resolve(response({revision:0,data:empty()}));await pending
+  assert.deepEqual(JSON.parse(storage.entries.get(sessionKey)),{version:1,base:'https://test',token})
+  assert.equal(JSON.stringify(agent.snapshot()).includes(token),false)
+  assert.equal(storage.writes.length,1)
+})
+await test('new document restores the same tab connection with one read and no replayed actions',async()=>{
+  const data={...empty(),goals:[{id:'g',title:'Learn',status:'active',steps:[{id:'s',title:'Review',tool:'review',input:'Summarize',state:'todo'}]}]}
+  const storage=sessionStorage(),server=backend(data),first=environment(server.fetch).create({sessionStorage:storage})
+  await first.connect('https://test',token)
+  const next=environment(server.fetch).create({sessionStorage:storage,permitted:()=>true})
+  assert.equal(next.configured(),false)
+  await next.resume()
+  assert.equal(next.configured(),true);assert.equal(next.snapshot().connection,'connected')
+  assert.equal(next.snapshot().data.goals[0].steps[0].state,'todo')
+  assert.equal(server.requests.length,2);assert.ok(server.requests.every(r=>r.method==='GET'&&r.url==='https://test/api/state'))
+  assert.equal(server.requests.at(-1).headers.Authorization,'Bearer '+token)
+  await next.resume();assert.equal(server.requests.length,2)
+})
+await test('locked pages do not read session credentials or contact the backend before unlock',async()=>{
+  let permitted=false
+  const storage=sessionStorage({[sessionKey]:savedSession()}),server=backend(),agent=environment(server.fetch).create({sessionStorage:storage,permitted:()=>permitted})
+  assert.equal(await agent.resume(),null);assert.equal(storage.reads.length,0);assert.equal(server.requests.length,0)
+  assert.ok(storage.entries.has(sessionKey))
+  permitted=true;await agent.resume();assert.equal(server.requests.length,1)
+})
+await test('concurrent resume calls share one validation request and remain yellow until it returns',async()=>{
+  const hold=deferred(),storage=sessionStorage({[sessionKey]:savedSession()});let calls=0
+  const agent=environment(()=>{calls++;return hold.promise}).create({sessionStorage:storage,permitted:()=>true})
+  const first=agent.resume(),second=agent.resume(),third=agent.resume()
+  assert.equal(first,second);assert.equal(first,third);assert.equal(calls,1)
+  assert.equal(agent.snapshot().connection,'connecting');assert.equal(agent.configured(),false)
+  hold.resolve(response({revision:2,data:empty()}));await first
+  assert.equal(agent.snapshot().connection,'connected');assert.equal(agent.configured(),true)
+})
+await test('manual disconnect removes stored credentials and late restoration cannot revive them',async()=>{
+  const hold=deferred(),storage=sessionStorage({[sessionKey]:savedSession()});let calls=0
+  const agent=environment(()=>{calls++;return hold.promise}).create({sessionStorage:storage,permitted:()=>true})
+  const pending=agent.resume();agent.disconnect()
+  assert.equal(storage.entries.has(sessionKey),false)
+  hold.resolve(response({revision:1,data:empty()}));await assert.rejects(pending)
+  await agent.resume()
+  assert.equal(calls,1);assert.equal(agent.snapshot().connection,'disconnected');assert.equal(storage.entries.has(sessionKey),false)
+})
+await test('temporary restoration failures preserve saved credentials for a later online retry',async()=>{
+  const storage=sessionStorage({[sessionKey]:savedSession()}),server=backend();let failure=true
+  const agent=environment((...args)=>failure?Promise.reject(new TypeError('offline')):server.fetch(...args)).create({sessionStorage:storage,permitted:()=>true})
+  await assert.rejects(agent.resume(),/offline/)
+  assert.equal(agent.snapshot().connection,'error');assert.equal(agent.configured(),false);assert.ok(storage.entries.has(sessionKey))
+  failure=false;await agent.resume()
+  assert.equal(agent.snapshot().connection,'connected');assert.equal(server.requests.length,1)
+})
+await test('authentication rejection during restoration clears the invalid saved session',async()=>{
+  for(const status of [401,403]){
+    const storage=sessionStorage({[sessionKey]:savedSession()});let calls=0
+    const agent=environment(()=>{calls++;return response({error:{message:'invalid credentials'}},status)}).create({sessionStorage:storage,permitted:()=>true})
+    await assert.rejects(agent.resume(),/invalid credentials/)
+    assert.equal(storage.entries.has(sessionKey),false);assert.equal(agent.snapshot().connection,'error')
+    await agent.resume();assert.equal(calls,1)
+  }
+})
+await test('malformed or unsafe saved credentials are discarded without any authenticated request',async()=>{
+  const invalid=['{',JSON.stringify([]),JSON.stringify({version:2,base:'https://test',token}),savedSession('http://remote.test'),savedSession('https://user:pass@test'),savedSession('https://test/path'),savedSession('https://test','short'),savedSession('https://test',token+'\r\nInjected: yes'),'x'.repeat(10001)]
+  for(const value of invalid){
+    const storage=sessionStorage({[sessionKey]:value});let calls=0
+    const agent=environment(()=>{calls++;return response({revision:0,data:empty()})}).create({sessionStorage:storage,permitted:()=>true})
+    assert.equal(await agent.resume(),null);assert.equal(calls,0);assert.equal(storage.entries.has(sessionKey),false)
+  }
+})
+await test('denied session storage keeps the current connection usable and reports its limitation',async()=>{
+  const storage={getItem(){throw Error('denied')},setItem(){throw Error('denied')},removeItem(){throw Error('denied')}},server=backend()
+  const agent=environment(server.fetch).create({sessionStorage:storage,permitted:()=>true})
+  assert.equal(await agent.resume(),null)
+  await agent.connect('https://test',token)
+  assert.equal(agent.configured(),true);assert.equal(agent.snapshot().connection,'connected');assert.match(agent.snapshot().sessionIssue,/浏览器.*会话/)
+  await agent.request('/api/runs');assert.equal(server.requests.length,2)
+  agent.disconnect();assert.equal(agent.snapshot().sessionIssue,'')
+})
+await test('an obsolete backend response cannot overwrite a newly saved connection',async()=>{
+  const storage=sessionStorage(),hold=deferred(),server=backend(),agent=environment((url,opts)=>url.startsWith('https://a.test')?hold.promise:server.fetch(url,opts)).create({sessionStorage:storage})
+  const first=agent.connect('https://a.test',token)
+  await agent.connect('https://b.test',token+'-new')
+  hold.resolve(response({revision:4,data:empty()}));await assert.rejects(first)
+  assert.deepEqual(JSON.parse(storage.entries.get(sessionKey)),{version:1,base:'https://b.test',token:token+'-new'})
+})
+await test('singleton startup and navigation/online events obey the gate and deduplicate restoration',async()=>{
+  const storage=sessionStorage({[sessionKey]:savedSession()}),hold=deferred();let unlocked=false,calls=0
+  const app=environment(()=>{calls++;return hold.promise},{sessionStorage:storage,NOIMPTY_GATE:{unlocked:()=>unlocked}})
+  assert.equal(calls,0);assert.equal(storage.reads.length,0)
+  app.fire('pageshow');assert.equal(calls,0)
+  unlocked=true;app.fire('pjax:complete');app.fire('pageshow');app.fire('online')
+  assert.equal(calls,1);assert.equal(app.window.NANALY_AGENT.snapshot().connection,'connecting')
+  hold.resolve(response({revision:0,data:empty()}));await flush()
+  assert.equal(app.window.NANALY_AGENT.configured(),true)
+  app.fire('pjax:complete');app.fire('pageshow');app.fire('online');assert.equal(calls,1)
+  app.fire('noimpty:search-reset');assert.equal(storage.entries.has(sessionKey),false)
+  app.fire('online');assert.equal(calls,1);assert.equal(app.window.NANALY_AGENT.configured(),false)
+})
+await test('restoring an old cached page honors a disconnect made on the newer page',async()=>{
+  const storage=sessionStorage(),server=backend(),app=environment(server.fetch),old=app.create({sessionStorage:storage,permitted:()=>true})
+  await old.connect('https://test',token)
+  const newer=app.create({sessionStorage:storage,permitted:()=>true});await newer.resume();newer.disconnect()
+  const count=server.requests.length
+  assert.equal(old.configured(),true,'the cached document still has old memory before pageshow')
+  await old.resume({reconcile:true})
+  assert.equal(old.configured(),false);assert.equal(old.snapshot().connection,'disconnected')
+  assert.equal(server.requests.length,count);assert.equal(storage.entries.has(sessionKey),false)
+})
+await test('restoring a cached page reconciles the latest backend and never sends its old token',async()=>{
+  const storage=sessionStorage(),server=backend(),app=environment(server.fetch),old=app.create({sessionStorage:storage,permitted:()=>true})
+  await old.connect('https://a.test',token)
+  const newer=app.create({sessionStorage:storage,permitted:()=>true});await newer.connect('https://b.test',token+'-new')
+  const count=server.requests.length
+  await old.resume({reconcile:true})
+  assert.equal(server.requests.length,count+1)
+  assert.equal(server.requests.at(-1).url,'https://b.test/api/state');assert.equal(server.requests.at(-1).headers.Authorization,'Bearer '+token+'-new')
+  assert.equal(old.snapshot().connection,'connected')
+  await old.request('/api/runs')
+  assert.equal(server.requests.at(-1).url,'https://b.test/api/runs');assert.equal(server.requests.at(-1).headers.Authorization,'Bearer '+token+'-new')
+})
+await test('a cached page that becomes locked drops private memory without reading or deleting its session',async()=>{
+  let permitted=true
+  const storage=sessionStorage(),server=backend(),agent=environment(server.fetch).create({sessionStorage:storage,permitted:()=>permitted})
+  await agent.connect('https://test',token);agent.setContext({private:'previous article'})
+  const reads=storage.reads.length,calls=server.requests.length
+  permitted=false;await agent.resume({reconcile:true})
+  assert.equal(agent.configured(),false);assert.equal(agent.context(),null);assert.equal(storage.reads.length,reads);assert.equal(server.requests.length,calls)
+  assert.ok(storage.entries.has(sessionKey))
+})
+await test('singleton restores immediately on an unlocked page but not during backup recovery',async()=>{
+  const storage=sessionStorage({[sessionKey]:savedSession()}),server=backend()
+  const app=environment(server.fetch,{sessionStorage:storage,NOIMPTY_GATE:{unlocked:()=>true}})
+  await flush();assert.equal(server.requests.length,1);assert.equal(app.window.NANALY_AGENT.configured(),true)
+  const recovery=environment(server.fetch,{sessionStorage:storage,NOIMPTY_GATE:{unlocked:()=>true},NANALY_BACKUP_PENDING:true})
+  await flush();assert.equal(server.requests.length,1);assert.equal(recovery.window.NANALY_AGENT.configured(),false)
 })
 await test('late failures from an old connection cannot overwrite the new backend status',async()=>{
   let delay=false
@@ -304,6 +449,15 @@ await test('studio connection message and color state follow verified connectivi
   assert.equal(status.dataset.connection,'error');assert.equal(status.textContent,'访问令牌无效')
   app.agent.disconnect()
   assert.equal(status.dataset.connection,'disconnected');assert.match(status.textContent,/尚未连接/)
+})
+await test('studio shows a session-storage warning while keeping a verified connection green',()=>{
+  const app=uiEnvironment();app.window.NANALY_AGENT_UI.open()
+  const status=app.all.find(node=>node.className==='studio-status')
+  const state={connected:true,connection:'connected',revision:1,data:empty(),problem:'',sessionIssue:'后端已连接，但浏览器未允许保留会话；切换页面后可能需要重新连接。'}
+  app.load(state)
+  assert.equal(status.dataset.connection,'connected');assert.equal(status.textContent,state.sessionIssue)
+  app.window.NANALY_AGENT_UI.close();app.window.NANALY_AGENT_UI.open()
+  assert.equal(status.textContent,state.sessionIssue)
 })
 await test('disconnect clears every private draft and detached list, preventing cross-backend resubmission',async()=>{
   const app=uiEnvironment();app.window.NANALY_AGENT_UI.open()

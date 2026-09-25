@@ -83,7 +83,7 @@
   }
 
   /* ⚠️ 从这一行到「送进模型之前」那句注释之间的整段，会被
-   * tools/tests/nanaly-chat.test.mjs 按字符串边界切出去、在隔离作用域里求值
+   * tools/tests/ai/nanaly-chat.test.mjs 按字符串边界切出去、在隔离作用域里求值
    * （这个文件是浏览器脚本，没法 import）。这两句边界文字别改、别在别处重复。
    *
    * ---- 对话之间隔了多久 ----
@@ -913,7 +913,7 @@
   const searchWeb = async (query, maxResults = 5, signal) => {
     if (!secrets.tavilyKey) throw new Error('NO_TAVILY')
     const res = await fetch('https://api.tavily.com/search', {
-      method: 'POST', signal,
+      method: 'POST', signal, redirect: 'error', credentials: 'omit', cache: 'no-store',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${secrets.tavilyKey}`
@@ -1917,21 +1917,31 @@
   const SITE_PREFIX = /^全站搜(?:一下)?[：:]\s*/
 
   /* 这几条消息的顺序：固定人设与站点信息在前；按当前问题选取材料，历史和当下状态在后。 */
-  const attachmentContent = async (text, attachments = [], files = [], { strict = true, signal, fileBudget = { remaining: 48000 } } = {}) => {
+  const attachmentContent = async (text, attachments = [], files = [], { strict = true, signal, fileBudget = { remaining: 48000 }, imageBudget = { remaining: 2 } } = {}) => {
     signal?.throwIfAborted()
-    let content = attachments.length
-      ? await window.NANALY_VISION.imageContent(text, attachments, { strict })
+    // Current attachments and every historical reread share the same request budget.
+    const selectedImages = attachments.slice(0, Math.max(0, imageBudget.remaining))
+    const imageCount = content => Array.isArray(content) ? content.filter(part => part?.type === 'image_url').length : 0
+    let content = selectedImages.length
+      ? await window.NANALY_VISION.imageContent(text, selectedImages, { strict })
       : text
+    imageBudget.remaining = Math.max(0, imageBudget.remaining - imageCount(content))
+    if (selectedImages.length < attachments.length) {
+      const notice = '\n（历史图片本轮名额不足，未发送、未读取；不能声称重新看过。）'
+      if (Array.isArray(content)) content.unshift({ type: 'text', text: notice })
+      else content = String(content || '') + notice
+    }
     if (files.length) {
       if (!window.NANALY_FILES) {
         if (strict) throw new Error('文件模块未加载，请刷新后再试。')
         content = String(text) + '\n（这条历史的文件暂时无法读取，不能假装已经看过。）'
       } else {
         const documentContent = await window.NANALY_FILES.content('', files, {
-          strict, imageBudget: Math.max(0, 2 - attachments.length), signal,
+          strict, imageBudget: imageBudget.remaining, signal,
           textBudget: Math.max(0, fileBudget.remaining),
           onTextUsed: count => { fileBudget.remaining = Math.max(0, fileBudget.remaining - count) }
         })
+        imageBudget.remaining = Math.max(0, imageBudget.remaining - imageCount(documentContent))
         const parts = value => Array.isArray(value) ? value : [{ type: 'text', text: String(value || '') }]
         const all = [...parts(content), ...parts(documentContent)]
         content = all.some(part => part.type === 'image_url') ? all : all.map(part => part.text || '').join('\n\n')
@@ -1958,7 +1968,7 @@
       request.payload.max_tokens = 80
       const response = await fetch(request.url, { method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + request.key },
-        body: JSON.stringify(request.payload), signal: controller.signal })
+        body: JSON.stringify(request.payload), signal: controller.signal, redirect: 'error', credentials: 'omit', cache: 'no-store' })
       if (!response.ok) return ''
       const data = await response.json()
       controller.signal.throwIfAborted()
@@ -1980,7 +1990,7 @@
     const request = window.NANALY_PROVIDER.request({ cfg, secrets, messages, tools, tool_choice, vision: !!activeTurn?.researchFiles?.length, stream: false })
     const res = await fetch(request.url, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + request.key },
-      body: JSON.stringify(request.payload), signal
+      body: JSON.stringify(request.payload), signal, redirect: 'error', credentials: 'omit', cache: 'no-store'
     })
     if (!res.ok) throw await window.NANALY_PROVIDER.responseError(res)
     const data = await res.json()
@@ -2042,8 +2052,8 @@
     const marked = withTimeMarks(recent)
     // Every request shares one document-body budget. Reserve it for newly attached files
     // before rereading history; file names and honest reading-range notices remain visible.
-    const fileBudget = { remaining: 48000 }
-    const currentContent = await attachmentContent(userText, attachments, files, { signal, fileBudget })
+    const fileBudget = { remaining: 48000 }, imageBudget = { remaining: 2 }
+    const currentContent = await attachmentContent(userText, attachments, files, { signal, fileBudget, imageBudget })
     // 最多回传最近两张历史图片；缺图必须明确，不能把文字描述当作重新看到了图片。
     const imageRows = recent.map((m, i) => m.attachments?.length ? i : -1).filter(i => i >= 0).slice(-1)
     const fileRows = recent.map((m, i) => m.files?.length ? i : -1).filter(i => i >= 0).slice(-1)
@@ -2053,7 +2063,7 @@
       if ((imageRows.includes(i) || fileRows.includes(i)) && secrets.visionKey) {
         const images = imageRows.includes(i) ? recent[i].attachments || [] : []
         const docs = fileRows.includes(i) ? recent[i].files || [] : []
-        message.content = await attachmentContent(message.content, images, docs, { strict: false, signal, fileBudget })
+        message.content = await attachmentContent(message.content, images, docs, { strict: false, signal, fileBudget, imageBudget })
         if (Array.isArray(message.content) || docs.length) hasImages = true
       } else if (recent[i].attachments?.length || recent[i].files?.length) {
         message.content += '\n（这条历史曾附有图片或文件，本轮未重新读取。）'
@@ -2097,7 +2107,7 @@
     const res = await fetch(request.url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + request.key },
-      body: JSON.stringify(request.payload), signal
+      body: JSON.stringify(request.payload), signal, redirect: 'error', credentials: 'omit', cache: 'no-store'
     })
     if (!res.ok) throw await window.NANALY_PROVIDER.responseError(res)
 
@@ -2108,11 +2118,12 @@
     let eventData = []
     let full = ''
     let think = ''
-    let finished = false
+    let finished = false, completed = false, receivedBytes = 0, eventChars = 0
+    const limitError = () => new Error('接口响应超过安全大小限制，回答尚未完成。')
     const consumeEvent = () => {
       if (!eventData.length) return
       const data = eventData.join('\n').trim()
-      eventData = []
+      eventData = []; eventChars = 0
       if (!data) return
       if (data === '[DONE]') { finished = true; return }
       let chunk
@@ -2121,20 +2132,33 @@
       if (chunk.error) throw new Error(chunk.error.message || '接口返回流式错误')
       if (chunk.usage) lastUsage = chunk.usage
       const d = chunk.choices?.[0]?.delta || {}
-      if (typeof d.reasoning_content === 'string' && deep) think += d.reasoning_content
-      if (typeof d.content === 'string') full += d.content
+      if (typeof d.reasoning_content === 'string' && deep) {
+        if (think.length + d.reasoning_content.length > 256000) throw limitError()
+        think += d.reasoning_content
+      }
+      if (typeof d.content === 'string') {
+        if (full.length + d.content.length > 128000) throw limitError()
+        full += d.content
+      }
       if (d.content || (d.reasoning_content && deep)) onDelta(full, think)
       const reason = chunk.choices?.[0]?.finish_reason
+      if (reason === 'stop') completed = true
       if (reason === 'length') throw new Error('回答达到模型输出长度上限，尚未完成；可以让娜娜莉继续。')
       if (reason === 'content_filter') throw new Error('服务商中止了这条回答（content_filter），回答尚未完成。')
     }
     const consumeLine = line => {
       if (!line) { consumeEvent(); return }
-      if (line.startsWith('data:')) eventData.push(line.slice(5).replace(/^ /, ''))
+      if (line.startsWith('data:')) {
+        eventChars += line.length
+        if (eventChars > 262144) throw limitError()
+        eventData.push(line.slice(5).replace(/^ /, ''))
+      }
     }
     try {
       while (!finished) {
         const { done, value } = await abortable(reader.read(), signal)
+        receivedBytes += value?.byteLength || 0
+        if (receivedBytes > 4 * 1024 * 1024) throw limitError()
         buf += done ? decoder.decode() : decoder.decode(value, { stream: true })
         let match
         while (!finished && (match = /\r\n|\n|\r(?!$)/.exec(buf))) {
@@ -2142,6 +2166,7 @@
           buf = buf.slice(match.index + match[0].length)
           consumeLine(line)
         }
+        if (buf.length > 262144) throw limitError()
         if (done) {
           if (buf) consumeLine(buf.replace(/\r$/, ''))
           consumeEvent()
@@ -2150,6 +2175,7 @@
       }
       signal?.throwIfAborted()
       if (!full.trim()) throw new Error('接口没有返回回答内容，请稍后重试或检查模型设置')
+      if (!finished && !completed) throw new Error('连接在回答完成前结束，已保留收到的内容；可以重试或继续。')
       return full
     } finally {
       // [DONE] 后不等网关关闭长连接；取消时也释放 reader，避免遗留连接。

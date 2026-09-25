@@ -153,7 +153,7 @@ export const ask = async (system, user, maxTokens = 700, opts = {}) => {
     let retryable = true
     try {
       const res = await fetch(`${BASE}/chat/completions`, {
-        method: 'POST',
+        method: 'POST', redirect: 'error',
         headers: { 'content-type': 'application/json', Authorization: `Bearer ${KEY}` },
         body: JSON.stringify({
           model,
@@ -253,7 +253,7 @@ ${facts.join('\n')}${mine ? '\n\n' + mine : ''}`, 400, { label: '小结' })
  * 实测过一轮（2026-09-16）：资讯 1%、回评 4%、批注 8% 的可缓存比例 ——
  * 全都是因为标题、挂了几小时、主题名这类变量被写在了第一行，
  * 把后面几百上千 token 的固定内容整片踩脏。
- * 这一条对所有提示词都成立，tools/tests/prompt-cache.test.mjs 盯着。
+ * 这一条对所有提示词都成立，tools/tests/automation/prompt-cache.test.mjs 盯着。
  *
  * 这一条的顺序本来就是对的（要求在前、文章在后），抽成函数是为了能被测到。 */
 export const reviewPrompt = post => `主人刚发了一篇新文章，你读完之后给他一段反馈。要求：

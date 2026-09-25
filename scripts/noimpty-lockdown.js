@@ -77,7 +77,7 @@ const readStream = async stream => {
  * 所以现在对外只剩首页：一张大图 + 三个英文单词 + 一句「这里是私人记录」。
  *
  * 想重新公开某一页，把它加回这个集合 —— 但加之前先想清楚那一页上写了什么。
- * tools/leakcheck.mjs 会盯着这里面的每一页。 */
+ * tools/checks/leakcheck.mjs 会盯着这里面的每一页。 */
 const PUBLIC_PATHS = new Set(['/'])
 
 /* 板块落地页 → 解锁框上显示的名字。

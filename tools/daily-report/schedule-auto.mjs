@@ -23,6 +23,7 @@ import { pushWithRetry, useNanalyIdentity } from '../nanaly/git.mjs'
 import { postPath } from '../nanaly/permalink.mjs'
 import { note, FILE as JOURNAL } from '../nanaly/journal.mjs'
 import { listPosts, POSTS_DIR } from '../nanaly/posts.mjs'
+import { validateScheduleData } from '../schedule-data.cjs'
 
 const FILE = 'source/_data/schedule.json'
 
@@ -144,8 +145,12 @@ export const autoComplete = async ({ comments = { ok: false }, ownerLogin, dry =
   if (!existsSync(FILE)) return { changed: 0, done: [] }
 
   let data
-  try { data = JSON.parse(readFileSync(FILE, 'utf8')) } catch (_) { return { changed: 0, done: [] } }
-  if (!data || typeof data !== 'object' || !data.days || Array.isArray(data.days)) return { changed: 0, done: [] }
+  try {
+    data = JSON.parse(readFileSync(FILE, 'utf8'))
+    validateScheduleData(data)
+  } catch (error) {
+    throw new Error('日程数据无效，停止自动完成并保留原文件：' + error.message)
+  }
   const days = data.days
   const todayKey = bjKey()
 
@@ -176,8 +181,9 @@ export const autoComplete = async ({ comments = { ok: false }, ownerLogin, dry =
   const titles = pathTitleMap(posts)
   const owner = String(ownerLogin || '').toLowerCase()
   const ownerReplies = []
-  if (owner && comments && comments.ok && Array.isArray(comments.items)) {
-    comments.items.filter(Boolean).forEach(c => {
+  const replies = comments?.completionSignals ?? comments?.items
+  if (owner && comments?.ok && Array.isArray(replies)) {
+    replies.filter(Boolean).forEach(c => {
       const at = typeof c.at === 'string' ? Date.parse(c.at) : NaN
       // 没有可靠时间就无法证明发生在任务当天之后；未来时间同样不能当成成果。
       if (String(c.who || '').toLowerCase() === owner && Number.isFinite(at) && at <= Date.now()) {
@@ -225,7 +231,7 @@ export const commitSchedule = async (done) => {
     useNanalyIdentity(run)
     run('add', FILE, JOURNAL)
     if (!run('status', '--porcelain', '--', FILE, JOURNAL).trim()) return false
-    run('commit', '-m', `娜娜莉：自动完成 ${done.length} 项日程`)
+    run('commit', '-m', `娜娜莉：自动完成 ${done.length} 项日程`, '--only', '--', FILE, JOURNAL)
 
     // 你可能正好在网页上按了保存 —— 那边直接往 main 提交，这边就会被拒。
     // 拒了要 rebase 之后重试，不能默默算了，不然这几个勾就永远消失了

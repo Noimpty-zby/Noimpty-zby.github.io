@@ -273,7 +273,7 @@ export const commitNotes = async () => {
   useNanalyIdentity(run)
   run('add', DATA)
   if (!run('status', '--porcelain', '--', DATA).trim()) { console.log('  批注没有变化，不提交'); return false }
-  run('commit', '-m', '娜娜莉：更新文章批注')
+  run('commit', '-m', '娜娜莉：更新文章批注', '--only', '--', DATA)
   pushWithRetry(run, '批注')
   console.log('  批注已提交并推送')
   // 用 GITHUB_TOKEN 推的提交不会自动触发部署，得自己叫一声

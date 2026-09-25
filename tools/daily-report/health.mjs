@@ -130,7 +130,7 @@ export const checkLeak = async (crawl) => {
    * 只比 postPaths，不要比 locked ——「链到一个上锁页面」不是泄漏。
    * 首页的导航栏永远挂着 /archives/、/categories/、/tags/，板块卡片还链着
    * /extra/、/in-class/、/life/，这些页面自己全都在锁后面，点过去只会弹暗号框，
-   * 拿不到任何东西。tools/leakcheck.mjs 里那份「这些不算泄漏」的清单
+   * 拿不到任何东西。tools/checks/leakcheck.mjs 里那份「这些不算泄漏」的清单
    * （归档 / 分类 / 标签）说的是同一件事，两边口径必须一致。
    *
    * 这里曾经写的是 locked.filter(...)。postPaths 就在上面几行算好了，
@@ -140,7 +140,7 @@ export const checkLeak = async (crawl) => {
    * 真漏的那天就没人看了。
    *
    * 至于公开页上会不会写出「屋里放着什么」（课程名、技术栈这类人话），
-   * 那是另一回事，由 tools/leakcheck.mjs 在构建时按敏感词查，
+   * 那是另一回事，由 tools/checks/leakcheck.mjs 在构建时按敏感词查，
    * pages.yml 里红了就不部署。别把那件事挪到这里来做。 */
   if (crawl) {
     crawl.html.forEach((body, url) => {
@@ -335,7 +335,7 @@ export const checkDeps = async () => {
  * 不在 locals.pages 里，因此也不在锁清单里 ——
  * 而受保护文章的标题恰恰最容易漏在那种地方。
  */
-const crawlSite = async () => {
+export const crawlSite = async () => {
   const seeds = await sitePages(CFG.site)
   if (!seeds) return null
 
@@ -354,7 +354,7 @@ const crawlSite = async () => {
       if (/^(mailto:|javascript:|data:|#)/.test(h)) return
       let abs
       try { abs = new URL(h, url).href } catch (_) { return }
-      if (!abs.startsWith(CFG.site)) return
+      if (new URL(abs).origin !== new URL(CFG.site).origin) return
       abs = abs.split('#')[0]
       targets.add(abs)
       if (isPage(abs)) found.push(abs)

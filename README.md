@@ -7,7 +7,7 @@
 需要 Node.js 20.19 或更高版本，推荐使用项目 `.nvmrc` 中的 Node.js 24。
 
 ```bash
-npm install
+npm ci
 npm run clean
 npm run server
 ```
@@ -16,11 +16,19 @@ npm run server
 
 ## 常用目录
 
-- `source/_posts/`：博客文章
-- `source/img/`：图片资源
-- `source/css/custom.css`：自定义视觉样式
+- `source/_posts/`、`source/news/`：文章与资讯
+- `source/_data/`：日程、旁注、日志与用量数据
+- `source/js/`、`source/css/`：自有功能与样式
+- `source/img/`、`source/music/`、`source/live2d/`：图片、音乐和角色模型
+- `scripts/`：Hexo 构建插件
+- `tools/nanaly/`、`tools/daily-report/`：助手自动任务与日报
+- `tools/checks/`、`tools/assets/`：检查入口与模型资源工具
+- `tools/tests/`：按功能分类的离线回归
+- `docs/features/`、`docs/maintenance/`：使用说明与维护记录
 - `_config.yml`：Hexo 主配置
 - `_config.butterfly.yml`：Butterfly 主题配置
+
+完整的功能与文件映射见 [项目结构](docs/architecture.md)。
 
 不要直接修改 `node_modules/hexo-theme-butterfly/`，重新安装依赖会覆盖里面的内容。
 
@@ -90,7 +98,7 @@ private_section: 课外        # 课外 / 课内 / Life，决定解锁框上显�
 漏了**不报错、构建全绿、测试也全过**。2026-08-28 发 DSA 开篇那次就漏了 ——
 首页还写着「还没开始」，而娜娜莉当面否认了刚发布的文章。
 现在前三处自动，profile 那处在 `news.mjs` 读取时自动追加一份真实清单。
-`tools/tests/section-stats.test.mjs` 拦着，不许再写回去。
+`tools/tests/site/section-stats.test.mjs` 拦着，不许再写回去。
 
 ### 首页分区图片来源
 
@@ -132,7 +140,7 @@ private_section: 课外        # 课外 / 课内 / Life，决定解锁框上显�
 | `nanaly.yml` | 回评论 / 巡逻 / 批注 / 资讯 / 随笔 | 见文件内的 cron |
 | `daily-report.yml` | 每晚站点日报邮件 | 每天 22:00 |
 
-`npm test` 会跑 `tools/tests/` 下的全部测试。部署前会自动跑一遍，红了就不部署。
+`npm test` 会跑 `tools/tests/` 下各分类目录中的全部测试。部署前会自动跑一遍，红了就不部署。
 
 **策划室已于 2026-08-26 整个删掉**（原本是一周三次自动写游戏策划书）。方向转去
 AI Infra 之后它没有存在意义了，页面、脚本、工作流和测试都已移除。它的产出在一个
@@ -182,7 +190,7 @@ AI Infra 之后它没有存在意义了，页面、脚本、工作流和测试�
 | `npm run emotioncheck` | 校验情绪样例与分段契约；加 `--live` 才会真调模型 | 默认离线免费，`--live` 要花钱 |
 | `npm run svgcheck <文件…>` | 估算配图里文字的包围盒，查出框和压字 | 只在写文章配图时用得上 |
 
-这台机器上没有任何 SVG 渲染器，配图画完看不见，所以 `svgcheck` 是画图时唯一的兜底。
+`svgcheck` 仅估算文字几何范围，配图仍应在浏览器中检查实际渲染。
 
 聊天取消、清空、保险箱锁定会终止旧轮请求；截断或错误的流式回答会保留已收到内容并提示未完成。
 日程未提交草稿使用本机缓存保留，刷新时按原基线合并；保存期间继续编辑不会被较早的保存结果覆盖。
@@ -190,9 +198,9 @@ AI Infra 之后它没有存在意义了，页面、脚本、工作流和测试�
 
 Hexo 与娜娜莉统一使用 Markdown-it 15；本地渲染适配器保留原有数学公式、任务列表、图片与标题锚点配置。
 主题资源按当前启用功能生成，不再安装所有可选评论系统；新增本地插件时需声明其依赖，或配置对应的 `CDN.option`。
-自动任务统一使用 `npm ci`；日报的邮件依赖也已纳入锁文件。2026-09-19 的 `npm audit` 结果为 0 项已知漏洞。
+自动任务统一使用 `npm ci`；日报的邮件依赖也已纳入锁文件。2026-09-25 的 `npm audit` 结果为 0 项已知漏洞。
 
-详细修复与验证记录见 [代码审查记录](docs/code-audit.md)。
+最新修复与验证见 [2026-09-25 维护记录](docs/maintenance/2026-09-25-audit.md)；此前记录见 [2026-09-19 代码审查](docs/maintenance/2026-09-19-audit.md)。
 
 ## 视觉设计
 
@@ -214,7 +222,7 @@ Hexo 与娜娜莉统一使用 Markdown-it 15；本地渲染适配器保留原有
 
 声音共用已保存的硅基流动密钥：默认 `FunAudioLLM/CosyVoice2-0.5B` 的 `diana` 女声，提供清甜猫娘、温柔陪伴和元气声线，可试听、朗读回复、调语速及关闭提示音。自动朗读默认关闭；试听/朗读按硅基流动实际用量收费，本机提示音不请求模型。图文与文件默认使用 `Pro/moonshotai/Kimi-K2.6`，文字模型保留现有配置。
 
-布局、历史和声音偏好保存在当前浏览器；文件和图片保存在本机 IndexedDB。配置、读取限制、费用说明及操作方法见 [娜娜莉聊天工作区](docs/nanaly-chat.md)。
+布局、历史和声音偏好保存在当前浏览器；文件和图片保存在本机 IndexedDB。配置、读取限制、费用说明及操作方法见 [娜娜莉聊天工作区](docs/features/nanaly-chat.md)。
 
 
 ### 娜娜莉表情与音乐小舞台

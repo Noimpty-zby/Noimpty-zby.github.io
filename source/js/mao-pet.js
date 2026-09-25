@@ -4,10 +4,10 @@
  * Mao 只是站在角落的人偶，双击她可以把娜娜莉叫出来。两者别混。
  *
  * 模型是 Live2D 官方免费样例 Niziiro Mao（mao_pro），按《Free Material License Agreement》
- * 使用，授权原文在 source/live2d/mao/ReadMe.txt。贴图由 tools/build-live2d-model.mjs
+ * 使用，授权原文在 source/live2d/mao/ReadMe.txt。贴图由 tools/assets/build-live2d-model.mjs
  * 从官方包的 4096² 缩到 2048² 并转 webp —— 原图 7.9 MB，她在页面上只有三百来像素。
  * 三份运行时（Cubism Core / PixiJS / pixi-live2d-display）都自己存在 source/lib/l2d/，
- * 由 tools/vendor-live2d.mjs 搬运，那个脚本会拦下任何会被 fetch 的外部地址。
+ * 由 tools/assets/vendor-live2d.mjs 搬运，那个脚本会拦下任何会被 fetch 的外部地址。
  *
  * 几个不显眼但要紧的决定：
  *
@@ -228,7 +228,7 @@
   const read = () => {
     try {
       const saved = localStorage.getItem(PREF)
-      return saved === null ? CONFIG.defaultVisible : JSON.parse(saved)
+      return saved === null ? CONFIG.defaultVisible : JSON.parse(saved) === true
     } catch (_) { return CONFIG.defaultVisible }
   }
   const save = on => { try { localStorage.setItem(PREF, JSON.stringify(on)) } catch (_) {} }
@@ -241,8 +241,9 @@
   }
 
   let app = null, model = null, stage = null, bubble = null, button = null
+  let lifecycle = 0, enableTask = null
   let sulkUntil = 0, tapStreak = 0, lastTapAt = 0, greetTimer = null, voiceTimer = null
-  let loading = null, idleTimer = null, hideTimer = null, typeTimer = null, onMove = null, onResize = null
+  let loading = null, idleTimer = null, hideTimer = null, typeTimer = null, onMove = null, onResize = null, onVisibility = null
 
   const loadScript = src => new Promise((resolve, reject) => {
     const tag = document.createElement('script')
@@ -277,7 +278,7 @@
     if (!model) return
     const id = CONFIG.faces[name]
     if (!id) return
-    try { model.expression(id) } catch (_) {}
+    try { Promise.resolve(model.expression(id)).catch(() => {}) } catch (_) {}
   }
 
   /* 戳到哪一段了。把指针的纵坐标换算成她包围盒里的比例，再查 CONFIG.zones。
@@ -352,7 +353,7 @@
   let voiceOn = (() => {
     try {
       const saved = localStorage.getItem(VOICE_PREF)
-      return saved === null ? CONFIG.voiceDefault : JSON.parse(saved)
+      return saved === null ? CONFIG.voiceDefault : JSON.parse(saved) === true
     } catch (_) { return CONFIG.voiceDefault }
   })()
   let voiceSeq = 0, voiceId = null, unsubVoice = null
@@ -379,9 +380,9 @@
     unsubVoice = ctl.subscribe(state => {
       if (!model) return
       const mine = state && state.id === voiceId
-      if (!mine) { if (!typeTimer) mouth(0); return }
+      if (!mine) { stopVoiceMouth(); return }
       // planning / loading 时还没出声，嘴先别动
-      if (state.phase === 'planning' || state.phase === 'loading') { mouth(0); return }
+      if (state.phase !== 'playing') { stopVoiceMouth(); return }
       if (!voiceTimer) {
         voiceTimer = setInterval(() => mouth(0.35 + Math.random() * 0.65), CONFIG.typeMs)
       }
@@ -406,7 +407,10 @@
     hideTimer = typeTimer = null
     stopVoiceMouth()
     // 上一句还在放就掐掉，不然新台词的字和旧句子的声音对不上
-    if (voiceId) { try { voiceCtl()?.stop() } catch (_) {} voiceId = null }
+    if (voiceId) {
+      try { const ctl = voiceCtl(); if (ctl?.state()?.id === voiceId) ctl.stop() } catch (_) {}
+      voiceId = null
+    }
   }
 
   /* 逐字上屏，嘴跟着开合。嘴型值取随机而不是定值 —— 匀速开合看着像机器人，
@@ -424,7 +428,7 @@
     if (ctl) {
       voiceId = 'mao-' + (++voiceSeq)
       watchVoice()
-      try { ctl.speak(text, { id: voiceId }) } catch (_) {}
+      try { Promise.resolve(ctl.speak(text, { id: voiceId })).catch(() => {}) } catch (_) {}
     }
 
     bubble.textContent = ''
@@ -433,7 +437,7 @@
     typeTimer = setInterval(() => {
       bubble.textContent = text.slice(0, ++i)
       // 有声音在响的时候，嘴归声音那条线管 —— 两边一起写会打架
-      if (model && !voiceTimer) mouth(i < text.length ? 0.4 + Math.random() * 0.6 : 0)
+      if (model && !voiceId && !voiceTimer) mouth(i < text.length ? 0.4 + Math.random() * 0.6 : 0)
       if (i >= text.length) { clearInterval(typeTimer); typeTimer = null }
     }, CONFIG.typeMs)
     hideTimer = setTimeout(() => {
@@ -451,7 +455,7 @@
    *
    * 日程要等解密拿回来，所以这里等一下 —— 但最多等 1.5 秒，不能让她杵在那儿
    * 半天不开口。锁着的时候 loadState() 立刻返回 null，这一等是没有的。 */
-  const greet = async () => {
+  const greet = async (version) => {
     const st = await Promise.race([
       loadState(),
       new Promise(resolve => {
@@ -459,8 +463,9 @@
       })
     ]).catch(() => null)
     // 日程先回来的话那个闹钟还挂着，收掉 —— 不收就是一个没人管的定时器
+    if (version !== lifecycle) return
     if (greetTimer) { clearTimeout(greetTimer); greetTimer = null }
-    if (!model) return                   // 等的这一会儿她可能已经被关掉了
+    if (!model || document.hidden) return                   // 等的这一会儿她可能已经被关掉了
 
     if (awayFor >= CONFIG.missYouAfterH) {
       const [text, mood] = pick(CONFIG.missLines)
@@ -514,7 +519,11 @@
    *
    * 解密走 NOIMPTY_SEARCH.decryptPayload，和 schedule.js 同一条路 ——
    * 自己再写一份 AES-GCM 解密早晚会和它对不上。 */
-  let siteState = null, statePending = null, stateRaw = null, stateDay = ''
+  let siteState = null, statePending = null, stateRaw = null, stateDay = '', stateVersion = 0
+  const stateAllowed = () => {
+    try { return !window.NOIMPTY_GATE || window.NOIMPTY_GATE.unlocked() } catch (_) { return false }
+  }
+  const clearState = () => { stateVersion++; siteState = stateRaw = statePending = null; stateDay = '' }
 
   const summarize = data => {
     const days = data && data.days
@@ -535,6 +544,7 @@
    * 读状态的地方都得先过这里，只在 loadState 里查是不够的：
    * moodFace() 是直接读 siteState 的，它才是跨夜之后最容易挂着旧脸的地方。 */
   const freshState = () => {
+    if (!stateAllowed()) { clearState(); return null }
     if (siteState && stateDay !== ymd(rightNow())) {
       stateDay = ymd(rightNow())
       siteState = summarize(stateRaw)
@@ -548,7 +558,8 @@
     try {
       if (window.NOIMPTY_GATE && !window.NOIMPTY_GATE.unlocked()) return Promise.resolve(null)
     } catch (_) { return Promise.resolve(null) }
-    statePending = (async () => {
+    const version = stateVersion
+    const job = Promise.resolve().then(async () => {
       try {
         const res = await fetch('/schedule/data.json?t=' + Date.now(), { cache: 'no-store' })
         if (!res.ok) return null
@@ -556,13 +567,15 @@
         const raw = payload && payload.alg === 'AES-GCM'
           ? JSON.parse(await window.NOIMPTY_SEARCH.decryptPayload(payload))
           : payload
+        if (version !== stateVersion || !stateAllowed()) { if (!stateAllowed()) clearState(); return null }
         stateRaw = raw
         stateDay = ymd(rightNow())
         siteState = summarize(raw)
         return siteState
-      } catch (_) { return null } finally { statePending = null }
-    })()
-    return statePending
+      } catch (_) { return null } finally { if (statePending === job) statePending = null }
+    })
+    statePending = job
+    return job
   }
 
   /* 默认那张脸跟着站点的真实状况走：今天发了东西就精神，日程堆着就发愁。
@@ -629,11 +642,15 @@
 
   // ── 出场 ──
 
-  const enable = async () => {
-    if (app || button?.dataset.busy) return
+  const enable = () => {
+    if (enableTask) return enableTask.then(() => read() ? enable() : undefined)
+    if (app) return Promise.resolve()
+    const version = ++lifecycle
     if (button) button.dataset.busy = '1'
+    const job = (async () => {
     try {
       await loadLibs()
+      if (version !== lifecycle) return
       const { w, h } = stageSize()
 
       stage = document.createElement('div')
@@ -662,9 +679,11 @@
         autoDensity: true
       })
 
-      model = await window.PIXI.live2d.Live2DModel.from(CONFIG.model, {
+      const loaded = await window.PIXI.live2d.Live2DModel.from(CONFIG.model, {
         autoHitTest: false, autoFocus: false, idleMotionGroup: CONFIG.idleGroup
       })
+      if (version !== lifecycle) { loaded.destroy({ children: true, texture: true, baseTexture: true }); return }
+      model = loaded
       app.stage.addChild(model)
       layout()
 
@@ -717,7 +736,7 @@
           return                       // 闹别扭的时候不播动作，不然刚扭开又被动作掰回来
         }
 
-        try { model.motion(CONFIG.tapGroup) } catch (_) {}
+        try { Promise.resolve(model.motion(CONFIG.tapGroup)).catch(() => {}) } catch (_) {}
         say(pick(zoneAt(e).lines), { aloud: true })
       })
 
@@ -730,17 +749,37 @@
       onResize = () => layout(true)
       window.addEventListener('resize', onResize)
 
-      greet()
+      greet(version)
       // 每次到点才算这一页说什么 —— pjax 翻页不会重建她，算早了会一直念旧页面
-      idleTimer = setInterval(() => say(pick(linesHere())), CONFIG.idleEveryMs)
+      onVisibility = event => {
+        if (!app || !model) return
+        const paused = document.hidden || event?.type === 'pagehide'
+        model.autoUpdate = !paused
+        if (paused) {
+          app.stop?.(); stopTalking()
+          if (bubble) delete bubble.dataset.on
+          clearInterval(idleTimer); idleTimer = null
+        } else {
+          app.start?.()
+          if (!idleTimer) idleTimer = setInterval(() => say(pick(linesHere())), CONFIG.idleEveryMs)
+        }
+      }
+      document.addEventListener('visibilitychange', onVisibility)
+      window.addEventListener('pagehide', onVisibility)
+      window.addEventListener('pageshow', onVisibility)
+      onVisibility()
       requestAnimationFrame(() => stage && (stage.dataset.ready = '1'))
     } catch (error) {
       console.warn('[看板娘]', error && error.message)
-      await teardown()
+      if (version === lifecycle) await teardown()
     } finally {
+      if (enableTask === job) enableTask = null
       if (button) delete button.dataset.busy
       sync()
     }
+    })()
+    enableTask = job
+    return job
   }
 
   // 按画布高度等比放，脚底贴着下边缘站住
@@ -777,6 +816,7 @@
   }
 
   const teardown = async () => {
+    lifecycle++
     stopTalking()
     clearTimeout(greetTimer); greetTimer = null
     // 订阅挂在娜娜莉那个控制器上，她被收起来之后不退订就是一直挂着的回调
@@ -784,7 +824,12 @@
     clearInterval(idleTimer); idleTimer = null
     if (onMove) { document.removeEventListener('pointermove', onMove); onMove = null }
     if (onResize) { window.removeEventListener('resize', onResize); onResize = null }
-    try { model?.destroy() } catch (_) {}
+    if (onVisibility) {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', onVisibility); window.removeEventListener('pageshow', onVisibility)
+      onVisibility = null
+    }
+    try { model?.destroy({ children: true, texture: true, baseTexture: true }) } catch (_) {}
     try { app?.destroy(false, { children: true }) } catch (_) {}
     try { stage?.remove() } catch (_) {}
     app = model = stage = bubble = null
@@ -793,13 +838,12 @@
   }
 
   const disable = async () => {
-    if (!app) return
     await teardown()
     sync()
   }
 
   const toggle = async () => {
-    const next = !app
+    const next = !(app || enableTask && read())
     save(next)
     if (next) await enable()
     else await disable()

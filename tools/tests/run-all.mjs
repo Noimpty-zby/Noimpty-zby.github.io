@@ -8,11 +8,17 @@
  */
 import { readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const files = readdirSync(here).filter(f => f.endsWith('.test.mjs')).sort()
+const project = resolve(here, '../..')
+const discover = (dir, prefix = '') => readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+  const relative = prefix + entry.name
+  if (entry.isDirectory()) return discover(join(dir, entry.name), relative + '/')
+  return entry.isFile() && entry.name.endsWith('.test.mjs') ? [relative] : []
+})
+const files = discover(here).sort()
 
 if (!files.length) {
   console.log('没有找到任何测试文件')
@@ -23,8 +29,9 @@ let failed = 0
 for (const f of files) {
   console.log(`\n──────── ${f} ────────`)
   try {
-    execFileSync(process.execPath, [join(here, f)], { stdio: 'inherit', cwd: process.cwd() })
-  } catch (_) {
+    execFileSync(process.execPath, [join(here, f)], { stdio: 'inherit', cwd: project, timeout: 120_000 })
+  } catch (error) {
+    console.error(`测试失败：${f}${error.code === 'ETIMEDOUT' ? '（超过 120 秒）' : ''}`)
     failed++
   }
 }

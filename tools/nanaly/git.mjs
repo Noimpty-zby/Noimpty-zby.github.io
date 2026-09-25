@@ -25,7 +25,9 @@ export const pushWithRetry = (run, what = '改动', tries = 3) => {
       run('pull', '--rebase', '--autostash')
       console.log(`  ${what}：推送被拒，已 rebase，重试第 ${i + 1} 次`)
     } catch (e) {
-      // rebase 都做不成（真冲突），别再瞎试
+      // Restore the pre-pull state; retain the local commit and autostashed work.
+      // Network failures may not start a rebase, so abort is best-effort.
+      try { run('rebase', '--abort') } catch (_) {}
       last = e
       break
     }

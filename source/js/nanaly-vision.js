@@ -7,6 +7,9 @@
   const validRef = ref => ref && typeof ref.id === 'string' && /^[a-zA-Z0-9-]{8,80}$/.test(ref.id)
   const refs = items => (Array.isArray(items) ? items : []).filter(validRef).slice(0, MAX_FILES)
     .map(x => ({ id: x.id, name: String(x.name || '图片').slice(0, 160), type: 'image/jpeg' }))
+  const validImage = (item, id) => item && item.id === id && item.type === 'image/jpeg'
+    && typeof item.dataURL === 'string' && item.dataURL.length <= 2600000
+    && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(item.dataURL)
   const memory = new Map(), pending = new Map()
   // 内存缓存的上限。真正该当闸的是字节数：截图压完通常几百 KB，条数卡太死会让
   // 长话题里的旧图反复回存储里取。条数只用来兜住「很多张极小的图」。
@@ -49,6 +52,10 @@
       // temporary 的条目只存在于内存里（IndexedDB 写失败），淘汰它就是丢图片。
       if (!cached.temporary && id !== item.id) drop(id)
     }
+    if (memory.size > MEM.count || memoryBytes > MEM.bytes) {
+      drop(item.id)
+      if (item.temporary) throw new Error('本机图片暂存已满，已有图片仍保留；请启用浏览器存储后重试')
+    }
     return item
   }
   const load = async id => {
@@ -59,8 +66,8 @@
       let item = null
       try { item = await transact('readonly', store => store.get(id)) } catch (_) { item = null }
       // 读取途中可能被 remove() 删掉。那就不该再把它放回内存，否则删过的又活了。
-      if (item && pending.get(id) === job) touch(item)
-      return item || null
+      if (pending.get(id) !== job || !validImage(item, id)) return null
+      return touch(item)
     })()
     pending.set(id, job)
     try { return await job } finally { if (pending.get(id) === job) pending.delete(id) }
@@ -72,8 +79,10 @@
   // Clear only images no longer referenced by any topic, pending retry or undo record.
   const prune = async (state, draft = []) => {
     const keep = new Set(refs(draft).map(x => x.id))
+    const seen = new WeakSet()
     const scan = value => {
-      if (!value || typeof value !== 'object') return
+      if (!value || typeof value !== 'object' || seen.has(value)) return
+      seen.add(value)
       if (Array.isArray(value.attachments)) refs(value.attachments).forEach(x => keep.add(x.id))
       if (Array.isArray(value.draftAttachments)) refs(value.draftAttachments).forEach(x => keep.add(x.id))
       Object.values(value).forEach(v => { if (v && typeof v === 'object') scan(v) })
@@ -100,7 +109,7 @@
   }
   const validateFile = file => {
     if (!file || !/^image\/(?:png|jpeg|webp)$/.test(file.type)) throw new Error('支持 PNG、JPEG、WebP 静态图片')
-    if (!file.size || file.size > MAX_BYTES) throw new Error('每张图片请控制在 10 MB 以内')
+    if (!Number.isSafeInteger(file.size) || file.size <= 0 || file.size > MAX_BYTES) throw new Error('每张图片请控制在 10 MB 以内')
   }
   const prepare = async file => {
     validateFile(file)
@@ -122,12 +131,11 @@
       let dataURL = canvas.toDataURL('image/jpeg', 0.9)
       if (dataURL.length > 2200000) dataURL = canvas.toDataURL('image/jpeg', 0.72)
       if (dataURL.length > 2600000) throw new Error('图片压缩后仍然过大，请裁剪后再试')
-      const item = { id: crypto.randomUUID(), name: file.name || '粘贴的图片', type: 'image/jpeg', dataURL, at: Date.now() }
-      // 先当作没落盘：这样它在写入期间不会被别的读取挤出内存。存进去的那份不带这个内存标记。
-      const stored = { ...item }
-      item.temporary = true
+      const item = { id: crypto.randomUUID(), name: String(file.name || '粘贴的图片').slice(0, 160), type: 'image/jpeg', dataURL, at: Date.now() }
+      // 此时调用者还没拿到 id，局部变量会保住写入中的数据。只在写入失败后
+      // 才将它加入不可淘汰的暂存，避免旧暂存满额时连成功落盘的新图也被阻止。
+      try { await transact('readwrite', store => store.put({ ...item })) } catch (_) { item.temporary = true }
       touch(item)
-      try { await transact('readwrite', store => store.put(stored)); delete item.temporary } catch (_) {}
       return item
     } finally { URL.revokeObjectURL(url) }
   }

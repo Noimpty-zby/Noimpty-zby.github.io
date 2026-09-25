@@ -5,6 +5,7 @@
   const MODEL = 'FunAudioLLM/CosyVoice2-0.5B'
   const KEY = 'nanaly-voice-v1'
   const END_DRAIN_MS = 500
+  const MAX_AUDIO_BYTES = 12 * 1024 * 1024
   // CosyVoice2 tells instruction from content by sentence form, not by the delimiter,
   // and it reads whatever it does not take as instruction out loud in place of the reply.
   // Measured against a 9-character reply: a descriptive '清甜轻盈的少女动漫声线…' leaked
@@ -46,6 +47,7 @@
     .replace(/\(=\^[^)]{0,12}\)|\([oO0][vVwW][oO0]\)|\(>[wW]<\)/g, '')
     .replace(/\s+/g, ' ').trim()
   const splitText = (text, limit = 450) => {
+    if (!Number.isSafeInteger(limit) || limit < 2) throw new RangeError('朗读分段长度必须是至少 2 的整数')
     const parts = []
     let remaining = cleanText(text)
     while (remaining) {
@@ -70,7 +72,9 @@
     try { prefs = normalize(JSON.parse(window.localStorage.getItem(KEY) || '{}')) } catch (_) { prefs = normalize() }
     let revision = 0, active = null, soundContext = null, audioBytes = 0, cacheAccount = null
     const cache = new Map(), plans = new Map(), listeners = new Set()
-    const emit = () => listeners.forEach(listener => listener(active ? { id: active.id, phase: active.phase } : null))
+    const emit = () => listeners.forEach(listener => {
+      try { listener(active ? { id: active.id, phase: active.phase } : null) } catch (_) {}
+    })
     const stop = ({ clearCache = false } = {}) => {
       revision++
       const prior = active
@@ -236,8 +240,38 @@
           })
           if (!response.ok) throw await speechError(response)
           if (/json|text\//i.test(response.headers?.get('content-type') || '')) throw new Error('语音服务返回了异常内容，请稍后重试。')
-          const blob = await response.blob()
-          if (!blob.size || blob.size > 12 * 1024 * 1024) throw new Error('语音服务没有返回可播放的音频。')
+          const signal = turn.controller.signal
+          signal.throwIfAborted()
+          const declared = Number(response.headers?.get('content-length'))
+          if (Number.isFinite(declared) && declared > MAX_AUDIO_BYTES) {
+            try { await response.body?.cancel() } catch (_) {}
+            throw new Error('语音服务返回的音频过大，请缩短朗读内容。')
+          }
+          let blob
+          if (response.body?.getReader) {
+            const reader = response.body.getReader(), chunks = []
+            let size = 0, complete = false
+            const abort = () => { Promise.resolve(reader.cancel(signal.reason)).catch(() => {}) }
+            signal.addEventListener('abort', abort, { once: true })
+            try {
+              while (true) {
+                signal.throwIfAborted()
+                const { done, value } = await reader.read()
+                signal.throwIfAborted()
+                if (done) { complete = true; break }
+                size += value.byteLength
+                if (size > MAX_AUDIO_BYTES) throw new Error('语音服务返回的音频过大，请缩短朗读内容。')
+                chunks.push(value)
+              }
+              blob = new Blob(chunks, { type: response.headers?.get('content-type') || 'audio/wav' })
+            } finally {
+              signal.removeEventListener('abort', abort)
+              if (!complete) { try { await reader.cancel() } catch (_) {} }
+              reader.releaseLock()
+            }
+          } else blob = await response.blob()
+          signal.throwIfAborted()
+          if (!blob.size || blob.size > MAX_AUDIO_BYTES) throw new Error('语音服务没有返回可播放的音频。')
           return blob
         }
         const parts = settings.emotion

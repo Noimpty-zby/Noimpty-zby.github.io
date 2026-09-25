@@ -228,6 +228,11 @@
         destroyed = true; observer?.disconnect(); sizeObserver?.disconnect()
         if (scheduled) window.cancelAnimationFrame(scheduled)
         cleanup.forEach(fn => fn()); added.forEach(node => node.remove())
+        // On mobile this node lives in workspaceBar, outside the removed toolbar.
+        actions.remove()
+        for (const key of ['nanalyLayout', 'nanalyMobile', 'nanalyWide']) delete panel.dataset[key]
+        for (const name of ['x', 'y', 'width', 'height']) panel.style.removeProperty('--nanaly-shell-' + name)
+        panel.style.removeProperty('--nanaly-drawer-top')
         if (head) { originalButtons.forEach(button => head.appendChild(button)); controls.remove() }
         panel.classList.remove('nanaly-shell', 'nanaly-shell--drawer', 'nanaly-shell--resizing', 'nanaly-shell--sleeping')
         launcher?.classList.remove('nanaly-shell-launcher-hidden')

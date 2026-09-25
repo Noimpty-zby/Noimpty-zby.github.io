@@ -25,6 +25,8 @@ const step = async (name, fn, fallback) => {
 }
 
 const main = async () => {
+  const unknown = process.argv.slice(2).filter(arg => arg !== '--dry')
+  if (unknown.length) throw new Error(`不支持的参数：${unknown.join(' ')}（演练参数是 --dry）`)
   console.log(`站点 ${CFG.site}｜窗口 ${WINDOW_LABEL}`)
 
   const [traffic, comments, newPosts, health, beat] = await Promise.all([
@@ -44,7 +46,7 @@ const main = async () => {
     comments,
     ownerLogin: process.env.OWNER_LOGIN || (CFG.repo.split('/')[0]),
     dry: DRY
-  }), { changed: 0, done: [] })
+  }).catch(error => { process.exitCode = 1; throw error }), { changed: 0, done: [] })
 
   if (auto.changed) {
     auto.done.forEach(d => console.log(`    ${DRY ? '[演练] 会勾上' : '自动勾上'}「${d.text}」 —— ${d.why}`))

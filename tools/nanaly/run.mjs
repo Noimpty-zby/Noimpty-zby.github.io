@@ -105,9 +105,10 @@ const main = async () => {
     const auto = await autoComplete({ dry: DRY })
     if (auto.changed) {
       auto.done.forEach(d => console.log(`  ${DRY ? '[演练] 会勾上' : '自动勾上'}「${d.text}」 —— ${d.why}`))
-      if (!DRY) await commitSchedule(auto.done)
+      if (!DRY && !await commitSchedule(auto.done)) throw new Error('日程更改未能提交')
     }
   } catch (e) {
+    process.exitCode = 1
     console.log('  日程自动完成没跑成：' + String(e.message || e).slice(0, 160))
   }
 

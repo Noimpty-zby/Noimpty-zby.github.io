@@ -196,35 +196,45 @@
     return pdfPromise
   }
   const parsePDF = async (buffer, lib, signal) => {
+    abort(signal)
     if (!new TextDecoder().decode(new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 1024))).includes('%PDF-')) throw new Error('文件内容不是有效的 PDF。')
     const task = lib.getDocument({ data: new Uint8Array(buffer.slice(0)), isEvalSupported: false, stopAtErrors: true,
       maxImageSize: 20000000, canvasMaxAreaInBytes: 20000000, disableAutoFetch: true,
       cMapUrl: '/pluginsSrc/pdfjs-dist/cmaps/', cMapPacked: true, standardFontDataUrl: '/pluginsSrc/pdfjs-dist/standard_fonts/', wasmUrl: '/pluginsSrc/pdfjs-dist/wasm/' })
     let timedOut = false
-    const timer = setTimeout(() => { timedOut = true; task.destroy() }, 45000)
-    const cancel = () => { task.destroy() }
+    const destroy = () => { Promise.resolve(task.destroy()).catch(() => {}) }
+    const timer = setTimeout(() => { timedOut = true; destroy() }, 45000)
+    const cancel = destroy
+    const check = () => {
+      abort(signal)
+      if (timedOut) throw new Error('PDF 解析超过 45 秒，请拆分文件或上传需要的页面。')
+    }
     signal?.addEventListener('abort', cancel, { once: true })
     try {
       const pdf = await task.promise
       const output = [], readPages = [], imagePages = [], missingPages = [], images = []
       let chars = 0, truncated = pdf.numPages > LIMITS.pdfPages, cutPage = null, stoppedAtPage = null
       for (let n = 1; n <= Math.min(pdf.numPages, LIMITS.pdfPages); n++) {
-        abort(signal)
+        check()
         if (chars >= LIMITS.chars) { truncated = true; stoppedAtPage = n; break }
         const page = await pdf.getPage(n)
         try {
           const content = await page.getTextContent()
-          let text = '', lastY = null, lastEnd = null
+          const available = LIMITS.chars - chars
+          let text = '', lastY = null, lastEnd = null, clipped = false
           for (const item of content.items) {
             if (typeof item.str !== 'string') continue
             const y = item.transform?.[5], x = item.transform?.[4]
-            if (text && lastY !== null && Number.isFinite(y) && Math.abs(y - lastY) > 3) text += '\n'
-            else if (text && lastEnd !== null && Number.isFinite(x) && x - lastEnd > 3) text += '\t'
-            text += item.str + (item.hasEOL ? '\n' : '')
+            const separator = text && lastY !== null && Number.isFinite(y) && Math.abs(y - lastY) > 3 ? '\n'
+              : text && lastEnd !== null && Number.isFinite(x) && x - lastEnd > 3 ? '\t' : ''
+            const length = separator.length + item.str.length + (item.hasEOL ? 1 : 0)
+            const remaining = available - text.length
+            // Slice before concatenating: compressed pages can expand far beyond 60k.
+            text += (separator + item.str.slice(0, Math.max(0, remaining - separator.length)) + (item.hasEOL ? '\n' : '')).slice(0, remaining)
+            if (length > remaining) { clipped = true; break }
             lastY = y; lastEnd = Number.isFinite(x) ? x + (item.width || 0) : null
           }
-          const originalLength = text.length, available = LIMITS.chars - chars
-          text = text.slice(0, available)
+          const originalLength = text.length + (clipped ? 1 : 0)
           if (originalLength > available) { truncated = true; cutPage = n }
           if (text.trim()) { output.push('[PDF 第 ' + n + ' 页文字层' + (originalLength > available ? '，本页已截断' : '') + ']\n' + text); readPages.push(n); chars += text.length }
           // Sparse/no text indicates a scan. Only two bounded page images enter a turn.
@@ -243,13 +253,13 @@
               if (dataURL.length > 1800000) dataURL = canvas.toDataURL('image/jpeg', 0.65)
               if (dataURL.length > 2000000) throw new Error('扫描页压缩后过大')
               images.push({ page: n, dataURL }); imagePages.push(n)
-            } catch (error) { abort(signal); missingPages.push(n); truncated = true }
+            } catch (error) { check(); missingPages.push(n); truncated = true }
             finally { canvas.width = 1; canvas.height = 1 }
           }
-        } catch (error) { abort(signal); missingPages.push(n); truncated = true }
+        } catch (error) { check(); missingPages.push(n); truncated = true }
         finally { page.cleanup() }
       }
-      abort(signal)
+      check()
       if (!output.length && !images.length) throw new Error('PDF 中没有成功读取的页面；可能需要密码或文件已损坏。')
       const summary = '共 ' + pdf.numPages + ' 页；文字层提取 ' + readPages.length + ' 页' +
         (readPages.length ? '（第 ' + range(readPages) + ' 页）' : '') + '；扫描图 ' + imagePages.length + ' 页' +

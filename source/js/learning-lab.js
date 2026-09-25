@@ -296,7 +296,11 @@
       if (window.NANALY_AGENT?.open) window.NANALY_AGENT.open()
       else { error.textContent = '后端设置尚未加载，请稍后重试。'; error.hidden = false }
     }, 'learning-connect-button')
-    controls.append(select, connectButton)
+    const connectionDot = node('span', 'learning-connection-dot'); connectionDot.setAttribute('aria-hidden', 'true')
+    const connectionLabel = node('span', 'learning-connection-label', '连接后端')
+    connectButton.replaceChildren(connectionDot, connectionLabel)
+    const connectionAnnouncement = node('span', 'learning-sr-only'); connectionAnnouncement.setAttribute('role', 'status'); connectionAnnouncement.setAttribute('aria-live', 'polite')
+    controls.append(select, connectButton, connectionAnnouncement)
     if (onClose) controls.append(button('收起分屏', onClose, 'learning-close'))
     heading.append(brand, controls)
     const toolbar = node('div', 'learning-toolbar')
@@ -375,6 +379,7 @@
     root.append(heading, toolbar, editorPane, consolePane, statusbar, status, error, storageStatus); container.append(root)
     let storage; try { storage = window.localStorage } catch (_) {}
     let timer = null; let adapter = null; let lastAutoRevision = null; let lastResult; let lastChecked; let lastHistory; let lastBackups
+    let connectionState = window.NANALY_AGENT?.snapshot?.().connection || (window.NANALY_AGENT?.configured() ? 'connected' : 'disconnected')
     const request = (path, options) => window.NANALY_AGENT.request(path, options)
     const session = createSession({ request, storage, available: () => !!window.NANALY_AGENT?.configured(), permitted: unlocked, changed: () => render() })
     const context = () => {
@@ -407,8 +412,12 @@
       if (lifetime.signal.aborted) return
       const state = session.state; const connected = window.NANALY_AGENT?.configured() === true
       filename.textContent = FILE_NAMES[state.lessonId]
-      connectivity.textContent = connected ? '● 后端已连接' : '○ 离线编辑'; connectivity.dataset.connected = String(connected)
-      connectButton.textContent = connected ? '已连接' : '连接后端'
+      const connectionText = { disconnected: '未连接 · 点此连接', connecting: '正在连接…', connected: '后端已连接', error: '连接异常 · 重试' }[connectionState] || '未连接 · 点此连接'
+      connectivity.textContent = connectionState === 'disconnected' ? '未连接后端 · 仅可编辑' : connectionText
+      connectivity.dataset.connected = String(connectionState === 'connected'); connectivity.dataset.state = connectionState
+      connectionLabel.textContent = connectionText; connectButton.dataset.state = connectionState
+      connectButton.title = connectionState === 'connected' ? '已通过后端验证，点击管理连接' : connectionState === 'connecting' ? '正在验证后端连接，请稍候' : '点击填写访问令牌并连接后端'
+      if (connectionAnnouncement.textContent !== connectionText) connectionAnnouncement.textContent = connectionText
       saved.textContent = state.persist ? (state.storageError ? '保存异常' : '草稿已保存') : '临时草稿'
       select.disabled = state.busy; select.value = state.lessonId
       runButton.disabled = state.busy || !connected || !state.code.trim(); runButton.textContent = state.busy ? '运行中…' : '▶ 运行'
@@ -469,7 +478,15 @@
     root.addEventListener('keydown', event => { if (event.key === 'Escape' && more.open) { more.open = false; more.querySelector('summary').focus() } })
     document.addEventListener('pointerdown', event => { if (!more.contains(event.target)) more.open = false }, { signal: lifetime.signal })
     let wasConnected = false
-    const connectionChanged = () => { const connected = window.NANALY_AGENT?.configured() === true; if (connected !== wasConnected) { wasConnected = connected; render(); if (connected) session.syncHistory() } }
+    const connectionChanged = snapshot => {
+      const connected = window.NANALY_AGENT?.configured() === true
+      const next = snapshot?.connection || window.NANALY_AGENT?.snapshot?.().connection || (connected ? 'connected' : 'disconnected')
+      const changed = next !== connectionState || connected !== wasConnected
+      const sync = connected && !wasConnected
+      connectionState = next; wasConnected = connected
+      if (changed) render()
+      if (sync) session.syncHistory()
+    }
     const unsubscribe = window.NANALY_AGENT?.subscribe?.(connectionChanged)
     window.addEventListener('nanaly:agent-configured', connectionChanged, { signal: lifetime.signal })
     syncEditor(); setPanel('input'); render(); connectionChanged()

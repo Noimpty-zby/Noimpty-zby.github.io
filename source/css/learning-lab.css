@@ -91,7 +91,7 @@
 .learning-brand { flex: none; flex-wrap: wrap; gap: 9px; font-size: 16px; font-weight: 700; letter-spacing: .035em; }
 .learning-flower, .learning-brand-icon { display: grid; place-items: center; width: 33px; height: 33px; border-radius: 12px; background: var(--lab-surface); color: var(--lab-accent); font-size: 25px; font-weight: 400; line-height: 1; box-shadow: 0 2px 6px #b6759412; }
 .learning-brand small { margin: 2px 0 0 2px; color: var(--lab-muted); font-size: 9px; font-weight: 600; letter-spacing: .14em; }
-.learning-controls { justify-content: flex-end; gap: 8px; min-width: 0; }
+.learning-controls { justify-content: flex-end; flex-wrap: wrap; gap: 8px; min-width: 0; }
 .learning-actions { gap: 7px; }
 .learning-lab button, .learning-lab select, .learning-lab summary, .learning-launch, .learning-mobile-switch button { -webkit-tap-highlight-color: transparent; }
 .learning-button, .learning-lab .learning-connect-button, .learning-lab .learning-close, .learning-lab .learning-run, .learning-lab .learning-stop, .learning-mobile-switch button, .learning-launch {
@@ -120,6 +120,20 @@
 .learning-lab[data-editor-theme='dark'] .learning-run, .learning-lab[data-editor-theme='dark'] .learning-run:hover:not(:disabled) { color: #302130; }
 .learning-lab .learning-stop { min-width: 34px; color: var(--lab-muted); }
 .learning-lab button:disabled { opacity: .42; cursor: not-allowed; box-shadow: none; }
+.learning-lab .learning-connect-button { min-width: 126px; font-weight: 600; }
+.learning-connection-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #867685; }
+.learning-lab .learning-connect-button[data-state='connected'] { color: #187849; background: #e7f8ee; border-color: #91d4ad; }
+.learning-lab .learning-connect-button[data-state='connected']:hover { color: #105f37; background: #d7f2e3; border-color: #55b27e; }
+.learning-connect-button[data-state='connected'] .learning-connection-dot { background: #23a563; box-shadow: 0 0 0 3px #23a5631c; }
+.learning-lab .learning-connect-button[data-state='connecting'] { color: #926316; background: #fff4db; border-color: #e7c780; }
+.learning-connect-button[data-state='connecting'] .learning-connection-dot { background: #d99822; }
+.learning-lab .learning-connect-button[data-state='error'] { color: #af3551; background: #fff0f3; border-color: #e9a2b2; }
+.learning-connect-button[data-state='error'] .learning-connection-dot { background: #ce4667; }
+.learning-lab[data-editor-theme='dark'] .learning-connect-button[data-state='connected'] { color: #a8ebc4; background: #193d30; border-color: #387956; }
+.learning-lab[data-editor-theme='dark'] .learning-connect-button[data-state='connected']:hover { color: #d2ffe3; background: #22503d; }
+.learning-lab[data-editor-theme='dark'] .learning-connect-button[data-state='connecting'] { color: #f1d18a; background: #453820; border-color: #896a30; }
+.learning-lab[data-editor-theme='dark'] .learning-connect-button[data-state='error'] { color: #ffb9c8; background: #492934; border-color: #944b60; }
+.learning-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .learning-select { min-width: 118px; max-width: 100%; min-height: 36px; margin: 0; padding: 6px 30px 6px 12px; border: 1px solid var(--lab-border); border-radius: 10px; background-color: var(--lab-surface); color: var(--lab-ink); font: inherit; font-size: 13px; cursor: pointer; }
 .learning-lab :is(button, summary, select, textarea, a):focus-visible, .learning-launch:focus-visible, .learning-divider:focus-visible, .learning-mobile-switch button:focus-visible { outline: 2px solid var(--lab-accent, #ba547d); outline-offset: 3px; }
 .learning-toolbar { flex: none; justify-content: space-between; gap: 12px; min-height: 53px; padding: 8px 18px; border-bottom: 1px solid var(--lab-border); background: var(--lab-surface); }
@@ -179,6 +193,8 @@
 .learning-statusbar { flex: none; gap: 14px; min-height: 30px; padding: 5px 18px; border-top: 1px solid var(--lab-border); background: var(--lab-lilac); color: var(--lab-muted); font-size: 10px; }
 .learning-connectivity { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .learning-connectivity[data-connected='true'] { color: var(--lab-success); }
+.learning-connectivity[data-state='error'] { color: var(--lab-error); }
+.learning-connectivity[data-state='connecting'] { color: var(--lab-warning); }
 .learning-cursor { margin-left: auto; white-space: nowrap; }
 .learning-save-state, .learning-shortcut { white-space: nowrap; }
 .learning-lab p.learning-status, .learning-lab p.learning-error, .learning-lab p.learning-storage-status { flex: none; margin: 0 !important; padding: 6px 18px; border-top: 1px solid var(--lab-border); background: var(--lab-surface); color: var(--lab-muted); font-size: 11px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -269,7 +285,7 @@ html:is(.learning-page, .learning-is-open) :is(#noimpty-music-player, #mao-toggl
   .learning-heading { gap: 8px; }
   .learning-brand { gap: 5px; font-size: 14px; }
   .learning-flower, .learning-brand-icon { width: 25px; height: 25px; font-size: 20px; }
-  .learning-lab .learning-connect-button { max-width: 100px; overflow: hidden; text-overflow: ellipsis; }
+  .learning-lab .learning-connect-button { max-width: none; min-width: 126px; }
   .learning-select { min-width: 84px; max-width: 98px; padding-right: 22px; font-size: 12px; }
   .learning-file-name { max-width: 116px; }
   .learning-lab .learning-run { min-width: 67px; }

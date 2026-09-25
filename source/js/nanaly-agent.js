@@ -16,7 +16,7 @@
   const create = (options = {}) => {
     const io = options.fetch || window.fetch.bind(window), now = options.now || Date.now
     const uuid = options.id || (() => window.crypto.randomUUID())
-    let base = '', token = '', revision = null, data = empty(), problem = '', epoch = 0, queue = Promise.resolve(), context = null
+    let base = '', token = '', revision = null, data = empty(), problem = '', connection = 'disconnected', epoch = 0, queue = Promise.resolve(), context = null
     const listeners = new Set(), pending = new Set(), executing = new Map(), activeActivities = new Map()
     let lastActivity = { id: '', phase: 'idle', text: '' }
     // Ephemeral activity is never inferred from restored history or saved goals.
@@ -38,7 +38,14 @@
       return detail
     }
     const emit = () => { for (const fn of listeners) { try { fn(snapshot()) } catch (_) {} } }
-    const snapshot = () => ({ connected: !!token, revision, data: clone(data), problem })
+    const snapshot = () => ({ connected: !!token, connection, revision, data: clone(data), problem })
+    const connectionState = (state, message = '') => {
+      if (connection === state && (!message || problem === message)) return
+      if (message) problem = message
+      else if (connection === 'error' && state === 'connected') problem = ''
+      connection = state; emit()
+    }
+    const connectionFailure = status => !status || status === 401 || status === 403 || status >= 500
     const configured = () => !!token && !!base && revision !== null
     const request = async (path, opts = {}) => {
       if (!base || !token) throw new Error('请先在“娜娜莉工作室”连接私有后端。')
@@ -46,6 +53,7 @@
       const requestURL = new URL(path, base)
       if (requestURL.origin !== base || requestURL.hash || !/^\/api\/[a-zA-Z0-9/_-]+$/.test(requestURL.pathname)) throw new Error('无效的后端接口。')
       const controller = new AbortController(), generation = epoch
+      let responseStatus = 0
       const abort = () => controller.abort(opts.signal?.reason)
       if (opts.signal?.aborted) abort()
       else opts.signal?.addEventListener('abort', abort, { once: true })
@@ -54,6 +62,7 @@
       try {
         controller.signal.throwIfAborted()
         const response = await io(requestURL.href, { method: opts.method || 'GET', headers: { Authorization: 'Bearer ' + token, ...(opts.body === undefined ? {} : { 'Content-Type': 'application/json' }) }, body: opts.body === undefined ? undefined : JSON.stringify(opts.body), signal: controller.signal, credentials: 'omit', redirect: 'error', cache: 'no-store' })
+        responseStatus = response.status
         if (Number(response.headers?.get('content-length')) > 4 * 1024 * 1024) throw new Error('后端返回内容过大。')
         const raw = await response.text()
         if (raw.length > 4 * 1024 * 1024) throw new Error('后端返回内容过大。')
@@ -62,7 +71,14 @@
         if (generation !== epoch) throw new Error('连接已改变，请重试。')
         controller.signal.throwIfAborted()
         if (!response.ok) throw Object.assign(new Error(text(value?.error?.message, 300) || '后端请求失败（' + response.status + '）'), { status: response.status, code: value?.error?.code, response: value })
+        if (revision !== null) connectionState('connected')
         return value
+      } catch (error) {
+        // Caller cancellation and obsolete sessions do not describe backend health.
+        if (generation === epoch && !opts.signal?.aborted && (connectionFailure(responseStatus) || responseStatus < 400)) {
+          connectionState('error', error.message || '后端连接失败。')
+        }
+        throw error
       } finally { clearTimeout(timer); pending.delete(controller); opts.signal?.removeEventListener('abort', abort) }
     }
     const accept = value => {
@@ -99,7 +115,7 @@
       }
       // A slow GET must not roll back a newer successfully saved revision.
       if (revision !== null && value.revision < revision) return snapshot()
-      revision = value.revision; data = { ...empty(), ...clone(value.data) }; problem = ''; emit()
+      revision = value.revision; data = { ...empty(), ...clone(value.data) }; problem = ''; connection = 'connected'; emit()
       return snapshot()
     }
     const refresh = async signal => {
@@ -108,10 +124,17 @@
         const value = await request('/api/state', { signal })
         if (generation !== epoch) throw new Error('连接已改变，请重试。')
         return accept(value)
-      } catch (error) { if (generation === epoch) { problem = error.message; emit() } throw error }
+      } catch (error) {
+        if (generation === epoch && !signal?.aborted) {
+          problem = error.message
+          if (connectionFailure(error.status)) connection = 'error'
+          emit()
+        }
+        throw error
+      }
     }
     const disconnect = () => {
-      epoch++; token = ''; base = ''; revision = null; data = empty(); context = null; problem = ''; queue = Promise.resolve()
+      epoch++; token = ''; base = ''; revision = null; data = empty(); context = null; problem = ''; connection = 'disconnected'; queue = Promise.resolve()
       for (const id of [...activeActivities.keys()]) activity({ id, phase: 'cancelled', text: '本页任务已停止。' })
       lastActivity = { id: '', phase: 'idle', text: '' }
       for (const controller of pending) controller.abort()
@@ -121,12 +144,12 @@
     const connect = async (url, key) => {
       const checked = endpoint(url), secret = text(key, 4097)
       if (secret.length < 24 || secret.length > 4096 || /[\r\n]/.test(secret)) throw new Error('请填写至少 24 字符的后端访问令牌。')
-      disconnect(); base = checked; token = secret
+      disconnect(); base = checked; token = secret; connectionState('connecting')
       const generation = epoch
       try { return await refresh() }
       catch (error) {
         // An aborted earlier connection must never clear its replacement.
-        if (generation === epoch) { disconnect(); problem = error.message; emit() }
+        if (generation === epoch) { disconnect(); connectionState('error', error.message) }
         throw error
       }
     }

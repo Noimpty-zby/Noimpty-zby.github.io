@@ -108,7 +108,7 @@ const harness = ({ saved = storage({ 'nanaly-deep-v1': 'off' }), imageEntries = 
     cut('  const WEB_PREFIX', '  // 模型把指令'),
     cut('  const ACT_RE =', '  const checkArticleLinks =')
   ]
-  vm.runInContext(pieces.join('\n') + '\nthis.subject = { send, buildMessages, attachmentContent, generateTopicTitle, stream, stopStream, speechPayload, workspace, setupShell, backToChat }', context)
+  vm.runInContext(pieces.join('\n') + '\nthis.subject = { send, buildMessages, attachmentContent, generateTopicTitle, stream, stopStream, speechPayload, workspace, setupShell, backToChat, chatBridge }', context)
   const workspace = context.subject.workspace
   window.workspace = workspace
   context.history = workspace.readLog()
@@ -480,6 +480,26 @@ await test('current and historical images plus PDF scans share one two-image req
   const full = await h.buildMessages('你好', 'article', new AbortController().signal, history, [current, { ...current, id: old.id }])
   assert.equal(full.flatMap(m => Array.isArray(m.content) ? m.content : []).filter(part => part.type === 'image_url').length, 2)
   assert.match(full.map(m => typeof m.content === 'string' ? m.content : m.content.filter(p => p.type === 'text').map(p => p.text).join('\n')).join('\n'), /历史图片.*未发送、未读取/)
+})
+
+
+await test('workspace restoration never replays completion and switching clears the old chat snapshot', async () => {
+  const h = harness(), events = []
+  h.context.window.CustomEvent = CustomEvent
+  h.context.window.dispatchEvent = event => events.push(event.detail)
+  await h.send('你好', 'article')
+  assert.equal(events.filter(event => event.phase === 'complete').length, 1)
+  assert.equal(h.chatBridge.snapshot().phase, 'complete')
+  const previous = h.workspace.snapshot().activeId
+  h.workspace.createSession()
+  assert.equal(h.chatBridge.snapshot().phase, 'idle')
+  h.workspace.switchSession(previous)
+  assert.equal(events.filter(event => event.phase === 'complete').length, 1)
+  h.workspace.flush()
+  const restored = harness({ saved: h.saved })
+  assert.equal(restored.chatBridge.snapshot().phase, 'idle')
+  assert.equal(restored.chatBridge.snapshot().text, '')
+  assert.equal(restored.requests.length, 0)
 })
 
 console.log(`\n${passed} core upgrade integration cases passed`)

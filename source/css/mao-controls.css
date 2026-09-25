@@ -1,0 +1,80 @@
+/* 小齿轮和共用快捷卡，沿用 Mao 的奶白、梅紫与粉色。 */
+.mao-controls-trigger {
+  position: fixed;
+  left: calc(var(--corner-left, 20px) + var(--corner-size, 54px) - 5px);
+  bottom: calc(var(--corner-slot-2, 156px) + var(--corner-size, 54px) - 9px);
+  z-index: 9004;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, .25));
+  border-radius: 50%;
+  background: #fff7fa;
+  color: #7f3f52;
+  box-shadow: 0 3px 12px rgba(75, 43, 56, .18);
+  font: 20px/1 system-ui, sans-serif;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background .2s ease, translate .3s cubic-bezier(.22, .75, .24, 1);
+}
+.mao-controls-trigger::before { content: ''; position: absolute; inset: -5px; border-radius: 50%; }
+.mao-controls-trigger:hover, .mao-controls-trigger[aria-expanded='true'] { background: #ffe4ed; }
+body:has(#noimpty-music-player:not(.is-collapsed)) .mao-controls-trigger { translate: 0 -180px; }
+.mao-controls-panel {
+  position: fixed;
+  z-index: 9010;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  border: 1px solid var(--noimpty-border, rgba(233, 89, 120, .25));
+  border-radius: 20px;
+  background: linear-gradient(160deg, #fffdfd, #fff3f8);
+  color: #673746;
+  box-shadow: 0 15px 48px rgba(75, 43, 56, .24);
+  font: 13px/1.55 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  text-align: left;
+  scrollbar-width: thin;
+}
+.mao-controls-panel[hidden], .mao-controls-panel [hidden] { display: none !important; }
+.mao-controls-panel *, .mao-controls-panel *::before, .mao-controls-panel *::after { box-sizing: border-box; }
+.mao-controls-panel button, .mao-controls-panel input, .mao-controls-panel select { font: inherit; }
+.mao-controls-panel button { cursor: pointer; touch-action: manipulation; }
+.mao-controls-panel button:disabled { cursor: wait; opacity: .6; }
+.mao-controls-panel :is(button, input, select):focus-visible, .mao-controls-trigger:focus-visible {
+  outline: 3px solid #a34267;
+  outline-offset: 3px;
+}
+.mao-controls-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.mao-controls-title { font-size: 15px; }
+.mao-controls-close { flex: 0 0 32px; width: 32px; height: 32px; border: 0; border-radius: 50%; background: #fae8ef; color: #673746; font-size: 24px !important; line-height: 1 !important; }
+.mao-controls-status { display: flex; align-items: center; gap: 8px; padding: 8px 0 12px; font-size: 12px; color: #805365; overflow-wrap: anywhere; }
+.mao-controls-status span { flex: 1; }
+.mao-controls-status[data-phase='error'] { color: #9b2f48; }
+.mao-controls-retry { flex-shrink: 0; min-height: 32px; padding: 3px 8px; border: 1px solid #cf9cb1; border-radius: 9px; background: #fff; color: #813a54; }
+.mao-controls-actions { display: grid; gap: 7px; }
+.mao-controls-action { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 46px; padding: 10px 12px; border: 1px solid #eed5df; border-radius: 12px; background: #fff; color: #673746; text-align: left; }
+.mao-controls-action:hover { border-color: #cd7e9b; background: #fff8fb; }
+.mao-controls-action > span { font-weight: 600; }
+.mao-controls-action small { color: #805365; font-size: 11px; }
+.mao-controls-panel .mao-controls-hint, .mao-controls-panel .mao-controls-notice { margin: 9px 0; font-size: 12px; color: #805365; }
+.mao-controls-panel .mao-controls-notice { padding: 8px 10px; border-radius: 9px; background: #fce3ec; color: #79334b; }
+.mao-controls-settings-toggle { width: 100%; min-height: 40px; margin-top: 2px; border: 0; border-top: 1px solid #eed5df; background: transparent; color: #813a54; text-align: left; }
+.mao-controls-settings-toggle::after { content: '+'; float: right; font-size: 18px; }
+.mao-controls-settings-toggle[aria-expanded='true']::after { content: '−'; }
+.mao-controls-settings { padding-top: 3px; }
+.mao-controls-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; margin: 0; padding: 6px 0; }
+.mao-controls-label { flex: 1; }
+.mao-controls-field select { max-width: 55%; min-height: 34px; padding: 4px 24px 4px 8px; border: 1px solid #dfb4c5; border-radius: 8px; background-color: #fff; color: #673746; }
+.mao-controls-field input { accent-color: #c44f79; }
+.mao-controls-field input[type='checkbox'] { width: 19px; height: 19px; margin: 4px; }
+.mao-controls-field input[type='range'] { width: 100%; height: 24px; margin: 0; order: 2; }
+.mao-controls-value { font-size: 12px; color: #805365; }
+.mao-controls-panel .mao-controls-help { margin: -2px 0 7px; color: #805365; font-size: 11px; line-height: 1.5; }
+@media (max-width: 420px) {
+  .mao-controls-panel { padding: 12px; border-radius: 16px; }
+  .mao-controls-action { align-items: flex-start; flex-direction: column; gap: 1px; }
+}
+@media (prefers-reduced-motion: reduce) { .mao-controls-trigger { transition: none; } }

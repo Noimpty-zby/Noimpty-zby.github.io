@@ -16,11 +16,12 @@ const wave = (payload = 4800) => {
   for (let i = 44; i < bytes.length; i += 2) bytes.writeInt16LE(1234, i)
   return new Blob([bytes], { type: 'audio/wav' })
 }
-const boot = ({ key = 'offline-siliconflow-key', fetcher, autoplay = false, emotion = false, fastTimeout = false, manualDrain = false, playError = null, padWav = null } = {}) => {
+const boot = ({ key = 'offline-siliconflow-key', fetcher, autoplay = false, emotion = false, fastTimeout = false, manualDrain = false, playError = null, padWav = null, AudioContext = null, audioSetup = () => {} } = {}) => {
   const values = new Map([['nanaly-voice-v1', JSON.stringify({ autoplay, emotion })]])
   const requests = [], notices = [], audio = [], blobs = [], usages = [], urls = new Set(), drains = new Map()
   let needed = 0, nextUrl = 0
-  const window = { localStorage: { getItem: k => values.get(k), setItem: (k, v) => values.set(k, v) }, addEventListener() {} }
+  const events = new Map()
+  const window = { AudioContext, localStorage: { getItem: k => values.get(k), setItem: (k, v) => values.set(k, v) }, addEventListener(name, fn) { events.set(name, fn) } }
   class ObjectURL extends URL {
     static createObjectURL(blob) { blobs.push(blob); const value = 'blob:test-' + (++nextUrl); urls.add(value); return value }
     static revokeObjectURL(value) { urls.delete(value) }
@@ -37,9 +38,9 @@ const boot = ({ key = 'offline-siliconflow-key', fetcher, autoplay = false, emot
   const controller = api.create({ getConnection: () => connection,
     notify: text => notices.push(text), onNeedKey: () => needed++, onUsage: usage => usages.push(usage),
     fetcher: async (url, init) => { requests.push({ url, init }); return fetcher ? fetcher(url, init) : new Response(wave(), { headers: { 'content-type': 'audio/wav' } }) },
-    makeAudio: () => { const item = { paused: false, events: [], play: async () => { item.events.push('play'); if (playError) throw playError }, pause() { this.events.push('pause'); this.paused = true }, removeAttribute() { this.events.push('remove') }, load() { this.events.push('load') } }; audio.push(item); return item }
+    makeAudio: () => { const item = { paused: false, events: [], play: async () => { item.events.push('play'); if (playError) throw playError }, pause() { this.events.push('pause'); this.paused = true }, removeAttribute() { this.events.push('remove') }, load() { this.events.push('load') } }; audioSetup(item); audio.push(item); return item }
   })
-  return { api, planner: window.NANALY_PROSODY, controller, requests, notices, values, document, audio, urls, blobs, drains, usages, connection, needed: () => needed,
+  return { api, planner: window.NANALY_PROSODY, controller, requests, notices, values, document, audio, urls, blobs, drains, usages, connection, events, needed: () => needed,
     drain: async () => { for (const [id, fn] of [...drains]) { drains.delete(id); fn() }; await flush() } }
 }
 const flush = async () => { for (let i = 0; i < 8; i++) await new Promise(resolve => setImmediate(resolve)) }
@@ -541,6 +542,171 @@ await test('a broken optional voice subscriber cannot strand playback or prevent
   h.controller.stop()
   assert.equal(await job, false)
   assert.equal(h.urls.size, 0)
+})
+
+// These media fakes exercise the side stream only. The element still owns playback.
+const analyserRig = ({ failure = '', delayedTrack = false } = {}) => {
+  const contexts = [], streams = [], nodes = []
+  let sample = .25
+  const node = type => { const value = { type, disconnected: 0, connected: [], connect(target) { this.connected.push(target) }, disconnect() { this.disconnected++ } }; nodes.push(value); return value }
+  class Context {
+    constructor() { this.state = failure === 'resume' ? 'suspended' : 'running'; this.currentTime = 0; this.destination = {}; contexts.push(this) }
+    createAnalyser() {
+      if (failure === 'setup') throw Error('no analyser')
+      return Object.assign(node('analyser'), { fftSize: 256, getFloatTimeDomainData(values) { if (failure === 'sample') throw Error('cannot sample'); values.fill(sample) } })
+    }
+    createMediaStreamSource() { return node('source') }
+    createMediaElementSource() { throw Error('audible playback must never be rerouted') }
+    resume() { return Promise.reject(Error('context rejected')) }
+    close() { this.state = 'closed'; return Promise.resolve() }
+    createOscillator() { return Object.assign(node('oscillator'), { frequency: {}, start() {}, stop() {} }) }
+    createGain() { return Object.assign(node('gain'), { gain: { setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} } }) }
+  }
+  const audioSetup = audio => { audio.captureStream = () => {
+    if (failure === 'capture') throw Error('no capture')
+    const track = { readyState: 'live', stops: 0, stop() { this.stops++; this.readyState = 'ended' } }
+    const listeners = new Map()
+    const stream = { track, listeners, hasTrack: !delayedTrack, getAudioTracks() { return this.hasTrack ? [track] : [] }, getTracks() { return [track] },
+      addEventListener(name, fn) { listeners.set(name, fn) }, removeEventListener(name, fn) { if (listeners.get(name) === fn) listeners.delete(name) } }
+    streams.push(stream); return stream
+  } }
+  return { Context, audioSetup, contexts, streams, nodes, sample: value => { sample = value } }
+}
+
+await test('only started playback exposes bounded segment text and the existing prosody emotion', async () => {
+  let releasePlay
+  const text = '字'.repeat(179) + '😀后面的文字。', states = []
+  const h = boot({ emotion: true, audioSetup: audio => { audio.play = () => new Promise(resolve => { releasePlay = resolve }) },
+    fetcher: async url => url.endsWith('/chat/completions') ? plannedResponse(h.planner.prepare(text), 'joy') : audioResponse() })
+  h.controller.subscribe(state => states.push(state))
+  const job = h.controller.speak(text, { id: 'chat-metadata' }); await flush()
+  assert.equal(h.controller.state().phase, 'loading')
+  assert.equal(h.controller.state().text, undefined)
+  assert.equal(h.controller.energy(), 0)
+  releasePlay(); await flush()
+  const state = h.controller.state()
+  assert.equal(state.phase, 'playing'); assert.equal(state.priority, 'chat')
+  assert.equal(state.text, '字'.repeat(179)); assert.equal(state.emotion, 'joy'); assert.equal(state.intensity, .5)
+  assert.equal(h.controller.energy(), null, 'unsupported analysis is explicit while native audio continues')
+  assert.ok(states.filter(state => state && state.phase !== 'playing').every(state => state.text === undefined && state.emotion === undefined))
+  state.text = 'mutated by consumer'; assert.notEqual(h.controller.state().text, state.text)
+  assert.equal(h.requests.length, 2, 'only the existing plan and one synthesis request')
+  h.controller.stop(); assert.equal(await job, false); assert.equal(h.controller.energy(), 0)
+})
+await test('current segment retains exact emotion intensity through switching and cached replay', async () => {
+  const text = '第一句开心。第二句更开心。', rig = analyserRig()
+  const h = boot({ emotion: true, manualDrain: true, AudioContext: rig.Context, audioSetup: rig.audioSetup, fetcher: async url => {
+    if (!url.endsWith('/chat/completions')) return audioResponse()
+    return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ ranges: [
+      { from: 0, to: 1, emotion: 'joy', intensity: .4, confidence: .9 },
+      { from: 1, to: 2, emotion: 'joy', intensity: .6, confidence: .9 }
+    ] }) } }] }))
+  } })
+  const job = h.controller.speak(text); await flush()
+  assert.equal(h.controller.state().text, '第一句开心。'); assert.equal(h.controller.state().intensity, .4)
+  h.audio[0].onended()
+  assert.equal(h.controller.state().phase, 'ended'); assert.equal(h.controller.state().text, undefined)
+  await h.drain()
+  assert.equal(h.controller.state().text, '第二句更开心。'); assert.equal(h.controller.state().intensity, .6)
+  assert.equal(rig.streams[0].track.stops, 1); assert.equal(rig.streams[1].track.stops, 0); assert.equal(rig.contexts.length, 1)
+  h.audio[1].onended(); await h.drain(); assert.equal(await job, true)
+  const replay = h.controller.speak(text); await flush()
+  assert.equal(h.requests.length, 3); assert.equal(h.controller.state().intensity, .4)
+  h.controller.stop(); await replay
+})
+await test('low confidence, disabled emotions and failed plans expose neutral metadata', async () => {
+  for (const option of ['off', 'low-confidence', 'failure']) {
+    const h = boot({ emotion: option !== 'off', fetcher: async url => {
+      if (!url.endsWith('/chat/completions')) return audioResponse()
+      return option === 'failure' ? new Response('{}') : plannedResponse(h.planner.prepare('平稳的文字。'), 'joy', .1)
+    } })
+    const job = h.controller.speak('平稳的文字。'); await flush()
+    assert.equal(h.controller.state().emotion, 'neutral'); assert.equal(h.controller.state().intensity, 0)
+    h.controller.stop(); await job
+  }
+})
+await test('real waveform RMS is bounded, ID scoped, zero for silence and released on stop', async () => {
+  const rig = analyserRig(), h = boot({ AudioContext: rig.Context, audioSetup: rig.audioSetup })
+  const job = h.controller.speak('真实声音。', { id: 'measured' }); await flush()
+  assert.equal(h.controller.energy(), .25); assert.equal(h.controller.energy('measured'), .25); assert.equal(h.controller.energy('other'), 0)
+  h.audio[0].muted = true; assert.equal(h.controller.energy(), 0)
+  h.audio[0].muted = false; h.audio[0].volume = .5; assert.equal(h.controller.energy(), .125)
+  h.audio[0].volume = 1
+  rig.sample(0); assert.equal(h.controller.energy(), 0)
+  rig.sample(2); assert.equal(h.controller.energy(), 1)
+  assert.ok(rig.nodes.find(node => node.type === 'source').connected.every(node => node.type === 'analyser'))
+  h.controller.stop(); assert.equal(await job, false)
+  assert.equal(h.controller.energy(), 0); assert.equal(rig.streams[0].track.stops, 1)
+  assert.equal(rig.streams[0].listeners.size, 0)
+  assert.ok(rig.nodes.every(node => node.disconnected === 1))
+})
+await test('pause, buffering and natural end release analysis and cannot leave a talking state', async () => {
+  const rig = analyserRig(), h = boot({ AudioContext: rig.Context, audioSetup: rig.audioSetup, manualDrain: true })
+  const job = h.controller.speak('停顿与继续。'); await flush()
+  const audio = h.audio[0]
+  audio.paused = true; audio.onpause()
+  assert.equal(h.controller.state().phase, 'paused'); assert.equal(h.controller.state().text, undefined)
+  assert.equal(h.controller.energy(), 0); assert.equal(rig.streams[0].track.stops, 1)
+  audio.paused = false; audio.onplaying()
+  assert.equal(h.controller.state().phase, 'playing'); assert.equal(h.controller.energy(), .25)
+  audio.onwaiting()
+  assert.equal(h.controller.state().phase, 'loading'); assert.equal(h.controller.energy(), 0)
+  audio.onplaying(); audio.onended()
+  assert.equal(h.controller.state().phase, 'ended'); assert.equal(h.controller.energy(), 0)
+  assert.ok(rig.streams.every(stream => stream.track.stops === 1))
+  assert.equal(rig.contexts.length, 1, 'one context is reused across all analysis restarts')
+  await h.drain(); assert.equal(await job, true)
+})
+await test('analyser setup, capture, sampling and context failures never interrupt native audio', async () => {
+  for (const failure of ['setup', 'capture', 'sample', 'resume']) {
+    const rig = analyserRig({ failure }), h = boot({ AudioContext: rig.Context, audioSetup: rig.audioSetup })
+    const job = h.controller.speak('仍然出声。'); await flush()
+    assert.equal(h.controller.state().phase, 'playing'); assert.equal(h.controller.energy(), null)
+    assert.deepEqual(h.audio[0].events, ['play']); assert.equal(h.notices.length, 0)
+    assert.ok(rig.streams.every(stream => stream.track.stops === 1))
+    h.controller.stop(); await job
+  }
+})
+await test('late capture tracks are observed only while active and pagehide closes the shared context', async () => {
+  const rig = analyserRig({ delayedTrack: true }), h = boot({ AudioContext: rig.Context, audioSetup: rig.audioSetup })
+  h.controller.chime('open')
+  const job = h.controller.speak('延迟轨道。'); await flush()
+  assert.equal(rig.contexts.length, 1, 'speech and chimes share the same context')
+  assert.equal(h.controller.energy(), null)
+  const stream = rig.streams[0], add = stream.listeners.get('addtrack')
+  stream.hasTrack = true; add(); assert.equal(h.controller.energy(), .25)
+  h.events.get('pagehide')(); assert.equal(await job, false)
+  assert.equal(h.controller.energy(), 0); assert.equal(rig.contexts[0].state, 'closed')
+  const count = rig.nodes.length; add(); assert.equal(rig.nodes.length, count)
+})
+await test('pet speech cannot cancel chat during planning, loading or playing', async () => {
+  for (const phase of ['planning', 'loading', 'playing']) {
+    let release
+    const h = boot({ emotion: phase === 'planning', fetcher: async url => {
+      if (phase !== 'playing') return new Promise(resolve => { release = resolve })
+      return audioResponse()
+    } })
+    const job = h.controller.speak('聊天优先。', { id: 'voice-chat' }); await flush()
+    assert.equal(h.controller.state().phase, phase)
+    assert.equal(await h.controller.speak('戳我啦。', { id: 'mao-1' }), false)
+    assert.equal(await h.controller.speak('仍然不能插话。', { id: 'custom-pet', priority: 'pet' }), false)
+    assert.equal(h.requests.length, 1); assert.equal(h.controller.state().id, 'voice-chat')
+    assert.equal(h.requests[0].init.signal.aborted, false)
+    h.controller.stop()
+    if (release) release(phase === 'planning' ? plannedResponse(h.planner.prepare('聊天优先。')) : audioResponse())
+    assert.equal(await job, false)
+  }
+})
+await test('manual and enabled automatic chat can take over pet speech without duplicate synthesis', async () => {
+  for (const automatic of [false, true]) {
+    const h = boot({ autoplay: true })
+    const pet = h.controller.speak('桌宠一句。', { id: 'mao-first' }); await flush()
+    assert.equal(h.controller.state().priority, 'pet')
+    const chat = h.controller.speak('聊天开始。', { id: 'mao-looking-but-chat', priority: 'chat', automatic }); await flush()
+    assert.equal(await pet, false); assert.equal(h.controller.state().priority, 'chat')
+    assert.equal(h.requests.length, 2); assert.deepEqual(h.audio[0].events, ['play', 'pause', 'remove', 'load'])
+    h.controller.stop(); await chat
+  }
 })
 
 console.log('\n' + passed + ' speech behavior groups passed')

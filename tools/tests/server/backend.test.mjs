@@ -177,3 +177,30 @@ test('rejected concurrent workspace request does not release another run lock', 
   await assert.rejects(runner.run(validateRun({ language: 'git', code: 'git status', workspaceId: workspace.workspaceId, workspaceRevision: 0 })), { code: 'WORKSPACE_BUSY' });
   assert.ok(runner.busy.has(workspace.workspaceId));
 });
+
+test('workspace discovery is authenticated, ordered and independent of run history', async t => {
+  const { store } = await storeFixture(t);
+  const old = await store.resetWorkspace(null, 'linux');
+  const current = await store.resetWorkspace(null, 'linux');
+  const git = await store.resetWorkspace(null, 'git');
+  store.workspaces.items[old.workspaceId].updatedAt = '2026-01-01T00:00:00.000Z';
+  store.workspaces.items[current.workspaceId].updatedAt = '2026-01-03T00:00:00.000Z';
+  store.workspaces.items[git.workspaceId].updatedAt = '2026-01-02T00:00:00.000Z';
+  const runner = { busy: new Set([current.workspaceId]) };
+  const app = createApp({ store, runner, token });
+  app.listen(0, '127.0.0.1'); await once(app, 'listening');
+  t.after(() => { app.closeAllConnections(); app.close(); });
+  const base = 'http://127.0.0.1:' + app.address().port;
+  assert.equal((await fetch(base + '/api/workspaces')).status, 401);
+  const response = await fetch(base + '/api/workspaces', { headers: { Authorization: 'Bearer ' + token } });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  const { workspaces } = await response.json();
+  assert.deepEqual(workspaces.map(workspace => workspace.workspaceId), [current.workspaceId, git.workspaceId, old.workspaceId]);
+  assert.deepEqual(workspaces.map(workspace => workspace.busy), [true, false, false]);
+  assert.equal(store.history.runs.length, 0);
+  workspaces[0].revision = 999;
+  assert.equal(store.getWorkspace(current.workspaceId).revision, 0);
+  await store.deleteWorkspace(old.workspaceId);
+  assert.equal(store.listWorkspaces().length, 2);
+});

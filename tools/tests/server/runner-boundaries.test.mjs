@@ -27,6 +27,7 @@ function mockDocker(hook){
     if(args[0]==='info')return output(info)
     if(args[0]==='image')return output('sha256:runner')
     if(args.includes('cat')&&args.includes('/work/program'))return output('ELF')
+    if(args.includes('/tmp/nanaly-shell-result.json'))return output(JSON.stringify({cwd:'/work',shellStateSaved:true,warnings:[]}))
     if(args.includes('-czf'))return output('workspace snapshot')
     return output()
   }
@@ -145,7 +146,7 @@ test('cancelling a running shell kills its container and cannot commit the chang
   const store=await fixture(t),started=deferred(),stopped=deferred(),controller=new AbortController()
   const docker=mockDocker(async args=>{
     if(args[0]==='kill'){stopped.resolve();return output()}
-    if(args.includes('bash')&&args.includes('/input/main.sh')&&!args.includes('-n')){
+    if(args.includes('/opt/nanaly/shell-session.py')&&args.includes('run')){
       started.resolve();await stopped.promise;return output('',137)
     }
   })
@@ -201,4 +202,40 @@ test('aborting the HTTP run propagates a cancellation signal and saves no comple
   }).catch(error=>error)
   await started.promise;controller.abort();await request;await aborted.promise
   assert.equal(store.history.runs.length,0)
+})
+
+test('shell runs preserve file permissions, use session cwd for Git, and report the real exit code',async t=>{
+  const store=await fixture(t)
+  let workspace=await store.resetWorkspace(null,'git')
+  workspace=await store.commitWorkspace(workspace,Buffer.from('old snapshot'))
+  const docker=mockDocker(args=>{
+    if(args.includes('/opt/nanaly/shell-session.py')&&args.includes('run'))return output('retained output',7)
+    if(args.includes('/tmp/nanaly-shell-result.json'))return output(JSON.stringify({cwd:'/work/project',shellStateSaved:true,warnings:[]}))
+  })
+  const runner=new DockerRunner(store,{execute:docker.execute})
+  const result=await runner.run(validateRun({language:'git',code:'exit 7',workspaceId:workspace.workspaceId,workspaceRevision:workspace.revision}))
+  assert.equal(result.status,'runtime_error');assert.equal(result.exitCode,7);assert.equal(result.cwd,'/work/project')
+  assert.equal(result.workspaceCommitted,true)
+  const restore=docker.calls.find(call=>call.args.includes('-xzf')).args
+  assert.ok(restore.includes('--same-permissions'));assert.ok(restore.includes('--no-same-owner'))
+  const summary=docker.calls.find(call=>call.args.includes('status')).args
+  assert.equal(summary[summary.indexOf('-C')+1],'/work/project')
+  const create=docker.calls.find(call=>call.args[0]==='create').args
+  assert.ok(create.includes('--network=none'));assert.ok(!create.includes('--env=GIT_CONFIG_NOSYSTEM=1'))
+  const persistIndex=docker.calls.findIndex(call=>call.args.includes('persist'))
+  const cleanIndex=docker.calls.map(call=>call.args.includes('/opt/nanaly/cleanup.py')).lastIndexOf(true)
+  assert.ok(persistIndex>cleanIndex)
+})
+
+test('missing or failed shell state never overwrites the last usable workspace snapshot',async t=>{
+  for(const metadata of ['not json',JSON.stringify({cwd:'/work',shellStateSaved:false,warnings:['session warning']})]){
+    const store=await fixture(t)
+    const docker=mockDocker(args=>args.includes('/tmp/nanaly-shell-result.json')?output(metadata):undefined)
+    const runner=new DockerRunner(store,{execute:docker.execute})
+    const result=await runner.run(validateRun({language:'linux',code:'echo changed'}))
+    assert.equal(result.workspaceCommitted,false)
+    assert.equal(docker.calls.some(call=>call.args.includes('-czf')),false)
+    assert.ok(result.warnings.some(warning=>warning.includes('快照未能保存')))
+    if(metadata.startsWith('{'))assert.ok(result.warnings.includes('session warning'))
+  }
 })

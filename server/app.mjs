@@ -88,6 +88,9 @@ export function createApp({ store, runner, token, origins = [], now = Date.now }
         json(res, 200, { runs: store.history.runs.slice(-limit).reverse() }); return;
       }
       if (url.pathname === '/api/runs' && req.method === 'DELETE') { await store.clearRuns(); json(res, 200, { deleted: true }); return; }
+      if (url.pathname === '/api/workspaces' && req.method === 'GET') {
+        json(res, 200, { workspaces: store.listWorkspaces().map(value => ({ ...value, busy: runner.busy.has(value.workspaceId) })) }); return;
+      }
       if (url.pathname === '/api/workspaces/reset' && req.method === 'POST') {
         const request = await body(req);
         json(res, 200, await store.resetWorkspace(request?.workspaceId, request?.language)); return;

@@ -111,6 +111,11 @@ export class PrivateStore {
       return this.getState();
     });
   }
+  listWorkspaces() {
+    return Object.values(this.workspaces.items)
+      .map(value => structuredClone(value))
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || b.workspaceId.localeCompare(a.workspaceId));
+  }
   getWorkspace(id) {
     invariant(/^[a-f0-9-]{36}$/.test(id || ''), 400, 'INVALID_WORKSPACE', '工作区编号无效。');
     const value = this.workspaces.items[id];

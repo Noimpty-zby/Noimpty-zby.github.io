@@ -12,7 +12,7 @@ import { validateRun } from '../../../server/lib/validation.mjs';
 test('real Docker execution, diagnostics, boundaries and persisted workspaces', { skip: process.env.NANALY_DOCKER_TESTS !== '1', timeout: 300000 }, async t => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'nanaly-docker-'));
   const store = await new PrivateStore(directory).init();
-  const runner = new DockerRunner(store);
+  const runner = new DockerRunner(store, { image: process.env.NANALY_RUNNER_IMAGE || 'nanaly-runner:1' });
   t.after(async () => { await runner.close(); await store.close(); await fs.rm(directory, { recursive: true, force: true }); });
   assert.equal((await runner.health()).ready, true, 'Build image and ensure cgroup v2 controllers first.');
   const run = value => runner.run(validateRun(value));
@@ -36,6 +36,112 @@ test('real Docker execution, diagnostics, boundaries and persisted workspaces', 
   assert.equal(check.status, 'checked'); assert.equal(check.workspaceCommitted, false);
   const checked = await run({ language: 'linux', code: 'test ! -e should-not-exist', workspaceId: linux.workspaceId, workspaceRevision: resumed.workspaceRevision });
   assert.equal(checked.status, 'accepted');
+  await t.test('Linux provides real calendar, text, archive, inspection and help commands', async () => {
+    const tools = await run({ language: 'linux', code: [
+      'set -e',
+      'for tool in ncal cal grep sed awk less tree file zip unzip xz bzip2 jq bc diff patch ps findmnt curl wget ssh man; do command -v "$tool" >/dev/null; done',
+      'ncal -b 9 2026',
+      'printf "one\\ntwo\\n" | grep two | sed s/two/three/',
+      "printf '%s\\n' '{\"name\":\"toolbox\"}' | jq -r .name",
+      'printf "2+3\\n" | bc',
+      'printf "tools-ok\\n"'
+    ].join('\n') });
+    assert.equal(tools.status, 'accepted', JSON.stringify(tools));
+    assert.equal(tools.exitCode, 0);
+    assert.match(tools.stdout, /2026/);
+    assert.match(tools.stdout, /three\ntoolbox\n5\ntools-ok/);
+  });
+  await t.test('Linux resumes directory, exports, aliases, functions, umask and file permissions', async () => {
+    const first = await run({ language: 'linux', code: [
+      'set -e',
+      'mkdir -p "lesson dir"',
+      'cd "lesson dir"',
+      "export LAB_TOPIC='linux practice'",
+      'umask 027',
+      'printf before > kept.txt',
+      'chmod 764 kept.txt',
+      'mkdir private-dir',
+      'chmod 770 private-dir',
+      'lab_greet() { printf "function-ok\\n"; }',
+      "alias lab_alias='printf \"alias-ok\\n\"'",
+      'pwd'
+    ].join('\n') });
+    assert.equal(first.status, 'accepted', JSON.stringify(first));
+    assert.equal(first.workspaceCommitted, true);
+    assert.match(first.cwd, /\/lesson dir$/);
+    assert.equal(first.stdout.trim(), first.cwd);
+    const second = await run({
+      language: 'linux', workspaceId: first.workspaceId, workspaceRevision: first.workspaceRevision,
+      code: [
+        'pwd',
+        'printf "%s\\n" "$LAB_TOPIC"',
+        'touch created-after-resume.txt',
+        'mkdir created-after-resume-dir',
+        "stat -c '%a' kept.txt private-dir created-after-resume.txt created-after-resume-dir",
+        'lab_greet',
+        'lab_alias'
+      ].join('\n')
+    });
+    assert.equal(second.status, 'accepted', JSON.stringify(second));
+    assert.equal(second.cwd, first.cwd);
+    assert.deepEqual(second.stdout.trim().split('\n'), [
+      first.cwd, 'linux practice', '764', '770', '640', '750', 'function-ok', 'alias-ok'
+    ]);
+    assert.equal(second.workspaceCommitted, true);
+  });
+  for (const language of ['linux', 'git']) {
+    await t.test(language + ' can commit in a newly created subrepository and resume its directory', async () => {
+      const created = await run({ language, code: [
+        'set -e',
+        'mkdir project',
+        'cd project',
+        'git init -b main',
+        'printf "first lesson\\n" > lesson.txt',
+        'git add lesson.txt',
+        'git commit -m "first lesson"',
+        'git log -1 --format=%s'
+      ].join('\n') });
+      assert.equal(created.status, 'accepted', JSON.stringify(created));
+      assert.equal(created.workspaceCommitted, true);
+      assert.match(created.cwd, /\/project$/);
+      assert.match(created.stdout, /first lesson/);
+      const resumedRepo = await run({
+        language, workspaceId: created.workspaceId, workspaceRevision: created.workspaceRevision,
+        code: [
+          'set -e',
+          'printf "second lesson\\n" >> lesson.txt',
+          'git add lesson.txt',
+          'git commit -m "second lesson"',
+          'git log -2 --format=%s',
+          'test -z "$(git status --porcelain)"'
+        ].join('\n')
+      });
+      assert.equal(resumedRepo.status, 'accepted', JSON.stringify(resumedRepo));
+      assert.equal(resumedRepo.cwd, created.cwd);
+      assert.match(resumedRepo.stdout, /second lesson\nfirst lesson/);
+      assert.equal(resumedRepo.workspaceCommitted, true);
+    });
+  }
+  await t.test('nonzero shell exits report the actual code and preserve completed workspace changes', async () => {
+    const failed = await run({ language: 'linux', code: [
+      'mkdir failed-step',
+      'cd failed-step',
+      'printf saved-before-error > note.txt',
+      'exit 7'
+    ].join('\n') });
+    assert.equal(failed.status, 'runtime_error', JSON.stringify(failed));
+    assert.equal(failed.exitCode, 7);
+    assert.equal(failed.workspaceCommitted, true);
+    assert.match(failed.cwd, /\/failed-step$/);
+    const recovered = await run({
+      language: 'linux', workspaceId: failed.workspaceId, workspaceRevision: failed.workspaceRevision,
+      code: 'cat note.txt\nfalse\nprintf "\\ncontinued\\n"'
+    });
+    assert.equal(recovered.status, 'accepted', JSON.stringify(recovered));
+    assert.equal(recovered.exitCode, 0);
+    assert.equal(recovered.cwd, failed.cwd);
+    assert.equal(recovered.stdout, 'saved-before-error\ncontinued\n', 'ordinary Bash continues after false unless the script enables errexit');
+  });
   const git = await run({ language: 'git', code: 'echo lesson > lesson.txt; git add .; git commit -m lesson; git branch lesson' });
   assert.equal(git.status, 'accepted');
   const gitResume = await run({ language: 'git', code: 'git branch --list lesson', workspaceId: git.workspaceId, workspaceRevision: git.workspaceRevision });

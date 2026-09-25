@@ -11,7 +11,7 @@ import { validateRun } from '../../../server/lib/validation.mjs';
 test('real sandbox boundaries, testcase isolation, and cancellation during execution', { skip: process.env.NANALY_DOCKER_TESTS !== '1', timeout: 60000 }, async t => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'nanaly-boundaries-'));
   const store = await new PrivateStore(directory).init();
-  const runner = new DockerRunner(store, { concurrency: 1 });
+  const runner = new DockerRunner(store, { concurrency: 1, image: process.env.NANALY_RUNNER_IMAGE || 'nanaly-runner:1' });
   t.after(async () => { await runner.close(); await store.close(); await fs.rm(directory, { recursive: true, force: true }); });
   assert.equal((await runner.health()).ready, true);
   const request = input => runner.run(validateRun(input));

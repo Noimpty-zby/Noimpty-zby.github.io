@@ -94,7 +94,7 @@ export class DockerRunner {
         '--mount', 'type=bind,src=' + directory + ',dst=/input,readonly',
         '--workdir=/work', '--env=HOME=/work', '--env=GOCACHE=/tmp/go-cache', '--env=GOPATH=/tmp/gopath',
         '--env=CGO_ENABLED=0', '--env=GOTOOLCHAIN=local', '--env=GOPROXY=off',
-        '--env=GIT_CONFIG_NOSYSTEM=1', this.image, 'sleep', '150'];
+        this.image, 'sleep', '150'];
       containerCreated = true; this.containers.add(name);
       const created = await this.cli(createArgs, { timeout: 10000 });
       notCancelled();
@@ -110,13 +110,12 @@ export class DockerRunner {
       const guard = await exec(['python3', '/opt/nanaly/check-limits.py']);
       invariant(guard.code === 0, 503, 'LIMITS_UNAVAILABLE', '容器资源限制未生效，已拒绝执行。');
       if (workspace?.revision && request.language !== 'mysql') {
-        const restored = await exec(['tar', '-xzf', '/input/workspace.snapshot', '--no-same-owner', '--no-same-permissions', '-C', '/work'], null, 10000);
+        const restored = await exec(['tar', '-xzf', '/input/workspace.snapshot', '--no-same-owner', '--same-permissions', '-C', '/work'], null, 10000);
         invariant(restored.code === 0, 500, 'WORKSPACE_RESTORE_FAILED', '工作区快照恢复失败，请重置工作区。');
       }
       if (request.language === 'git' && !workspace?.revision) {
         const init = await exec(['git', 'init', '-b', 'main', '/work']);
         invariant(init.code === 0, 500, 'WORKSPACE_INIT_FAILED', '练习仓库初始化失败。');
-        await exec(['git', 'config', 'user.name', 'Learner']); await exec(['git', 'config', 'user.email', 'learner@example.invalid']);
       }
       let workspaceSnapshotSafe = true;
       let result = { runId, revision: request.revision, status: 'checked', stdout: '', stderr: '', diagnostics: [], tests: [] };
@@ -133,15 +132,28 @@ export class DockerRunner {
         result = { ...result, ...mysql };
       } else if (request.mode === 'run') {
         if (['git', 'linux'].includes(request.language)) {
-          const executed = stringResult(await exec(['bash', '--noprofile', '--norc', '/input/main.sh'], request.stdin, 8000));
-          result = { ...result, status: status(executed), stdout: executed.stdout, stderr: executed.stderr, diagnostics: diagnostics(executed.stderr) };
+          const executed = stringResult(await exec(['python3', '/opt/nanaly/shell-session.py', 'run', '/input/main.sh'], request.stdin, 30000));
+          result = { ...result, status: status(executed), exitCode: executed.code, stdout: executed.stdout, stderr: executed.stderr, diagnostics: diagnostics(executed.stderr) };
           if (!executed.reason) {
             const cleaned = await exec(['python3', '/opt/nanaly/cleanup.py']);
             workspaceSnapshotSafe = cleaned.code === 0 && !cleaned.reason;
-            const summary = await exec(request.language === 'git' ? ['git', '-c', 'core.fsmonitor=false', 'status', '--short', '--branch'] : ['find', '.', '-maxdepth', '2', '-not', '-path', './.git/*'], null, 2000, 8192);
+            const metadata = await exec(['cat', '/tmp/nanaly-shell-result.json'], null, 2000, 16384);
+            let session;
+            try { if (metadata.code === 0 && !metadata.reason) session = JSON.parse(metadata.stdout.toString('utf8')); } catch {}
+            const validCwd = typeof session?.cwd === 'string' && session.cwd.startsWith('/') && session.cwd.length <= 4096 && !session.cwd.includes('\0');
+            workspaceSnapshotSafe = workspaceSnapshotSafe && validCwd && session?.shellStateSaved === true;
+            result.cwd = validCwd ? session.cwd : '/work';
+            if (Array.isArray(session?.warnings)) result.warnings = session.warnings.filter(value => typeof value === 'string').slice(0, 5).map(value => value.slice(0, 2000));
+            const summary = await exec(request.language === 'git'
+              ? ['git', '-C', result.cwd, '-c', 'core.fsmonitor=false', 'status', '--short', '--branch']
+              : ['find', result.cwd, '-maxdepth', '2', '-not', '-path', '*/.git/*'], null, 2000, 8192);
             result.workspaceSummary = summary.stdout.toString('utf8');
             const finalClean = await exec(['python3', '/opt/nanaly/cleanup.py']);
             workspaceSnapshotSafe = workspaceSnapshotSafe && finalClean.code === 0 && !finalClean.reason;
+            if (workspaceSnapshotSafe) {
+              const saved = await exec(['python3', '/opt/nanaly/shell-session.py', 'persist']);
+              workspaceSnapshotSafe = saved.code === 0 && !saved.reason;
+            }
           }
         } else {
           const cases = request.tests.length ? request.tests : [{ input: request.stdin }];
@@ -197,7 +209,7 @@ export class DockerRunner {
             result.workspaceCommitted = true;
           } else {
             result.workspaceCommitted = false;
-            result.warnings = ['工作区快照未能保存；下次执行从上次已保存版本恢复。'];
+            result.warnings = [...(result.warnings || []), '工作区快照未能保存；下次执行从上次已保存版本恢复。'];
           }
         } else result.workspaceCommitted = false;
       }

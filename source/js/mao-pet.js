@@ -101,21 +101,21 @@
       ],
       '/in-class/': [
         ['课内这两门是硬骨头，慢慢啃。', '平静'],
-        ['数据结构写到第二章了，后面还长着呢。', '为难']
+        ['课程笔记会跟着实际更新慢慢积累。', '为难']
       ],
       '/extra/': [
         ['课外这条线是他自己挑的，没人逼。', '笑'],
         ['一门一门来，别跳着看。', '闭眼']
       ],
-      '/extra/ai-infra/': ['AI Infra 这条线刚铺开，Go 还一行没写呢 (ovo)'],
+      '/extra/ai-infra/': ['AI Infra 从语言到系统，可以沿着课程卡片继续看。'],
       '/extra/ai-infra/git/': [
         ['分支就是个 41 字节的文件，知道这个之后好懂多了。', '星星眼'],
         ['冲突不可怕，看清楚共同祖先就行。', '平静']
       ],
       '/extra/ai-infra/linux/': ['命令行这东西，敲熟了比什么都快。'],
       '/life/': [['这一栏轻松点，歇会儿再学。', '笑']],
-      '/news/': [['这些是我每周捞回来的，挑着看。', '星星眼']],
-      '/schedule/': [['日程排得挺满，今天的做完了吗喵？', '为难']]
+      '/news/': [['这里按日期整理资讯，挑感兴趣的看。', '星星眼']],
+      '/schedule/': [['打开日程，可以看看今天的安排喵。', '为难']]
     },
     /* ── 按时段换话 ──
      * until 是「几点之前」，24 小时制，本地时间。深夜那档是有意留的：
@@ -158,9 +158,9 @@
 
     // 文章页：读页面上的 <h1.post-title>，套进这几句里
     postLines: [
-      ['《{题}》，这篇我看过。', '闭眼'],
+      ['正在看《{题}》喵。', '闭眼'],
       ['又在翻《{题}》喵？', '笑'],
-      ['《{题}》这篇有点长，慢慢看。', '为难']
+      ['《{题}》有不明白的地方，可以选中文字问我。', '为难']
     ],
     /* ── 戳哪儿算哪儿 ──
      * 按她包围盒的纵向比例切三段（0 是头顶，1 是脚底）。模型自带的 HitArea
@@ -233,11 +233,54 @@
   }
   const save = on => { try { localStorage.setItem(PREF, JSON.stringify(on)) } catch (_) {} }
 
-  // 窄屏上她得让位给正文，等比缩
+  const SETTINGS_PREF = 'mao-settings-v1'
+  const defaults = { side: CONFIG.side, size: 'medium', bottomRatio: 0, compact: false,
+    autoCompact: true, voice: CONFIG.voiceDefault, chatSync: true, idleSeconds: CONFIG.idleEveryMs / 1000,
+    quiet: false, power: 'auto' }
+  const normalize = (patch, base = defaults) => {
+    const next = { ...base }
+    if (!patch || typeof patch !== 'object') return next
+    for (const key of ['compact', 'autoCompact', 'voice', 'chatSync', 'quiet']) {
+      if (typeof patch[key] === 'boolean') next[key] = patch[key]
+    }
+    for (const [key, choices] of Object.entries({ side: ['left', 'right'],
+      size: ['small', 'medium', 'large'], power: ['auto', 'saving'], idleSeconds: [0, 70, 150, 300] })) {
+      if (choices.includes(patch[key])) next[key] = patch[key]
+    }
+    if (Number.isFinite(patch.bottomRatio)) next.bottomRatio = Math.max(0, Math.min(1, patch.bottomRatio))
+    return next
+  }
+  let settings = (() => {
+    try {
+      const data = JSON.parse(localStorage.getItem(SETTINGS_PREF) || 'null')
+      const migrated = { ...defaults, voice: JSON.parse(localStorage.getItem('mao-voice') || 'false') === true }
+      return normalize(data, migrated)
+    } catch (_) { return { ...defaults } }
+  })()
+  let controls = null, status = { phase: 'idle', message: 'Mao 已收起' }
+  let compactOverride = false, cancelModelLoad = null, dragCleanup = null
+  let speech = null, mouthLevel = 0, lastFace = '', suppressTapUntil = 0
+  let chat = { phase: 'idle', turnId: '', text: '' }, chatTurn = '', celebratedAt = 0
+  let motionQuery = null, onPowerChange = null, sharedFPS = null
+  let pendingModels = 0
+  const modelTextures = new Set()
+  const compactNow = () => settings.compact || (settings.autoCompact && !compactOverride && (window.innerWidth || 1440) <= 560)
+  const reducedMotion = () => { try { return !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches } catch (_) { return false } }
+  const savingPower = () => settings.power === 'saving' || reducedMotion() || compactNow()
+    || !!window.navigator?.connection?.saveData
+  const chatBusy = () => settings.chatSync && ['thinking', 'streaming'].includes(chat.phase)
+  const speechBusy = () => !!speech && ['planning', 'loading', 'playing', 'paused'].includes(speech.phase)
+  const occupied = () => chatBusy() || speechBusy()
+  const setStatus = (phase, message) => { status = { phase, message }; sync() }
+
+  // 窄屏可以收成头像，展开后仍按视口等比缩放。
   const stageSize = () => {
     const cap = Math.round((window.innerWidth || CONFIG.width) * CONFIG.widthCapRatio)
-    const w = Math.max(150, Math.min(CONFIG.width, cap))
-    return { w, h: Math.round(w * CONFIG.height / CONFIG.width) }
+    if (compactNow()) return { w: 88, h: 88 }
+    const target = CONFIG.width * ({ small: 0.75, medium: 1, large: 1.18 }[settings.size])
+    const heightCap = Math.max(120, (window.innerHeight || 900) - 32) * CONFIG.width / CONFIG.height
+    const w = Math.min(Math.max(150, Math.min(target, cap)), heightCap)
+    return { w: Math.round(w), h: Math.round(w * CONFIG.height / CONFIG.width) }
   }
 
   let app = null, model = null, stage = null, bubble = null, button = null
@@ -248,8 +291,15 @@
   const loadScript = src => new Promise((resolve, reject) => {
     const tag = document.createElement('script')
     tag.src = src
-    tag.onload = resolve
-    tag.onerror = () => reject(new Error('取不到 ' + src))
+    let settled = false
+    const finish = error => {
+      if (settled) return
+      settled = true; clearTimeout(timer); tag.onload = tag.onerror = null
+      if (error) { tag.remove(); reject(error) } else resolve()
+    }
+    const timer = setTimeout(() => finish(new Error('运行时加载超时，请重试')), 20000)
+    tag.onload = () => finish()
+    tag.onerror = () => finish(new Error('取不到 ' + src))
     document.head.appendChild(tag)
   })
 
@@ -263,10 +313,15 @@
 
   const sync = () => {
     if (!button) return
-    const on = !!app
+    const on = !!model
     button.setAttribute('aria-pressed', String(on))
     button.dataset.voice = voiceOn ? 'on' : 'off'
-    button.title = (on ? '把 Mao 收起来' : '把 Mao 放出来')
+    button.dataset.status = status.phase
+    button.setAttribute('aria-busy', String(status.phase === 'loading'))
+    controls?.refresh()
+    button.title = (status.phase === 'error' ? status.message + '（点旁边齿轮可重试）'
+      : status.phase === 'loading' ? '正在加载 Mao，再点一次可取消'
+        : on ? '把 Mao 收起来' : '把 Mao 放出来')
       + '（长按' + (voiceOn ? '让她闭嘴' : '让她出声') + '）'
   }
 
@@ -277,7 +332,8 @@
   const face = name => {
     if (!model) return
     const id = CONFIG.faces[name]
-    if (!id) return
+    if (!id || lastFace === id) return
+    lastFace = id
     try { Promise.resolve(model.expression(id)).catch(() => {}) } catch (_) {}
   }
 
@@ -312,7 +368,8 @@
     if (!core) return
     const set = (id, v) => { try { core.setParameterValueById(id, v) } catch (_) {} }
 
-    if (sulkUntil > Date.now()) {
+    updateSpeechMouth()
+    if (!occupied() && sulkUntil > Date.now()) {
       // 越靠近结束扭得越轻，别在别扭结束那一刻「啪」地弹回来
       const left = Math.min(1, (sulkUntil - Date.now()) / 600)
       set('ParamAngleY', -28 * left)
@@ -321,7 +378,7 @@
       set('ParamEyeBallX', -1 * left)
     }
 
-    const energy = musicEnergy()
+    const energy = occupied() || savingPower() ? 0 : musicEnergy()
     if (energy > 0.02) {
       const phase = Date.now() / 1000 * CONFIG.danceHz * Math.PI * 2
       const wave = Math.sin(phase) * Math.min(1, energy * CONFIG.danceGain)
@@ -350,13 +407,8 @@
    * 她说话的时候嘴跟着动：接上语音之后，嘴的节奏跟的是**真的有没有声音在响**
    * （订阅控制器的状态），而不是打字机打到第几个字。 */
   const VOICE_PREF = 'mao-voice'
-  let voiceOn = (() => {
-    try {
-      const saved = localStorage.getItem(VOICE_PREF)
-      return saved === null ? CONFIG.voiceDefault : JSON.parse(saved) === true
-    } catch (_) { return CONFIG.voiceDefault }
-  })()
-  let voiceSeq = 0, voiceId = null, unsubVoice = null
+  let voiceOn = settings.voice
+  let voiceSeq = 0, voiceId = null, unsubVoice = null, voiceHandler = null
 
   const voiceCtl = () => {
     try {
@@ -373,29 +425,88 @@
     try { model.internalModel.coreModel.setParameterValueById(CONFIG.mouthParam, v) } catch (_) {}
   }
 
-  /* 订阅控制器：只认自己那条 id，别把娜娜莉在对话窗里说的话也当成自己在说。 */
+  const emotionFace = state => {
+    const emotion = String(state.emotion || '').toLowerCase()
+    const intensity = Number(state.intensity)
+    if (Number.isFinite(intensity) && intensity < 0.25) return '平静'
+    return ({ joy: '笑', sadness: '难过', comfort: '闭眼', surprise: '星星眼', serious: '平静',
+      embarrassed: '脸红', teasing: '笑', annoyed: '生气', happy: '笑', cheerful: '笑', excited: '星星眼', sad: '难过',
+      angry: '生气', shy: '脸红', concerned: '为难', worried: '为难',
+      soothing: '闭眼', calm: '平静', neutral: '平静', curious: '星星眼' })[emotion] || '平静'
+  }
+  const updateSpeechMouth = () => {
+    if (!speech || speech.phase !== 'playing' || document.hidden) {
+      if (!typeTimer) mouth(0)
+      return
+    }
+    let level = null
+    try { level = voiceCtl()?.energy?.(speech.id) ?? null } catch (_) {}
+    // 不支持波形分析时只在真实 playing 阶段使用轻微周期动画。
+    const target = level === null ? 0.18 + 0.18 * (1 + Math.sin(Date.now() / 85))
+      : Math.max(0, Math.min(1, Number(level) * 3.2 || 0))
+    mouthLevel += (target - mouthLevel) * (target > mouthLevel ? 0.65 : 0.45)
+    mouth(mouthLevel < 0.015 ? 0 : mouthLevel)
+  }
+  const showBubble = text => {
+    if (!bubble) return
+    clearTimeout(hideTimer); clearInterval(typeTimer); hideTimer = typeTimer = null
+    bubble.textContent = Array.from(String(text || '')).slice(0, 180).join('')
+    bubble.dataset.on = '1'
+  }
+  const settleBubble = () => {
+    clearTimeout(hideTimer)
+    hideTimer = setTimeout(() => {
+      hideTimer = null
+      if (occupied()) return
+      if (bubble) delete bubble.dataset.on
+      face(moodFace())
+    }, CONFIG.speakMs)
+  }
   const watchVoice = () => {
     const ctl = voiceCtl()
-    if (!ctl || unsubVoice) return
-    unsubVoice = ctl.subscribe(state => {
-      if (!model) return
-      const mine = state && state.id === voiceId
-      if (!mine) { stopVoiceMouth(); return }
-      // planning / loading 时还没出声，嘴先别动
-      if (state.phase !== 'playing') { stopVoiceMouth(); return }
-      if (!voiceTimer) {
-        voiceTimer = setInterval(() => mouth(0.35 + Math.random() * 0.65), CONFIG.typeMs)
+    if (!ctl) return
+    if (!voiceHandler) voiceHandler = state => {
+      if (!model || document.hidden) return
+      if (!stateAllowed()) {
+        speech = null; stopVoiceMouth()
+        if (bubble) delete bubble.dataset.on
+        return
       }
-    })
+      const follows = state && (state.id === voiceId || (settings.chatSync && state.priority !== 'pet'))
+      if (!follows) {
+        const previous = speech
+        speech = null; stopVoiceMouth()
+        if (previous && !chatBusy()) { face(moodFace()); settleBubble() }
+        return
+      }
+      speech = { ...state }
+      if (state.phase !== 'playing') {
+        stopVoiceMouth()
+        if (['ended', 'idle', 'error'].includes(state.phase)) {
+          speech = null
+          if (!chatBusy()) { face(moodFace()); settleBubble() }
+        }
+        return
+      }
+      face(emotionFace(state))
+      if (settings.chatSync && state.id !== voiceId && state.text) showBubble(state.text)
+      if (!voiceTimer) voiceTimer = setInterval(updateSpeechMouth, CONFIG.typeMs)
+      updateSpeechMouth()
+    }
+    if (!unsubVoice) unsubVoice = ctl.subscribe(voiceHandler)
+    // 出场、前台恢复和重开聊天联动时，控制器可能已在播放，不会再发 playing。
+    voiceHandler(ctl.state?.() || null)
   }
-
   const stopVoiceMouth = () => {
-    clearInterval(voiceTimer); voiceTimer = null
+    clearInterval(voiceTimer); voiceTimer = null; mouthLevel = 0
     mouth(0)
   }
 
   const setVoice = on => {
     voiceOn = !!on
+    if (!voiceOn) stopTalking()
+    settings.voice = voiceOn
+    persistSettings()
     try { localStorage.setItem(VOICE_PREF, JSON.stringify(voiceOn)) } catch (_) {}
     sync()
     if (model) say(pick(CONFIG.voiceLines[voiceOn ? 'on' : 'off']), { aloud: voiceOn })
@@ -405,7 +516,7 @@
   const stopTalking = () => {
     clearTimeout(hideTimer); clearInterval(typeTimer)
     hideTimer = typeTimer = null
-    stopVoiceMouth()
+    if (!speech || speech.id === voiceId) { speech = null; stopVoiceMouth() }
     // 上一句还在放就掐掉，不然新台词的字和旧句子的声音对不上
     if (voiceId) {
       try { const ctl = voiceCtl(); if (ctl?.state()?.id === voiceId) ctl.stop() } catch (_) {}
@@ -416,7 +527,7 @@
   /* 逐字上屏，嘴跟着开合。嘴型值取随机而不是定值 —— 匀速开合看着像机器人，
    * 随机幅度才有说话的样子。 */
   const say = (line, { aloud = false } = {}) => {
-    if (!bubble) return
+    if (!bubble || occupied()) return
     // 台词可以写成 '一句话'，也可以写成 ['一句话', '表情']
     const [text, mood] = Array.isArray(line) ? line : [line, null]
     stopTalking()
@@ -428,7 +539,7 @@
     if (ctl) {
       voiceId = 'mao-' + (++voiceSeq)
       watchVoice()
-      try { Promise.resolve(ctl.speak(text, { id: voiceId })).catch(() => {}) } catch (_) {}
+      try { Promise.resolve(ctl.speak(text, { id: voiceId, priority: 'pet' })).catch(() => {}) } catch (_) {}
     }
 
     bubble.textContent = ''
@@ -465,7 +576,7 @@
     // 日程先回来的话那个闹钟还挂着，收掉 —— 不收就是一个没人管的定时器
     if (version !== lifecycle) return
     if (greetTimer) { clearTimeout(greetTimer); greetTimer = null }
-    if (!model || document.hidden) return                   // 等的这一会儿她可能已经被关掉了
+    if (!model || document.hidden || settings.quiet || occupied()) return // 等的这一会儿她可能已经被关掉了
 
     if (awayFor >= CONFIG.missYouAfterH) {
       const [text, mood] = pick(CONFIG.missLines)
@@ -553,6 +664,9 @@
   }
 
   const loadState = () => {
+    if (!stateAllowed()) { clearState(); return Promise.resolve(null) }
+    const snapshot = window.NOIMPTY_SCHEDULE?.snapshot?.()
+    if (snapshot) { stateRaw = snapshot; stateDay = ymd(rightNow()); siteState = summarize(snapshot) }
     if (freshState()) return Promise.resolve(siteState)
     if (statePending) return statePending
     try {
@@ -629,16 +743,221 @@
     const part = dayPartNow()
     if (part.name === '深夜') return withFace(part.lines, part.face)
 
-    const title = postTitle()
+    const title = stateAllowed() ? postTitle() : null
     if (title) return CONFIG.postLines.map(([t, mood]) => [t.replace('{题}', title), mood])
 
     const here = whereAmI()
+    if (here?.url === '/schedule/' && stateAllowed()) {
+      const line = scheduleLine()
+      if (line) return [line]
+      if (freshState()) return [['今天还没有安排任务，可以打开日程添加。', '平静']]
+    }
+    const progress = progressLines()
+    if (progress.length) return progress
     const own = here && CONFIG.pageLines[here.url]
     if (own && own.length) return own
 
     if (part.lines && part.lines.length) return withFace(part.lines, part.face)
     return CONFIG.idleLines
   }
+
+  // 读取构建时生成的真实课程卡片与文章列表，不把篇数当作已学章节数。
+  const progressLines = () => {
+    if (!stateAllowed()) return []
+    try {
+      const cards = Array.from(document.querySelectorAll('.noimpty-track-card'))
+      const lines = cards.map(card => {
+        const title = card.querySelector('h3')?.textContent?.trim()
+        const stat = card.querySelector('.noimpty-track-card__stat')?.textContent || ''
+        const count = stat.match(/已写\s*(\d+)\s*篇/)
+        return title && count ? [`${title.slice(0, 40)}已经记录 ${count[1]} 篇笔记喵。`, '笑'] : null
+      }).filter(Boolean)
+      if (lines.length) return lines
+      const grid = document.querySelector('.noimpty-post-grid[data-section]')
+      if (grid) return [[`这一栏目前有 ${grid.querySelectorAll('.noimpty-post-card').length} 篇笔记，可以挑一篇继续看。`, '平静']]
+    } catch (_) {}
+    return []
+  }
+  const persistSettings = () => {
+    try { localStorage.setItem(SETTINGS_PREF, JSON.stringify(settings)) } catch (_) {}
+  }
+  const restartIdle = () => {
+    clearInterval(idleTimer); idleTimer = null
+    if (!model || document.hidden || settings.quiet || !settings.idleSeconds) return
+    idleTimer = setInterval(() => {
+      watchVoice()
+      if (!occupied()) say(pick(linesHere()))
+    }, settings.idleSeconds * 1000)
+  }
+  const applyPower = () => {
+    const fps = savingPower() ? 24 : 60
+    if (app?.ticker) app.ticker.maxFPS = fps
+    const shared = window.PIXI?.Ticker?.shared
+    if (shared) { if (sharedFPS === null) sharedFPS = shared.maxFPS; shared.maxFPS = fps }
+    if (stage) stage.dataset.power = fps === 24 ? 'saving' : 'auto'
+  }
+  const configure = patch => {
+    const before = settings
+    settings = normalize(patch, settings); voiceOn = settings.voice
+    if (patch && Object.hasOwn(patch, 'autoCompact')) compactOverride = false
+    persistSettings()
+    try { localStorage.setItem(VOICE_PREF, JSON.stringify(voiceOn)) } catch (_) {}
+    if (!settings.chatSync && before.chatSync) {
+      chat = { phase: 'idle', turnId: '', text: '' }
+      if (speech?.id !== voiceId) { speech = null; stopVoiceMouth() }
+      if (bubble) delete bubble.dataset.on
+    }
+    if (!voiceOn && before.voice) stopTalking()
+    if (settings.quiet && !before.quiet && !occupied()) {
+      stopTalking(); if (bubble) delete bubble.dataset.on
+    }
+    layout(true); applyPower(); restartIdle(); watchVoice(); sync()
+    return { ...settings }
+  }
+  const onChatState = event => {
+    if (!settings.chatSync || !model) return
+    const next = event?.detail || {}
+    if (document.hidden) {
+      if (next.phase === 'thinking') chatTurn = String(next.turnId || '')
+      chat = { phase: next.phase, turnId: String(next.turnId || ''), text: '' }
+      return
+    }
+    if (!stateAllowed()) {
+      chat = { phase: 'idle', turnId: '', text: '' }; stopTalking()
+      if (bubble) delete bubble.dataset.on
+      return
+    }
+    if (!['thinking', 'streaming', 'complete', 'cancelled', 'error', 'idle'].includes(next.phase)) return
+    const id = String(next.turnId || '')
+    if (next.phase === 'thinking') {
+      stopTalking(); resetMood(); chatTurn = id
+    } else if (id && chatTurn && id !== chatTurn) return
+    chat = { phase: next.phase, turnId: id, text: String(next.text || '').slice(-180) }
+    watchVoice()
+    if (speech?.phase === 'playing') return
+    const phases = { thinking: ['在想了喵…', '为难'], streaming: [chat.text || '正在整理回答…', '平静'],
+      complete: [chat.text || '回答好了喵。', '笑'], cancelled: ['好，先停在这里。', '平静'],
+      error: ['这次没有顺利完成，可以回到对话里重试。', '难过'] }
+    if (next.phase === 'idle') {
+      chatTurn = ''; if (bubble) delete bubble.dataset.on
+      stopVoiceMouth(); face(moodFace()); return
+    }
+    const [text, mood] = phases[next.phase]
+    showBubble(text); face(mood)
+    if (!chatBusy()) settleBubble()
+  }
+  const onScheduleUpdated = event => {
+    if (!stateAllowed()) { clearState(); return }
+    const before = freshState()
+    const data = event?.detail
+    if (!data?.days || typeof data.days !== 'object') return
+    stateVersion++
+    // 保存快照，防止事件发送者之后原地改动数据。
+    try { stateRaw = JSON.parse(JSON.stringify({ days: data.days })) } catch (_) { return }
+    stateDay = ymd(rightNow()); siteState = summarize(stateRaw); statePending = null
+    if (!model || occupied() || document.hidden) return
+    face(moodFace())
+    const completed = before?.left > 0 && siteState?.total > 0 && siteState.left === 0
+    const published = before && !before.published && siteState?.published
+    if ((completed && data.source === 'edit' || published && data.source !== 'load')
+      && !settings.quiet && Date.now() - celebratedAt > 60000) {
+      celebratedAt = Date.now()
+      say([published ? '今天又留下了一篇记录喵。' : '今天的任务都完成了喵，歇一会儿吧。', '星星眼'])
+    }
+  }
+  const action = (name, options) => {
+    if (name === 'schedule') {
+      if (window.pjax?.loadUrl) window.pjax.loadUrl('/schedule/')
+      else window.location.assign('/schedule/')
+      return true
+    }
+    const run = window.NANALY?.contextAction
+    if (!run) { say(['助手还没有加载好，请稍后再试。', '为难']); return false }
+    return Promise.resolve(run(name, options))
+  }
+  const bindDrag = canvas => {
+    let drag = null
+    const down = event => {
+      if (event.button != null && event.button !== 0) return
+      const box = stage.getBoundingClientRect()
+      drag = { id: event.pointerId, x: event.clientX, y: event.clientY,
+        left: box.left, top: box.top, moved: false }
+      canvas.setPointerCapture?.(event.pointerId)
+    }
+    const move = event => {
+      if (!drag || event.pointerId !== drag.id) return
+      const dx = event.clientX - drag.x, dy = event.clientY - drag.y
+      if (!drag.moved && Math.hypot(dx, dy) < 7) return
+      drag.moved = true; event.preventDefault()
+      const { w, h } = stageSize()
+      stage.dataset.dragging = '1'
+      stage.style.right = 'auto'; stage.style.bottom = 'auto'
+      stage.style.left = Math.max(0, Math.min((window.innerWidth || w) - w, drag.left + dx)) + 'px'
+      stage.style.top = Math.max(0, Math.min((window.innerHeight || 900) - h, drag.top + dy)) + 'px'
+    }
+    const up = event => {
+      if (!drag || event.pointerId !== drag.id) return
+      const was = drag; drag = null
+      canvas.releasePointerCapture?.(event.pointerId)
+      if (!was.moved) return
+      suppressTapUntil = Date.now() + 400; delete stage.dataset.dragging
+      const { w, h } = stageSize(), vh = window.innerHeight || 900
+      const left = Math.max(0, Math.min((window.innerWidth || w) - w, was.left + event.clientX - was.x))
+      const top = Math.max(0, Math.min(vh - h, was.top + event.clientY - was.y))
+      configure({ side: left + w / 2 < (window.innerWidth || w) / 2 ? 'left' : 'right',
+        bottomRatio: Math.max(0, vh - h - top) / Math.max(1, vh - h - 16) })
+    }
+    const cancel = event => {
+      if (!drag || event.pointerId !== drag.id) return
+      drag = null; suppressTapUntil = Date.now() + 400
+      delete stage.dataset.dragging; layout(true)
+    }
+    const keys = event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault(); controls?.showActions()
+      } else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+        event.preventDefault()
+        configure(event.key === 'ArrowLeft' || event.key === 'ArrowRight'
+          ? { side: event.key === 'ArrowLeft' ? 'left' : 'right' }
+          : { bottomRatio: settings.bottomRatio + (event.key === 'ArrowUp' ? 0.05 : -0.05) })
+      }
+    }
+    const menu = event => { event.preventDefault(); controls?.showActions() }
+    const lost = event => {
+      event.preventDefault(); teardown().then(() => setStatus('error', '画面连接中断，请重试加载'))
+    }
+    const bindings = { pointerdown: down, pointermove: move, pointerup: up,
+      pointercancel: cancel, lostpointercapture: cancel, keydown: keys, contextmenu: menu, webglcontextlost: lost }
+    for (const [type, fn] of Object.entries(bindings)) canvas.addEventListener(type, fn)
+    dragCleanup = () => { for (const [type, fn] of Object.entries(bindings)) canvas.removeEventListener(type, fn); drag = null }
+  }
+  // Pixi 按 URL 共享贴图；取消后的旧加载不能销毁新实例仍在使用的贴图。
+  const rememberTextures = loaded => { for (const texture of loaded?.textures || []) modelTextures.add(texture) }
+  const releaseTextures = () => {
+    if (model || pendingModels) return
+    for (const texture of modelTextures) { try { texture.destroy(true) } catch (_) {} }
+    modelTextures.clear()
+  }
+  const retireModel = loaded => {
+    rememberTextures(loaded)
+    try { loaded?.destroy({ children: true, texture: false, baseTexture: false }) } catch (_) {}
+  }
+  const loadModel = () => new Promise((resolve, reject) => {
+    pendingModels++
+    let settled = false
+    const finish = (error, loaded) => {
+      if (settled) { if (loaded) retireModel(loaded); releaseTextures(); return }
+      settled = true; clearTimeout(timer); cancelModelLoad = null
+      if (error) reject(error); else resolve(loaded)
+    }
+    const timer = setTimeout(() => finish(new Error('模型加载超时，请重试')), 30000)
+    cancelModelLoad = () => finish(new Error('已取消加载'))
+    Promise.resolve().then(() => window.PIXI.live2d.Live2DModel.from(CONFIG.model, {
+      autoHitTest: false, autoFocus: false, idleMotionGroup: CONFIG.idleGroup
+    })).then(loaded => {
+      pendingModels--; rememberTextures(loaded); finish(null, loaded)
+    }, error => { pendingModels--; finish(error); releaseTextures() })
+  })
 
   // ── 出场 ──
 
@@ -647,6 +966,7 @@
     if (app) return Promise.resolve()
     const version = ++lifecycle
     if (button) button.dataset.busy = '1'
+    setStatus('loading', '正在加载 Mao…')
     const job = (async () => {
     try {
       await loadLibs()
@@ -655,15 +975,20 @@
 
       stage = document.createElement('div')
       stage.id = 'mao-stage'
-      stage.dataset.side = CONFIG.side
+      stage.dataset.side = settings.side
       stage.style.cssText = `width:${w}px;height:${h}px;bottom:${CONFIG.bottom}px;`
         + `${CONFIG.side}:${CONFIG.edge}px;z-index:${CONFIG.zIndex}`
 
       bubble = document.createElement('div')
       bubble.id = 'mao-bubble'
+      bubble.setAttribute('role', 'status')
+      bubble.setAttribute('aria-live', 'polite')
       stage.appendChild(bubble)
 
       const canvas = document.createElement('canvas')
+      canvas.tabIndex = 0
+      canvas.setAttribute('role', 'button')
+      canvas.setAttribute('aria-label', 'Mao：双击打开聊天，右键或按回车打开快捷操作，方向键移动位置')
       stage.appendChild(canvas)
       document.body.appendChild(stage)
 
@@ -679,13 +1004,13 @@
         autoDensity: true
       })
 
-      const loaded = await window.PIXI.live2d.Live2DModel.from(CONFIG.model, {
-        autoHitTest: false, autoFocus: false, idleMotionGroup: CONFIG.idleGroup
-      })
-      if (version !== lifecycle) { loaded.destroy({ children: true, texture: true, baseTexture: true }); return }
+      const loaded = await loadModel()
+      if (version !== lifecycle) { retireModel(loaded); releaseTextures(); return }
       model = loaded
       app.stage.addChild(model)
       layout()
+      bindDrag(canvas); watchVoice(); applyPower()
+      setStatus('ready', 'Mao 已就绪')
 
       /* 这一行没有的话戳她是没反应的。
        * 库只在 autoHitTest / autoFocus 至少开一个时才把模型设成可交互，
@@ -705,10 +1030,14 @@
        * 对 touch 根本不派发 dblclick，安卓那边双击多半先被浏览器当成缩放手势吃掉），
        * 所以手机上双击她一直打不开对话窗。改成自己数 pointertap 的间隔 ——
        * PixiJS 的 pointertap 鼠标和手指都会发，一套代码两边都算数。
-       * 配合 CSS 里画布那条 touch-action: manipulation，把浏览器的双击缩放让开。 */
+       * 画布使用 touch-action: none 支持触摸拖动；正文区域仍按原方式滚动。 */
       let lastTap = 0
       model.on('pointertap', e => {
         const now = Date.now()
+        if (now < suppressTapUntil || stage?.dataset.dragging === '1') return
+        if (compactNow()) {
+          compactOverride = true; configure({ compact: false }); return
+        }
         const isDouble = now - lastTap <= CONFIG.doubleTapMs
         // 连击只认一次。不清零的话三连点会被数成两次双击，对话窗开两遍
         lastTap = isDouble ? 0 : now
@@ -724,6 +1053,7 @@
           return
         }
 
+        if (occupied()) { controls?.showActions(); return }
         if (!CONFIG.tapToTalk) return
 
         // 连着戳：超过 sulkWindowMs 没动静就重新数
@@ -743,12 +1073,16 @@
       /* 视线跟随全页面，而不只是她那块画布 —— 鼠标在文章里划过时她也会转头看，
        * 「养在博客里」的感觉全靠这一条。 */
       if (CONFIG.followCursor) {
-        onMove = e => { if (model) model.focus(e.clientX - stage.getBoundingClientRect().left, e.clientY - stage.getBoundingClientRect().top) }
+        onMove = e => { if (model && !savingPower() && !document.hidden && !stage.dataset.dragging) model.focus(e.clientX - stage.getBoundingClientRect().left, e.clientY - stage.getBoundingClientRect().top) }
         document.addEventListener('pointermove', onMove, { passive: true })
       }
-      onResize = () => layout(true)
+      onResize = () => { layout(true); applyPower() }
       window.addEventListener('resize', onResize)
 
+      motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)') || null
+      onPowerChange = applyPower
+      motionQuery?.addEventListener?.('change', onPowerChange)
+      window.navigator?.connection?.addEventListener?.('change', onPowerChange)
       greet(version)
       // 每次到点才算这一页说什么 —— pjax 翻页不会重建她，算早了会一直念旧页面
       onVisibility = event => {
@@ -756,12 +1090,16 @@
         const paused = document.hidden || event?.type === 'pagehide'
         model.autoUpdate = !paused
         if (paused) {
-          app.stop?.(); stopTalking()
+          app.stop?.(); stopTalking(); speech = null; stopVoiceMouth()
           if (bubble) delete bubble.dataset.on
           clearInterval(idleTimer); idleTimer = null
         } else {
           app.start?.()
-          if (!idleTimer) idleTimer = setInterval(() => say(pick(linesHere())), CONFIG.idleEveryMs)
+          applyPower(); restartIdle(); watchVoice()
+          const current = window.NANALY?.chatState?.()
+          if (current && ['thinking', 'streaming'].includes(current.phase)) {
+            chatTurn = current.turnId; onChatState({ detail: current })
+          } else { chat = { phase: 'idle', turnId: '', text: '' }; chatTurn = ''; face(moodFace()) }
         }
       }
       document.addEventListener('visibilitychange', onVisibility)
@@ -771,7 +1109,7 @@
       requestAnimationFrame(() => stage && (stage.dataset.ready = '1'))
     } catch (error) {
       console.warn('[看板娘]', error && error.message)
-      if (version === lifecycle) await teardown()
+      if (version === lifecycle) { await teardown(); setStatus('error', 'Mao 加载失败，请检查网络后重试') }
     } finally {
       if (enableTask === job) enableTask = null
       if (button) delete button.dataset.busy
@@ -786,15 +1124,22 @@
   const layout = (resize = false) => {
     if (!app || !model || !stage) return
     const { w, h } = stageSize()
-    if (resize) {
-      stage.style.width = w + 'px'
-      stage.style.height = h + 'px'
-      app.renderer.resize(w, h)
-    }
-    const scale = (h * CONFIG.fill) / (model.internalModel.originalHeight || model.height || 1)
+    // 加载过程中也可能旋转屏幕；首次放置须使用此刻的真实尺寸。
+    stage.style.width = w + 'px'
+    stage.style.height = h + 'px'
+    app.renderer.resize(w, h)
+    stage.dataset.side = settings.side
+    stage.dataset.compact = compactNow() ? '1' : '0'
+    stage.style.top = 'auto'
+    stage.style.left = settings.side === 'left' ? CONFIG.edge + 'px' : 'auto'
+    stage.style.right = settings.side === 'right' ? CONFIG.edge + 'px' : 'auto'
+    const bottom = Math.max(0, (window.innerHeight || 900) - h - 16) * settings.bottomRatio
+    stage.style.bottom = bottom + 'px'
+    stage.dataset.bubbleBelow = ((window.innerHeight || 900) - h - bottom < 170) ? '1' : '0'
+    const scale = (h * (compactNow() ? 3 : CONFIG.fill)) / (model.internalModel.originalHeight || model.height || 1)
     model.scale.set(scale)
     model.anchor.set(0.5, 1)
-    model.position.set(w * CONFIG.anchorX, h)
+    model.position.set(w * CONFIG.anchorX, compactNow() ? h * 2.8 : h)
     clipToBody(w, h)
   }
 
@@ -805,6 +1150,7 @@
   const clipToBody = (w, h) => {
     const canvas = stage && stage.querySelector('canvas')
     if (!canvas || !model) return
+    if (compactNow()) { canvas.style.clipPath = 'circle(49% at 50% 50%)'; return }
     let box
     try { box = model.getBounds() } catch (_) { return }
     if (!box || !box.width) return
@@ -817,10 +1163,19 @@
 
   const teardown = async () => {
     lifecycle++
-    stopTalking()
+    if (cancelModelLoad) cancelModelLoad()
+    if (dragCleanup) { dragCleanup(); dragCleanup = null }
+    motionQuery?.removeEventListener?.('change', onPowerChange)
+    window.navigator?.connection?.removeEventListener?.('change', onPowerChange)
+    motionQuery = onPowerChange = null
+    if (sharedFPS !== null && window.PIXI?.Ticker?.shared) window.PIXI.Ticker.shared.maxFPS = sharedFPS
+    sharedFPS = null
+    stopTalking(); speech = null; stopVoiceMouth()
+    chat = { phase: 'idle', turnId: '', text: '' }; chatTurn = ''; lastFace = ''
     clearTimeout(greetTimer); greetTimer = null
     // 订阅挂在娜娜莉那个控制器上，她被收起来之后不退订就是一直挂着的回调
     if (unsubVoice) { try { unsubVoice() } catch (_) {} unsubVoice = null }
+    voiceHandler = null
     clearInterval(idleTimer); idleTimer = null
     if (onMove) { document.removeEventListener('pointermove', onMove); onMove = null }
     if (onResize) { window.removeEventListener('resize', onResize); onResize = null }
@@ -829,17 +1184,18 @@
       window.removeEventListener('pagehide', onVisibility); window.removeEventListener('pageshow', onVisibility)
       onVisibility = null
     }
-    try { model?.destroy({ children: true, texture: true, baseTexture: true }) } catch (_) {}
+    retireModel(model)
     try { app?.destroy(false, { children: true }) } catch (_) {}
     try { stage?.remove() } catch (_) {}
     app = model = stage = bubble = null
+    releaseTextures()
     // 别留着「正在闹别扭」跨过这一次关闭 —— 下次打开她该是好好的
     resetMood()
   }
 
   const disable = async () => {
     await teardown()
-    sync()
+    setStatus('idle', 'Mao 已收起')
   }
 
   const toggle = async () => {
@@ -884,7 +1240,8 @@
 
   const mountToggle = () => {
     const existing = document.getElementById('mao-toggle')
-    if (existing) { button = existing; return }
+    if (existing) { button = existing; mountControls(); return }
+    if (controls) { controls.destroy(); controls = null }
     button = document.createElement('button')
     button.id = 'mao-toggle'
     button.type = 'button'
@@ -903,7 +1260,19 @@
     bindHold(button)          // 长按切出声。必须在 click 之前挂，它要能拦下那一次 click
     button.addEventListener('click', toggle)
     document.body.appendChild(button)
-    sync()
+    mountControls(); sync()
+  }
+
+  const retry = async () => {
+    save(true)
+    if (app) await teardown()
+    return enable()
+  }
+  const mountControls = () => {
+    if (!controls && window.MAO_CONTROLS) controls = window.MAO_CONTROLS.create({
+      button, getSettings: () => ({ ...settings }), onSettingsChange: configure,
+      onAction: action, getStatus: () => ({ ...status }), onRetry: retry
+    })
   }
 
   /* pjax 换的是 #body-wrap 里面那一块，挂在 body 下的按钮和她本人都在外面，
@@ -911,6 +1280,7 @@
    * 而开关还亮着。所以每次翻完页对一下：谁掉了就把谁补回来。 */
   const recover = () => {
     mountToggle()
+    if (!occupied()) { stopTalking(); if (bubble) delete bubble.dataset.on }
     if (!app || !stage || document.contains(stage)) return
     teardown()
     if (!read()) { sync(); return }
@@ -928,6 +1298,8 @@
     visible: () => !!app,
     say,
     model: () => model,
+    settings: () => ({ ...settings }), configure,
+    status: () => ({ ...status }), retry,
     config: () => CONFIG,
     // 这会儿她该说哪一组话。测试和调试都用它，省得等 70 秒
     lines: () => linesHere(),
@@ -935,6 +1307,8 @@
     voice: on => (on === undefined ? voiceOn : setVoice(on))
   })
 
+  window.addEventListener('nanaly:chat-state', onChatState)
+  window.addEventListener('noimpty:schedule-updated', onScheduleUpdated)
   rememberVisit()
   document.addEventListener('pjax:complete', recover)
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot)

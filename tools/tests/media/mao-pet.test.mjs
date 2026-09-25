@@ -46,16 +46,27 @@ const test = async (name, fn) => {
 
 // ────────────────── 一个够跑这段脚本的浏览器 ──────────────────
 
-const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2, lastSeen = null, delayModel = false } = {}) => {
+// 原全身几何用例显式关闭自动紧凑；默认移动端行为另用 settingsSaved: null 验证。
+const boot = ({ saved = null, innerWidth = 1440, innerHeight = 900, failAt = null, dpr = 2, lastSeen = null,
+  delayModel = false, sharedTextures = false, settingsSaved = { autoCompact: false }, reduced = false, saveData = false } = {}) => {
   const doc = new Map()          // 事件类型 → 回调
   const win = new Map()
   const store = new Map(saved === null ? [] : [['nanaly-pet-visible', saved]])
   if (lastSeen !== null) store.set('mao-last-seen', String(lastSeen))
+  if (settingsSaved !== null) store.set('mao-settings-v1', typeof settingsSaved === 'string' ? settingsSaved : JSON.stringify(settingsSaved))
+  const controlCalls = { refresh: 0, showActions: 0, close: 0 }
+  let controlOptions = null
+  const motionListeners = new Map(), connectionListeners = new Map()
+  const motionQuery = { matches: reduced, addEventListener: (t, fn) => motionListeners.set(t, fn), removeEventListener: t => motionListeners.delete(t) }
+  const connection = { saveData, addEventListener: (t, fn) => connectionListeners.set(t, fn), removeEventListener: t => connectionListeners.delete(t) }
   const attached = new Set()
   const scripts = []
   const timers = { interval: [], timeout: [] }
   const created = { apps: [], models: [] }
   let pending = null, releaseModel = null
+  const modelReleases = [], textures = []
+  const makeTexture = () => { const texture = { destroyCalls: [], destroy (base) { this.destroyCalls.push(base) } }; textures.push(texture); return texture }
+  const sharedTexture = sharedTextures ? makeTexture() : null
   /* 双击判定按 Date.now() 的间隔算，真表没法测「两下隔了 400ms」这种情况 ——
    * 给沙箱一块自己能拨的表，测试想隔多久就隔多久。 */
   let clock = CLOCK0
@@ -71,7 +82,10 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2, lastSee
     removeEventListener(t) { this.handlers.delete(t) },
     fire(t, e) { const fn = this.handlers.get(t); return fn && fn(e) },
     appendChild(c) { c.parentElement = this; attached.add(c); return c },
-    remove() { attached.delete(this) },
+    remove() {
+      const removeChildren = parent => { for (const child of [...attached]) if (child.parentElement === parent) { removeChildren(child); attached.delete(child) } }
+      removeChildren(this); attached.delete(this)
+    },
     querySelector(sel) { return [...attached].find(n => n.parentElement === this && n.tagName === sel.toUpperCase()) || null },
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 380, x: 0, y: 0 })
   })
@@ -96,7 +110,12 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2, lastSee
   }
 
   const window_ = {
-    innerWidth, devicePixelRatio: dpr, localStorage,
+    innerWidth, innerHeight, devicePixelRatio: dpr, localStorage,
+    matchMedia: () => motionQuery, navigator: { connection },
+    MAO_CONTROLS: { create: options => {
+      controlOptions = options
+      return { refresh: () => { controlCalls.refresh++ }, showActions: () => { controlCalls.showActions++ }, close: () => { controlCalls.close++ } }
+    } },
     addEventListener: (t, fn) => win.set(t, fn),
     removeEventListener: t => win.delete(t)
   }
@@ -124,10 +143,14 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2, lastSee
   const stage = () => [...attached].find(n => n.id === 'mao-stage')
   return {
     win: window_, sandbox, document, scripts, timers, created, stage,
-    docListeners: doc, winListeners: win,
+    docListeners: doc, winListeners: win, motionQuery, motionListeners, connection, connectionListeners, controlCalls,
+    controlOptions: () => controlOptions,
+    storedSettings: () => JSON.parse(store.get('mao-settings-v1') || 'null'),
+    fireTimeout: ms => { const i = timers.timeout.findIndex(t => t && t.ms === ms); assert.ok(i >= 0, 'missing timeout ' + ms); const item = timers.timeout[i]; timers.timeout[i] = null; item.fn() },
     advance: ms => { clock += ms },
     clockNow: () => clock,
-    releaseModel: () => releaseModel?.(),
+    releaseModel: index => (index === undefined ? releaseModel : modelReleases[index])?.(),
+    textures,
     stored: () => (store.has('nanaly-pet-visible') ? store.get('nanaly-pet-visible') : null),
     storedVoice: () => (store.has('mao-voice') ? store.get('mao-voice') : null),
     button: () => document.getElementById('mao-toggle'),
@@ -139,8 +162,11 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2, lastSee
       pending = () => {
         window_.Live2DCubismCore = {}
         window_.PIXI = {
+          Ticker: { shared: { maxFPS: 120 } },
           Application: class {
-            constructor (opts) { this.opts = opts; this.stage = { addChild: () => {} }; this.renderer = { resize: () => {} }; created.apps.push(this) }
+            constructor (opts) { this.opts = opts; this.stage = { addChild: () => {} }; this.resizes = []; this.renderer = { resize: (...size) => this.resizes.push(size) }; this.ticker = { maxFPS: 0 }; this.starts = this.stops = 0; created.apps.push(this) }
+            start () { this.starts++ }
+            stop () { this.stops++ }
             destroy (...a) { this.destroyed = a }
           },
           live2d: {
@@ -148,7 +174,7 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2, lastSee
               from: async (path_, opts) => {
                 if (failAt === 'model') throw new Error('模型没取到')
                 const m = {
-                  path: path_, opts, scale: { set: v => { m.scaleValue = v } },
+                  path: path_, opts, textures: [sharedTexture || makeTexture()], scale: { set: v => { m.scaleValue = v } },
                   anchor: { set: () => {} }, position: { set: (x, y) => { m.pos = [x, y] } },
                   internalModel: {
                     originalHeight: 2400,
@@ -161,12 +187,13 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2, lastSee
                   // 包围盒：画布 300×380 里她占中间那一块
                   getBounds: () => ({ x: 50, y: 20, width: 220, height: 360 }),
                   eventMode: 'auto',
-                  motion: g => { m.played = g },
+                  motion: g => { m.played = g; m.motionCount = (m.motionCount || 0) + 1 },
+                  focus: (x, y) => { m.focusAt = [x, y] },
                   expression: id => { m.face = id; (m.faces = m.faces || []).push(id) },
-                  destroy: () => { m.destroyed = true }
+                  destroy: options => { m.destroyOptions = options; m.destroyed = true; m.destroyCount = (m.destroyCount || 0) + 1 }
                 }
                 created.models.push(m)
-                if (delayModel) await new Promise(resolve => { releaseModel = resolve })
+                if (delayModel) await new Promise(resolve => { releaseModel = resolve; modelReleases.push(resolve) })
                 return m
               }
             }
@@ -180,7 +207,7 @@ const boot = ({ saved = null, innerWidth = 1440, failAt = null, dpr = 2, lastSee
         if (!s.onload) continue
         const fn = s.onload; s.onload = null
         if (failAt === 'script' && s.src.includes('pixi')) { s.onerror(); continue }
-        if (scripts.filter(x => !x.onload).length === 3 && pending) { pending(); pending = null }
+        if (s.src === '/lib/l2d/live2d-display.min.js' && pending) { pending(); pending = null }
         fn()
       }
     }
@@ -756,17 +783,19 @@ console.log('\n出声')
 const fakeVoice = env => {
   env.win.NOIMPTY_GATE = { unlocked: () => true }      // 出声要过暗号这关
   const spoken = []
-  let listener = null, stopped = 0, state = null
+  let listener = null, stopped = 0, state = null, energy = null, subscriptions = 0
+  const energyReads = []
   env.win.NANALY = {
     ...(env.win.NANALY || {}),
     voice: () => ({
       speak: (text, opt) => { spoken.push({ text, id: opt && opt.id }); state = { id: opt?.id, phase: 'loading' }; return true },
       stop: () => { stopped++ },
-      subscribe: fn => { listener = fn; return () => { listener = null } },
-      state: () => state
+      subscribe: fn => { subscriptions++; listener = fn; return () => { listener = null } },
+      state: () => state,
+      energy: id => { energyReads.push(id); return energy }
     })
   }
-  return { spoken, emit: st => { state = st; if (listener) listener(st) }, stopped: () => stopped, id: () => spoken.at(-1)?.id }
+  return { spoken, energyReads, subscriptions: () => subscriptions, current: value => { state = value }, setEnergy: value => { energy = value }, emit: st => { state = st; if (listener) listener(st) }, stopped: () => stopped, id: () => spoken.at(-1)?.id }
 }
 
 await test('★★ 默认不出声 —— TTS 按次计费，别默认替人花钱', async () => {
@@ -792,7 +821,7 @@ await test('★★ 开了之后，主动招呼她才出声；闲聊不出声', a
   assert.equal(v.spoken.length, 1, '戳了却没出声')
 
   v.spoken.length = 0
-  env.timers.interval.find(t => t && t.ms === env.win.MAO_PET.config().idleEveryMs).fn()  // 闲聊
+  env.timers.interval.find(t => t && t.ms === env.win.MAO_PET.settings().idleSeconds * 1000).fn()  // 闲聊
   assert.equal(v.spoken.length, 0, '闲聊也出声了 —— 每 70 秒烧一次额度')
   assert.equal(env.win.MAO_PET.config().voiceOnIdle, false, 'voiceOnIdle 不是 false')
 })
@@ -816,8 +845,9 @@ await test('★★ 嘴跟着「真的有没有声音」动，不是跟着打字�
   assert.ok(before > 0, '出声了却没有驱动嘴的循环')
 })
 
-await test('★★ 别人说话别跟着动嘴 —— 娜娜莉在对话窗里念不算她在说', async () => {
+await test('★★ 关闭聊天联动后，外部朗读不带动 Mao，自己的互动语音仍驱动嘴型', async () => {
   const env = boot()
+  env.win.MAO_PET.configure({ chatSync: false })
   const v = fakeVoice(env)
   const { created, params } = await turnOn(env)
   for (let i = 0; i < 4; i++) await new Promise(r => setImmediate(r))
@@ -1317,6 +1347,422 @@ await test('a schedule response decrypted after the site gate closes is discarde
   env.win.MAO_PET.say('迟到的数据不可缓存')
   const cfg = env.win.MAO_PET.config()
   assert.equal(env.win.MAO_PET.model().face, cfg.faces[cfg.restFace])
+})
+
+
+console.log('\nMao 升级 · 偏好、紧凑与性能')
+const flushTyping = env => {
+  for (let i = 0; i < 300; i++) {
+    const timer = env.timers.interval.find(item => item && item.ms === env.win.MAO_PET.config().typeMs)
+    if (!timer) return
+    timer.fn()
+  }
+}
+const emitChat = (env, phase, turnId = 'turn-1', text = '') => env.winListeners.get('nanaly:chat-state')({ detail: { phase, turnId, text } })
+const emitSchedule = (env, tasks, source = 'edit') => env.winListeners.get('noimpty:schedule-updated')({ detail: { days: { [todayKey(env)]: tasks }, source } })
+const pointerEvent = (x, y, extra = {}) => ({ pointerId: 7, clientX: x, clientY: y, button: 0, preventDefault () { this.prevented = true }, ...extra })
+
+await test('默认手机采用 88px 小挂件，主动点击展开，手动紧凑仍可重新生效', async () => {
+  const env = boot({ innerWidth: 390, settingsSaved: null })
+  await turnOn(env)
+  const m = env.win.MAO_PET.model(), canvas = env.stage().querySelector('canvas')
+  assert.equal(env.win.MAO_PET.settings().autoCompact, true)
+  assert.equal(env.created.apps[0].opts.width, 88)
+  assert.equal(env.stage().dataset.compact, '1')
+  assert.match(canvas.style.clipPath, /^circle/)
+  m.handlers.get('pointertap')()
+  assert.equal(env.stage().dataset.compact, '0')
+  assert.equal(env.stage().style.width, '203px')
+  assert.equal(m.motionCount || 0, 0, '展开小挂件不应同时触发戳一下')
+  env.win.MAO_PET.configure({ compact: true })
+  assert.equal(env.stage().dataset.compact, '1')
+})
+await test('偏好只接受白名单类型，高度夹紧，读取副本不修改已保存状态', () => {
+  const env = boot({ settingsSaved: { side: 'left', size: 'enormous', bottomRatio: 2, voice: 'true', quiet: true, idleSeconds: 10, power: 'turbo', unknown: 'x' } })
+  const pet = env.win.MAO_PET
+  assert.equal(pet.settings().side, 'left'); assert.equal(pet.settings().size, 'medium')
+  assert.equal(pet.settings().bottomRatio, 1); assert.equal(pet.settings().voice, false)
+  assert.equal(pet.settings().idleSeconds, 70); assert.equal(pet.settings().power, 'auto')
+  assert.equal('unknown' in pet.settings(), false)
+  pet.configure({ bottomRatio: -3, quiet: false, idleSeconds: 300, size: 'large' })
+  pet.configure({ bottomRatio: Infinity, side: 'middle', compact: 'false' })
+  assert.equal(pet.settings().bottomRatio, 0); assert.equal(pet.settings().side, 'left')
+  assert.equal(pet.settings().compact, false); assert.equal(pet.settings().idleSeconds, 300)
+  const copy = pet.settings(); copy.side = 'right'
+  assert.equal(pet.settings().side, 'left'); assert.equal(env.storedSettings().side, 'left')
+  assert.equal(boot({ settingsSaved: '{invalid' }).win.MAO_PET.settings().autoCompact, true)
+})
+await test('省电与系统减少动效/省流量实时降到 24FPS，关闭恢复共享 ticker', async () => {
+  const env = boot(), { params } = await turnOn(env)
+  const app = env.created.apps[0], shared = env.win.PIXI.Ticker.shared
+  const frame = env.win.MAO_PET.model().internalModel.hooks.get('afterMotionUpdate')
+  env.win.NOIMPTY_MUSIC_PLAYER = { energy: () => 1 }
+  assert.equal(app.ticker.maxFPS, 60); assert.equal(shared.maxFPS, 60)
+  env.win.MAO_PET.configure({ power: 'saving' })
+  assert.equal(app.ticker.maxFPS, 24); assert.equal(shared.maxFPS, 24)
+  params.clear(); frame(); assert.equal(params.has('ParamHairFront'), false)
+  env.win.MAO_PET.configure({ power: 'auto' })
+  env.motionQuery.matches = true; env.motionListeners.get('change')()
+  assert.equal(app.ticker.maxFPS, 24)
+  env.motionQuery.matches = false; env.motionListeners.get('change')()
+  assert.equal(app.ticker.maxFPS, 60)
+  env.connection.saveData = true; env.connectionListeners.get('change')()
+  assert.equal(app.ticker.maxFPS, 24)
+  await env.win.MAO_PET.hide()
+  assert.equal(shared.maxFPS, 120)
+  assert.equal(env.motionListeners.size, 0); assert.equal(env.connectionListeners.size, 0)
+})
+await test('安静模式停止闲聊与当前招呼，改间隔不积累定时器，显式互动仍可用', async () => {
+  const env = boot(); await turnOn(env)
+  env.win.MAO_PET.configure({ quiet: true })
+  assert.equal(env.timers.interval.filter(Boolean).length, 0)
+  assert.equal(env.bubble().dataset.on, undefined)
+  env.win.MAO_PET.say('主动互动'); flushTyping(env)
+  assert.equal(env.bubble().textContent, '主动互动')
+  env.win.MAO_PET.configure({ quiet: false, idleSeconds: 150 })
+  assert.equal(env.timers.interval.filter(item => item && item.ms >= 70000).length, 1)
+  assert.equal(env.timers.interval.find(item => item && item.ms >= 70000).ms, 150000)
+  env.win.MAO_PET.configure({ idleSeconds: 300 }); env.win.MAO_PET.configure({ idleSeconds: 0 })
+  assert.equal(env.timers.interval.filter(item => item && item.ms >= 70000).length, 0)
+})
+
+console.log('\nMao 升级 · 聊天、能量与情绪')
+await test('聊天思考→流式→完成更新气泡，闲聊与戳动作不抢占', async () => {
+  const env = boot(); await turnOn(env)
+  const m = env.win.MAO_PET.model(), cfg = env.win.MAO_PET.config()
+  emitChat(env, 'thinking')
+  assert.equal(env.bubble().textContent, '在想了喵…'); assert.equal(m.face, cfg.faces['为难'])
+  const idle = env.timers.interval.find(item => item && item.ms === 70000)
+  idle.fn(); m.handlers.get('pointertap')()
+  assert.equal(env.bubble().textContent, '在想了喵…')
+  assert.equal(m.motionCount || 0, 0); assert.equal(env.controlCalls.showActions, 1)
+  emitChat(env, 'streaming', 'turn-1', '流式内容'.repeat(100))
+  assert.ok(env.bubble().textContent.length <= 180); assert.match(env.bubble().textContent, /流式内容/)
+  emitChat(env, 'complete', 'turn-1', '最终回复')
+  assert.equal(env.bubble().textContent, '最终回复'); assert.equal(m.face, cfg.faces['笑'])
+  env.fireTimeout(cfg.speakMs)
+  assert.equal(env.bubble().dataset.on, undefined)
+})
+await test('旧轮完成不能覆盖新轮；取消、错误、空闲和关闭联动明确收尾', async () => {
+  const env = boot(); await turnOn(env)
+  emitChat(env, 'thinking', 'old'); emitChat(env, 'thinking', 'new')
+  emitChat(env, 'complete', 'old', '迟到的旧回答')
+  assert.equal(env.bubble().textContent, '在想了喵…')
+  emitChat(env, 'cancelled', 'new'); assert.match(env.bubble().textContent, /先停在这里/)
+  emitChat(env, 'error', 'new'); assert.equal(env.win.MAO_PET.model().face, env.win.MAO_PET.config().faces['难过'])
+  emitChat(env, 'idle', 'new'); assert.equal(env.bubble().dataset.on, undefined)
+  env.win.MAO_PET.configure({ chatSync: false })
+  emitChat(env, 'thinking', 'ignored'); assert.equal(env.bubble().dataset.on, undefined)
+})
+await test('聊天语音用真实能量驱动嘴、段落情绪驱动脸，暂停归零且不自动请求朗读', async () => {
+  const env = boot(), v = fakeVoice(env), { params } = await turnOn(env)
+  const m = env.win.MAO_PET.model(), cfg = env.win.MAO_PET.config(), frame = m.internalModel.hooks.get('afterMotionUpdate')
+  v.setEnergy(0)
+  v.emit({ id: 'chat-a', priority: 'manual', phase: 'playing', text: '这段读出来', emotion: 'happy', intensity: .9 })
+  assert.equal(params.get(cfg.mouthParam), 0)
+  assert.equal(env.bubble().textContent, '这段读出来'); assert.equal(m.face, cfg.faces['笑'])
+  v.setEnergy(.2); frame()
+  assert.ok(params.get(cfg.mouthParam) > 0 && params.get(cfg.mouthParam) <= 1)
+  assert.equal(v.energyReads.at(-1), 'chat-a')
+  v.emit({ id: 'chat-a', priority: 'manual', phase: 'paused' })
+  assert.equal(params.get(cfg.mouthParam), 0)
+  v.emit({ id: 'chat-a', priority: 'manual', phase: 'playing', emotion: 'sad', intensity: .8 })
+  assert.equal(m.face, cfg.faces['难过'])
+  v.emit({ id: 'chat-a', priority: 'manual', phase: 'playing', emotion: 'excited', intensity: .1 })
+  assert.equal(m.face, cfg.faces['平静'])
+  v.emit({ id: 'chat-a', priority: 'manual', phase: 'ended' })
+  assert.equal(params.get(cfg.mouthParam), 0); assert.equal(v.spoken.length, 0)
+})
+await test('波形不可用时只在真实 playing 阶段退回嘴型动画；关闭联动立即停止', async () => {
+  const env = boot(), v = fakeVoice(env), { params } = await turnOn(env)
+  const mouth = env.win.MAO_PET.config().mouthParam
+  v.setEnergy(null); v.emit({ id: 'chat-b', priority: 'auto', phase: 'loading' })
+  assert.equal(params.get(mouth), 0)
+  v.emit({ id: 'chat-b', priority: 'auto', phase: 'playing', emotion: 'concerned' })
+  assert.ok(params.get(mouth) > 0)
+  env.win.MAO_PET.configure({ chatSync: false })
+  assert.equal(params.get(mouth), 0)
+  v.emit({ id: 'chat-b', priority: 'auto', phase: 'playing' })
+  assert.equal(params.get(mouth), 0)
+})
+await test('聊天播放中流式文字、闲聊及音乐不会覆盖正在朗读的嘴型和气泡', async () => {
+  const env = boot(), v = fakeVoice(env), { params } = await turnOn(env)
+  emitChat(env, 'thinking', 'spoken-turn')
+  v.setEnergy(.1); v.emit({ id: 'chat-c', priority: 'auto', phase: 'playing', text: '实际在播放', emotion: 'soothing' })
+  emitChat(env, 'streaming', 'spoken-turn', '尚未读到的后续文本')
+  env.win.MAO_PET.say('闲聊不该插进来')
+  assert.equal(env.bubble().textContent, '实际在播放')
+  env.win.NOIMPTY_MUSIC_PLAYER = { energy: () => 1 }
+  params.clear(); env.win.MAO_PET.model().internalModel.hooks.get('afterMotionUpdate')()
+  assert.ok(params.get(env.win.MAO_PET.config().mouthParam) > 0)
+  assert.equal(params.has('ParamHairFront'), false)
+})
+
+console.log('\nMao 升级 · 拖动与失败恢复')
+await test('拖动吸附最近侧并保存高度；拖后 pointertap 不触发戳或双击', async () => {
+  const env = boot(); await turnOn(env)
+  const stage = env.stage(), canvas = stage.querySelector('canvas'), m = env.win.MAO_PET.model()
+  let captured = null, released = null
+  canvas.setPointerCapture = id => { captured = id }; canvas.releasePointerCapture = id => { released = id }
+  stage.getBoundingClientRect = () => ({ left: 1040, top: 400, width: 380, height: 480 })
+  canvas.fire('pointerdown', pointerEvent(1100, 450))
+  canvas.fire('pointermove', pointerEvent(180, 210))
+  assert.equal(stage.dataset.dragging, '1'); assert.equal(captured, 7)
+  canvas.fire('pointerup', pointerEvent(180, 210))
+  assert.equal(released, 7); assert.equal(stage.dataset.dragging, undefined)
+  assert.equal(env.storedSettings().side, 'left')
+  assert.ok(env.storedSettings().bottomRatio > .6 && env.storedSettings().bottomRatio < .7)
+  m.handlers.get('pointertap')(); assert.equal(m.motionCount || 0, 0)
+  env.advance(401); m.handlers.get('pointertap')(); assert.equal(m.motionCount, 1)
+})
+await test('Pixi pointertap 先于 DOM pointerup 时，正在拖动的紧凑挂件也不展开或戳一下', async () => {
+  const env = boot({ settingsSaved: { compact: true, autoCompact: false } }); await turnOn(env)
+  const stage = env.stage(), canvas = stage.querySelector('canvas'), m = env.win.MAO_PET.model()
+  stage.getBoundingClientRect = () => ({ left: 1200, top: 700, width: 88, height: 88 })
+  canvas.fire('pointerdown', pointerEvent(1230, 730))
+  canvas.fire('pointermove', pointerEvent(180, 210))
+  assert.equal(stage.dataset.dragging, '1')
+  // Pixi 注册监听更早：真实浏览器的 tap 在我们的 DOM up 回调之前到达。
+  m.handlers.get('pointertap')()
+  assert.equal(env.win.MAO_PET.settings().compact, true)
+  assert.equal(stage.dataset.compact, '1'); assert.equal(m.motionCount || 0, 0)
+  assert.equal(env.controlCalls.showActions, 0)
+  canvas.fire('pointerup', pointerEvent(180, 210))
+  assert.equal(stage.dataset.dragging, undefined)
+  assert.equal(env.storedSettings().side, 'left'); assert.equal(env.storedSettings().compact, true)
+  assert.equal(stage.dataset.compact, '1')
+})
+
+await test('取消拖动不持久化临时位置；键盘方向可移动，回车打开快捷卡', async () => {
+  const env = boot(); await turnOn(env)
+  const canvas = env.stage().querySelector('canvas'), before = JSON.stringify(env.storedSettings())
+  canvas.fire('pointerdown', pointerEvent(150, 150))
+  canvas.fire('pointermove', pointerEvent(400, 300))
+  canvas.fire('pointercancel', pointerEvent(400, 300))
+  assert.equal(JSON.stringify(env.storedSettings()), before); assert.equal(env.stage().dataset.dragging, undefined)
+  canvas.fire('keydown', pointerEvent(0, 0, { key: 'ArrowLeft' }))
+  canvas.fire('keydown', pointerEvent(0, 0, { key: 'ArrowUp' }))
+  assert.equal(env.storedSettings().side, 'left'); assert.equal(env.storedSettings().bottomRatio, .05)
+  canvas.fire('keydown', pointerEvent(0, 0, { key: 'Enter' }))
+  assert.equal(env.controlCalls.showActions, 1)
+})
+await test('模型超时释放画布，迟到模型销毁，重试建立全新实例并复用运行时', async () => {
+  const env = boot({ delayModel: true }); env.armLibs()
+  const first = env.win.MAO_PET.show()
+  for (let i = 0; i < 12; i++) { env.resolveScripts(); await tick() }
+  assert.equal(env.created.models.length, 1)
+  env.fireTimeout(30000); await first
+  assert.equal(env.win.MAO_PET.status().phase, 'error'); assert.equal(env.stage(), undefined)
+  assert.equal(env.created.apps[0].destroyed.length > 0, true)
+  env.releaseModel(); await tick()
+  assert.equal(env.created.models[0].destroyCount, 1)
+  const retry = env.win.MAO_PET.retry(); await tick()
+  assert.equal(env.created.models.length, 2)
+  env.releaseModel(); await retry
+  assert.equal(env.win.MAO_PET.status().phase, 'ready')
+  assert.equal(env.win.MAO_PET.model(), env.created.models[1]); assert.equal(env.scripts.length, 3)
+})
+await test('运行时超时可重试，不遗留 busy 状态或永不完成的 loading promise', async () => {
+  const env = boot(); env.armLibs()
+  const first = env.win.MAO_PET.show(); env.fireTimeout(20000); await first
+  assert.equal(env.win.MAO_PET.status().phase, 'error'); assert.equal(env.button().dataset.busy, undefined)
+  const retry = env.win.MAO_PET.retry()
+  for (let i = 0; i < 12; i++) { env.resolveScripts(); await tick() }
+  await retry
+  assert.equal(env.win.MAO_PET.status().phase, 'ready')
+  assert.equal(env.created.models.length, 1)
+})
+await test('WebGL 上下文丢失清理旧绑定，并可从设置面板重试', async () => {
+  const env = boot(); await turnOn(env)
+  const canvas = env.stage().querySelector('canvas'), event = pointerEvent(0, 0)
+  canvas.fire('webglcontextlost', event); await tick()
+  assert.equal(event.prevented, true); assert.equal(canvas.handlers.size, 0)
+  assert.equal(env.win.MAO_PET.status().phase, 'error')
+  await env.controlOptions().onRetry()
+  assert.equal(env.win.MAO_PET.status().phase, 'ready'); assert.equal(env.created.models.length, 2)
+})
+
+console.log('\nMao 升级 · 真实日程与冷却')
+await test('读日程当前快照免网络请求，编辑完成触发一次庆祝并克隆输入', async () => {
+  const env = boot(), tasks = [{ id: 'one', done: false }, { id: 'two', done: false }]
+  let requests = 0
+  env.win.NOIMPTY_SCHEDULE = { snapshot: () => ({ days: { [todayKey(env)]: tasks } }) }
+  env.sandbox.fetch = () => { requests++; throw new Error('snapshot should avoid fetch') }
+  await turnOn(env); assert.equal(requests, 0)
+  const completed = tasks.map(task => ({ ...task, done: true }))
+  emitSchedule(env, completed); flushTyping(env)
+  assert.match(env.bubble().textContent, /今天的任务都完成了/)
+  assert.equal(env.win.MAO_PET.model().face, env.win.MAO_PET.config().faces['星星眼'])
+  completed[0].done = false
+  env.win.MAO_PET.say('确认快照'); flushTyping(env)
+  assert.equal(env.win.MAO_PET.model().face, env.win.MAO_PET.config().faces['笑'])
+})
+await test('反复取消/完成有一分钟冷却，远端同步与安静模式不庆祝', async () => {
+  const env = boot(); await turnOn(env)
+  const undone = [{ done: false }], done = [{ done: true }]
+  emitSchedule(env, undone); emitSchedule(env, done)
+  const first = env.timers.interval.length
+  emitSchedule(env, undone); emitSchedule(env, done)
+  assert.equal(env.timers.interval.length, first)
+  env.advance(60001); emitSchedule(env, undone); emitSchedule(env, done)
+  assert.equal(env.timers.interval.length, first + 1)
+  const second = env.timers.interval.length
+  env.advance(60001); emitSchedule(env, undone); emitSchedule(env, done, 'remote')
+  assert.equal(env.timers.interval.length, second)
+  env.win.MAO_PET.configure({ quiet: true })
+  emitSchedule(env, undone); emitSchedule(env, done)
+  assert.equal(env.timers.interval.length, second)
+})
+await test('锁住或聊天忙碌时日程更新不会抢话、庆祝或泄露任务状态', async () => {
+  const env = boot(); await turnOn(env)
+  emitSchedule(env, [{ done: false }]); emitChat(env, 'thinking')
+  emitSchedule(env, [{ done: true }])
+  assert.equal(env.bubble().textContent, '在想了喵…')
+  emitChat(env, 'idle')
+  env.win.NOIMPTY_GATE = { unlocked: () => false }
+  emitSchedule(env, [{ done: true, autoWhy: '你发了私密文章' }])
+  env.win.NOIMPTY_GATE = { unlocked: () => true }
+  env.win.MAO_PET.say('检查锁后状态')
+  assert.equal(env.win.MAO_PET.model().face, env.win.MAO_PET.config().faces['平静'])
+})
+
+
+console.log('\nMao 升级 · 后台与交错完成竞态')
+await test('真实语音情绪枚举映射到表情，低强度回归平静', async () => {
+  const env = boot(), v = fakeVoice(env); await turnOn(env)
+  const m = env.win.MAO_PET.model(), faces = env.win.MAO_PET.config().faces
+  for (const [emotion, expected] of Object.entries({ joy: '笑', sadness: '难过', comfort: '闭眼', surprise: '星星眼', serious: '平静', embarrassed: '脸红', teasing: '笑', annoyed: '生气' })) {
+    v.emit({ id: 'emotions', priority: 'manual', phase: 'playing', emotion, intensity: .8 })
+    assert.equal(m.face, faces[expected], emotion)
+  }
+  v.emit({ id: 'emotions', priority: 'manual', phase: 'playing', emotion: 'surprise', intensity: .1 })
+  assert.equal(m.face, faces['平静'])
+})
+await test('重新开启联动和后台返回立即读取现有播放状态，不重复订阅或朗读', async () => {
+  const env = boot(), v = fakeVoice(env), { params } = await turnOn(env)
+  const pet = env.win.MAO_PET, mouth = pet.config().mouthParam
+  v.setEnergy(.2); pet.configure({ chatSync: false })
+  v.current({ id: 'already-playing', priority: 'manual', phase: 'playing', text: '已经在播放', emotion: 'joy', intensity: .8 })
+  pet.configure({ chatSync: true })
+  assert.equal(env.bubble().textContent, '已经在播放'); assert.ok(params.get(mouth) > 0)
+  env.document.hidden = true; env.docListeners.get('visibilitychange')()
+  assert.equal(params.get(mouth), 0)
+  env.document.hidden = false; env.docListeners.get('visibilitychange')()
+  assert.equal(env.bubble().textContent, '已经在播放'); assert.ok(params.get(mouth) > 0)
+  assert.equal(v.subscriptions(), 1); assert.equal(v.spoken.length, 0)
+})
+await test('门禁关闭后的语音事件不显示文本或动嘴；空状态使旧语音气泡正常收尾', async () => {
+  const env = boot(), v = fakeVoice(env), { params } = await turnOn(env)
+  v.setEnergy(.2); v.emit({ id: 'public', priority: 'manual', phase: 'playing', text: '刚才的播报' })
+  v.emit(null); env.fireTimeout(env.win.MAO_PET.config().speakMs)
+  assert.equal(env.bubble().dataset.on, undefined)
+  env.win.NOIMPTY_GATE = { unlocked: () => false }
+  v.emit({ id: 'secret', priority: 'manual', phase: 'playing', text: '不该显示的文本' })
+  assert.equal(env.bubble().dataset.on, undefined)
+  assert.notEqual(env.bubble().textContent, '不该显示的文本')
+  assert.equal(params.get(env.win.MAO_PET.config().mouthParam), 0)
+})
+await test('关闭互动语音立即停止 Mao 当前播放，外部聊天朗读不被取消', async () => {
+  const env = boot(), v = fakeVoice(env), { params } = await turnOn(env)
+  const pet = env.win.MAO_PET
+  pet.voice(true); v.emit({ id: v.id(), priority: 'pet', phase: 'playing' })
+  const before = v.stopped(); pet.voice(false)
+  assert.equal(v.stopped(), before + 1); assert.equal(params.get(pet.config().mouthParam), 0)
+  v.emit({ id: 'external', priority: 'manual', phase: 'playing', text: '外部语音' })
+  const externalStops = v.stopped(); pet.voice(false)
+  assert.equal(v.stopped(), externalStops)
+})
+await test('忙碌时双击仍能打开聊天，不被第一下的快捷卡吞掉', async () => {
+  const env = boot(); let opens = 0
+  env.win.NANALY = { open: () => { opens++ } }; await turnOn(env)
+  emitChat(env, 'thinking')
+  const tap = env.win.MAO_PET.model().handlers.get('pointertap')
+  tap(); env.advance(100); tap()
+  assert.equal(env.controlCalls.showActions, 1); assert.equal(opens, 1)
+})
+await test('后台开始的新轮在前台恢复流式，旧轮完成不覆盖；后台已完成不重新展示', async () => {
+  const env = boot(); let current = null
+  env.win.NANALY = { chatState: () => current }; await turnOn(env)
+  emitChat(env, 'thinking', 'old')
+  env.document.hidden = true; env.docListeners.get('visibilitychange')()
+  emitChat(env, 'thinking', 'new')
+  current = { phase: 'streaming', turnId: 'new', text: '前台接着显示' }
+  emitChat(env, 'streaming', 'new', current.text)
+  assert.equal(env.bubble().dataset.on, undefined)
+  env.document.hidden = false; env.docListeners.get('visibilitychange')()
+  assert.equal(env.bubble().textContent, '前台接着显示')
+  emitChat(env, 'complete', 'old', '旧轮迟到'); assert.equal(env.bubble().textContent, '前台接着显示')
+  env.document.hidden = true; env.docListeners.get('visibilitychange')()
+  current = { phase: 'complete', turnId: 'new', text: '后台已完成' }
+  emitChat(env, 'complete', 'new', current.text)
+  env.document.hidden = false; env.docListeners.get('visibilitychange')()
+  assert.equal(env.bubble().dataset.on, undefined)
+})
+await test('超时旧模型晚于新模型完成时，只销毁旧模型，不销毁新模型共享贴图', async () => {
+  const env = boot({ delayModel: true, sharedTextures: true }); env.armLibs()
+  const first = env.win.MAO_PET.show()
+  for (let i = 0; i < 12; i++) { env.resolveScripts(); await tick() }
+  env.fireTimeout(30000); await first
+  const retry = env.win.MAO_PET.retry(); await tick()
+  env.releaseModel(1); await retry
+  env.releaseModel(0); await tick()
+  assert.equal(env.created.models[0].destroyCount, 1)
+  assert.deepEqual(JSON.parse(JSON.stringify(env.created.models[0].destroyOptions)), { children: true, texture: false, baseTexture: false })
+  assert.equal(env.created.models[1].destroyCount || 0, 0)
+  assert.equal(env.textures[0].destroyCalls.length, 0)
+  await env.win.MAO_PET.hide()
+  assert.deepEqual(env.textures[0].destroyCalls, [true])
+})
+await test('新模型仍加载时旧模型先返回，不释放共享贴图；最终全部取消后只释放一次', async () => {
+  const env = boot({ delayModel: true, sharedTextures: true }); env.armLibs()
+  const first = env.win.MAO_PET.show()
+  for (let i = 0; i < 12; i++) { env.resolveScripts(); await tick() }
+  await env.win.MAO_PET.hide(); await first
+  const retry = env.win.MAO_PET.show(); await tick()
+  env.releaseModel(0); await tick()
+  assert.equal(env.created.models[0].destroyCount, 1); assert.equal(env.textures[0].destroyCalls.length, 0)
+  await env.win.MAO_PET.hide(); await retry
+  assert.equal(env.textures[0].destroyCalls.length, 0, '仍有在途模型，不能提前释放它即将使用的纹理')
+  env.releaseModel(1); await tick()
+  assert.equal(env.created.models[1].destroyCount, 1)
+  assert.deepEqual(env.textures[0].destroyCalls, [true])
+  await env.win.MAO_PET.hide(); assert.deepEqual(env.textures[0].destroyCalls, [true])
+})
+
+
+await test('加载模型期间视口变窄，首次完成同步 stage 与 renderer 为当前紧凑尺寸', async () => {
+  const env = boot({ delayModel: true, settingsSaved: null, innerWidth: 1440 }); env.armLibs()
+  const loading = env.win.MAO_PET.show()
+  for (let i = 0; i < 12; i++) { env.resolveScripts(); await tick() }
+  assert.equal(env.created.apps[0].opts.width, 380, '应用最初按桌面视口创建')
+  env.win.innerWidth = 390
+  env.releaseModel(); await loading
+  assert.equal(env.stage().dataset.compact, '1')
+  assert.equal(env.stage().style.width, '88px'); assert.equal(env.stage().style.height, '88px')
+  assert.deepEqual(env.created.apps[0].resizes.at(-1), [88, 88])
+  assert.match(env.stage().querySelector('canvas').style.clipPath, /^circle/)
+})
+
+
+await test('新文章从未发布转为已发布可庆祝；初次加载不庆祝，且共用任务完成冷却', async () => {
+  const env = boot(); await turnOn(env)
+  const noPost = [{ id: 'article', done: false }, { id: 'remaining', done: false }]
+  const published = [{ id: 'article', done: true, autoWhy: '你发了《新文章》' }, { id: 'remaining', done: false }]
+  emitSchedule(env, noPost, 'load')
+  const beforeLoad = env.timers.interval.length
+  emitSchedule(env, published, 'load')
+  assert.equal(env.timers.interval.length, beforeLoad, '初次加载已有文章不应庆祝')
+  emitSchedule(env, noPost, 'remote'); emitSchedule(env, published, 'remote')
+  flushTyping(env)
+  assert.equal(env.bubble().textContent, '今天又留下了一篇记录喵。')
+  assert.equal(env.win.MAO_PET.model().face, env.win.MAO_PET.config().faces['星星眼'])
+  const first = env.timers.interval.length
+  emitSchedule(env, published, 'remote')
+  emitSchedule(env, noPost, 'remote'); emitSchedule(env, published, 'remote')
+  emitSchedule(env, published.map(task => ({ ...task, done: true })), 'edit')
+  assert.equal(env.timers.interval.length, first, '重复发布和任务完成共享同一个一分钟冷却')
+  env.advance(60001); emitSchedule(env, noPost, 'remote'); emitSchedule(env, published, 'remote')
+  assert.equal(env.timers.interval.length, first + 1)
 })
 
 console.log(`\n${passed} 项通过`)

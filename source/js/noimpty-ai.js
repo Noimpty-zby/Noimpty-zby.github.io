@@ -1484,6 +1484,63 @@
     Promise.resolve(promise).then(resolve, reject).finally(() => signal.removeEventListener('abort', abort))
   })
 
+  // Shared, read-only lifecycle for the desktop pet. History rendering never starts a turn.
+  const chatBridge = (() => {
+    let state = { phase: 'idle', turnId: '', text: '' }, sequence = 0, timer = null
+    let lastStreamAt = -Infinity, pendingText = ''
+    const readable = () => { try { return canReadPageContext() } catch (_) { return false } }
+    const excerpt = value => {
+      const paragraphs = String(value || '').trim().split(/\n\s*\n/)
+      let text = (paragraphs.at(-1) || '').slice(-180)
+      if (/^[\uDC00-\uDFFF]/.test(text)) text = text.slice(1)
+      return text
+    }
+    const snapshot = () => ({ ...state, text: readable() ? state.text : '' })
+    const emit = () => {
+      try {
+        const EventType = window.CustomEvent || CustomEvent
+        window.dispatchEvent(new EventType('nanaly:chat-state', { detail: snapshot() }))
+      } catch (_) {}
+    }
+    const clearTimer = () => { if (timer !== null) clearTimeout(timer); timer = null; pendingText = '' }
+    const publish = (turn, phase, text = '') => {
+      if (!turn?.chatId || turn.chatId !== state.turnId) return
+      if (['complete', 'cancelled', 'error'].includes(state.phase)) return
+      if (phase === 'streaming') {
+        pendingText = readable() ? excerpt(text) : ''
+        const remaining = 250 - (Date.now() - lastStreamAt)
+        if (remaining > 0) {
+          if (timer === null) timer = setTimeout(() => {
+            timer = null
+            publish(turn, 'streaming', pendingText)
+          }, remaining)
+          return
+        }
+        text = pendingText
+        lastStreamAt = Date.now()
+      }
+      clearTimer()
+      state = { phase, turnId: turn.chatId, text: readable() ? excerpt(text) : '' }
+      emit()
+    }
+    const clear = () => {
+      clearTimer()
+      if (state.phase === 'idle' && !state.turnId) return
+      state = { phase: 'idle', turnId: '', text: '' }; emit()
+    }
+    const begin = turn => {
+      clearTimer()
+      turn.chatId = 'chat-' + Date.now().toString(36) + '-' + (++sequence)
+      state = { phase: 'thinking', turnId: turn.chatId, text: '' }
+      lastStreamAt = -Infinity
+      turn.controller.signal.addEventListener('abort', () => {
+        publish(turn, turn.controller.signal.reason?.name === 'AbortError' ? 'cancelled' : 'error')
+      }, { once: true })
+      emit()
+    }
+    return { begin, publish, clear, snapshot }
+  })()
+
   /* 忙的时候把发送键变成「停」。
    * 以前唯一的叫停办法是关掉整个面板（关面板会 abort）——
    * 想让她闭嘴就得把面板一起收走，推理档一答几十秒，这很难受。 */
@@ -1508,6 +1565,7 @@
     if (discard) uiRevision++
     if (activeTurn && discard) activeTurn.discard = true
     if (abortCtl) abortCtl.abort()
+    if (discard || !abortCtl) chatBridge.clear()
   }
 
   const addMsg = (role, text, opts = {}) => {
@@ -2216,6 +2274,7 @@
     abortCtl = turn.controller
     const signal = turn.controller.signal
     const timeout = setTimeout(() => turn.controller.abort(new Error('请求超时，请稍后重试。')), 180000)
+    chatBridge.begin(turn)
     setBusy(true)
     followScroll = true
     const artNow = currentArticle()
@@ -2248,6 +2307,7 @@
       full = await stream(messages, (partial, thinking) => {
         signal.throwIfAborted()
         full = partial
+        if (partial) chatBridge.publish(turn, 'streaming', splitAction(hideActFragment(partial)).text)
         if (turn.pendingToken && workspace) workspace.updateTurn(turn.pendingToken, splitAction(hideActFragment(partial)).text)
         if (thinking && !thinkBox) {
           thinkBox = el('details', 'nanaly-think', '<summary>思考过程</summary><div></div>')
@@ -2372,6 +2432,9 @@
         workspace?.decorateMessage(bubble, { role: 'assistant', content: splitAction(hideActFragment(full)).text })
         renderSources(bubble, turn.sources, full)
       }
+      if (turn.discard) chatBridge.clear()
+      else chatBridge.publish(turn, completed ? 'complete' : signal.aborted && signal.reason?.name === 'AbortError' ? 'cancelled' : 'error',
+        completed ? splitAction(hideActFragment(full)).text : '')
       if (completed && !panel.classList.contains('is-open')) launcher.classList.add('has-news')
       if (activeTurn === turn) { activeTurn = null; abortCtl = null }
       setBusy(false, completed)
@@ -2379,6 +2442,41 @@
       setSubLine()
       scrollBottom()
     }
+  }
+
+  const contextAction = async (action, { text } = {}) => {
+    if (!['explain-selection', 'summarize'].includes(action)) return false
+    if (!canReadPageContext()) {
+      openPanel(); addMsg('sys', '请先解锁站点，再让我阅读文章或选中的文字。')
+      return false
+    }
+    // Capture selection before opening the panel changes focus.
+    let selected = ''
+    if (action === 'explain-selection') {
+      selected = typeof text === 'string' ? text.trim() : String(window.getSelection?.() || '').trim()
+    }
+    openPanel()
+    if (busy) { addMsg('sys', '我还在回答上一句；先点停止，再使用阅读快捷操作。'); return false }
+    if (action === 'explain-selection' && !selected) {
+      addMsg('sys', '先选中一段想理解的文字，再点“解释选区”。')
+      return false
+    }
+    if (action === 'summarize' && !currentArticle()) {
+      addMsg('sys', '先打开一篇文章，再让我总结。')
+      return false
+    }
+    if (selected.length > 6000) {
+      selected = selected.slice(0, 6000).replace(/[\uD800-\uDBFF]$/, '')
+      addMsg('sys', '选区超过 6000 字，已截取前 6000 字用于本次解释。')
+    }
+    const prompt = action === 'summarize'
+      ? '用几条要点总结一下这篇文章，重点讲清楚它到底解决了什么问题。'
+      : '解释一下这段：\n「' + selected + '」'
+    if (view !== 'chat') { showKeyUI('填写或解锁 API Key 后，再使用阅读快捷操作。'); return false }
+    const previousTurn = chatBridge.snapshot().turnId
+    await send(prompt, 'article', { attachments: [], files: [] })
+    const currentTurn = chatBridge.snapshot().turnId
+    return !!currentTurn && currentTurn !== previousTurn
   }
 
   const taskSummary = task => {
@@ -2804,6 +2902,7 @@
   workspace?.mount({
     panel, body, input, isBusy: () => busy, isLocked: () => locked() || view !== 'chat',
     onHistoryChange: (log, draftAssets = {}) => {
+      chatBridge.clear()
       history = log; historyAnchor = 0; research?.reset(); stopSpeak()
       vision?.clear({ silent: true }); fileTray?.clear({ silent: true })
       vision?.restore(draftAssets.attachments || [], { silent: true })
@@ -2862,6 +2961,8 @@
   window.NANALY = Object.freeze({
     open: openPanel,
     close: closePanel,
+    chatState: () => chatBridge.snapshot(),
+    contextAction,
     reset: () => { stopStream(true); history = []; historyAnchor = 0; writeLog(history); backToChat() },
     lock: () => { stopStream(true); clearSession(); voiceController?.stop({ clearCache: true }); secrets = { ...EMPTY_SECRETS }; showKeyUI() },
     stopSpeaking: () => stopSpeak(),

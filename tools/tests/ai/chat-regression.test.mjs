@@ -165,7 +165,7 @@ const sendHarness = (buildMessages, stream, extra = {}) => {
     setBusy: value => busyStates.push(value), mdToHtml: text => text, escapeHtml: text => text,
     enhance: async () => {}, hideActFragment: text => text, splitAction: text => ({ text, act: null }),
     showUsage() {}, addSpeakBtn() {}, scrollBottom() {}, logTurn: (...args) => logs.push(args), setSubLine() {}, ...extra
-  }, ['send', 'stopStream', 'speechPayload'])
+  }, ['send', 'stopStream', 'speechPayload', 'chatBridge', 'contextAction'])
   return { ...controller, logs, bubbles, busyStates }
 }
 
@@ -729,6 +729,135 @@ await test('model requests never follow redirects or attach browser cookies', as
     return new Response(sse('done') + 'data: [DONE]\n\n')
   })
   assert.equal(await stream([], () => {}, false, new AbortController().signal), 'done')
+})
+
+
+await test('real new chat turns broadcast short answer state and completion without extra speech', async () => {
+  const events = [], speech = []
+  const window = { CustomEvent, dispatchEvent: event => events.push(event.detail), NANALY_VOICE: {} }
+  const h = sendHarness(async () => [], async (_, delta) => {
+    delta('前段\n\n' + '尾'.repeat(220), 'PRIVATE REASONING')
+    return '前段\n\n' + '尾'.repeat(220)
+  }, { window, canReadPageContext: () => true, crypto,
+    el: () => Object.assign(new Bubble(), { querySelector: () => ({}) }),
+    voiceController: { chime: value => speech.push(['chime', value]), speak: () => speech.push(['speak']) } })
+  assert.equal(h.chatBridge.snapshot().phase, 'idle')
+  assert.equal(events.length, 0, 'restored/initial state must not celebrate')
+  await h.send('question', 'article')
+  assert.deepEqual(events.map(event => event.phase), ['thinking', 'streaming', 'complete'])
+  assert.equal(new Set(events.map(event => event.turnId)).size, 1)
+  assert.ok(events.every(event => event.text.length <= 180 && !event.text.includes('PRIVATE REASONING')))
+  assert.equal(events.at(-1).text, '尾'.repeat(180))
+  assert.deepEqual(speech, [['chime', 'done'], ['speak']], 'bridge must not add another speech request')
+  const snapshot = h.chatBridge.snapshot(); snapshot.text = 'changed'
+  assert.equal(h.chatBridge.snapshot().text, '尾'.repeat(180))
+  h.chatBridge.clear()
+  assert.equal(events.at(-1).phase, 'idle')
+})
+await test('stream state coalesces at 250ms and terminal state cancels queued text immediately', () => {
+  let now = 0, nextId = 0, unlocked = true
+  const events = [], jobs = new Map()
+  const { chatBridge } = run(cut('  const chatBridge =', '  /* 忙的时候'), {
+    Date: class extends Date { static now() { return now } },
+    canReadPageContext: () => unlocked,
+    window: { CustomEvent, dispatchEvent: event => events.push({ at: now, ...event.detail }) },
+    setTimeout: (fn, delay) => { jobs.set(++nextId, { fn, at: now + delay }); return nextId },
+    clearTimeout: id => jobs.delete(id)
+  }, ['chatBridge'])
+  const turn = { controller: new AbortController() }
+  chatBridge.begin(turn)
+  for (let i = 0; i < 300; i++) chatBridge.publish(turn, 'streaming', '片段' + i)
+  assert.equal(events.filter(event => event.phase === 'streaming').length, 1)
+  assert.equal(jobs.size, 1)
+  now = 250
+  for (const [id, job] of [...jobs]) { jobs.delete(id); job.fn() }
+  assert.equal(events.at(-1).text, '片段299')
+  chatBridge.publish(turn, 'streaming', 'queued private')
+  turn.controller.abort()
+  assert.equal(events.at(-1).phase, 'cancelled')
+  assert.equal(events.at(-1).text, '')
+  assert.equal(jobs.size, 0)
+  chatBridge.publish(turn, 'complete', 'late result')
+  assert.equal(events.at(-1).phase, 'cancelled')
+  const next = { controller: new AbortController() }; chatBridge.begin(next)
+  chatBridge.publish(next, 'streaming', 'private')
+  unlocked = false
+  assert.equal(chatBridge.snapshot().text, '')
+  chatBridge.publish(next, 'complete', 'private complete')
+  assert.equal(events.at(-1).text, '')
+})
+await test('actual cancellation, discard and failure publish the correct immediate terminal state', async () => {
+  for (const discard of [false, true]) {
+    const waiting = deferred(), events = []
+    const h = sendHarness(() => waiting.promise, async () => 'must not run', {
+      canReadPageContext: () => true, window: { CustomEvent, dispatchEvent: event => events.push(event.detail) }
+    })
+    const pending = h.send('question', 'article')
+    h.stopStream(discard)
+    assert.ok(events.some(event => event.phase === 'cancelled'), 'cancel must be synchronous')
+    assert.equal(events.at(-1).text, '')
+    await pending
+    waiting.resolve([])
+    assert.equal(events.at(-1).phase, discard ? 'idle' : 'cancelled')
+    assert.ok(!events.some(event => event.phase === 'complete'))
+  }
+  const events = []
+  const h = sendHarness(async () => [], async () => { throw new Error('fixture outage') }, {
+    canReadPageContext: () => true, window: { CustomEvent, dispatchEvent: event => events.push(event.detail) }
+  })
+  await h.send('question', 'article')
+  assert.equal(events.at(-1).phase, 'error')
+  assert.equal(events.at(-1).text, '')
+})
+await test('reading actions reuse send, bound selections and never inspect a locked page', async () => {
+  const requests = [], notices = [], events = []
+  let unlocked = true, selectionReads = 0
+  const h = sendHarness(async text => { requests.push(text); return [] }, async () => '解释完成', {
+    canReadPageContext: () => unlocked, currentArticle: () => ({ title: '文章' }), openPanel() {},
+    addMsg: (role, text) => { if (role === 'sys') notices.push(text); return new Bubble() },
+    window: { CustomEvent, dispatchEvent: event => events.push(event.detail),
+      getSelection: () => { selectionReads++; return 'selected paragraph' } }
+  })
+  await h.contextAction('explain-selection', { text: '字'.repeat(6100) })
+  assert.equal(requests.length, 1)
+  assert.equal((requests[0].match(/字/g) || []).length, 6000)
+  assert.ok(notices.some(text => /6000.*截取/.test(text)))
+  await h.contextAction('summarize')
+  assert.equal(requests.length, 2)
+  assert.match(requests[1], /总结.*文章/)
+  await h.contextAction('explain-selection', { text: '' })
+  assert.ok(notices.some(text => /先选中/.test(text)))
+  unlocked = false
+  await h.contextAction('explain-selection')
+  assert.equal(selectionReads, 0)
+  assert.equal(requests.length, 2)
+  assert.ok(notices.some(text => /先解锁站点/.test(text)))
+})
+
+
+await test('reading shortcuts preserve busy/key boundaries and do not send draft attachments', async () => {
+  for (const busy of [false, true]) {
+    let requested = 0, keyPrompts = 0
+    const h = sendHarness(async () => { requested++; return [] }, async () => 'unused', {
+      busy, secrets: {}, canReadPageContext: () => true, openPanel() {}, currentArticle: () => ({ title: 'article' }),
+      showKeyUI: () => { keyPrompts++ },
+      vision: { refs: () => [{ id: 'draft-photo' }], loading: () => false },
+      fileTray: { refs: () => [{ id: 'draft-document' }], loading: () => false }
+    })
+    assert.equal(await h.contextAction('summarize'), false)
+    assert.equal(requested, 0)
+    assert.equal(keyPrompts, busy ? 0 : 1)
+  }
+  let attached
+  const h = sendHarness(async (_text, _mode, _signal, _history, images, files) => {
+    attached = [images, files]; return []
+  }, async () => 'done', {
+    canReadPageContext: () => true, openPanel() {}, currentArticle: () => ({ title: 'article' }),
+    vision: { refs: () => [{ id: 'draft-photo' }], loading: () => false, take() { throw new Error('must retain draft') } },
+    fileTray: { refs: () => [{ id: 'draft-document' }], loading: () => false, take() { throw new Error('must retain draft') } }
+  })
+  assert.equal(await h.contextAction('summarize'), true)
+  assert.equal(attached[0].length, 0); assert.equal(attached[1].length, 0)
 })
 
 console.log(`\n${passed} chat regression checks passed`)

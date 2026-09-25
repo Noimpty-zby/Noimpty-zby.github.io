@@ -152,3 +152,15 @@
   #mao-stage,
   #mao-bubble { transition: none; }
 }
+
+/* 拖动只接管人物画布，正文保持原有滚动。 */
+#mao-stage canvas { touch-action: none; }
+#mao-stage[data-dragging="1"] { transition: none; }
+#mao-stage[data-dragging="1"] canvas { cursor: grabbing; }
+#mao-stage canvas:focus-visible { outline: 3px solid #ad7098; outline-offset: -5px; }
+#mao-stage[data-compact="1"] canvas { border-radius: 50%; background: rgba(255, 239, 246, .9); box-shadow: 0 2px 16px #8c557033; }
+#mao-stage[data-bubble-below="1"] #mao-bubble { top: calc(100% - 12px); bottom: auto; }
+#mao-toggle[data-status="loading"] { animation: mao-loading 1.4s ease-in-out infinite; }
+#mao-toggle[data-status="error"] { outline: 2px solid #a34c67; }
+@keyframes mao-loading { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { #mao-toggle[data-status="loading"] { animation: none; } }

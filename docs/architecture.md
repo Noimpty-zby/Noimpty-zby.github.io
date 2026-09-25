@@ -36,7 +36,7 @@
 | 检索、来源与检查任务 | source/js/nanaly-research.js、nanaly-tasks.js |
 | 服务商、图片与文件 | source/js/nanaly-provider.js、nanaly-vision.js、nanaly-files.js |
 | 聊天窗口与语音 | source/js/nanaly-shell.js、nanaly-prosody.js、nanaly-voice.js、nanaly-audio.js |
-| Mao 看板娘 | source/js/mao-pet.js、source/live2d/mao；Mao 是显示与互动组件，娜娜莉负责对话 |
+| Mao 看板娘 | source/js/mao-pet.js、mao-controls.js、source/css/mao-*.css、source/live2d/mao；Mao 是显示与互动组件，娜娜莉负责对话 |
 | 音乐与页面动态 | source/js/music-player.js、sakura-motion.js、site-clock.js、toc-sync.js |
 | 访问统计 | source/js/analytics.js；区分访客浏览与主人心跳 |
 | 后台自动生成内容 | tools/nanaly；在构建前产生 Markdown 或 _data 数据 |

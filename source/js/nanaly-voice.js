@@ -72,9 +72,79 @@
     try { prefs = normalize(JSON.parse(window.localStorage.getItem(KEY) || '{}')) } catch (_) { prefs = normalize() }
     let revision = 0, active = null, soundContext = null, audioBytes = 0, cacheAccount = null
     const cache = new Map(), plans = new Map(), listeners = new Set()
+    const snapshot = () => {
+      if (!active) return null
+      const state = { id: active.id, phase: active.phase, priority: active.priority }
+      if (active.phase === 'playing' && active.part) {
+        const text = active.part.text.slice(0, 180).replace(/[\uD800-\uDBFF]$/, '')
+        Object.assign(state, { text, emotion: active.part.emotion, intensity: active.part.intensity })
+      }
+      return state
+    }
     const emit = () => listeners.forEach(listener => {
-      try { listener(active ? { id: active.id, phase: active.phase } : null) } catch (_) {}
+      try { listener(snapshot()) } catch (_) {}
     })
+    const contextForSound = () => {
+      const Context = window.AudioContext || window.webkitAudioContext
+      if (!Context) return null
+      if (!soundContext || soundContext.state === 'closed') soundContext = new Context()
+      return soundContext
+    }
+    // Observe a captured side stream. Never route the audible element through Web
+    // Audio: an unsupported capture/analyser or suspended context must not mute it.
+    const observeAudio = audio => {
+      let stream = null, source = null, analyser = null, samples = null, context = null, closed = false
+      const stop = () => {
+        if (closed) return
+        closed = true
+        try { stream?.removeEventListener('addtrack', bind) } catch (_) {}
+        try { stream?.removeEventListener('removetrack', bind) } catch (_) {}
+        try { source?.disconnect() } catch (_) {}
+        try { analyser?.disconnect() } catch (_) {}
+        try { for (const track of stream?.getTracks?.() || []) { try { track.stop() } catch (_) {} } } catch (_) {}
+        stream = source = analyser = samples = null
+      }
+      const bind = () => {
+        if (closed || !stream) return
+        try {
+          source?.disconnect(); source = null
+          if (!stream.getAudioTracks().some(track => track.readyState !== 'ended')) return
+          source = context.createMediaStreamSource(stream)
+          source.connect(analyser)
+        } catch (_) { stop() }
+      }
+      try {
+        const capture = audio.captureStream || audio.mozCaptureStream
+        if (typeof capture !== 'function') return { stop, energy: () => null }
+        context = contextForSound()
+        if (!context) return { stop, energy: () => null }
+        analyser = context.createAnalyser()
+        analyser.fftSize = 256
+        samples = new Float32Array(analyser.fftSize)
+        stream = capture.call(audio)
+        stream.addEventListener?.('addtrack', bind)
+        stream.addEventListener?.('removetrack', bind)
+        bind()
+        if (!closed && context.state === 'suspended') Promise.resolve(context.resume()).catch(stop)
+      } catch (_) { stop() }
+      return { stop, energy: () => {
+        if (closed || !source || !analyser || context.state !== 'running') return null
+        try {
+          analyser.getFloatTimeDomainData(samples)
+          let total = 0
+          for (const sample of samples) total += sample * sample
+          const value = Math.sqrt(total / samples.length)
+          return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : null
+        } catch (_) { stop(); return null }
+      } }
+    }
+    const energy = id => {
+      if (!active || active.phase !== 'playing' || id !== undefined && active.id !== id || !active.audio || active.audio.paused || active.audio.ended) return 0
+      if (active.audio.muted || active.audio.volume === 0) return 0
+      const value = active.meter?.energy() ?? null
+      const volume = Number.isFinite(active.audio.volume) ? Math.min(1, Math.max(0, active.audio.volume)) : 1
+      return value === null ? null : value * volume
+    }
     const stop = ({ clearCache = false } = {}) => {
       revision++
       const prior = active
@@ -117,7 +187,7 @@
     }
     const planSpeech = async (text, context, connection, turn) => {
       const planner = window.NANALY_PROSODY
-      const fallback = () => splitText(text).map(text => ({ text, instruction: NEUTRAL }))
+      const fallback = () => splitText(text).map(text => ({ text, instruction: NEUTRAL, emotion: 'neutral', intensity: 0 }))
       const model = connection.model || 'Pro/moonshotai/Kimi-K2.6'
       const cacheKey = JSON.stringify([model, text, context])
       if (plans.has(cacheKey)) {
@@ -156,8 +226,8 @@
         const chunks = []
         for (const segment of plan.segments) {
           const previous = chunks[chunks.length - 1]
-          if (previous && previous.instruction === segment.instruction && previous.text.length + segment.text.length <= 450) previous.text += segment.text
-          else chunks.push({ text: segment.text, instruction: segment.instruction })
+          if (previous && previous.instruction === segment.instruction && previous.emotion === segment.emotion && previous.intensity === segment.intensity && previous.text.length + segment.text.length <= 450) previous.text += segment.text
+          else chunks.push({ text: segment.text, instruction: segment.instruction, emotion: segment.emotion, intensity: segment.intensity })
         }
         plans.set(cacheKey, chunks)
         while (plans.size > 16) plans.delete(plans.keys().next().value)
@@ -182,7 +252,8 @@
         settled = true
         if (drainTimer !== null) clearTimeout(drainTimer)
         signal.removeEventListener('abort', abort)
-        audio.onended = audio.onerror = null
+        audio.onended = audio.onerror = audio.onplaying = audio.onpause = audio.onwaiting = null
+        turn.meter?.stop(); turn.meter = null
         // Reset only interrupted/failed playback. A natural end should be allowed to
         // drain to the output device without resetting the decoder at its final frame.
         if (error) { audio.pause(); audio.removeAttribute?.('src'); audio.load?.() }
@@ -193,8 +264,25 @@
       }
       const abort = () => finish(signal.reason || new DOMException('停止朗读', 'AbortError'))
       signal.addEventListener('abort', abort, { once: true })
+      const pause = phase => {
+        if (settled || active !== turn) return
+        turn.meter?.stop(); turn.meter = null
+        turn.phase = phase; emit()
+      }
+      const playing = () => {
+        if (settled || signal.aborted || active !== turn || audio.paused || audio.ended || drainTimer !== null) return
+        if (turn.phase === 'playing') return
+        turn.meter = observeAudio(audio)
+        turn.phase = 'playing'; emit()
+      }
+      audio.onplaying = playing
+      audio.onpause = () => pause('paused')
+      audio.onwaiting = () => pause('loading')
       audio.onended = () => {
-        if (!settled && drainTimer === null) drainTimer = setTimeout(() => finish(), END_DRAIN_MS)
+        if (!settled && drainTimer === null) {
+          pause('ended')
+          drainTimer = setTimeout(() => finish(), END_DRAIN_MS)
+        }
       }
       audio.onerror = () => {
         const error = new Error('浏览器无法播放这段音频，请重试。')
@@ -202,13 +290,15 @@
         finish(error)
       }
       audio.src = url
-      turn.phase = 'playing'; emit()
-      Promise.resolve().then(() => { signal.throwIfAborted(); return audio.play() }).catch(error => finish(error?.name === 'NotAllowedError'
+      turn.phase = 'loading'; emit()
+      Promise.resolve().then(() => { signal.throwIfAborted(); return audio.play() }).then(playing).catch(error => finish(error?.name === 'NotAllowedError'
         ? new Error('声音已生成，请再点一次朗读来允许播放。') : error))
     })
-    const speak = async (text, { id = 'preview', automatic = false, context = '' } = {}) => {
+    const speak = async (text, { id = 'preview', automatic = false, context = '', priority } = {}) => {
+      priority = priority === 'pet' || priority === 'chat' ? priority : String(id).startsWith('mao-') ? 'pet' : 'chat'
       if (automatic && (!prefs.autoplay || document.hidden)) return false
-      if (automatic && active) return false
+      if (active && priority === 'pet' && active.priority === 'chat') return false
+      if (automatic && active && !(priority === 'chat' && active.priority === 'pet')) return false
       if (active?.id === id && !automatic) { stop(); return false }
       stop()
       const plain = cleanText(text)
@@ -217,7 +307,7 @@
       const connection = getConnection?.() || {}
       if (!connection.key) { notify('声音共用硅基流动密钥，请先解锁或填写。'); if (!automatic) onNeedKey(); return false }
       const version = revision
-      const turn = { id, controller: new AbortController(), phase: 'loading', audio: null, url: null }
+      const turn = { id, priority, controller: new AbortController(), phase: 'loading', audio: null, url: null, part: null, meter: null }
       active = turn; emit()
       const settings = { ...prefs }, style = STYLES[settings.style]
       try {
@@ -276,7 +366,7 @@
         }
         const parts = settings.emotion
           ? await planSpeech(String(text), String(context || '').slice(0, 1200), connection, turn)
-          : splitText(text).map(text => ({ text, instruction: NEUTRAL }))
+          : splitText(text).map(text => ({ text, instruction: NEUTRAL, emotion: 'neutral', intensity: 0 }))
         for (const part of parts) {
           turn.controller.signal.throwIfAborted()
           // A complete sentence also gives synthesis an explicit ending for bare headings.
@@ -315,6 +405,7 @@
             } finally { clearTimeout(timeout) }
           }
           if (version !== revision || active !== turn) return false
+          turn.part = part
           try { await play(blob, turn) }
           catch (error) {
             // Failed media must not poison retries. Keep useful cached audio when
@@ -335,9 +426,7 @@
     const chime = kind => {
       if (!prefs.effects || document.hidden) return
       try {
-        const Context = window.AudioContext || window.webkitAudioContext
-        if (!Context) return
-        if (!soundContext) soundContext = new Context()
+        if (!contextForSound()) return
         // This can only unlock after a real pointer/keyboard gesture.
         if (soundContext.state === 'suspended') soundContext.resume().catch(() => {})
         if (soundContext.state !== 'running') return
@@ -355,10 +444,14 @@
         })
       } catch (_) {}
     }
-    window.addEventListener?.('pagehide', () => stop({ clearCache: true }))
-    return { speak, stop, chime, configure, preferences: () => ({ ...prefs }),
+    window.addEventListener?.('pagehide', () => {
+      stop({ clearCache: true })
+      const context = soundContext; soundContext = null
+      try { if (context && context.state !== 'closed') Promise.resolve(context.close()).catch(() => {}) } catch (_) {}
+    })
+    return { speak, stop, chime, configure, energy, preferences: () => ({ ...prefs }),
       subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener) },
-      state: () => active ? { id: active.id, phase: active.phase } : null,
+      state: snapshot,
       clearCache: () => { cache.clear(); plans.clear(); audioBytes = 0; cacheAccount = null } }
   }
   const mount = ({ panel, controller, isChat = () => true, onOpen = () => {} }) => {

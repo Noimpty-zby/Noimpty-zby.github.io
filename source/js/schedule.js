@@ -116,6 +116,39 @@
     })
   }
   const validData = value => value && typeof value === 'object' && !Array.isArray(value) && validDays(value.days)
+  const scheduleUnlocked = () => {
+    try {
+      return window.NOIMPTY_GATE?.unlocked() === true &&
+        !document.documentElement?.classList?.contains('noimpty-private-locked')
+    } catch (_) { return false }
+  }
+  const scheduleSnapshot = () => {
+    if (!loaded || !scheduleUnlocked()) return null
+    const days = {}
+    for (const day of Object.keys(data.days || {}).sort()) {
+      if (!validCalendarDay(day) || !Array.isArray(data.days[day])) continue
+      days[day] = data.days[day].filter(task => task && typeof task.id === 'string' &&
+        typeof task.text === 'string' && typeof task.done === 'boolean').map(task => ({
+          id: task.id, text: task.text, done: task.done,
+          ...(task.when?.type ? { when: { type: String(task.when.type), match: String(task.when.match || '') } } : {}),
+          ...(task.autoAt ? { autoAt: String(task.autoAt) } : {}),
+          ...(task.autoWhy ? { autoWhy: String(task.autoWhy) } : {})
+        }))
+    }
+    return { days }
+  }
+  let announcedSchedule = null
+  const publishSchedule = source => {
+    const snapshot = scheduleSnapshot()
+    if (!snapshot) { announcedSchedule = null; return }
+    const signature = JSON.stringify(snapshot.days)
+    if (signature === announcedSchedule) return
+    announcedSchedule = signature
+    try {
+      const EventType = window.CustomEvent || CustomEvent
+      window.dispatchEvent(new EventType('noimpty:schedule-updated', { detail: { ...snapshot, source } }))
+    } catch (_) {}
+  }
   const readCache = () => {
     try {
       const value = JSON.parse(localStorage.getItem(LS_CACHE) || 'null')
@@ -194,7 +227,7 @@
       return 'remote'
     })()
     loadPending = pending
-    return pending.finally(() => { if (loadPending === pending) loadPending = null })
+    return pending.finally(() => { if (loadPending === pending) loadPending = null; publishSchedule('load') })
   }
 
   const nextDay = k => {
@@ -212,6 +245,7 @@
     dirty = true
     changeCount++
     writeCache()
+    publishSchedule('edit')
     render()
   }
 
@@ -230,6 +264,7 @@
     dirty = true
     changeCount++
     writeCache()
+    publishSchedule('edit')
     render()
   }
 
@@ -434,6 +469,7 @@
       data = dirty ? { updatedAt: new Date().toISOString(), days: remaining } : JSON.parse(payload)
       changeCount = dirty ? Math.max(1, changeCount - saveChanges) : 0
       writeCache()
+      publishSchedule('save')
       status(dirty ? '刚才的改动已保存。保存期间又有新改动，请再保存一次。' : theyMoved
         ? '已保存。你打开这页之后仓库里也有改动（多半是娜娜莉自动勾的），我把两边合起来了，都在。'
         : '已保存。站点大约 1–2 分钟后更新，晚上的邮件就会带上这些安排了。', 'ok')
@@ -1139,6 +1175,7 @@
 
   window.NOIMPTY_SCHEDULE = Object.freeze({
     data: () => JSON.parse(JSON.stringify(data)),
+    snapshot: scheduleSnapshot,
     baseline: () => (baseline ? JSON.parse(JSON.stringify(baseline)) : null),
     dirty: () => dirty,
     reload: () => loadData().then(r => { render(); return r }),

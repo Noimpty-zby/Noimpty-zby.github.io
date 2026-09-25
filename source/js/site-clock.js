@@ -80,11 +80,12 @@
      * 认 #site-info 是为了只在首页出现：文章页也有 #page-header，但那是窄横幅。 */
     const info = document.querySelector('#site-info')
     const title = info && info.querySelector('#site-title')
-    if (!info || !title || document.getElementById('noimpty-clock')) return
+    if (info && title && document.getElementById('noimpty-clock')) return
     /* 走到这儿说明上一块要么没有、要么已经被 pjax 连同整个 hero 换掉了。
      * 旧的秒表和监听不会自己消失 —— 不先拆掉，每回一次首页就多积一份，
      * 它们还会对着已经脱离文档的节点每秒写一次。 */
     if (teardown) { teardown(); teardown = null }
+    if (!info || !title) return
 
     const el = (tag, cls, text) => {
       const node = document.createElement(tag)
@@ -179,10 +180,12 @@
     const onVisible = () => { document.hidden ? stop() : start() }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('pagehide', stop)
+    window.addEventListener('pageshow', start)
     teardown = () => {
       stop()
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('pagehide', stop)
+      window.removeEventListener('pageshow', start)
     }
     start()
     box.dataset.ready = '1'

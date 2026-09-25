@@ -23,7 +23,7 @@ export const [OWNER, NAME] = REPO.split('/')
 export const gql = async (query, variables = {}, token = HER_TOKEN) => {
   if (!token) throw new Error('没有 GitHub token')
   const res = await fetch('https://api.github.com/graphql', {
-    method: 'POST',
+    method: 'POST', redirect: 'error',
     headers: { Authorization: `bearer ${token}`, 'content-type': 'application/json' },
     body: JSON.stringify({ query, variables }),
     signal: AbortSignal.timeout(30000)
@@ -202,7 +202,7 @@ export const triggerDeploy = async (workflowFile = 'pages.yml', ref = 'main') =>
     const res = await fetch(
       `https://api.github.com/repos/${OWNER}/${NAME}/actions/workflows/${workflowFile}/dispatches`,
       {
-        method: 'POST',
+        method: 'POST', redirect: 'error',
         headers: {
           Authorization: `Bearer ${token}`,
           accept: 'application/vnd.github+json',

@@ -151,6 +151,8 @@
       if (capture) {
         capture.removeEventListener('addtrack', bindSource)
         capture.removeEventListener('removetrack', bindSource)
+        for (const track of capture.getTracks?.() || capture.getAudioTracks()) { try { track.stop?.() } catch (_) {} }
+        capture = null
       }
       try { if (context && context.state !== 'closed') Promise.resolve(context.close()).catch(() => {}) } catch (_) {}
     }

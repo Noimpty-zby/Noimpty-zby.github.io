@@ -145,7 +145,7 @@ export const readProfile = () => {
 const searchWeb = async (query, maxResults = 8) => {
   if (!TAVILY_KEY) throw new Error('没有 TAVILY_API_KEY')
   const res = await fetch('https://api.tavily.com/search', {
-    method: 'POST',
+    method: 'POST', redirect: 'error',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TAVILY_KEY}` },
     body: JSON.stringify({
       query,
@@ -180,7 +180,7 @@ const dedupe = items => {
 }
 
 /* ⚠️ 从下面这一行到「最近几期写过什么」那句注释之间的整段，会被
- * tools/tests/news-links.test.mjs 按字符串边界切出去、在隔离作用域里求值
+ * tools/tests/automation/news-links.test.mjs 按字符串边界切出去、在隔离作用域里求值
  * （attachSources 没有 export）。所以这两行之间**别塞带 export 的东西**，
  * 塞了那个测试会直接语法错误；那两句边界文字本身也别改动、别在别处重复。
  *
@@ -505,8 +505,10 @@ export const buildNews = async () => {
   // page.categories.data —— page 上没有这个字段，直接抛 TypeError。
   // 后果特别隐蔽：hexo generate 照常「成功」，只是把这个页面渲染成一个
   // 0 字节的 index.html。工作流全绿、文件也在仓库里，点进去却是一片空白。
+  // Model output must never execute Hexo/Nunjucks tags after Markdown sanitization.
   const md = `---
 title: 资讯速览 · ${date}
+disableNunjucks: true
 date: ${stamp}
 type: news
 comments: true
@@ -547,10 +549,12 @@ ${sections.map(s => `## ${s.title}\n\n${s.body}`).join('\n\n')}
  */
 export const commitNews = async (label) => {
   const run = (...a) => execFileSync('git', a, { encoding: 'utf8', stdio: 'pipe' })
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(label)) throw new Error('资讯日期无效')
   useNanalyIdentity(run)
-  run('add', DIR)
-  if (!run('status', '--porcelain', '--', DIR).trim()) { console.log('  没有变化，不提交'); return false }
-  run('commit', '-m', `娜娜莉：资讯速览 ${label}`)
+  const file = `${DIR}/${label}/index.md`
+  run('add', '--', file)
+  if (!run('status', '--porcelain', '--', file).trim()) { console.log('  没有变化，不提交'); return false }
+  run('commit', '-m', `娜娜莉：资讯速览 ${label}`, '--only', '--', file)
   pushWithRetry(run, '资讯')
   console.log('  已提交并推送')
   await triggerDeploy()

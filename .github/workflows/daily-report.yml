@@ -20,7 +20,7 @@ permissions:
   actions: write
 
 concurrency:
-  group: daily-report
+  group: blog-data-writes-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
@@ -45,6 +45,7 @@ jobs:
 
       - name: 生成并发送日报
         env:
+          INPUT_DRY: ${{ inputs.dry }}
           SITE_URL: https://noimpty-zby.github.io
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -68,7 +69,7 @@ jobs:
           NANALY_GIT_EMAIL: ${{ secrets.NANALY_GIT_EMAIL }}
           NANALY_GIT_NAME: ${{ secrets.NANALY_GIT_NAME }}
         run: |
-          if [ "${{ inputs.dry }}" = "true" ]; then
+          if [ "$INPUT_DRY" = "true" ]; then
             node tools/daily-report/run.mjs --dry
           else
             node tools/daily-report/run.mjs

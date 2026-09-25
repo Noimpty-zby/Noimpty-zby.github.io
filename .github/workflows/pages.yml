@@ -67,14 +67,14 @@ jobs:
       # 不会报错，只会在有人点下去的时候 404 —— 而那个人多半永远不会告诉你。
       # 这一步扫每个 HTML 里的每个 href/src，解析不到文件就让部署失败。
       - name: 站内死链检查
-        run: node tools/linkcheck.mjs
+        run: node tools/checks/linkcheck.mjs
 
       # 公开页面泄漏检查。对外只剩首页，它上面的每一个字都是公开的 ——
       # 包括被 CSS 藏起来的部分，因为「藏起来」只是不显示，源码里照样有。
       # 这类泄漏漏过两次（卡片小字、侧边栏公告），都不是逻辑错误，
       # 是「顺手写了一句人话」，靠人盯没用。
       - name: 公开页面泄漏检查
-        run: node tools/leakcheck.mjs
+        run: node tools/checks/leakcheck.mjs
 
       # 上锁自检。这几条如果没过，部署出去的站就是敞开的 ——
       # 而这种「敞开」在页面上完全看不出来，只有直接请求那几个文件才会发现。

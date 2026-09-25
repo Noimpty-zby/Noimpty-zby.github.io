@@ -7,6 +7,7 @@
     error.code = 'NANALY_INVALID_WAV'
     throw error
   }
+  const MAX_BYTES = 12 * 1024 * 1024
   const WAV_TYPES = ['audio/wav', 'audio/wave', 'audio/x-wav', 'audio/vnd.wave', 'application/octet-stream']
   // Non-seekable writers leave a placeholder until the final byte count is known:
   // UINT32_MAX, a value near INT32_MAX (sometimes minus the header), or a small
@@ -17,6 +18,7 @@
   const streamingLength = value => value >= 0xffffff00 || value >= 0x7fff0000 && value <= 0x7fffffff
   const padWav = async (blob, seconds = 0.35) => {
     if (!blob || typeof blob.arrayBuffer !== 'function' || typeof blob.size !== 'number') throw new TypeError('需要 Blob 音频')
+    if (!Number.isSafeInteger(blob.size) || blob.size < 0 || blob.size > MAX_BYTES) throw new RangeError('WAV 文件超出安全范围')
     if (!Number.isFinite(seconds) || seconds < 0) throw new RangeError('静音时长必须是非负有限数字')
     const mime = String(blob.type || '').split(';')[0].trim().toLowerCase()
     if (mime && !WAV_TYPES.includes(mime)) return blob
@@ -94,7 +96,7 @@
   // Deliberately lenient where padWav is strict: an unreadable header is not an error
   // here, it simply means the length is unknown.
   const measure = async blob => {
-    if (!blob || typeof blob.arrayBuffer !== 'function') return null
+    if (!blob || typeof blob.arrayBuffer !== 'function' || !Number.isSafeInteger(blob.size) || blob.size > MAX_BYTES) return null
     const mime = String(blob.type || '').split(';')[0].trim().toLowerCase()
     if (mime && !WAV_TYPES.includes(mime)) return null
     const bytes = new Uint8Array(await blob.arrayBuffer())
@@ -103,12 +105,14 @@
     const tag = offset => String.fromCharCode(...bytes.subarray(offset, offset + 4))
     if (tag(0) !== 'RIFF' || tag(8) !== 'WAVE') return null
     const declared = view.getUint32(4, true)
+    const openRiff = declared === 0 || streamingLength(declared) && declared + 8 > bytes.length
     const end = declared && !streamingLength(declared) && declared + 8 <= bytes.length ? declared + 8 : bytes.length
     let rate = 0, align = 0, size = 0, offset = 12
     while (offset + 8 <= end) {
       const name = tag(offset), start = offset + 8, available = end - start
       const length = view.getUint32(offset + 4, true)
-      const bounded = Math.min(length, available)
+      const unbounded = name === 'data' && (streamingLength(length) && length > available || length === 0 && openRiff)
+      const bounded = unbounded ? available : Math.min(length, available)
       if (name === 'fmt ' && bounded >= 16) { rate = view.getUint32(start + 4, true); align = view.getUint16(start + 12, true) }
       if (name === 'data') { size = bounded; break }
       offset = start + bounded + (bounded & 1)

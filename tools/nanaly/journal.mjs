@@ -139,8 +139,7 @@ export const commitJournal = async ({ run = (...args) => execFileSync('git', arg
   if (DRY) { console.log('  [演练] 不提交行动日志'); return false }
   if (pendingWriteError) throw new Error('行动日志未能保存：' + String(pendingWriteError.message).slice(0, 140))
   try {
-    if (!existsSync(FILE)) return false
-    const files = [FILE, ...extra.filter(f => typeof f === 'string' && existsSync(f))]
+    const files = [...new Set([FILE, ...extra].filter(f => typeof f === 'string' && existsSync(f)))]
     /* 先看有没有变化，**再**动 git 身份。
      *
      * useNanalyIdentity 会往仓库的 .git/config 里写 user.name / user.email。
@@ -153,7 +152,7 @@ export const commitJournal = async ({ run = (...args) => execFileSync('git', arg
     run('add', ...changed)
     // 提交信息按实际改了什么写，别让一次纯记账的提交谎称更新了日志。
     const what = changed.includes(FILE) ? (changed.length > 1 ? '行动日志和用量记账' : '行动日志') : '用量记账'
-    run('commit', '-m', '娜娜莉：更新' + what)
+    run('commit', '-m', '娜娜莉：更新' + what, '--only', '--', ...changed)
     pushWithRetry(run, what)
     console.log(`  ${what}已提交并推送`)
     /* 返回值的含义是「有没有东西需要部署」，不是「有没有提交过」。

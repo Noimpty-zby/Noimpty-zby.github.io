@@ -15,7 +15,7 @@
  *    每晚的定时任务会自动勾任务并提交，手机上也可能改过。如果这里直接
  *    「读最新 sha → 整个文件覆盖」，那个 sha 永远是最新的、永远不冲突，
  *    结果就是把别人的改动无声抹掉。所以记下打开页面时的基准版本，
- *    保存时和远端做三方合并：我动过的以我为准，我没动过的以远端为准。
+ *    保存时和远端做三方合并：同一字段冲突以我为准，互不冲突的改动都保留。
  *
  * 2. 读不到远端就绝不允许保存。
  *    以前 fetch 失败会静默变成空日程，你加一条再保存 = 整个仓库的日程被清空。
@@ -241,6 +241,7 @@
     text: String(t.text || ''),
     done: !!t.done,
     when: t.when && t.when.type ? { type: String(t.when.type), match: String(t.when.match || '') } : null,
+    autoAt: String(t.autoAt || ''),
     autoWhy: String(t.autoWhy || '')
   })
 
@@ -264,8 +265,43 @@
     return m
   }
 
+  // 日期、文字与完成状态分别合并。同一个任务改了文字，不代表撤销远端完成。
+  // 判据与完成证据必须作为一组：换了判据不能继续携带旧判据的自动完成。
+  const mergeTask = (base, mine, theirs) => {
+    if (!base) return mine
+    const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+    const state = task => ({
+      when: task.when && task.when.type ? { type: String(task.when.type), match: String(task.when.match || '') } : null,
+      done: task.done, autoAt: task.autoAt || '', autoWhy: task.autoWhy || ''
+    })
+    const result = { ...theirs.task }
+    if (mine.task.text !== base.task.text) result.text = mine.task.text
+    const stateChanged = !equal(state(mine.task), state(base.task))
+    const selectedState = stateChanged ? mine : theirs
+    const day = mine.day !== base.day ? mine.day : theirs.day
+    if (stateChanged) {
+      for (const key of ['when', 'done', 'autoAt', 'autoWhy']) {
+        if (Object.prototype.hasOwnProperty.call(mine.task, key)) result[key] = mine.task[key]
+        else delete result[key]
+      }
+    }
+    // 移动日期只影响旧日期的自动证据，不能连带撤销远端的新判据。
+    // 已经存在于基准中的证据也属于旧日期；新日期重新生成的证据可以保留。
+    const inheritedEvidence = (result.autoAt || '') === (base.task.autoAt || '') &&
+      (result.autoWhy || '') === (base.task.autoWhy || '')
+    if ((result.autoAt || result.autoWhy) &&
+        (day !== selectedState.day || (day !== base.day && inheritedEvidence))) {
+      // 明确重新手动勾上的状态仍然有效，只有继承的自动完成需要撤销。
+      const manuallyChecked = !base.task.done && selectedState.task.done && inheritedEvidence
+      if (!manuallyChecked) result.done = false
+      delete result.autoAt
+      delete result.autoWhy
+    }
+    return { day, task: result }
+  }
+
   /* base = 我打开页面时仓库的样子；mine = 我现在手上的；theirs = 此刻仓库里的。
-   * 规则：我动过的以我为准，我没动过的以远端为准。删除同理。 */
+   * 同一字段冲突时本地优先，独立改动都保留。删除遇到修改时保留修改。 */
   const mergeDays = (base, mine, theirs) => {
     const B = indexTasks(base), M = indexTasks(mine), T = indexTasks(theirs)
     const out = {}
@@ -275,9 +311,8 @@
     new Set([...M.keys(), ...T.keys()]).forEach(id => {
       const b = B.get(id), m = M.get(id), t = T.get(id)
       if (m && t) {
-        // 两边都有：我改过就用我的，否则用远端的（这样娜娜莉自动勾的 done 不会被顶掉）
-        if (changed(m, b)) put(m.day, m.task)
-        else put(t.day, t.task)
+        const merged = mergeTask(b, m, t)
+        put(merged.day, merged.task)
       } else if (m) {
         // 远端没有：我新加的，或者我改过而远端删了 —— 都保留；我没动而远端删了 —— 跟着删
         if (!b || changed(m, b)) put(m.day, m.task)
@@ -528,7 +563,8 @@
    * 只判「是不是对象」的话，一份缺了 posts 的数据照样进得来，
    * 然后 STUDY.posts.forEach 当场抛 —— 整页白屏，而日程那半和它根本无关。
    * 这一页的数据是构建时拼的，拼歪了不该让整页陪葬。 */
-  const STUDY = {
+  let STUDY = { courses: [], posts: [] }
+  const refreshStudy = () => { STUDY = {
     courses: Array.isArray(window.NOIMPTY_STUDY && window.NOIMPTY_STUDY.courses)
       ? window.NOIMPTY_STUDY.courses.filter(c => c && typeof c === 'object').map(c => ({
         ...c,
@@ -538,6 +574,8 @@
       })) : [],
     posts: Array.isArray(window.NOIMPTY_STUDY && window.NOIMPTY_STUDY.posts)
       ? window.NOIMPTY_STUDY.posts.filter(p => p && typeof p === 'object') : []
+  }
+
   }
 
   const HEAT_DAYS = 91          // 十三周，一屏放得下
@@ -1075,6 +1113,7 @@
     const node = document.getElementById('noimpty-schedule')
     root = node || null
     if (!root) return
+    refreshStudy()
     bindRoot(root)
     render()
     if (!loaded) {

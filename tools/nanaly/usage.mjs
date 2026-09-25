@@ -118,7 +118,7 @@ export const commitUsage = async ({ run = (...args) => execFileSync('git', args,
     if (!run('status', '--porcelain', '--', FILE).trim()) return false
     useNanalyIdentity(run)
     run('add', FILE)
-    run('commit', '-m', '娜娜莉：更新用量记账')
+    run('commit', '-m', '娜娜莉：更新用量记账', '--only', '--', FILE)
     pushWithRetry(run, '用量记账')
     console.log('  用量记账已提交并推送')
     return true

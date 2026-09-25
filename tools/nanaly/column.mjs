@@ -217,8 +217,10 @@ ${ctx || '（这段时间站上很安静，没什么事发生。那就写「安�
   }
   const { title, content } = parsed
 
+  // Model output must never execute Hexo/Nunjucks tags after Markdown sanitization.
   const md = `---
 title: ${yamlString(title)}
+disableNunjucks: true
 date: ${stampFull(now)}
 description: 娜娜莉自己写的随笔。
 categories:
@@ -253,7 +255,7 @@ export const commitAndPush = async ({ file, title }) => {
   run('add', file)
   const status = run('status', '--porcelain', '--', file).trim()
   if (!status) { console.log('  没有实际改动，不提交'); return false }
-  run('commit', '-m', `娜娜莉：${title}`)
+  run('commit', '-m', `娜娜莉：${title}`, '--only', '--', file)
   pushWithRetry(run, '专栏')
   console.log('  已提交并推送')
   // 用 GITHUB_TOKEN 推的提交不会自动触发部署，得自己叫一声

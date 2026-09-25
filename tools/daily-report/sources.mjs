@@ -153,9 +153,12 @@ export const getComments = async () => {
     // 和回评共用完整分页；固定 last:N 会漏掉繁忙讨论里的新回复。
     const discussions = await listDiscussions()
     const fresh = []
+    // Keep only the minimal historical signal needed by automatic completion.
+    const completionSignals = []
     for (const d of discussions) {
       const push = c => {
         const t = Date.parse(c.createdAt)
+        if (Number.isFinite(t) && t <= WINDOW.end) completionSignals.push({ on: d.title, who: c.author?.login || '', at: c.createdAt })
         if (t >= WINDOW.start && t <= WINDOW.end) {
           fresh.push({
             on: d.title, onUrl: d.url, url: c.url || d.url,
@@ -170,7 +173,7 @@ export const getComments = async () => {
       }
     }
     fresh.sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
-    return { ok: true, items: fresh }
+    return { ok: true, items: fresh, completionSignals }
   } catch (e) {
     return { ok: false, why: String(e.message || e).slice(0, 220) }
   }

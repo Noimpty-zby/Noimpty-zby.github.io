@@ -9,11 +9,11 @@ const empty = () => ({ memories:[], goals:[], notes:[], experiences:[], events:[
 const response = (value,status=200) => ({ok:status<400,status,headers:{get:()=>null},text:async()=>JSON.stringify(value)})
 const deferred = () => { let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});return {promise,resolve,reject} }
 const flush = async () => { for(let i=0;i<30;i++)await Promise.resolve() }
-function environment (fetch, additions={}) {
+function environment (fetch, additions={}, timers={}) {
   const events=[]
   const window={fetch,crypto:{randomUUID:()=>String(Math.random())},location:{href:'https://blog.test/lesson'},addEventListener(){},
     CustomEvent:class{constructor(type,options){this.type=type;this.detail=options.detail}},dispatchEvent:event=>events.push(copy(event)),...additions}
-  vm.runInNewContext(source,{window,URL,AbortController,setTimeout,clearTimeout,console})
+  vm.runInNewContext(source,{window,URL,AbortController,setTimeout,clearTimeout,console,...timers})
   let id=0,now=2_000_000_000_000
   const create=()=>window.NANALY_AGENT_FACTORY.create({fetch,now:()=>now,id:()=>String(++id)})
   return {window,create,events,advance:ms=>{now+=ms},now:()=>now}
@@ -54,6 +54,71 @@ await test('API query requests preserve same origin and reject external/traversa
   for(const path of ['https://evil.test/api/runs','//evil.test/api/runs','/api/../admin','/api/runs#fragment','/api/\\evil.test'])await assert.rejects(agent.request(path),/无效/)
   assert.equal(server.requests.length,count)
 })
+await test('connection status verifies initial state before turning green and emits disconnects immediately',async()=>{
+  const hold=deferred(),env=environment(()=>hold.promise),agent=env.create(),states=[]
+  agent.subscribe(state=>states.push(state.connection))
+  assert.equal(agent.snapshot().connection,'disconnected')
+  const connecting=agent.connect('https://test',token)
+  assert.equal(agent.snapshot().connection,'connecting');assert.equal(agent.configured(),false)
+  assert.equal(agent.snapshot().connected,true,'legacy connected means credentials are present')
+  assert.equal(states.at(-1),'connecting')
+  hold.resolve(response({revision:0,data:empty()}));await connecting
+  assert.equal(agent.snapshot().connection,'connected');assert.equal(agent.configured(),true)
+  agent.disconnect()
+  assert.equal(agent.snapshot().connection,'disconnected');assert.equal(agent.configured(),false)
+  assert.equal(states.at(-1),'disconnected')
+})
+await test('failed initial authentication clears credentials and exposes a connection error',async()=>{
+  const env=environment(async()=>response({error:{message:'令牌无效'}},401)),agent=env.create()
+  await assert.rejects(agent.connect('https://test',token),/令牌无效/)
+  assert.equal(agent.snapshot().connection,'error');assert.equal(agent.snapshot().problem,'令牌无效')
+  assert.equal(agent.configured(),false);assert.equal(agent.snapshot().connected,false)
+  agent.disconnect();assert.equal(agent.snapshot().connection,'disconnected');assert.equal(agent.snapshot().problem,'')
+})
+await test('authentication, network and server failures revoke green status while retaining retryable configuration',async()=>{
+  let failure=null
+  const server=backend(),env=environment((url,opts)=>failure?failure():server.fetch(url,opts)),agent=env.create()
+  await agent.connect('https://test',token)
+  for(const fail of [
+    ()=>response({error:{message:'unauthorized'}},401),
+    ()=>response({error:{message:'forbidden'}},403),
+    ()=>response({error:{message:'unavailable'}},503),
+    ()=>Promise.reject(new TypeError('Failed to fetch')),
+    ()=>({ok:true,status:200,headers:{get:()=>null},text:async()=>'<html>not a backend</html>'})
+  ]){
+    failure=fail;await assert.rejects(agent.request('/api/runs'))
+    assert.equal(agent.snapshot().connection,'error');assert.equal(agent.configured(),true)
+    assert.ok(agent.snapshot().problem)
+    failure=null;await agent.request('/api/runs')
+    assert.equal(agent.snapshot().connection,'connected');assert.equal(agent.snapshot().problem,'')
+  }
+  for(const status of [400,409,429]){
+    failure=()=>response({error:{message:'business error'}},status)
+    await assert.rejects(agent.request('/api/runs'))
+    assert.equal(agent.snapshot().connection,'connected','business failures are not connection failures')
+  }
+})
+await test('caller cancellation preserves connection health, while request timeout reports failure',async()=>{
+  let timeout,waiting=false
+  const server=backend(),env=environment((url,opts)=>waiting?new Promise((resolve,reject)=>{
+    opts.signal.addEventListener('abort',()=>reject(opts.signal.reason),{once:true})
+  }):server.fetch(url,opts),{}, {setTimeout:fn=>{timeout=fn;return 1},clearTimeout(){}}),agent=env.create()
+  await agent.connect('https://test',token);waiting=true
+  const controller=new AbortController(),cancelled=agent.refresh(controller.signal)
+  controller.abort(new Error('user cancelled'));await assert.rejects(cancelled,/user cancelled/)
+  assert.equal(agent.snapshot().connection,'connected');assert.equal(agent.snapshot().problem,'')
+  const timed=agent.request('/api/runs');timeout();await assert.rejects(timed,/后端请求超时/)
+  assert.equal(agent.snapshot().connection,'error');assert.equal(agent.configured(),true)
+})
+await test('late failures from an old connection cannot overwrite the new backend status',async()=>{
+  let delay=false
+  const hold=deferred(),server=backend(),env=environment((url,opts)=>delay&&url.startsWith('https://a.test')?hold.promise:server.fetch(url,opts)),agent=env.create()
+  await agent.connect('https://a.test',token);delay=true
+  const old=agent.request('/api/runs').catch(error=>error)
+  await agent.connect('https://b.test',token)
+  hold.reject(new TypeError('old backend offline'));await old
+  assert.equal(agent.snapshot().connection,'connected');assert.equal(agent.snapshot().problem,'')
+})
 await test('an old connect response cannot disconnect a newer successfully established backend',async()=>{
   const hold=deferred(),server=backend(),env=environment((url,opts)=>url.startsWith('https://a.test')?hold.promise:server.fetch(url,opts)),agent=env.create()
   const old=agent.connect('https://a.test',token).catch(error=>error)
@@ -61,6 +126,7 @@ await test('an old connect response cannot disconnect a newer successfully estab
   hold.resolve(response({revision:5,data:{...empty(),notes:[{id:'old',text:'private A'}]}}));await old
   assert.equal(agent.configured(),true);assert.equal(agent.snapshot().revision,0)
   assert.equal(agent.snapshot().problem,'');assert.equal(agent.snapshot().data.notes.length,0)
+  assert.equal(agent.snapshot().connection,'connected')
   await agent.saveMemory({kind:'fact',text:'B only',confirmed:true})
   assert.ok(server.requests.at(-1).url.startsWith('https://b.test'))
 })
@@ -206,7 +272,7 @@ function uiEnvironment () {
   const all=[]
   const make=tag=>{
     const listeners=new Map(),node={tagName:tag.toUpperCase(),children:[],value:'',checked:false,disabled:false,open:false,isConnected:false,
-      className:'',textContent:'',attrs:{},setAttribute(key,value){this.attrs[key]=value},
+      className:'',textContent:'',attrs:{},dataset:{},setAttribute(key,value){this.attrs[key]=value},
       append(...nodes){for(const child of nodes){child.parentElement=this;this.children.push(child)}},
       replaceChildren(...nodes){this.children=[];this.append(...nodes)},addEventListener(type,fn){listeners.set(type,fn)},
       fire(type){return listeners.get(type)?.({target:this,preventDefault(){}})},
@@ -222,6 +288,23 @@ function uiEnvironment () {
   vm.runInNewContext(ui,{window,document,localStorage:{getItem:()=>null,setItem(){}},location:{href:'https://blog.test'},URL,Blob,setTimeout,console})
   return {agent,window,all,load:state=>{snapshot=state;subscriber(snapshot)}}
 }
+await test('studio connection message and color state follow verified connectivity without a false green',()=>{
+  const app=uiEnvironment();app.window.NANALY_AGENT_UI.open()
+  const status=app.all.find(node=>node.className==='studio-status')
+  assert.equal(status.dataset.connection,'disconnected');assert.match(status.textContent,/尚未连接/)
+  app.load({connected:true,connection:'connecting',revision:null,data:empty(),problem:''})
+  assert.equal(status.dataset.connection,'connecting');assert.match(status.textContent,/正在连接/)
+  assert.doesNotMatch(status.textContent,/已连接/)
+  app.load({connected:true,connection:'connected',revision:3,data:empty(),problem:''})
+  assert.equal(status.dataset.connection,'connected');assert.match(status.textContent,/后端已连接.*3/)
+  app.load({connected:true,connection:'error',revision:3,data:empty(),problem:'后端请求超时'})
+  assert.equal(status.dataset.connection,'error');assert.equal(status.textContent,'后端请求超时')
+  assert.doesNotMatch(status.textContent,/已连接/)
+  app.load({connected:false,connection:'error',revision:null,data:empty(),problem:'访问令牌无效'})
+  assert.equal(status.dataset.connection,'error');assert.equal(status.textContent,'访问令牌无效')
+  app.agent.disconnect()
+  assert.equal(status.dataset.connection,'disconnected');assert.match(status.textContent,/尚未连接/)
+})
 await test('disconnect clears every private draft and detached list, preventing cross-backend resubmission',async()=>{
   const app=uiEnvironment();app.window.NANALY_AGENT_UI.open()
   const data=empty();data.memories=[{id:'private-id',kind:'fact',text:'secret-memory'}]

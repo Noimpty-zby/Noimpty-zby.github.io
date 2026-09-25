@@ -62,8 +62,10 @@
   const date = value => Number.isFinite(value) ? new Date(value).toLocaleString() : ''
   const states = { todo:'待启动',active:'进行中',paused:'已暂停',cancelled:'已取消',completed:'已完成',running:'上次执行中（需显式重试）',failed:'失败，待修正' }
   const renderLists = () => {
-    const {data,problem,connected,revision} = agent.snapshot()
-    status.textContent = problem || (connected ? '已连接 · 记录版本 ' + revision : '尚未连接私有后端。')
+    const {data,problem,connection,revision} = agent.snapshot()
+    const state = connection || (agent.configured() ? 'connected' : 'disconnected')
+    status.dataset.connection = state
+    status.textContent = problem || (state === 'connecting' ? '正在连接后端…' : state === 'connected' ? '● 后端已连接 · 记录版本 ' + revision : '尚未连接私有后端。')
     for (const el of [memoryList,goalList,noteList,experienceList,eventList]) el.replaceChildren()
     for (const m of data.memories) {
       const row = node('article'); row.append(node('p',m.text),node('small',(m.source || '用户确认') + ' · ' + date(m.updatedAt)),button('编辑',() => { memoryId=m.id; kind.input.value=m.kind; content.input.value=m.text; publicMemory.input.checked=m.publicAllowed===true; content.input.focus() }),button('删除',() => agent.remove('memories',m.id))); memoryList.append(row)
@@ -99,8 +101,12 @@
     goalSelect.input.replaceChildren()
   }
   agent.subscribe(state=>{
+    const previous = status.dataset.connection
+    status.dataset.connection = state.connection || (agent.configured() ? 'connected' : 'disconnected')
     if(!state.connected){clearPrivateDrafts();if(modal.open)renderLists()}
+    else if(state.connection==='connecting')status.textContent='正在连接后端…'
     else if(state.problem)status.textContent=state.problem
+    else if(state.connection==='connected'&&previous!=='connected')status.textContent='● 后端已连接 · 记录版本 '+state.revision
   })
   const attach = () => {
     const bar=document.querySelector('.nanaly-workspace-bar')

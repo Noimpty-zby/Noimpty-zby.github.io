@@ -56,6 +56,14 @@ await test('encrypted round trip includes ciphertext vault, chat/drafts/memory, 
   assert.deepEqual(Object.fromEntries(target.stored),clone(collected.local));assert.deepEqual(target.data.files,payload.files);assert.equal(target.api.pending(),false)
   assert.ok(target.ops.every(([,key])=>key!=='nanaly-session-v1'&&!key.includes('private-pass')))
 })
+await test('backend session credentials are excluded from local backups and rejected on import',async()=>{
+  const key='nanaly-agent-session-v1',secret='private-backend-token-must-not-export'
+  const env=environment({...fixture().local,[key]:JSON.stringify({version:1,base:'https://api.example',token:secret})})
+  const collected=await env.api.collect()
+  assert.equal(Object.hasOwn(collected.local,key),false);assert.equal(JSON.stringify(collected).includes(secret),false)
+  const poisoned=fixture();poisoned.local[key]=env.stored.get(key)
+  const target=environment();await assert.rejects(target.api.restore(poisoned),/不支持/);assert.equal(target.ops.length,0)
+})
 await test('wrong password, modified ciphertext and unsupported KDF never touch persistent storage',async()=>{
   const env=environment(),encrypted=await env.api.seal(fixture(),pass)
   await assert.rejects(env.api.inspect(encrypted,'wrong-password-123'),/密码不正确/)

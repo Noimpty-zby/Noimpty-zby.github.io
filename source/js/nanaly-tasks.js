@@ -2,9 +2,12 @@
  * GitHub dispatch requires the owner's existing unlocked vault and Actions access.
  * Without that access the fallback reports only what this browser can verify. */
 (() => {
+  if (window.NANALY_BACKUP_PENDING) return
   if (window.NANALY_TASKS) return
   const REPO = window.NOIMPTY_SCHEDULE_REPO || 'Noimpty-zby/Noimpty-zby.github.io'
   const WORKFLOW = 'nanaly-article-check.yml'
+  // Keep already-issued Pages reports readable during the custom-domain migration.
+  const RESULT_ORIGINS = new Set(['https://noimpty-zby.cn', 'https://noimpty-zby.github.io'])
   const API = `https://api.github.com/repos/${REPO}`
   const tasks = new Map()
   const active = new Map()
@@ -162,7 +165,7 @@
       || result.results.length !== result.checked) throw new Error('任务结果缺少有效检查统计')
     const rows = result.results.map(row => {
       const url = new URL(row.url)
-      if (url.origin !== 'https://noimpty-zby.github.io' || url.username || url.password || !['ok', 'broken', 'unknown'].includes(row.state)) throw new Error('任务结果包含无效检查项')
+      if (!RESULT_ORIGINS.has(url.origin) || url.username || url.password || !['ok', 'broken', 'unknown'].includes(row.state)) throw new Error('任务结果包含无效检查项')
       return { url: url.href, state: row.state, status: Number.isInteger(row.status) ? row.status : null, reason: String(row.reason || '').slice(0, 160) }
     })
     if (rows.filter(row => row.state === 'broken').length !== result.broken || rows.filter(row => row.state === 'unknown').length !== result.unknown) throw new Error('任务结果统计与检查明细不一致')

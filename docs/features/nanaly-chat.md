@@ -98,3 +98,7 @@
 有两类问题只有它能照出来：服务返回的 WAV 头换了写法（离线用例里的占位长度是构造出来的，撞不上真值），以及语音模型把语气提示当正文念出来（离线用例喂的是 mock 音频，听不出在念什么）。
 
 语义验收样例位于 `tools/fixtures/nanaly-emotion-cases.json`。运行 `node tools/checks/emotion-check.mjs` 检查样例与分段契约，不发网络请求；这不代表真实模型通过了准确率测试。需要实际评估时，显式设置专用 `NANALY_EMOTION_EVAL_KEY`、`NANALY_EMOTION_EVAL_BASE_URL`（以及可选 `NANALY_EMOTION_EVAL_MODEL`），运行 `node tools/checks/emotion-check.mjs --live`。它会逐条调用模型并报告结果及用量，不生成付费语音；最终情绪听感仍需试听。
+
+## 私有后端与学习工作室
+
+新增「工作室」入口，连接后记忆面板使用统一私有记忆；本机历史对话和附件不会自动上传。跨设备目标、真实工具步骤、教学经验与 OJ 上下文见 [娜娜莉工作室](nanaly-agent.md)。未连接时继续使用原本的浏览器本机记忆。

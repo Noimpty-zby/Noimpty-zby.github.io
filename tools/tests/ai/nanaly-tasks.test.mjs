@@ -4,7 +4,7 @@ import vm from 'node:vm'
 const script = readFileSync(new URL('../../../source/js/nanaly-tasks.js', import.meta.url), 'utf8')
 const path = '/2026/09/19/test/', id = '12345678-1234-1234-1234-123456789abc', sha = 'a'.repeat(40)
 const result = { v: 1, requestId: id, path, sha, at: '2026-09-19T01:00:00Z', state: 'completed', checked: 1, broken: 0, unknown: 0, skipped: 2,
-  results: [{ url: 'https://noimpty-zby.github.io/ok', state: 'ok', status: 200 }], scope: '本站检查' }
+  results: [{ url: 'https://noimpty-zby.cn/ok', state: 'ok', status: 200 }], scope: '本站检查' }
 const run = { id: 42, head_sha: sha, display_title: `Nanaly article check ${id}`, status: 'completed', conclusion: 'success' }
 const flush = async () => { for (let i = 0; i < 40; i++) await Promise.resolve() }
 class Element {
@@ -22,7 +22,7 @@ const boot = ({ token = 'fixture-token', fetchImpl, links = [], images = [], loc
     setTimeout: (fn, ms) => { const key = ++sequence; timers.set(key, { fn, ms }); return key }, clearTimeout: key => timers.delete(key)
   }
   const document = { createElement: () => new Element() }
-  const ctx = vm.createContext({ window, document, location: { origin: 'https://noimpty-zby.github.io', pathname: path },
+  const ctx = vm.createContext({ window, document, location: { origin: 'https://noimpty-zby.cn', pathname: path },
     URL, AbortController, DOMException, TextDecoder, structuredClone, Date: Clock, crypto: { randomUUID: () => id },
     DOMParser: class { parseFromString() { return { querySelector: () => ({ querySelectorAll: () => [...links.map(href => ({ tagName: 'A', getAttribute: () => href })), ...images.map(attrs => ({ tagName: 'IMG', getAttribute: key => attrs[key] || null }))] }) } } },
     fetch: async (url, init) => { calls.push({ url, init }); return fetchImpl(url, init) }
@@ -78,6 +78,20 @@ await check('GitHub dispatch is unique and results are correlated to request ID 
   assert.equal(app.calls.filter(call => call.init.method === 'POST').length, 1)
   assert.ok(app.api.renderCard(task).children.length >= 3)
 })
+await check('custom-domain results and historical Pages reports remain valid, without accepting lookalike origins', async () => {
+  for (const origin of ['https://noimpty-zby.cn', 'https://noimpty-zby.github.io',
+    'https://noimpty-zby.cn.evil.test', 'https://noimpty-zby.github.io.evil.test',
+    'https://noimpty-zby.cn@evil.test', 'http://noimpty-zby.cn', 'https://api.noimpty-zby.cn']) {
+    const accepted = ['https://noimpty-zby.cn', 'https://noimpty-zby.github.io'].includes(origin)
+    const report = { ...result, results: [{ url: origin + '/ok', state: 'ok', status: 200 }] }
+    const app = boot({ fetchImpl: remote(url => url.includes('/check-runs?') ? Response.json({ check_runs: [
+      { external_id: id, head_sha: sha, status: 'completed', output: { text: JSON.stringify(report) } }
+    ] }) : null) })
+    const task = await app.settle(app.start())
+    assert.equal(task.state, accepted ? 'completed' : 'failed', origin)
+    if (!accepted) assert.match(task.message, /无效检查项/)
+  }
+})
 await check('foreign or stale result metadata cannot be reported as completed', async () => {
   const app = boot({ fetchImpl: remote((url) => url.includes('/check-runs?') ? Response.json({ check_runs: [{ external_id: id, head_sha: sha, status: 'completed', output: { text: JSON.stringify({ ...result, requestId: 'old' }) } }] }) : null) })
   const task = await app.settle(app.start())
@@ -105,7 +119,7 @@ await check('browser lazy image checks match backend data-src/data-lazy-src/src 
   const task = await app.settle(app.start())
   assert.equal(task.result.checked, 2); assert.equal(task.result.broken, 1)
   assert.equal(task.result.skipped, 0)
-  assert.deepEqual(Array.from(task.result.results, row => row.url), ['https://noimpty-zby.github.io/missing.png', 'https://noimpty-zby.github.io/first'])
+  assert.deepEqual(Array.from(task.result.results, row => row.url), ['https://noimpty-zby.cn/missing.png', 'https://noimpty-zby.cn/first'])
   assert.equal(app.calls.filter(call => call.url.endsWith('/missing.png')).length, 2)
   assert.ok(!app.calls.some(call => /\/(?:fallback|second)$/.test(call.url) || call.url.startsWith('data:')))
 })

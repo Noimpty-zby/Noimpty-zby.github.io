@@ -57,6 +57,9 @@ jobs:
 
           # 让娜娜莉写小结和读后反馈。不配就降级成模板文字，报告照发
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          # 可选：独立私有记忆后端；只有允许公开的记忆进入公开内容提示词
+          NANALY_AGENT_URL: ${{ secrets.NANALY_AGENT_URL }}
+          NANALY_AGENT_TOKEN: ${{ secrets.NANALY_AGENT_TOKEN }}
 
           # 发信
           GMAIL_USER: ${{ secrets.GMAIL_USER }}

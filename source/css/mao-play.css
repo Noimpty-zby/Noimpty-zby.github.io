@@ -1,0 +1,43 @@
+.mao-play-layer { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.mao-play-effect { position: absolute; left: 50%; top: 18%; width: max-content; max-width: 95%; transform: translateX(-50%); font: 30px/1.4 system-ui, sans-serif; color: #af557c; white-space: pre; text-shadow: 0 2px 9px #fff; }
+.mao-play-food { top: 34%; animation: mao-food 900ms ease-out both; }
+.mao-play-kept { top: 49%; animation: none; }
+.mao-play-drag-food { top: var(--food-y); left: var(--food-x); animation: none; }
+.mao-play-hearts, .mao-play-flowers { animation: mao-spark 1800ms ease-out both; }
+.mao-play-falling { animation: mao-petal-land 1300ms ease-in both; }
+.mao-play-petal-miss { animation: mao-petal-miss 2400ms ease-in both; }
+.mao-play-dream { top: 12%; left: 68%; font-size: 24px; }
+.mao-play-countdown { top: 22%; font-size: 56px; font-weight: 700; }
+.mao-play-prop { position: absolute; top: 9%; left: 50%; transform: translateX(-50%); min-width: 44px; min-height: 44px; border: 1px solid #dfb4c5; border-radius: 50%; background: #fff8f1ed; color: #744053; box-shadow: 0 3px 14px #4b2b3826; font: 25px/1.3 system-ui, sans-serif; pointer-events: auto; cursor: pointer; }
+#mao-stage[data-play='note'] .mao-play-prop { top: 47%; border-radius: 5px; }
+#mao-stage[data-play='sleep'] .mao-play-prop { top: 11%; left: 73%; border-radius: 45%; font-size: 15px; }
+.mao-play-panel { position: fixed; z-index: 9011; box-sizing: border-box; padding: 16px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid #dfb4c5; border-radius: 20px; background: linear-gradient(160deg, #fffdfb, #fff1f7); color: #673746; box-shadow: 0 15px 48px #4b2b383d; font: 13px/1.55 system-ui, sans-serif; }
+.mao-play-panel *, .mao-play-panel *::before { box-sizing: border-box; }
+.mao-play-panel[hidden], .mao-play-panel [hidden], .mao-play-layer [hidden] { display: none !important; }
+.mao-play-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mao-play-heading strong { font-size: 15px; }
+.mao-play-heading button { flex: 0 0 38px; width: 38px; font-size: 20px; }
+.mao-play-notice { min-height: 42px; margin: 10px 0; color: #805365; }
+.mao-play-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.mao-play-button { display: inline-block; min-height: 44px; padding: 8px 10px; border: 1px solid #e5bdce; border-radius: 10px; background: #fff; color: #744053; font: inherit; text-align: center; cursor: pointer; touch-action: manipulation; text-decoration: none; }
+.mao-play-button:hover { background: #ffe9f1; border-color: #b86a8d; }
+.mao-play-button:disabled { opacity: .6; cursor: default; }
+.mao-play-panel :is(button, a):focus-visible, .mao-play-prop:focus-visible { outline: 3px solid #a34267; outline-offset: 3px; }
+.mao-play-snack { grid-column: 1 / -1; touch-action: none; user-select: none; }
+.mao-play-game { position: relative; height: 170px; margin-top: 12px; border: 1px dashed #cf9cb1; border-radius: 12px; background: #fff9ec; touch-action: none; }
+.mao-play-game p { position: absolute; bottom: 0; left: 8px; right: 8px; margin: 5px; pointer-events: none; font-size: 11px; }
+.mao-play-feather { position: absolute; width: 44px; height: 44px; transform: translate(-50%, -50%); padding: 0; border: 0; border-radius: 50%; background: #fce4ed; color: #744053; font-size: 28px; cursor: pointer; }
+.mao-play-paper { margin-top: 12px; padding: 14px; border: 1px solid #eddbbd; border-radius: 4px; background: #fffbea; color: #745647; }
+.mao-play-note-card { padding: 8px 0 13px; border-bottom: 1px dashed #d5c3a7; margin-bottom: 12px; text-align: center; }
+.mao-play-note-card pre { margin: 0; padding: 10px; background: transparent; color: #ad6685; font: 20px/1.25 monospace; white-space: pre; }
+.mao-play-note-card p { font-family: cursive; }
+.mao-play-note-card small { font-size: 11px; }
+.mao-play-photo { margin-top: 12px; text-align: center; }
+.mao-play-photo img { display: block; width: 100%; height: auto; margin-bottom: 10px; border-radius: 4px; box-shadow: 0 3px 12px #4b2b3829; }
+@keyframes mao-food { from { transform: translate(-120%, 24px) scale(.7); opacity: .2; } to { transform: translate(-50%, 0); opacity: 1; } }
+@keyframes mao-spark { from { opacity: 0; transform: translate(-50%, 10px) scale(.7); } 25% { opacity: 1; } to { opacity: .6; transform: translate(-50%, -12px) scale(1.1); } }
+@keyframes mao-petal-land { from { top: -20%; transform: translate(-140%, 0) rotate(-70deg); opacity: .1; } to { top: 9%; transform: translate(-50%, 0) rotate(0); opacity: 1; } }
+@keyframes mao-petal-miss { from { top: 24%; left: 50%; opacity: 1; } to { top: 80%; left: 85%; opacity: 0; } }
+#mao-stage[data-play-motion='still'] .mao-play-effect { animation: none; }
+@media (max-width: 360px) { .mao-play-panel { padding: 12px; } .mao-play-choices { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .mao-play-effect { animation: none !important; } }

@@ -1,6 +1,7 @@
 /* 文件先在本机解析并保存在 IndexedDB；只有发送问题时才构造模型输入。 */
 (() => {
   'use strict'
+  if (window.NANALY_BACKUP_PENDING) return
   if (window.NANALY_FILES) return
   const LIMITS = Object.freeze({ files: 2, bytes: 10 * 1024 * 1024, chars: 60000, pdfPages: 30, pdfImages: 2, zipBytes: 30 * 1024 * 1024, zipEntries: 1500 })
   const TEXT_EXT = new Set('txt md markdown csv tsv json jsonl yaml yml xml html htm css scss less js mjs cjs jsx ts tsx py java c h cpp hpp cc cs go rs rb php sh bash zsh sql r tex log ini toml conf vue svelte'.split(' '))

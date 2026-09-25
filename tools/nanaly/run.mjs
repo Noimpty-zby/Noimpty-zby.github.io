@@ -1,3 +1,4 @@
+import { recordAction } from './agent-client.mjs'
 // 娜娜莉的自主行动入口。
 //
 //   node tools/nanaly/run.mjs patrol   巡逻并在发现问题时留言
@@ -83,10 +84,12 @@ const main = async () => {
     if (!tasks[t]) { console.log(`不认识的动作：${t}`); continue }
     try {
       await tasks[t]()
+      try { await recordAction({kind:t,detail:t+' 后台任务返回',status:'returned'}) } catch (_) { console.warn('私有行动记录同步失败，现有任务日志仍保留') }
     } catch (e) {
       // 这里必须把工作流染红。以前只打一行日志就过去了，
       // 结果是「资讯生成好了但推送失败」这种事全绿通过，你完全不会发现，
       // 而那一期的内容随着 runner 一起消失，下次跑日期变了也不会补。
+      try { await recordAction({kind:t,detail:t+' 后台任务失败',status:'failed'}) } catch (_) {}
       console.error(`  ${t} 失败：`, String(e.message || e).slice(0, 300))
       process.exitCode = 1
     }

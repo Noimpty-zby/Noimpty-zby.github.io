@@ -45,10 +45,26 @@ const hashOf = rel => {
   return h
 }
 
-const RE = /(src|href)="\/((?:js|css)\/[^"?#]+\.(?:js|css))"/g
+const RE = /(src|href)="\/((?:js|css)\/[^"?#]+\.(?:js|css))(?:\?v=[a-f\d]{8,12})?"/g
 
-hexo.extend.filter.register('after_render:html', str =>
+const rewrite = str =>
   String(str).replace(RE, (whole, attr, rel) => {
     const h = hashOf(rel)
     return h ? `${attr}="/${rel}?v=${h}"` : whole
-  }))
+  })
+
+
+hexo.extend.filter.register('after_render:html', rewrite)
+
+// layout:false passes through as a route and does not run after_render:html.
+// Process only the independent migration page; never wrap it in a theme or
+// re-render all routes. Existing own fingerprints are refreshed in watch builds.
+hexo.extend.filter.register('after_generate', async () => {
+  const route = 'backup/index.html'
+  const stream = hexo.route.get(route)
+  if (!stream) return
+  let html = ''
+  for await (const chunk of stream) html += chunk.toString()
+  const rewritten = rewrite(html)
+  if (rewritten !== html) hexo.route.set(route, rewritten)
+}, 20)

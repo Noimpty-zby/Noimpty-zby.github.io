@@ -1,0 +1,238 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import vm from 'node:vm'
+
+const source = readFileSync('source/js/nanaly-agent.js','utf8')
+const ui = readFileSync('source/js/nanaly-agent-ui.js','utf8')
+const copy = value => JSON.parse(JSON.stringify(value))
+const empty = () => ({ memories:[], goals:[], notes:[], experiences:[], events:[] })
+const response = (value,status=200) => ({ok:status<400,status,headers:{get:()=>null},text:async()=>JSON.stringify(value)})
+const deferred = () => { let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});return {promise,resolve,reject} }
+const flush = async () => { for(let i=0;i<30;i++)await Promise.resolve() }
+function environment (fetch, additions={}) {
+  const events=[]
+  const window={fetch,crypto:{randomUUID:()=>String(Math.random())},location:{href:'https://blog.test/lesson'},addEventListener(){},
+    CustomEvent:class{constructor(type,options){this.type=type;this.detail=options.detail}},dispatchEvent:event=>events.push(copy(event)),...additions}
+  vm.runInNewContext(source,{window,URL,AbortController,setTimeout,clearTimeout,console})
+  let id=0,now=2_000_000_000_000
+  const create=()=>window.NANALY_AGENT_FACTORY.create({fetch,now:()=>now,id:()=>String(++id)})
+  return {window,create,events,advance:ms=>{now+=ms},now:()=>now}
+}
+const token='test-token-of-at-least-24-characters'
+function backend (data=empty()) {
+  let state={revision:0,data:copy(data)},readDelay=null,writeDelay=null
+  const requests=[]
+  const fetch=async(url,opts)=>{
+    requests.push({url,...opts})
+    if(opts.method==='PUT'){
+      const body=JSON.parse(opts.body)
+      if(writeDelay){const hold=writeDelay;writeDelay=null;await hold.promise}
+      if(opts.signal.aborted)throw opts.signal.reason
+      if(body.revision!==state.revision)return response({...copy(state),error:{message:'conflict'}},409)
+      state={revision:state.revision+1,data:body.data};return response(copy(state))
+    }
+    const result=copy(state)
+    if(readDelay){const hold=readDelay;readDelay=null;await hold.promise}
+    return response(result)
+  }
+  return {fetch,requests,state:()=>copy(state),replace:fn=>{fn(state.data);state.revision++},delayRead:hold=>{readDelay=hold},delayWrite:hold=>{writeDelay=hold}}
+}
+let passed=0
+async function test(label,fn){try{await fn();passed++;console.log('  ✓ '+label)}catch(error){process.exitCode=1;console.error('  ✗ '+label,error)}}
+
+await test('endpoint rejects credential-bearing, insecure remote and path URLs',()=>{
+  const env=environment(async()=>response({revision:0,data:empty()})),endpoint=env.window.NANALY_AGENT_FACTORY.endpoint
+  assert.equal(endpoint('http://localhost:5000'),'http://localhost:5000')
+  for(const url of ['http://remote.test','https://user:pass@test','https://test/path','https://test/?key=secret'])assert.throws(()=>endpoint(url))
+})
+await test('API query requests preserve same origin and reject external/traversal destinations before sending a token',async()=>{
+  const server=backend(),env=environment(server.fetch),agent=env.create();await agent.connect('https://test',token)
+  await agent.request('/api/runs?limit=40')
+  assert.equal(server.requests.at(-1).url,'https://test/api/runs?limit=40')
+  assert.equal(server.requests.at(-1).headers.Authorization,'Bearer '+token)
+  const count=server.requests.length
+  for(const path of ['https://evil.test/api/runs','//evil.test/api/runs','/api/../admin','/api/runs#fragment','/api/\\evil.test'])await assert.rejects(agent.request(path),/无效/)
+  assert.equal(server.requests.length,count)
+})
+await test('an old connect response cannot disconnect a newer successfully established backend',async()=>{
+  const hold=deferred(),server=backend(),env=environment((url,opts)=>url.startsWith('https://a.test')?hold.promise:server.fetch(url,opts)),agent=env.create()
+  const old=agent.connect('https://a.test',token).catch(error=>error)
+  await agent.connect('https://b.test',token)
+  hold.resolve(response({revision:5,data:{...empty(),notes:[{id:'old',text:'private A'}]}}));await old
+  assert.equal(agent.configured(),true);assert.equal(agent.snapshot().revision,0)
+  assert.equal(agent.snapshot().problem,'');assert.equal(agent.snapshot().data.notes.length,0)
+  await agent.saveMemory({kind:'fact',text:'B only',confirmed:true})
+  assert.ok(server.requests.at(-1).url.startsWith('https://b.test'))
+})
+await test('disconnect aborts requests, clears private data/context, and isolates a new mutation queue',async()=>{
+  const a=backend(),b=backend(),hold=deferred();let ignoreOld=false
+  const env=environment((url,opts)=>url.startsWith('https://a.test')&&ignoreOld?hold.promise:(url.startsWith('https://a.test')?a:b).fetch(url,opts)),agent=env.create()
+  await agent.connect('https://a.test',token);agent.setContext({secret:'A exercise'})
+  ignoreOld=true
+  const old=agent.saveNote({text:'A private note'}).catch(error=>error);await flush()
+  agent.disconnect();assert.equal(agent.context(),null);assert.equal(agent.snapshot().data.notes.length,0)
+  await agent.connect('https://b.test',token)
+  await agent.saveNote({text:'B note'})
+  hold.resolve(response({revision:9,data:{...empty(),notes:[{id:'A',text:'A note'}]}}));await old
+  assert.equal(agent.snapshot().problem,'');assert.equal(agent.snapshot().data.notes[0].text,'B note')
+})
+await test('late GET cannot roll back a newer committed revision',async()=>{
+  const server=backend(),env=environment(server.fetch),agent=env.create();await agent.connect('https://test',token)
+  const hold=deferred();server.delayRead(hold);const read=agent.refresh()
+  await agent.saveMemory({kind:'fact',text:'new memory',confirmed:true});assert.equal(agent.snapshot().revision,1)
+  hold.resolve();await read
+  assert.equal(agent.snapshot().revision,1);assert.equal(agent.snapshot().data.memories[0].text,'new memory')
+})
+await test('two devices use revision conflict recovery without losing either confirmed memory',async()=>{
+  const server=backend(),env=environment(server.fetch),a=env.create(),b=env.create()
+  await a.connect('https://test',token);await b.connect('https://test',token)
+  await a.saveMemory({kind:'preference',text:'A',confirmed:true})
+  await assert.rejects(b.saveMemory({kind:'fact',text:'B',confirmed:true}),/另一设备/)
+  assert.equal(b.snapshot().data.memories[0].text,'A');assert.equal(server.state().data.memories.length,1)
+  await b.saveMemory({kind:'fact',text:'B',confirmed:true});assert.equal(server.state().data.memories.length,2)
+})
+await test('unconfirmed memories are rejected and snapshots cannot mutate private state',async()=>{
+  const server=backend(),env=environment(server.fetch),agent=env.create();await agent.connect('https://test',token)
+  await assert.rejects(agent.saveMemory({kind:'fact',text:'unconfirmed'}),/明确确认/)
+  await agent.saveMemory({kind:'goal',text:'learn',confirmed:true})
+  const snapshot=agent.snapshot();snapshot.data.memories[0].text='changed'
+  assert.equal(agent.snapshot().data.memories[0].text,'learn')
+})
+await test('malformed nested backend records never replace the last usable snapshot or crash context generation',async()=>{
+  const server=backend(),env=environment(server.fetch),agent=env.create();await agent.connect('https://test',token)
+  await agent.saveMemory({kind:'fact',text:'Keep this confirmed memory',confirmed:true})
+  const previous=copy(agent.snapshot()),valid=copy(server.state().data)
+  const malformed=[
+    {memories:[null]}, {memories:[{id:'m',kind:'fact',text:'bad flag',confirmed:'true'}]},
+    {goals:[{id:'g',title:'broken',status:'active',steps:null}]},
+    {goals:[{id:'g',title:'broken',status:'active',steps:[null]}]},
+    {goals:[{id:'g',title:'broken',status:'active',steps:[{id:'s',title:'bad',input:'x',tool:'unknown',state:'todo'}]}]},
+    {notes:[null]}, {notes:[{id:'n',title:'invalid text',text:{private:'object'}}]},
+    {experiences:[null]}, {events:[null]}
+  ]
+  for(const patch of malformed){
+    server.replace(data=>Object.assign(data,copy(valid),patch))
+    await assert.rejects(agent.refresh(),/无法加载，未覆盖当前记录/)
+    assert.equal(agent.snapshot().revision,previous.revision)
+    assert.deepEqual(copy(agent.snapshot().data),previous.data)
+    assert.match(agent.contextPrompt(),/Keep this confirmed memory/)
+  }
+  server.replace(data=>Object.assign(data,copy(valid)))
+  await agent.refresh();assert.equal(agent.snapshot().problem,'')
+})
+const goalData=(state='todo',startedAt=0,attempt='')=>({...empty(),goals:[{id:'g',title:'Learn',status:'active',steps:[{id:'s',title:'Review',tool:'review',input:'Summarize',state,startedAt,attempt}]}]})
+await test('five minute lease prevents another device from retrying an actually running step',async()=>{
+  const server=backend(),tool=deferred(),env=environment(server.fetch,{NANALY:{agentTool:()=>tool.promise}}),a=env.create(),b=env.create()
+  server.replace(data=>Object.assign(data,goalData()))
+  await a.connect('https://test',token);await b.connect('https://test',token)
+  const run=a.runStep('g');await flush()
+  assert.equal(server.state().data.goals[0].steps[0].state,'running')
+  await assert.rejects(b.runStep('g'),/五分钟/)
+  tool.resolve({text:'Actual review'});await run
+  assert.equal(server.state().data.goals[0].status,'completed')
+})
+await test('pause aborts the active tool and preserves paused status when a late result arrives',async()=>{
+  const server=backend(goalData()),tool=deferred();let signal
+  const env=environment(server.fetch,{NANALY:{agentTool:options=>{signal=options.signal;return tool.promise}}}),agent=env.create()
+  await agent.connect('https://test',token);const run=agent.runStep('g').catch(error=>error);await flush()
+  await agent.updateGoal('g',{status:'paused'});assert.equal(signal.aborted,true)
+  tool.resolve({text:'too late'});await run
+  const goal=server.state().data.goals[0];assert.equal(goal.status,'paused');assert.equal(goal.steps[0].state,'failed')
+  assert.equal(goal.steps[0].result,undefined)
+})
+await test('expired execution cannot mark a newer device attempt as completed or failed',async()=>{
+  const server=backend(goalData()),tool=deferred(),env=environment(server.fetch,{NANALY:{agentTool:()=>tool.promise}}),agent=env.create()
+  await agent.connect('https://test',token);const run=agent.runStep('g').catch(error=>error);await flush()
+  server.replace(data=>{data.goals[0].steps[0].attempt='other-device';data.goals[0].steps[0].startedAt=env.now()})
+  tool.resolve({text:'old result'});await run
+  const step=server.state().data.goals[0].steps[0]
+  assert.equal(step.attempt,'other-device');assert.equal(step.state,'running');assert.equal(step.result,undefined)
+})
+await test('retry of a save-note step uses its stable identity and does not duplicate a saved note',async()=>{
+  const data=goalData('failed');data.goals[0].steps[0].tool='save_note';data.notes.push({id:'step-s',title:'Learn',text:'previous successful note'})
+  const server=backend(data),env=environment(server.fetch),agent=env.create();await agent.connect('https://test',token)
+  await agent.runStep('g');assert.equal(server.state().data.notes.length,1);assert.equal(server.state().data.goals[0].status,'completed')
+})
+await test('pause during initial refresh never claims a step or invokes its tool',async()=>{
+  const server=backend(goalData());let calls=0
+  const env=environment(server.fetch,{NANALY:{agentTool:()=>{calls++;return {text:'no'}}}}),agent=env.create();await agent.connect('https://test',token)
+  const hold=deferred();server.delayRead(hold);const run=agent.runStep('g').catch(error=>error)
+  await agent.updateGoal('g',{status:'paused'});hold.resolve();await run
+  assert.equal(calls,0);assert.equal(server.state().data.goals[0].steps[0].state,'todo')
+})
+await test('activity reports only live starts/ends, tracks overlapping work and never replays persisted history',async()=>{
+  const server=backend(goalData()),env=environment(server.fetch),agent=env.create();await agent.connect('https://test',token)
+  assert.equal(env.events.length,0);assert.equal(agent.activity().busy,false)
+  agent.activity({id:'old-goal',phase:'complete',text:'must not replay'});assert.equal(env.events.length,0)
+  agent.activity({id:'prepare-1',phase:'thinking',text:'正在出题'})
+  agent.activity({id:'prepare-2',phase:'thinking',text:'正在准备第二题'})
+  agent.activity({id:'prepare-1',phase:'complete',text:'第一题好了'})
+  assert.equal(agent.activity().busy,true);assert.equal(agent.activity().current.id,'prepare-2')
+  agent.activity({id:'prepare-2',phase:'cancelled',text:'暂停出题'})
+  assert.equal(agent.activity().busy,false);assert.equal(agent.activity().current,null)
+  const count=env.events.length;agent.activity({id:'prepare-2',phase:'complete'});await agent.refresh()
+  assert.equal(env.events.length,count)
+  assert.ok(env.events.every(event=>event.type==='nanaly:agent-activity'))
+  assert.equal(server.state().data.events.length,0,'ephemeral notifications never become stored history')
+})
+await test('runStep emits live thinking and completion only after actual tool and durable result success',async()=>{
+  const server=backend(goalData()),tool=deferred(),env=environment(server.fetch,{NANALY:{agentTool:()=>tool.promise}}),agent=env.create()
+  await agent.connect('https://test',token);const run=agent.runStep('g');await flush()
+  assert.deepEqual(env.events.map(event=>event.detail.phase),['thinking']);assert.equal(agent.activity().busy,true)
+  tool.resolve({text:'verified result'});await run
+  assert.deepEqual(env.events.map(event=>event.detail.phase),['thinking','complete'])
+  assert.equal(env.events[0].detail.id,env.events[1].detail.id);assert.equal(agent.activity().busy,false)
+  await agent.refresh();assert.equal(env.events.length,2)
+})
+await test('pause cancels live task activity immediately and its late result cannot replay completion',async()=>{
+  const server=backend(goalData()),tool=deferred(),env=environment(server.fetch,{NANALY:{agentTool:()=>tool.promise}}),agent=env.create()
+  await agent.connect('https://test',token);const run=agent.runStep('g').catch(error=>error);await flush()
+  const pause=agent.updateGoal('g',{status:'paused'})
+  assert.equal(agent.activity().busy,false);assert.equal(env.events.at(-1).detail.phase,'cancelled')
+  await pause;tool.resolve({text:'late'});await run
+  assert.deepEqual(env.events.map(event=>event.detail.phase),['thinking','cancelled'])
+})
+await test('tool failures emit error, while disconnect clears activity and ignores later old-session events',async()=>{
+  const server=backend(goalData()),env=environment(server.fetch,{NANALY:{agentTool:async()=>{throw new Error('tool failed')}}}),agent=env.create()
+  await agent.connect('https://test',token);await assert.rejects(agent.runStep('g'),/tool failed/)
+  assert.deepEqual(env.events.map(event=>event.detail.phase),['thinking','error'])
+  agent.activity({id:'prepare',phase:'thinking',text:'出题中'});agent.disconnect()
+  assert.equal(agent.activity().busy,false);assert.equal(agent.activity().phase,'idle')
+  const count=env.events.length;agent.activity({id:'prepare',phase:'complete'});assert.equal(env.events.length,count)
+})
+
+function uiEnvironment () {
+  let subscriber,snapshot={connected:false,revision:null,data:empty(),problem:''},document
+  const all=[]
+  const make=tag=>{
+    const listeners=new Map(),node={tagName:tag.toUpperCase(),children:[],value:'',checked:false,disabled:false,open:false,isConnected:false,
+      className:'',textContent:'',attrs:{},setAttribute(key,value){this.attrs[key]=value},
+      append(...nodes){for(const child of nodes){child.parentElement=this;this.children.push(child)}},
+      replaceChildren(...nodes){this.children=[];this.append(...nodes)},addEventListener(type,fn){listeners.set(type,fn)},
+      fire(type){return listeners.get(type)?.({target:this,preventDefault(){}})},
+      focus(){document.activeElement=this},showModal(){this.open=true},close(){this.open=false},querySelector(){return null}}
+    Object.defineProperty(node,'options',{get:()=>node.children.filter(child=>child.tagName==='OPTION')})
+    all.push(node);return node
+  }
+  document={createElement:make,body:make('body'),documentElement:{classList:{contains:()=>false}},querySelector:()=>null,activeElement:{focus(){}}}
+  const agent={tools:{review:'review'},snapshot:()=>copy(snapshot),configured:()=>snapshot.connected,
+    subscribe:fn=>{subscriber=fn},disconnect:()=>{snapshot={connected:false,revision:null,data:empty(),problem:''};subscriber(snapshot)},
+    connect:async()=>{},saveMemory:async()=>{},saveNote:async()=>{},feedback:async()=>{},refresh:async()=>{}}
+  const window={NANALY_AGENT:agent,addEventListener(){}}
+  vm.runInNewContext(ui,{window,document,localStorage:{getItem:()=>null,setItem(){}},location:{href:'https://blog.test'},URL,Blob,setTimeout,console})
+  return {agent,window,all,load:state=>{snapshot=state;subscriber(snapshot)}}
+}
+await test('disconnect clears every private draft and detached list, preventing cross-backend resubmission',async()=>{
+  const app=uiEnvironment();app.window.NANALY_AGENT_UI.open()
+  const data=empty();data.memories=[{id:'private-id',kind:'fact',text:'secret-memory'}]
+  app.load({connected:true,revision:1,data,problem:''});app.window.NANALY_AGENT_UI.open()
+  for(const input of app.all.filter(node=>['INPUT','TEXTAREA'].includes(node.tagName))){if(input.type==='checkbox')input.checked=true;else if(input.type!=='url')input.value='secret draft'}
+  app.all.find(node=>node.tagName==='BUTTON'&&node.textContent==='编辑').fire('click');await flush()
+  app.window.NANALY_AGENT_UI.close();app.agent.disconnect()
+  for(const input of app.all.filter(node=>['INPUT','TEXTAREA'].includes(node.tagName)&&node.type!=='url')){
+    assert.equal(input.value,'');assert.equal(input.checked,false)
+  }
+  app.window.NANALY_AGENT_UI.open()
+  assert.ok(app.all.filter(node=>node.tagName==='SELECT').some(node=>node.options.length===0))
+})
+console.log(`\n${passed} 私有代理状态与工作室回归通过`)

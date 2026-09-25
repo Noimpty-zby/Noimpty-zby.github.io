@@ -1765,4 +1765,132 @@ await test('新文章从未发布转为已发布可庆祝；初次加载不庆�
   assert.equal(env.timers.interval.length, first + 1)
 })
 
+await test('Mao 互动按人物生命周期创建/释放，原画面导出与聊天优先由同一适配器提供', async () => {
+  const env = boot(); let adapter; const calls = []
+  env.win.MAO_PLAY = { create: options => {
+    adapter = options
+    return { refresh: () => calls.push('refresh'), frame: setter => setter('ParamCheek', .7),
+      busy: () => false, tap: () => false, drag: phase => calls.push(phase),
+      suspend: value => calls.push('paused:' + value), open: () => { calls.push('open'); return true },
+      stop: () => calls.push('stop'), destroy: () => calls.push('destroy') }
+  } }
+  const { params } = await turnOn(env)
+  assert.ok(adapter.stage === env.stage()); assert.ok(adapter.canvas === env.stage().querySelector('canvas'))
+  const snapshot = {}; let extracted
+  env.created.apps[0].renderer.extract = { canvas: target => { extracted = target; return snapshot } }
+  assert.equal(adapter.capture(), snapshot); assert.equal(extracted, env.created.apps[0].stage)
+  env.win.MAO_PET.model().internalModel.hooks.get('afterMotionUpdate')()
+  assert.equal(params.get('ParamCheek'), .7)
+  await env.controlOptions().onAction('play'); assert.ok(calls.includes('open'))
+  assert.equal(adapter.isOccupied(), false)
+  env.win.NANALY = { chatState: () => ({ phase: 'thinking' }) }
+  env.win.MAO_PET.configure({ chatSync: false })
+  assert.equal(adapter.isOccupied(), true, '关闭表情联动也必须把聊天优先交给 Nana')
+  env.document.hidden = true; env.docListeners.get('visibilitychange')()
+  assert.ok(calls.includes('paused:true'))
+  await env.win.MAO_PET.hide(); assert.equal(calls.filter(value => value === 'destroy').length, 1)
+})
+
+await test('小游戏期间单击归互动、双击仍可打开 Nana 并停止小游戏', async () => {
+  const env = boot(); const calls = []; let opened = 0
+  env.win.MAO_PLAY = { create: () => ({ refresh () {}, frame () {}, busy: () => true,
+    tap: () => { calls.push('tap'); return true }, drag () {}, suspend () {}, open () {},
+    stop: () => calls.push('stop'), destroy () {} }) }
+  env.win.NANALY = { open: () => opened++ }
+  await turnOn(env)
+  const model = env.win.MAO_PET.model(), tap = model.handlers.get('pointertap')
+  tap({}); env.advance(150); tap({})
+  assert.deepEqual(calls, ['tap', 'stop']); assert.equal(opened, 1); assert.equal(model.motionCount || 0, 0)
+})
+
+const fakeActivity = env => {
+  let value = { id: '', phase: 'idle', text: '', busy: false, current: null }
+  env.win.NANALY_AGENT = { activity: () => value }
+  return next => {
+    value = { current: null, busy: next.phase === 'thinking', ...next }
+    if (value.busy && !value.current && value.phase === 'thinking') value.current = { id: value.id, phase: value.phase, text: value.text }
+    env.winListeners.get('nanaly:agent-activity')({ detail: value })
+  }
+}
+const fakeActivityPlay = env => {
+  let adapter; const paused = []
+  env.win.MAO_PLAY = { create: options => {
+    adapter = options
+    return { refresh () {}, frame () {}, busy: () => false, tap: () => false, drag () {},
+      suspend: value => paused.push(value), open: () => true, stop () {}, destroy () {} }
+  } }
+  return { paused, occupied: () => adapter.isOccupied() }
+}
+
+console.log('\nMao 升级 · 实时任务联动')
+await test('任务开始暂停主动游戏和闲聊，实时完成更新表情且重复终态不重播', async () => {
+  const env = boot(), emit = fakeActivity(env), play = fakeActivityPlay(env)
+  await turnOn(env)
+  const m = env.win.MAO_PET.model(), cfg = env.win.MAO_PET.config()
+  emit({ id: 'goal-live', phase: 'thinking', text: '正在检查程序' })
+  assert.equal(env.bubble().textContent, '正在检查程序'); assert.equal(m.face, cfg.faces['为难'])
+  assert.equal(play.occupied(), true); assert.equal(play.paused.at(-1), true)
+  env.timers.interval.find(item => item && item.ms === 70000).fn()
+  env.win.MAO_PET.say('闲聊'); m.handlers.get('pointertap')()
+  assert.equal(env.bubble().textContent, '正在检查程序'); assert.equal(m.motionCount || 0, 0)
+  emit({ id: 'goal-live', phase: 'complete', text: '检查完成' })
+  assert.equal(env.bubble().textContent, '检查完成'); assert.equal(m.face, cfg.faces['笑'])
+  assert.equal(play.occupied(), false); assert.equal(play.paused.at(-1), false)
+  emit({ id: 'goal-live', phase: 'complete', text: '旧结果不能再显示' })
+  assert.equal(env.bubble().textContent, '检查完成')
+})
+await test('后台完成与加载旧结果不重播；仍在执行的任务恢复前台后展示当前状态', async () => {
+  const env = boot({ settingsSaved: { quiet: true } }), emit = fakeActivity(env)
+  emit({ id: 'restored', phase: 'complete', text: '恢复的历史结果' })
+  await turnOn(env)
+  assert.notEqual(env.bubble().dataset.on, '1')
+  emit({ id: 'hidden-end', phase: 'thinking', text: '当前任务' })
+  env.document.hidden = true; env.docListeners.get('visibilitychange')()
+  emit({ id: 'hidden-end', phase: 'complete', text: '后台旧结果' })
+  env.document.hidden = false; env.docListeners.get('visibilitychange')()
+  assert.notEqual(env.bubble().dataset.on, '1')
+  env.document.hidden = true; env.docListeners.get('visibilitychange')()
+  emit({ id: 'still-running', phase: 'thinking', text: '仍在处理' })
+  env.document.hidden = false; env.docListeners.get('visibilitychange')()
+  assert.equal(env.bubble().textContent, '仍在处理'); assert.equal(env.bubble().dataset.on, '1')
+})
+await test('任务不能覆盖聊天或真实语音嘴型，语音结束后仅恢复仍执行的任务', async () => {
+  const env = boot({ settingsSaved: { quiet: true } }), emit = fakeActivity(env), v = fakeVoice(env)
+  const { params } = await turnOn(env), m = env.win.MAO_PET.model(), cfg = env.win.MAO_PET.config()
+  emitChat(env, 'thinking', 'chat-live')
+  emit({ id: 'practice', phase: 'thinking', text: '正在出题' })
+  assert.equal(env.bubble().textContent, '在想了喵…')
+  emitChat(env, 'idle', 'chat-live')
+  assert.equal(env.bubble().textContent, '正在出题')
+  v.setEnergy(.2)
+  v.emit({ id: 'voice-live', priority: 'manual', phase: 'playing', text: '实际播放中的段落', emotion: 'happy' })
+  const stopped = v.stopped()
+  emit({ id: 'another', phase: 'thinking', text: '另一个任务' })
+  assert.equal(env.bubble().textContent, '实际播放中的段落'); assert.equal(m.face, cfg.faces['笑'])
+  m.internalModel.hooks.get('afterMotionUpdate')()
+  assert.ok(params.get(cfg.mouthParam) > 0); assert.equal(v.energyReads.at(-1), 'voice-live')
+  assert.equal(v.stopped(), stopped, '任务事件不能取消真实语音')
+  v.emit({ id: 'voice-live', priority: 'manual', phase: 'ended' })
+  assert.equal(params.get(cfg.mouthParam), 0); assert.equal(env.bubble().textContent, '另一个任务')
+  v.emit({ id: 'voice-end', priority: 'manual', phase: 'playing', text: '最后的朗读', emotion: 'happy' })
+  emit({ id: 'another', phase: 'complete', text: '播放期间完成' })
+  v.emit({ id: 'voice-end', priority: 'manual', phase: 'ended' })
+  assert.notEqual(env.bubble().textContent, '播放期间完成', '语音结束不重播被聊天优先跳过的任务结果')
+})
+await test('关闭表情联动仍暂停游戏，重叠任务的一次完成不会清除其他活动', async () => {
+  const env = boot({ settingsSaved: { quiet: true, chatSync: false } }), emit = fakeActivity(env), play = fakeActivityPlay(env)
+  await turnOn(env)
+  emit({ id: 'first', phase: 'thinking', text: '第一个任务' })
+  assert.equal(play.occupied(), true); assert.equal(play.paused.at(-1), true)
+  assert.notEqual(env.bubble().dataset.on, '1')
+  env.win.MAO_PET.configure({ chatSync: true })
+  emit({ id: 'second', phase: 'thinking', text: '第二个任务' })
+  emit({ id: 'first', phase: 'complete', text: '第一个已完成', busy: true, current: { id: 'second', phase: 'thinking', text: '第二个任务' } })
+  assert.equal(env.bubble().textContent, '第二个任务')
+  assert.equal(env.win.MAO_PET.model().face, env.win.MAO_PET.config().faces['为难'])
+  assert.equal(play.occupied(), true); assert.equal(play.paused.at(-1), true)
+  emit({ id: 'second', phase: 'cancelled', text: '已停止本次任务' })
+  assert.equal(env.bubble().textContent, '已停止本次任务'); assert.equal(play.paused.at(-1), false)
+})
+
 console.log(`\n${passed} 项通过`)

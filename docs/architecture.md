@@ -2,6 +2,8 @@
 
 这个仓库是 Hexo 静态博客。文章、站点代码、构建插件、离线测试与联网自动任务分别维护。
 
+开发需求与验收状态见 [项目待办](backlog.md)。
+
 ## 目录职责
 
 | 目录 | 用途 |
@@ -12,6 +14,7 @@
 | source/img、source/music、source/live2d | 图片、音乐和 Live2D 模型素材 |
 | source/lib | 已随站点分发的第三方运行库；保留许可证 |
 | scripts | Hexo 构建插件，不能移入其他目录而不修改 Hexo 加载机制 |
+| server | 仓库外私有状态与历史、Docker 隔离练习、HTTPS/服务部署示例 |
 | tools/nanaly | 自动回评、巡逻、批注、资讯、随笔及 GitHub 操作 |
 | tools/daily-report | 数据采集、健康检查、自动日程与邮件报告 |
 | tools/checks | 链接、公开页面、SVG、语音和情绪检查入口 |
@@ -36,7 +39,9 @@
 | 检索、来源与检查任务 | source/js/nanaly-research.js、nanaly-tasks.js |
 | 服务商、图片与文件 | source/js/nanaly-provider.js、nanaly-vision.js、nanaly-files.js |
 | 聊天窗口与语音 | source/js/nanaly-shell.js、nanaly-prosody.js、nanaly-voice.js、nanaly-audio.js |
-| Mao 看板娘 | source/js/mao-pet.js、mao-controls.js、source/css/mao-*.css、source/live2d/mao；Mao 是显示与互动组件，娜娜莉负责对话 |
+| OJ 与边读边练 | source/learn、source/js/learning-lab.js、source/css/learning-lab.css、server |
+| 娜娜莉工作室、共享记忆与目标 | source/js/nanaly-agent.js、nanaly-agent-ui.js、nanaly-identity.js、tools/nanaly/agent-client.mjs；使用说明见 [工作室](features/nanaly-agent.md) |
+| Mao 看板娘 | source/js/mao-pet.js、mao-controls.js、mao-play.js、source/css/mao-*.css、source/live2d/mao；Mao 是显示与互动组件，娜娜莉负责对话 |
 | 音乐与页面动态 | source/js/music-player.js、sakura-motion.js、site-clock.js、toc-sync.js |
 | 访问统计 | source/js/analytics.js；区分访客浏览与主人心跳 |
 | 后台自动生成内容 | tools/nanaly；在构建前产生 Markdown 或 _data 数据 |
@@ -64,3 +69,7 @@
 5. 涉及图片、音频、布局或 PJAX 时，额外检查浏览器中的真实页面。
 
 npm run emotioncheck 默认离线。npm run voicecheck 是付费服务实测，应明确需要时再运行；--help 只显示说明。
+
+## 新增运行服务
+
+静态博客继续由 Hexo 构建；练习与私有记忆需要另行运行后端。部署前阅读 [后端说明](features/learning-backend.md)。`npm run test:runner` 需要已构建的 Docker 镜像，会执行真实隔离程序；常规 `npm test` 不调用付费模型或部署。

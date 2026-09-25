@@ -257,10 +257,13 @@
       return normalize(data, migrated)
     } catch (_) { return { ...defaults } }
   })()
+  let play = null
   let controls = null, status = { phase: 'idle', message: 'Mao 已收起' }
   let compactOverride = false, cancelModelLoad = null, dragCleanup = null
   let speech = null, mouthLevel = 0, lastFace = '', suppressTapUntil = 0
   let chat = { phase: 'idle', turnId: '', text: '' }, chatTurn = '', celebratedAt = 0
+  let taskActivity = { busy: false, current: null }
+  const seenActivities = new Set()
   let motionQuery = null, onPowerChange = null, sharedFPS = null
   let pendingModels = 0
   const modelTextures = new Set()
@@ -270,7 +273,8 @@
     || !!window.navigator?.connection?.saveData
   const chatBusy = () => settings.chatSync && ['thinking', 'streaming'].includes(chat.phase)
   const speechBusy = () => !!speech && ['planning', 'loading', 'playing', 'paused'].includes(speech.phase)
-  const occupied = () => chatBusy() || speechBusy()
+  const agentBusy = () => taskActivity.busy || window.NANALY_AGENT?.activity?.()?.busy === true
+  const occupied = () => chatBusy() || speechBusy() || agentBusy()
   const setStatus = (phase, message) => { status = { phase, message }; sync() }
 
   // 窄屏可以收成头像，展开后仍按视口等比缩放。
@@ -319,6 +323,7 @@
     button.dataset.status = status.phase
     button.setAttribute('aria-busy', String(status.phase === 'loading'))
     controls?.refresh()
+    play?.refresh()
     button.title = (status.phase === 'error' ? status.message + '（点旁边齿轮可重试）'
       : status.phase === 'loading' ? '正在加载 Mao，再点一次可取消'
         : on ? '把 Mao 收起来' : '把 Mao 放出来')
@@ -378,7 +383,7 @@
       set('ParamEyeBallX', -1 * left)
     }
 
-    const energy = occupied() || savingPower() ? 0 : musicEnergy()
+    const energy = occupied() || play?.busy() || savingPower() ? 0 : musicEnergy()
     if (energy > 0.02) {
       const phase = Date.now() / 1000 * CONFIG.danceHz * Math.PI * 2
       const wave = Math.sin(phase) * Math.min(1, energy * CONFIG.danceGain)
@@ -388,6 +393,7 @@
         set('ParamAngleZ', wave * 8 * CONFIG.danceBody)
       }
     }
+    play?.frame(set)
   }
 
   /* 播放器给它自己的可视化条算好的能量，搭个便车。它没在放、可视化没起来、
@@ -457,7 +463,8 @@
     clearTimeout(hideTimer)
     hideTimer = setTimeout(() => {
       hideTimer = null
-      if (occupied()) return
+      if (chatBusy() || speechBusy()) return
+      if (agentBusy()) { resumeAgentActivity(); return }
       if (bubble) delete bubble.dataset.on
       face(moodFace())
     }, CONFIG.speakMs)
@@ -466,6 +473,7 @@
     const ctl = voiceCtl()
     if (!ctl) return
     if (!voiceHandler) voiceHandler = state => {
+      play?.refresh()
       if (!model || document.hidden) return
       if (!stateAllowed()) {
         speech = null; stopVoiceMouth()
@@ -476,7 +484,7 @@
       if (!follows) {
         const previous = speech
         speech = null; stopVoiceMouth()
-        if (previous && !chatBusy()) { face(moodFace()); settleBubble() }
+        if (previous && !chatBusy()) { face(moodFace()); settleBubble(); resumeAgentActivity() }
         return
       }
       speech = { ...state }
@@ -484,7 +492,7 @@
         stopVoiceMouth()
         if (['ended', 'idle', 'error'].includes(state.phase)) {
           speech = null
-          if (!chatBusy()) { face(moodFace()); settleBubble() }
+          if (!chatBusy()) { face(moodFace()); settleBubble(); resumeAgentActivity() }
         }
         return
       }
@@ -576,7 +584,7 @@
     // 日程先回来的话那个闹钟还挂着，收掉 —— 不收就是一个没人管的定时器
     if (version !== lifecycle) return
     if (greetTimer) { clearTimeout(greetTimer); greetTimer = null }
-    if (!model || document.hidden || settings.quiet || occupied()) return // 等的这一会儿她可能已经被关掉了
+    if (!model || document.hidden || settings.quiet || occupied() || play?.busy()) return // 等的这一会儿她可能已经被关掉了
 
     if (awayFor >= CONFIG.missYouAfterH) {
       const [text, mood] = pick(CONFIG.missLines)
@@ -786,7 +794,7 @@
     if (!model || document.hidden || settings.quiet || !settings.idleSeconds) return
     idleTimer = setInterval(() => {
       watchVoice()
-      if (!occupied()) say(pick(linesHere()))
+      if (!occupied() && !play?.busy()) say(pick(linesHere()))
     }, settings.idleSeconds * 1000)
   }
   const applyPower = () => {
@@ -814,7 +822,46 @@
     layout(true); applyPower(); restartIdle(); watchVoice(); sync()
     return { ...settings }
   }
+  const priorityChat = () => {
+    const voice = voiceCtl()?.state?.()
+    return chatBusy() || ['thinking', 'streaming'].includes(window.NANALY?.chatState?.()?.phase)
+      || speechBusy() && speech?.id !== voiceId
+      || !!(voice && voice.priority !== 'pet' && ['planning', 'loading', 'playing', 'paused'].includes(voice.phase))
+  }
+  const onAgentActivity = event => {
+    const next = event?.detail
+    if (!next || !['thinking', 'complete', 'error', 'cancelled'].includes(next.phase) || typeof next.id !== 'string') return
+    const visibleStart = next.phase === 'thinking' && model && !document.hidden
+    if (visibleStart) seenActivities.add(next.id)
+    const sawStart = seenActivities.has(next.id)
+    if (next.phase !== 'thinking') seenActivities.delete(next.id)
+    taskActivity = { busy: next.busy === true || next.phase === 'thinking',
+      current: next.current || (next.phase === 'thinking' ? next : null) }
+    play?.suspend(document.hidden || taskActivity.busy || priorityChat())
+    if (!model || document.hidden || !settings.chatSync) return
+    if (!stateAllowed()) { if (bubble) delete bubble.dataset.on; return }
+    if (priorityChat()) return
+    if (taskActivity.busy) {
+      stopTalking(); resetMood()
+      showBubble(taskActivity.current?.text || '正在推进任务喵…'); face('为难')
+      return
+    }
+    // A completed task read from storage or finished in the background has no live start here.
+    if (!sawStart) return
+    stopTalking()
+    const messages = { complete: ['这一步完成了喵。', '笑'], error: ['这一步还没完成，看看任务里的原因。', '难过'], cancelled: ['好，任务先停在这里。', '平静'] }
+    const [message, mood] = messages[next.phase]
+    showBubble(next.text || message); face(mood); settleBubble()
+  }
+  const resumeAgentActivity = () => {
+    const current = window.NANALY_AGENT?.activity?.()
+    const active = current?.busy ? current.current || (current.phase === 'thinking' ? current : null) : null
+    if (active) onAgentActivity({ detail: { ...active, busy: true, current: active } })
+    else if (!current?.busy) taskActivity = { busy: false, current: null }
+  }
   const onChatState = event => {
+    if (['thinking', 'streaming'].includes(event?.detail?.phase)) play?.suspend(true)
+    else play?.suspend(agentBusy() || document.hidden)
     if (!settings.chatSync || !model) return
     const next = event?.detail || {}
     if (document.hidden) {
@@ -840,7 +887,7 @@
       error: ['这次没有顺利完成，可以回到对话里重试。', '难过'] }
     if (next.phase === 'idle') {
       chatTurn = ''; if (bubble) delete bubble.dataset.on
-      stopVoiceMouth(); face(moodFace()); return
+      stopVoiceMouth(); face(moodFace()); resumeAgentActivity(); return
     }
     const [text, mood] = phases[next.phase]
     showBubble(text); face(mood)
@@ -855,7 +902,7 @@
     // 保存快照，防止事件发送者之后原地改动数据。
     try { stateRaw = JSON.parse(JSON.stringify({ days: data.days })) } catch (_) { return }
     stateDay = ymd(rightNow()); siteState = summarize(stateRaw); statePending = null
-    if (!model || occupied() || document.hidden) return
+    if (!model || occupied() || document.hidden || play?.busy()) return
     face(moodFace())
     const completed = before?.left > 0 && siteState?.total > 0 && siteState.left === 0
     const published = before && !before.published && siteState?.published
@@ -866,6 +913,12 @@
     }
   }
   const action = (name, options) => {
+    if (name === 'play') {
+      save(true)
+      compactOverride = true
+      if (settings.compact) configure({ compact: false })
+      return enable().then(() => { layout(true); return play?.open() || false })
+    }
     if (name === 'schedule') {
       if (window.pjax?.loadUrl) window.pjax.loadUrl('/schedule/')
       else window.location.assign('/schedule/')
@@ -888,6 +941,7 @@
       if (!drag || event.pointerId !== drag.id) return
       const dx = event.clientX - drag.x, dy = event.clientY - drag.y
       if (!drag.moved && Math.hypot(dx, dy) < 7) return
+      if (!drag.moved) play?.drag('start')
       drag.moved = true; event.preventDefault()
       const { w, h } = stageSize()
       stage.dataset.dragging = '1'
@@ -906,11 +960,12 @@
       const top = Math.max(0, Math.min(vh - h, was.top + event.clientY - was.y))
       configure({ side: left + w / 2 < (window.innerWidth || w) / 2 ? 'left' : 'right',
         bottomRatio: Math.max(0, vh - h - top) / Math.max(1, vh - h - 16) })
+      play?.drag('end')
     }
     const cancel = event => {
       if (!drag || event.pointerId !== drag.id) return
       drag = null; suppressTapUntil = Date.now() + 400
-      delete stage.dataset.dragging; layout(true)
+      delete stage.dataset.dragging; layout(true); play?.drag('cancel')
     }
     const keys = event => {
       if (event.key === 'Enter' || event.key === ' ') {
@@ -1009,6 +1064,25 @@
       model = loaded
       app.stage.addChild(model)
       layout()
+      if (window.MAO_PLAY) play = window.MAO_PLAY.create({
+        stage, canvas, getSettings: () => ({ ...settings }),
+        isOccupied: () => {
+          const voice = voiceCtl()?.state?.()
+          return occupied() || ['thinking', 'streaming'].includes(window.NANALY?.chatState?.()?.phase)
+            || !!(voice && voice.priority !== 'pet' && ['planning', 'loading', 'playing', 'paused'].includes(voice.phase))
+        }, face, say,
+        reset: () => { stopTalking(); if (bubble) delete bubble.dataset.on; face(moodFace()) },
+        focus: (x, y) => { if (model && !savingPower()) { const rect = stage.getBoundingClientRect(); model.focus(x - rect.left, y - rect.top) } },
+        getBody: () => {
+          const rect = stage.getBoundingClientRect(), box = model.getBounds()
+          return { left: rect.left + box.x, top: rect.top + box.y, width: box.width, height: box.height }
+        },
+        capture: () => {
+          if (!app || !model || document.hidden) throw new Error('Mao 尚未就绪')
+          // Pixi 的 extract 重新渲染模型到离屏画布，不依赖易被清空的 WebGL 缓冲。
+          return app.renderer.extract.canvas(app.stage)
+        }
+      })
       bindDrag(canvas); watchVoice(); applyPower()
       setStatus('ready', 'Mao 已就绪')
 
@@ -1044,6 +1118,7 @@
 
         if (isDouble) {
           if (!CONFIG.openChatOnDoubleClick) return
+          play?.stop()
           // 第一下已经让她开口了，把那句收回去 ——
           // 否则对话窗开了，她头顶还挂着句“干嘛戳我”
           stopTalking()
@@ -1054,6 +1129,7 @@
         }
 
         if (occupied()) { controls?.showActions(); return }
+        if (play?.tap()) return
         if (!CONFIG.tapToTalk) return
 
         // 连着戳：超过 sulkWindowMs 没动静就重新数
@@ -1073,14 +1149,14 @@
       /* 视线跟随全页面，而不只是她那块画布 —— 鼠标在文章里划过时她也会转头看，
        * 「养在博客里」的感觉全靠这一条。 */
       if (CONFIG.followCursor) {
-        onMove = e => { if (model && !savingPower() && !document.hidden && !stage.dataset.dragging) model.focus(e.clientX - stage.getBoundingClientRect().left, e.clientY - stage.getBoundingClientRect().top) }
+        onMove = e => { if (model && !savingPower() && !document.hidden && !stage.dataset.dragging && !play?.busy()) model.focus(e.clientX - stage.getBoundingClientRect().left, e.clientY - stage.getBoundingClientRect().top) }
         document.addEventListener('pointermove', onMove, { passive: true })
       }
       onResize = () => { layout(true); applyPower() }
       window.addEventListener('resize', onResize)
 
       motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)') || null
-      onPowerChange = applyPower
+      onPowerChange = () => { applyPower(); play?.refresh() }
       motionQuery?.addEventListener?.('change', onPowerChange)
       window.navigator?.connection?.addEventListener?.('change', onPowerChange)
       greet(version)
@@ -1088,6 +1164,7 @@
       onVisibility = event => {
         if (!app || !model) return
         const paused = document.hidden || event?.type === 'pagehide'
+        play?.suspend(paused || agentBusy())
         model.autoUpdate = !paused
         if (paused) {
           app.stop?.(); stopTalking(); speech = null; stopVoiceMouth()
@@ -1099,7 +1176,7 @@
           const current = window.NANALY?.chatState?.()
           if (current && ['thinking', 'streaming'].includes(current.phase)) {
             chatTurn = current.turnId; onChatState({ detail: current })
-          } else { chat = { phase: 'idle', turnId: '', text: '' }; chatTurn = ''; face(moodFace()) }
+          } else { chat = { phase: 'idle', turnId: '', text: '' }; chatTurn = ''; face(moodFace()); resumeAgentActivity() }
         }
       }
       document.addEventListener('visibilitychange', onVisibility)
@@ -1165,6 +1242,7 @@
     lifecycle++
     if (cancelModelLoad) cancelModelLoad()
     if (dragCleanup) { dragCleanup(); dragCleanup = null }
+    if (play) { play.destroy(); play = null }
     motionQuery?.removeEventListener?.('change', onPowerChange)
     window.navigator?.connection?.removeEventListener?.('change', onPowerChange)
     motionQuery = onPowerChange = null
@@ -1172,6 +1250,7 @@
     sharedFPS = null
     stopTalking(); speech = null; stopVoiceMouth()
     chat = { phase: 'idle', turnId: '', text: '' }; chatTurn = ''; lastFace = ''
+    taskActivity = { busy: false, current: null }; seenActivities.clear()
     clearTimeout(greetTimer); greetTimer = null
     // 订阅挂在娜娜莉那个控制器上，她被收起来之后不退订就是一直挂着的回调
     if (unsubVoice) { try { unsubVoice() } catch (_) {} unsubVoice = null }
@@ -1280,6 +1359,7 @@
    * 而开关还亮着。所以每次翻完页对一下：谁掉了就把谁补回来。 */
   const recover = () => {
     mountToggle()
+    play?.refresh()
     if (!occupied()) { stopTalking(); if (bubble) delete bubble.dataset.on }
     if (!app || !stage || document.contains(stage)) return
     teardown()
@@ -1300,6 +1380,7 @@
     model: () => model,
     settings: () => ({ ...settings }), configure,
     status: () => ({ ...status }), retry,
+    play: () => action('play'),
     config: () => CONFIG,
     // 这会儿她该说哪一组话。测试和调试都用它，省得等 70 秒
     lines: () => linesHere(),
@@ -1308,6 +1389,7 @@
   })
 
   window.addEventListener('nanaly:chat-state', onChatState)
+  window.addEventListener('nanaly:agent-activity', onAgentActivity)
   window.addEventListener('noimpty:schedule-updated', onScheduleUpdated)
   rememberVisit()
   document.addEventListener('pjax:complete', recover)

@@ -1,0 +1,13 @@
+api.your-blog.example {
+    # TLS certificates are managed by Caddy. Set NANALY_ALLOWED_ORIGINS on the API.
+    request_body {
+        max_size 1200KB
+    }
+    reverse_proxy 127.0.0.1:4318 {
+        transport http {
+            # Stay below the API HTTP keep-alive timeout (5s).
+            keepalive 4s
+            response_header_timeout 150s
+        }
+    }
+}

@@ -198,6 +198,43 @@
           "out": 419
         }
       }
+    },
+    {
+      "ts": 1790320047403,
+      "at": "9-25 15:07",
+      "job": "nanaly",
+      "tasks": {
+        "jobs（推理）": {
+          "calls": 1,
+          "hit": 0,
+          "miss": 7148,
+          "out": 4408
+        },
+        "interview（推理）": {
+          "calls": 1,
+          "hit": 1024,
+          "miss": 7033,
+          "out": 4680
+        },
+        "practice": {
+          "calls": 1,
+          "hit": 768,
+          "miss": 6000,
+          "out": 515
+        },
+        "project": {
+          "calls": 1,
+          "hit": 1280,
+          "miss": 4908,
+          "out": 483
+        },
+        "资讯开场白": {
+          "calls": 1,
+          "hit": 0,
+          "miss": 74,
+          "out": 21
+        }
+      }
     }
   ]
 }

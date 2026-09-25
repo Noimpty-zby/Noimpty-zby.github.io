@@ -6,7 +6,7 @@ import { wallClockMs } from '../nanaly/permalink.mjs'
 import { listDiscussions } from '../nanaly/github.mjs'
 
 export const CFG = {
-  site: (process.env.SITE_URL || 'https://noimpty-zby.github.io').replace(/\/$/, ''),
+  site: (process.env.SITE_URL || 'https://noimpty-zby.cn').replace(/\/$/, ''),
   repo: process.env.GITHUB_REPOSITORY || 'Noimpty-zby/Noimpty-zby.github.io',
   ghToken: process.env.GITHUB_TOKEN || '',
   umamiKey: process.env.UMAMI_API_KEY || '',

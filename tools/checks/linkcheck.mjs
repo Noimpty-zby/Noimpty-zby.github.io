@@ -18,7 +18,7 @@ import { join, posix, sep } from 'node:path'
 // 相对于仓库根目录跑：node tools/checks/linkcheck.mjs
 const ROOT = process.env.LINKCHECK_ROOT || join(process.cwd(), 'public')
 // 站点自己的绝对地址也要当站内链接查 —— 有些模板会输出全路径
-const SITE = (process.env.LINKCHECK_SITE || 'https://noimpty-zby.github.io').replace(/\/$/, '')
+const SITE = (process.env.LINKCHECK_SITE || 'https://noimpty-zby.cn').replace(/\/$/, '')
 
 if (!existsSync(ROOT)) {
   console.error(`没有找到构建产物：${ROOT}\n先跑 npm run build。`)

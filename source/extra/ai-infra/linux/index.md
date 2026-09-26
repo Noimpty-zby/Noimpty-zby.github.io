@@ -14,27 +14,27 @@ description: 拆成两部分——入门管命令怎么用，深入管为什么�
 <header class="noimpty-hero noimpty-hero--linux">
   <div class="noimpty-hero__text">
     <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a></nav>
-    <h1 class="noimpty-hero__title"><span class="noimpty-hero__badge" aria-hidden="true"><i class="fab fa-linux"></i></span><span class="noimpty-hero__name">Linux</span></h1>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">Linux</span></h1>
     <p class="noimpty-hero__lead">命令行与系统 · 入门 + 深入</p>
     <p class="noimpty-hero__sub"><span>2 门课</span><span>{% section_stat Linux入门|Linux深入 %}</span></p>
   </div>
-  <figure class="noimpty-guide">
-    <figcaption class="noimpty-guide__bubble">先把命令行敲熟，再往系统深处走～入门正在一章章更新！</figcaption>
-    <span class="noimpty-guide__face" style="--guide:url('/img/sections/extra.webp');--guide-size:250%;--guide-pos:43% 20%" role="img" aria-label="娜娜莉"></span>
+  <figure class="noimpty-scene" data-lines="企鹅：学到的命令去代码小屋的终端里敲一敲，马上就能验证！|终端：$ echo 你好 (｡･ω･)ﾉ">
+    <figcaption class="noimpty-scene__bubble">Linux 分入门和深入两段，先把命令行玩熟～ <span class="noimpty-kaomoji">(・∀・)ノ</span></figcaption>
+    {% kawaii linux %}
   </figure>
 </header>
 
 <div class="noimpty-track-grid noimpty-track-grid--two">
   <a class="noimpty-track-card noimpty-track-card--linux-intro" href="/extra/ai-infra/linux/intro/">
     <span class="noimpty-track-card__index">01</span>
-    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fab fa-linux"></i></span>
+    <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii penguin %}</span>
     <h3>Linux 入门</h3>
     <span class="noimpty-track-card__by">Colt Steele · Beginner To Power User</span>
     <span class="noimpty-track-card__stat">{% section_stat Linux入门 %}</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--linux-advanced" href="/extra/ai-infra/linux/advanced/">
     <span class="noimpty-track-card__index">02</span>
-    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fas fa-layer-group"></i></span>
+    <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii penguin-glasses %}</span>
     <h3>Linux 深入</h3>
     <span class="noimpty-track-card__by">具体资料还没定</span>
     <span class="noimpty-track-card__stat">{% section_stat Linux深入 %}</span>

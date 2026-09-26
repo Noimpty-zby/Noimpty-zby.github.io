@@ -20,7 +20,7 @@ description: 推理时到底在算什么——attention、KV cache、批处理�
       <div><b>进度</b><span>{% section_progress Transformer 推理机制 %}</span></div>
     </div>
   </div>
-  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fas fa-brain"></i></span>
+  <figure class="noimpty-scene noimpty-scene--one" data-lines="Attention！……是「注意力」的意思啦|一个字一个字地往外蹦～">{% kawaii robot stage %}</figure>
 </header>
 
 {% section_posts Transformer 推理机制 %}

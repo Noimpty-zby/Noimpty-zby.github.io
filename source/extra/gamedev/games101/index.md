@@ -23,7 +23,7 @@ description: 闫令琪《现代计算机图形学入门》的课程笔记与作�
       <div><b>进度</b><span>作业一至作业四已完成 · {% section_progress GAMES101 %}</span></div>
     </div>
   </div>
-  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fas fa-cubes"></i></span>
+  <figure class="noimpty-scene noimpty-scene--one" data-lines="我是犹他茶壶，图形学的老熟人～|光栅化、着色，都在这门课里">{% kawaii teapot stage %}</figure>
 </header>
 
 {% section_posts GAMES101 %}

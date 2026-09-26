@@ -20,7 +20,7 @@ description: 标准库与常用第三方库的使用习惯。学习资料还没�
       <div><b>进度</b><span>{% section_progress Python %}</span></div>
     </div>
   </div>
-  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fab fa-python"></i></span>
+  <figure class="noimpty-scene noimpty-scene--one" data-lines="我是一条很友好的小蛇 ♪|缩进要对齐哦～">{% kawaii snake stage %}</figure>
 </header>
 
 {% section_posts Python %}

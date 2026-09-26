@@ -8,13 +8,13 @@ comments: false
 <header class="noimpty-hero noimpty-hero--about">
   <div class="noimpty-hero__text">
     <p class="noimpty-hero__tape">ABOUT · 关于</p>
-    <h1 class="noimpty-hero__title"><span class="noimpty-hero__badge" aria-hidden="true"><i class="fas fa-heart"></i></span><span class="noimpty-hero__name">关于这里</span></h1>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">关于这里</span></h1>
     <p class="noimpty-hero__lead">Noimpty 的个人空间</p>
     <p class="noimpty-hero__sub"><span>站长</span><span>小站</span></p>
   </div>
-  <figure class="noimpty-guide">
-    <figcaption class="noimpty-guide__bubble">想认识这个小站和站长？往下看就对啦～</figcaption>
-    <span class="noimpty-guide__face" style="--guide:url('/img/avatar.png');--guide-size:170%;--guide-pos:38% 21%" role="img" aria-label="娜娜莉"></span>
+  <figure class="noimpty-scene" data-lines="云朵：我在这儿飘了好久啦|爱心气球送给来看的你 ♡">
+    <figcaption class="noimpty-scene__bubble">想认识这个小站和站长？往下看就对啦～ <span class="noimpty-kaomoji">ヾ(≧▽≦*)o</span></figcaption>
+    {% kawaii about %}
   </figure>
 </header>
 

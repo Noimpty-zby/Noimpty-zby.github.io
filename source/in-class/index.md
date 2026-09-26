@@ -14,27 +14,27 @@ description: 计算机专业课的自学线：数据结构与算法、计算机�
 <header class="noimpty-hero noimpty-hero--core">
   <div class="noimpty-hero__text">
     <p class="noimpty-hero__tape">CORE · 课内</p>
-    <h1 class="noimpty-hero__title"><span class="noimpty-hero__badge" aria-hidden="true"><i class="fas fa-book"></i></span><span class="noimpty-hero__name">课内自学</span></h1>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">课内自学</span></h1>
     <p class="noimpty-hero__lead">数据结构与算法 · 计算机系统 CSAPP</p>
     <p class="noimpty-hero__sub"><span>2 门课</span><span>{% section_stat DSA|CSAPP %}</span></p>
   </div>
-  <figure class="noimpty-guide">
-    <figcaption class="noimpty-guide__bubble">专业课的自学笔记都在这里～先把数据结构打牢，CSAPP 排在后面！</figcaption>
-    <span class="noimpty-guide__face" style="--guide:url('/img/sections/in-class.webp');--guide-size:234%;--guide-pos:60% 19%" role="img" aria-label="娜娜莉"></span>
+  <figure class="noimpty-scene" data-lines="我们几本书排好队啦，从上往下一本一本来 (｀・ω・´)|铅笔说：笔记只写「为什么这么做」～">
+    <figcaption class="noimpty-scene__bubble">这里放专业课的自学笔记～先把数据结构打牢，CSAPP 排在后面！ <span class="noimpty-kaomoji">φ(・ω・ )♪</span></figcaption>
+    {% kawaii core %}
   </figure>
 </header>
 
 <div class="noimpty-track-grid noimpty-track-grid--two">
   <a class="noimpty-track-card noimpty-track-card--dsa" href="/in-class/dsa/">
     <span class="noimpty-track-card__index">01</span>
-    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fas fa-sitemap"></i></span>
+    <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii tree %}</span>
     <h3>数据结构与算法</h3>
     <span class="noimpty-track-card__by">Abdul Bari · C / C++</span>
     <span class="noimpty-track-card__stat">约 53 小时 · {% section_stat DSA %}</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--csapp" href="/in-class/csapp/">
     <span class="noimpty-track-card__index">02</span>
-    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fas fa-microchip"></i></span>
+    <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii chip %}</span>
     <h3>CS15-213 CSAPP</h3>
     <span class="noimpty-track-card__by">Carnegie Mellon University</span>
     <span class="noimpty-track-card__stat">约 150 小时 · {% section_stat CSAPP %}</span>

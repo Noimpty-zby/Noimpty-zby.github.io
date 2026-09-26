@@ -23,7 +23,7 @@ description: "Stephen Grider《Go: The Complete Developer's Guide (Golang)》的
       <div><b>进度</b><span>{% section_progress Go %}</span></div>
     </div>
   </div>
-  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fab fa-golang"></i></span>
+  <figure class="noimpty-scene noimpty-scene--one" data-lines="Go！Go！冲呀～|写得快，跑得也快 (｀・ω・´)">{% kawaii gopher stage %}</figure>
 </header>
 
 {% section_posts Go %}

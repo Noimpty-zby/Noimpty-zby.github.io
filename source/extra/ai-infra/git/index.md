@@ -23,7 +23,7 @@ description: Colt Steele《The Git & Github Bootcamp》的学习记录。
       <div><b>进度</b><span>命令行速成 + 基本循环 + 分支 + 合并 · {% section_progress Git %}</span></div>
     </div>
   </div>
-  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fab fa-git-alt"></i></span>
+  <figure class="noimpty-scene noimpty-scene--one" data-lines="每一颗小圆点都是一次提交哦|分支长出来，还能再合回去～">{% kawaii git stage %}</figure>
 </header>
 
 {% section_posts Git %}

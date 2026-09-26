@@ -23,7 +23,7 @@ description: Tom Looman《Professional Game Development in C++ and Unreal Engine
       <div><b>进度</b><span>第一至第六章 + 作业一、作业二 · 告一段落 · {% section_progress UE5-Looman %}</span></div>
     </div>
   </div>
-  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fas fa-gamepad"></i></span>
+  <figure class="noimpty-scene noimpty-scene--one" data-lines="蓝色的我是 UE5 的手柄～|Tom Looman 的课，用 C++ 写游戏！">{% kawaii gamepad-blue stage %}</figure>
 </header>
 
 {% section_posts UE5-Looman %}

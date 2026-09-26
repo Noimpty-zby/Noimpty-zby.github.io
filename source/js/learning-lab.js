@@ -9,6 +9,7 @@
   const MAX_OUTPUT = 32768
   const MAX_HISTORY = 40
   const STATEFUL = new Set(['git', 'linux', 'mysql'])
+  const SHELLS = new Set(['git', 'linux'])
   const CHECKABLE = new Set(['c', 'cpp', 'go', 'python', 'git', 'linux'])
   const STATUS = { accepted: '通过', wrong_answer: '测试未通过', compile_error: '编译错误', runtime_error: '运行错误', timeout: '执行超时', output_limit: '输出超限', checked: '工具检查完成', unsupported_check: '此语言需要实际运行才能检查' }
   const LESSONS = [
@@ -335,10 +336,89 @@
         return false
       } finally { if (activeSync === controller) activeSync = null }
     }
+    // The terminal reports the workspace it opened and each revision it saved, so a later
+    // script run continues from there instead of tripping the CAS check.
+    const adoptWorkspace = (language, value) => {
+      if (closed || !permitted() || !SHELLS.has(language) || !plain(value) || typeof value.workspaceId !== 'string' || !value.workspaceId || !Number.isInteger(value.workspaceRevision) || value.workspaceRevision < 0) return false
+      workspaceEpoch++; state.workspaces[language] = { id: value.workspaceId, revision: value.workspaceRevision, busy: false, broken: false, uncertain: false }
+      emit(); return true
+    }
+    const note = text => { if (!closed) { state.notice = clip(text, 300); state.error = ''; emit() } }
     const dispose = () => { save(); cancel(); activeSync?.abort(); invalidateWorkspaces(); closed = true }
     const initial = state.drafts[state.lessonId] || { code: '', stdin: '', tests: [], exercise: null }
     state.code = initial.code; state.stdin = initial.stdin; state.tests = cleanTests(initial.tests); state.exercise = optionalPractice(initial.exercise)
-    return { state, edit, select, run, cancel, reset, restore, loadPractice, restoreBackup, persistence, setAutoCheck, canAutoCheck, autoCheckCurrent, clearHistory, syncHistory, restoreWorkspaces, invalidateWorkspaces, dispose }
+    return { state, edit, select, run, cancel, reset, restore, loadPractice, restoreBackup, persistence, setAutoCheck, canAutoCheck, autoCheckCurrent, clearHistory, syncHistory, restoreWorkspaces, invalidateWorkspaces, adoptWorkspace, note, dispose }
+  }
+
+  // A Git/Linux terminal's connection: a one-time ticket from the authenticated API, then a
+  // socket carrying keystrokes one way and raw terminal output the other. The server saves the
+  // workspace however the socket ends; `end` waits for that so a script run never races it.
+  const createTerminalLink = ({ language, request, socketURL, WebSocketImpl, size, workspace, onOutput, onEvent }) => {
+    let state = 'idle', socket = null, generation = 0, pending = '', saved = null, closeWhenOpen = false
+    const waiting = new Set()
+    const setState = next => { if (state !== next) { state = next; onEvent({ type: 'state', state }) } }
+    const settle = () => { for (const resolve of waiting) resolve(saved); waiting.clear() }
+    const send = value => { try { socket?.send(JSON.stringify(value)) } catch (_) {} }
+    const connect = async () => {
+      if (state === 'connecting' || state === 'open' || state === 'closing') return
+      const current = ++generation
+      saved = null; pending = ''; closeWhenOpen = false
+      setState('connecting')
+      try {
+        const target = workspace()
+        const issued = await request('/api/terminal/ticket', { method: 'POST', body: { language, ...(target?.id ? { workspaceId: target.id } : {}), ...size() } })
+        if (current !== generation) return
+        if (typeof issued?.ticket !== 'string' || !/^[a-f0-9]{48}$/.test(issued.ticket)) throw new Error('终端响应无效，请检查后端版本。')
+        const ws = new WebSocketImpl(socketURL('/api/terminal?ticket=' + issued.ticket))
+        socket = ws; ws.binaryType = 'arraybuffer'
+        ws.onopen = () => { if (current === generation && closeWhenOpen) send({ type: 'close' }) }
+        ws.onmessage = event => {
+          if (current !== generation) return
+          if (typeof event.data !== 'string') { onOutput(new Uint8Array(event.data)); return }
+          let message
+          try { message = JSON.parse(event.data) } catch (_) { return }
+          if (!plain(message)) return
+          if (message.type === 'ready' && state === 'connecting') { setState('open'); if (pending) { send({ type: 'input', data: pending }); pending = '' } }
+          if (message.type === 'saved') saved = message
+          onEvent(message)
+        }
+        ws.onclose = () => {
+          if (current !== generation) return
+          socket = null; pending = ''
+          setState('closed')
+          if (!saved) onEvent({ type: 'lost' })
+          settle()
+        }
+        ws.onerror = () => {}
+      } catch (error) {
+        if (current !== generation) return
+        socket = null
+        setState('closed')
+        onEvent({ type: 'error', message: error?.status === 404 ? '后端还没有终端功能，需要先更新后端；现在可以切换到「脚本」模式执行命令。' : clip(error?.message || '终端连接失败。', 300) })
+        settle()
+      }
+    }
+    // Keys typed while the terminal is closed reopen it instead of being sent anywhere.
+    const write = data => {
+      if (state === 'open') send({ type: 'input', data })
+      else if (state === 'connecting') pending = (pending + data).slice(-4096)
+      else if (state === 'idle' || state === 'closed') void connect()
+    }
+    const resize = (cols, rows) => { if (state === 'open') send({ type: 'resize', cols, rows }) }
+    const end = () => {
+      if (state === 'idle' || state === 'closed') return Promise.resolve(saved)
+      const done = new Promise(resolve => waiting.add(resolve))
+      if (state === 'open') { setState('closing'); send({ type: 'close' }) }
+      else if (state === 'connecting') {
+        if (socket) { setState('closing'); if (socket.readyState === 1) send({ type: 'close' }); else closeWhenOpen = true }
+        else { generation++; setState('closed'); settle() }
+      }
+      // A server that never answers must not block a script run forever.
+      const timer = setTimeout(() => { if (waiting.size) { generation++; try { socket?.close() } catch (_) {} socket = null; setState('closed'); settle() } }, 20000)
+      return done.finally(() => clearTimeout(timer))
+    }
+    const dispose = () => { generation++; try { socket?.close() } catch (_) {} socket = null; state = 'closed'; settle() }
+    return { connect, write, resize, end, dispose, state: () => state, active: () => state === 'connecting' || state === 'open' || state === 'closing' }
   }
 
   const unlocked = () => { try { return window.NOIMPTY_GATE?.unlocked() === true && !document.documentElement.classList.contains('noimpty-private-locked') } catch (_) { return false } }
@@ -347,7 +427,19 @@
   let mounted = null
   let launch = null
 
-  const LANGUAGE_NAMES = { c: 'C', cpp: 'C++', go: 'Go', python: 'Python', git: 'Git', linux: 'Bash', mysql: 'MySQL' }
+  const LANGUAGE_NAMES = { c: 'C', cpp: 'C++', go: 'Go', python: 'Python', git: 'Git', linux: 'Linux', mysql: 'MySQL' }
+  const MODE_KEY = 'noimpty-code-shell-mode'
+  // xterm.js is only fetched the first time a terminal opens.
+  let terminalBundle = null
+  const loadTerminalBundle = () => terminalBundle ||= new Promise((resolve, reject) => {
+    if (window.NOIMPTY_TERMINAL) { resolve(window.NOIMPTY_TERMINAL); return }
+    const script = document.createElement('script')
+    // The inert tag in the page carries the fingerprinted URL, so a new build is never cached stale.
+    script.src = document.getElementById('learning-terminal-src')?.getAttribute('src') || '/js/learning-terminal.js'; script.async = true
+    script.onload = () => window.NOIMPTY_TERMINAL ? resolve(window.NOIMPTY_TERMINAL) : reject(new Error('终端组件加载失败。'))
+    script.onerror = () => { terminalBundle = null; script.remove(); reject(new Error('终端组件加载失败，请检查网络后刷新。')) }
+    document.head.append(script)
+  })
   const FILE_NAMES = { c: 'main.c', cpp: 'main.cpp', go: 'main.go', python: 'main.py', git: 'commands.sh', linux: 'script.sh', mysql: 'query.sql' }
   const resultLabel = result => result?.status === 'accepted' ? '运行完成' : STATUS[result?.status] || ''
   const mountLab = (container, article = null, onClose = null) => {
@@ -376,6 +468,15 @@
     heading.append(brand, controls)
     const toolbar = node('div', 'learning-toolbar')
     const filename = node('span', 'learning-file-name')
+    // Git and Linux open as a real terminal; 脚本 keeps the editor for running a whole script.
+    const modeSwitch = node('div', 'learning-mode-switch'); modeSwitch.setAttribute('role', 'group'); modeSwitch.setAttribute('aria-label', '使用方式')
+    const modeButtons = {}
+    for (const [id, label, hint] of [['terminal', '终端', '逐条输入命令，像真正的终端一样'], ['script', '脚本', '在编辑器里写好整段命令，一次执行']]) {
+      const item = button(label, () => setMode(id), 'learning-mode'); item.title = hint; item.setAttribute('aria-pressed', 'false')
+      modeButtons[id] = item; modeSwitch.append(item)
+    }
+    const terminalState = node('span', 'learning-terminal-state')
+    const reopenButton = button('重新打开', () => openTerminal(true), 'learning-reopen')
     const actions = node('div', 'learning-actions')
     const runButton = button('▶ 运行', () => run(), 'learning-run')
     runButton.title = 'Ctrl / ⌘ + Enter'
@@ -390,12 +491,19 @@
     const themeSelect = node('select', 'learning-select learning-theme-select'); themeSelect.setAttribute('aria-label', '编辑器配色')
     for (const [value, label] of [['light', '奶油樱粉'], ['dark', '夜樱紫']]) { const option = node('option', '', label); option.value = value; themeSelect.append(option) }
     themeSelect.value = root.dataset.editorTheme; themeLabel.append(themeSelect)
-    themeSelect.addEventListener('change', () => { root.dataset.editorTheme = themeSelect.value; try { window.localStorage.setItem('noimpty-code-theme', themeSelect.value) } catch (_) {} })
+    themeSelect.addEventListener('change', () => {
+      root.dataset.editorTheme = themeSelect.value
+      for (const entry of Object.values(terminals)) entry.view?.setTheme(themeSelect.value)
+      try { window.localStorage.setItem('noimpty-code-theme', themeSelect.value) } catch (_) {}
+    })
     const assistantButton = button('请教娜娜莉', () => { more.open = false; window.NANALY?.open?.() })
     const checkButton = button('检查语法', () => { window.clearTimeout(timer); setPanel('output'); session.run('check'); more.open = false })
     const resetButton = button('重置运行环境', async () => {
       more.open = false
-      if (window.confirm('重置将删除当前语言运行环境里的文件、仓库或表数据。编辑器代码仍保留。继续吗？')) await session.reset()
+      if (!window.confirm('重置将删除当前语言运行环境里的文件、仓库或表数据。编辑器代码仍保留。继续吗？')) return
+      const language = session.state.lessonId
+      await closeTerminal(language)
+      if (await session.reset() && SHELLS.has(language)) { terminals[language]?.view?.notice('运行环境已重置。'); applyMode() }
     })
     const downloadButton = button('下载代码', () => {
       if (!unlocked()) return
@@ -409,12 +517,28 @@
       session.edit({ code: '', stdin: '', tests: [], exercise: null }); syncEditor(); focusEditor()
     })
     menu.append(themeLabel, autoLabel, persistLabel, assistantButton, checkButton, downloadButton, clearButton, resetButton)
-    more.append(menu); actions.append(stopButton, runButton, more); toolbar.append(filename, actions)
+    more.append(menu); actions.append(reopenButton, stopButton, runButton, more); toolbar.append(modeSwitch, filename, terminalState, actions)
     const editorPane = node('main', 'learning-editor-pane')
     const editorWrap = node('div', 'learning-editor-wrap')
     const editorHost = node('div', 'learning-code-editor')
     const fallback = node('textarea', 'learning-editor'); fallback.setAttribute('aria-label', '代码编辑器'); fallback.spellcheck = false; fallback.maxLength = MAX_CODE; fallback.wrap = 'off'
     editorWrap.append(editorHost, fallback); editorPane.append(editorWrap)
+    const terminalPane = node('div', 'learning-terminal-pane')
+    const terminalHosts = node('div', 'learning-terminal-hosts')
+    const terminalOverlay = node('div', 'learning-terminal-overlay')
+    const overlayText = node('p', '', '连接后端后就能使用终端。')
+    terminalOverlay.append(overlayText, button('连接后端', () => window.NANALY_AGENT?.open?.(), 'learning-run'))
+    // Touch keyboards have no Tab, Ctrl or arrow keys. pointerdown keeps focus in the terminal.
+    const terminalKeys = node('div', 'learning-terminal-keys'); terminalKeys.setAttribute('role', 'toolbar'); terminalKeys.setAttribute('aria-label', '终端按键')
+    for (const [label, sequence, cursorKey] of [['Tab', '\t'], ['Esc', '\x1b'], ['Ctrl+C', '\x03'], ['Ctrl+D', '\x04'], ['↑', 'A', true], ['↓', 'B', true], ['←', 'D', true], ['→', 'C', true]]) {
+      const key = button(label, () => {
+        const entry = terminals[session.state.lessonId]
+        if (entry) entry.link.write(cursorKey ? (entry.view?.applicationCursor() ? '\x1bO' : '\x1b[') + sequence : sequence)
+      }, 'learning-terminal-key')
+      key.addEventListener('pointerdown', event => event.preventDefault())
+      terminalKeys.append(key)
+    }
+    terminalPane.append(terminalHosts, terminalOverlay, terminalKeys); editorPane.append(terminalPane)
     const consolePane = node('section', 'learning-console')
     // Drag bar above the terminal. The chosen height is a per-browser convenience; double-click resets it.
     const CONSOLE_KEY = 'noimpty-code-console-height'
@@ -436,7 +560,7 @@
     try { const saved = Number(window.localStorage.getItem(CONSOLE_KEY)); if (saved >= 120) consolePane.style.flexBasis = Math.min(saved, 900) + 'px' } catch (_) {}
     const tabs = node('div', 'learning-console-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', '输入与运行结果')
     const panels = {}; const tabButtons = {}; let currentPanel = 'input'
-    for (const [id, label] of [['input', '输入'], ['output', '终端'], ['history', '记录']]) {
+    for (const [id, label] of [['input', '输入'], ['output', '输出'], ['history', '记录']]) {
       const tab = button(label, () => setPanel(id), 'learning-console-tab'); tab.setAttribute('role', 'tab'); tab.id = `learning-tab-${id}`; tab.setAttribute('aria-controls', `learning-panel-${id}`)
       const panel = node('div', 'learning-console-panel'); panel.dataset.panel = id; panel.id = `learning-panel-${id}`; panel.setAttribute('role', 'tabpanel'); panel.setAttribute('aria-labelledby', tab.id)
       panels[id] = panel; tabButtons[id] = tab; tabs.append(tab)
@@ -461,7 +585,8 @@
     consolePane.append(tabs, ...Object.values(panels))
     const statusbar = node('div', 'learning-statusbar')
     const connectivity = node('span', 'learning-connectivity'); const cursor = node('span', 'learning-cursor', 'Ln 1, Col 1'); const saved = node('span', 'learning-save-state')
-    statusbar.append(connectivity, node('span', 'learning-shortcut', 'Ctrl / ⌘ ↵ 运行'), cursor, saved)
+    const shortcut = node('span', 'learning-shortcut', 'Ctrl / ⌘ ↵ 运行')
+    statusbar.append(connectivity, shortcut, cursor, saved)
     const status = node('p', 'learning-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite')
     const error = node('p', 'learning-error'); error.setAttribute('role', 'alert')
     const storageStatus = node('p', 'learning-storage-status'); storageStatus.setAttribute('role', 'status')
@@ -471,18 +596,107 @@
     let connectionState = window.NANALY_AGENT?.snapshot?.().connection || (window.NANALY_AGENT?.configured() ? 'connected' : 'disconnected')
     const request = (path, options) => window.NANALY_AGENT.request(path, options)
     const session = createSession({ request, storage, available: () => !!window.NANALY_AGENT?.configured(), permitted: unlocked, changed: () => render() })
+    const terminals = {}
+    const shellModes = { git: 'terminal', linux: 'terminal' }
+    try { const saved = JSON.parse(window.localStorage.getItem(MODE_KEY) || '{}'); for (const id of SHELLS) if (['terminal', 'script'].includes(saved?.[id])) shellModes[id] = saved[id] } catch (_) {}
+    const mode = () => SHELLS.has(session.state.lessonId) ? shellModes[session.state.lessonId] : 'script'
+    let terminalProblem = ''
     const context = () => {
       if (!unlocked()) return null
       const state = session.state; const language = state.lessonId
-      return { kind: 'practice', lessonId: language, title: FILE_NAMES[language], problem: state.exercise?.statement || '', exercise: state.exercise, article: article ? { title: article.title, url: article.url, text: article.text.slice(0, 12000) } : null, language, code: state.code, revision: state.revision, stdin: state.stdin, tests: cleanTests(state.tests), result: state.result, diagnostics: state.checked, workspace: state.workspaces[language] || null, verified: !!state.result, pending: state.busy }
+      const terminal = mode() === 'terminal' ? { mode: 'terminal', terminal: { state: terminals[language]?.link.state() || 'idle', screen: clip(terminals[language]?.view?.transcript(60) || '', 6000) } } : {}
+      return { kind: 'practice', lessonId: language, title: FILE_NAMES[language], problem: state.exercise?.statement || '', exercise: state.exercise, article: article ? { title: article.title, url: article.url, text: article.text.slice(0, 12000) } : null, language, code: state.code, revision: state.revision, stdin: state.stdin, tests: cleanTests(state.tests), result: state.result, diagnostics: state.checked, workspace: state.workspaces[language] || null, verified: !!state.result, pending: state.busy, ...terminal }
     }
     let published = ''
     const publish = () => { if (unlocked()) { try { const data = context(); const signature = JSON.stringify(data); if (signature !== published) { published = signature; window.NANALY_AGENT?.setContext?.(data) } } catch (_) {} } }
+    // Terminal output refreshes what 请教娜娜莉 sees, at most every two seconds.
+    let publishTimer = null
+    const publishSoon = () => { if (!publishTimer) publishTimer = window.setTimeout(() => { publishTimer = null; if (!lifetime.signal.aborted) publish() }, 2000) }
+    const terminalFor = language => {
+      if (terminals[language]) return terminals[language]
+      const host = node('div', 'learning-terminal-host'); host.hidden = true; terminalHosts.append(host)
+      const entry = { language, host, view: null, loading: null, greeted: false, resume: false }
+      entry.link = createTerminalLink({
+        language, request, WebSocketImpl: window.WebSocket,
+        socketURL: path => window.NANALY_AGENT.socketURL(path),
+        size: () => entry.view?.size() || { cols: 80, rows: 24 },
+        workspace: () => session.state.workspaces[language],
+        onOutput: data => { entry.view?.write(data); publishSoon() },
+        onEvent: event => terminalEvent(entry, event)
+      })
+      terminals[language] = entry
+      return entry
+    }
+    const terminalEvent = (entry, event) => {
+      const view = entry.view
+      if (event.type === 'status') view?.notice(`正在打开 ${LANGUAGE_NAMES[entry.language]} 终端…`)
+      else if (event.type === 'ready') {
+        session.adoptWorkspace(entry.language, event); entry.resume = false
+        if (!entry.greeted) { entry.greeted = true; view?.notice('nano / vim 编辑文件 · ↑ 翻历史 · Tab 补全 · 关闭页面会自动保存') }
+        if (session.state.lessonId === entry.language && mode() === 'terminal') view?.focus()
+      } else if (event.type === 'saved') {
+        session.adoptWorkspace(entry.language, event)
+        view?.notice(event.message || '终端已保存并关闭。')
+        for (const warning of Array.isArray(event.warnings) ? event.warnings : []) view?.notice(String(warning), 'warn')
+        if (!entry.resume) view?.notice('按任意键重新打开终端。')
+      } else if (event.type === 'error') { view?.notice(event.message, 'error'); view?.notice('按任意键重试。') }
+      else if (event.type === 'lost') view?.notice('与后端的连接断开了，已完成的改动由后端保存。按任意键重新连接。', 'warn')
+      render()
+    }
+    // Shows the terminal for the current language and connects it: on first sight, when coming
+    // back to it, or when asked. A terminal that closed on its own waits for a key instead.
+    const openTerminal = async (force = false) => {
+      const language = session.state.lessonId
+      if (!SHELLS.has(language) || mode() !== 'terminal' || lifetime.signal.aborted) return
+      const entry = terminalFor(language)
+      for (const other of Object.values(terminals)) other.host.hidden = other !== entry
+      try {
+        entry.loading ||= loadTerminalBundle().then(bundle => {
+          if (lifetime.signal.aborted) return null
+          entry.view = bundle.create(entry.host, { theme: root.dataset.editorTheme, onData: data => entry.link.write(data), onResize: (cols, rows) => entry.link.resize(cols, rows) })
+          return entry.view
+        })
+        await entry.loading
+        terminalProblem = ''
+      } catch (error) { entry.loading = null; terminalProblem = error.message; render(); return }
+      if (!entry.view || session.state.lessonId !== language || mode() !== 'terminal') return
+      entry.view.fit(); entry.view.focus()
+      if (window.NANALY_AGENT?.configured() && (force || entry.link.state() === 'idle' || (entry.resume && entry.link.state() === 'closed'))) void entry.link.connect()
+      render()
+    }
+    const closeTerminal = language => {
+      const entry = terminals[language]
+      if (!entry?.link.active()) return Promise.resolve(null)
+      entry.resume = true
+      return entry.link.end()
+    }
+    // A script run and the terminal share the workspace; the terminal saves and closes first.
+    const beforeScript = async () => {
+      const language = session.state.lessonId
+      if (terminals[language]?.link.active()) { session.note('正在保存终端里的改动…'); await closeTerminal(language) }
+    }
+    const applyMode = () => {
+      const current = mode()
+      root.dataset.mode = current
+      for (const [id, item] of Object.entries(modeButtons)) item.setAttribute('aria-pressed', String(id === current))
+      // Only the terminal on screen stays open; the others save and close.
+      for (const [language, entry] of Object.entries(terminals)) if ((language !== session.state.lessonId || current !== 'terminal') && entry.link.active()) void closeTerminal(language)
+      if (current === 'terminal') void openTerminal()
+      render()
+    }
+    const setMode = next => {
+      const language = session.state.lessonId
+      if (!SHELLS.has(language) || shellModes[language] === next) return
+      shellModes[language] = next
+      try { window.localStorage.setItem(MODE_KEY, JSON.stringify(shellModes)) } catch (_) {}
+      applyMode()
+      if (next === 'script') focusEditor()
+    }
     const setPanel = id => { currentPanel = id; for (const key of Object.keys(panels)) { panels[key].hidden = key !== id; tabButtons[key].setAttribute('aria-selected', String(key === id)); tabButtons[key].tabIndex = key === id ? 0 : -1 } }
     const focusEditor = () => adapter ? adapter.focus() : fallback.focus()
     const syncEditor = () => { const state = session.state; lastMarked = null; if (adapter) { adapter.setLanguage(state.lessonId); adapter.setValue(state.code) } fallback.value = state.code; stdin.value = state.stdin; select.value = state.lessonId }
     const loadPractice = exercise => { const result = session.loadPractice(exercise); syncEditor(); render(); return result }
-    const run = () => { window.clearTimeout(timer); setPanel('output'); session.run() }
+    const run = async () => { window.clearTimeout(timer); setPanel('output'); await beforeScript(); session.run() }
     const jump = diagnostic => {
       if (!diagnostic.line) return
       if (adapter) return adapter.jump(diagnostic)
@@ -510,7 +724,18 @@
       saved.textContent = state.persist ? (state.storageError ? '保存异常' : '草稿已保存') : '临时草稿'
       select.disabled = state.busy; select.value = state.lessonId
       runButton.disabled = state.busy || !connected || !state.code.trim(); runButton.textContent = state.restoring && state.busy ? '恢复环境…' : state.busy ? '运行中…' : ['git', 'linux'].includes(state.lessonId) ? '▶ 执行脚本' : '▶ 运行'
-      stopButton.hidden = !state.busy && !state.checking
+      const terminalMode = mode() === 'terminal'
+      const linkState = terminals[state.lessonId]?.link.state() || 'idle'
+      root.dataset.mode = mode(); modeSwitch.hidden = !SHELLS.has(state.lessonId)
+      filename.hidden = terminalMode; runButton.hidden = terminalMode
+      stopButton.hidden = terminalMode || (!state.busy && !state.checking)
+      for (const item of [checkButton, downloadButton, clearButton, autoLabel]) item.hidden = terminalMode
+      terminalState.hidden = !terminalMode; terminalState.dataset.state = connected ? linkState : 'offline'
+      terminalState.textContent = !connected ? '未连接后端' : terminalProblem ? '终端组件没加载成功' : { idle: '准备中…', connecting: '正在打开…', open: '终端已连接', closing: '正在保存…', closed: '已关闭' }[linkState]
+      reopenButton.hidden = !terminalMode || !connected || linkState !== 'closed'
+      terminalOverlay.hidden = !terminalMode || (connected && !terminalProblem)
+      overlayText.textContent = terminalProblem || '连接后端后就能使用终端。'
+      shortcut.textContent = terminalMode ? 'exit 或关闭页面都会自动保存' : 'Ctrl / ⌘ ↵ 运行'; cursor.hidden = terminalMode
       clearButton.disabled = state.busy; checkButton.disabled = state.busy || state.checking || !connected || !state.code.trim() || !CHECKABLE.has(state.lessonId)
       resetButton.hidden = !STATEFUL.has(state.lessonId); resetButton.disabled = state.busy || !connected
       autoCheck.checked = state.autoCheck; autoCheck.disabled = !CHECKABLE.has(state.lessonId); persist.checked = state.persist
@@ -574,7 +799,7 @@
     fallback.addEventListener('input', () => { session.edit({ code: fallback.value }); scheduleCheck() })
     fallback.addEventListener('keydown', event => { if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); run() } })
     stdin.addEventListener('input', () => session.edit({ stdin: stdin.value }))
-    select.addEventListener('change', () => { window.clearTimeout(timer); session.select(select.value); syncEditor(); focusEditor() })
+    select.addEventListener('change', () => { window.clearTimeout(timer); session.select(select.value); syncEditor(); applyMode(); if (mode() !== 'terminal') focusEditor() })
     autoCheck.addEventListener('change', () => { window.clearTimeout(timer); lastAutoRevision = null; session.setAutoCheck(autoCheck.checked); if (autoCheck.checked) scheduleCheck() })
     persist.addEventListener('change', () => session.persistence(persist.checked))
     root.addEventListener('keydown', event => { if (event.key === 'Escape' && more.open) { more.open = false; more.querySelector('summary').focus() } })
@@ -587,15 +812,23 @@
       const sync = connected && !wasConnected
       connectionState = next; wasConnected = connected
       if (changed) render()
-      if (!connected && changed) session.invalidateWorkspaces()
-      if (sync) { session.restoreWorkspaces(); session.syncHistory() }
+      if (!connected && changed) {
+        session.invalidateWorkspaces()
+        for (const entry of Object.values(terminals)) if (entry.link.active()) { entry.link.dispose(); entry.resume = true }
+      }
+      if (sync) { session.restoreWorkspaces(); session.syncHistory(); void openTerminal() }
     }
     const unsubscribe = window.NANALY_AGENT?.subscribe?.(connectionChanged)
     window.addEventListener('nanaly:agent-configured', connectionChanged, { signal: lifetime.signal })
     // Opened next to an article: start in the language the article teaches.
     if (article?.language && LANGUAGE_NAMES[article.language] && session.state.lessonId !== article.language) session.select(article.language)
-    syncEditor(); setPanel('input'); render(); connectionChanged()
-    return { session, context, loadPractice, dispose: () => { window.clearTimeout(timer); lifetime.abort(); unsubscribe?.(); session.dispose(); adapter?.destroy(); root.remove(); try { window.NANALY_AGENT?.setContext?.(null) } catch (_) {} } }
+    syncEditor(); setPanel('input'); applyMode(); connectionChanged()
+    return { session, context, loadPractice, beforeScript, dispose: () => {
+      window.clearTimeout(timer); window.clearTimeout(publishTimer); lifetime.abort(); unsubscribe?.()
+      // Closing the socket is enough: the server saves the workspace when the connection ends.
+      for (const entry of Object.values(terminals)) { entry.link.dispose(); entry.view?.dispose() }
+      session.dispose(); adapter?.destroy(); root.remove(); try { window.NANALY_AGENT?.setContext?.(null) } catch (_) {}
+    } }
   }
 
   // The practice language an article teaches: its category first (Git posts are full of bash
@@ -650,7 +883,7 @@
     article.before(launch)
   }
 
-  window.NOIMPTY_LEARNING = Object.freeze({ createSession, lessons: LESSONS, mount, articleLanguage, context: () => unlocked() ? mounted?.context() || null : null })
+  window.NOIMPTY_LEARNING = Object.freeze({ createSession, createTerminalLink, lessons: LESSONS, mount, articleLanguage, context: () => unlocked() ? mounted?.context() || null : null })
   window.LEARNING_LAB = Object.freeze({
     context: () => unlocked() ? mounted?.context() || null : null,
     loadPractice: exercise => { if (!unlocked() || !mounted) throw new Error('请先解锁并打开练习页面，再载入练习。'); return mounted.loadPractice(exercise) },
@@ -661,7 +894,7 @@
       if (session.state.busy) throw new Error('当前练习正在执行，请等待完成。')
       const cancel = () => session.cancel()
       signal?.addEventListener('abort', cancel, { once: true })
-      try { const result = await session.run('run', session.state.tests.length > 0); signal?.throwIfAborted(); if (!result) throw new Error(session.state.error || '本次执行未返回可验证结果。'); return result }
+      try { await mounted.beforeScript(); signal?.throwIfAborted(); const result = await session.run('run', session.state.tests.length > 0); signal?.throwIfAborted(); if (!result) throw new Error(session.state.error || '本次执行未返回可验证结果。'); return result }
       finally { signal?.removeEventListener('abort', cancel) }
     }
   })

@@ -1178,6 +1178,9 @@ inject:
     - <script src="/js/nanaly-agent-ui.js"></script>
     - <script src="/js/learning-editor.js"></script>
     - <script src="/js/learning-lab.js"></script>
+    # xterm.js for the code studio terminal. text/plain: not fetched or run here; learning-lab.js
+    # loads it on first use from this tag's src, which carries the content fingerprint.
+    - <script type="text/plain" id="learning-terminal-src" src="/js/learning-terminal.js"></script>
     - <script src="/js/schedule.js"></script>
     - <script src="/js/site-clock.js"></script>
     - <script src="/js/mao-controls.js"></script>

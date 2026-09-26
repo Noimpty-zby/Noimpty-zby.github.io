@@ -22,6 +22,14 @@ RUN GOCACHE=/opt/go-cache CGO_ENABLED=0 GOTOOLCHAIN=local GOPROXY=off go build -
 ENV PATH=/opt/py/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 OMP_NUM_THREADS=1
 RUN groupadd --gid 10001 learner && useradd --uid 10001 --gid 10001 --home-dir /work learner
+# Interactive terminal for Linux and Git: editors and Tab completion. Its own layer, so the
+# PyTorch layer above stays cached. HOME is the Git workspace itself, so the dotfiles that
+# less, vim and python leave there are ignored instead of showing up as untracked files.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nano vim bash-completion \
+    && rm -rf /var/lib/apt/lists/* \
+    && printf '%s\n' .lesshst .viminfo .python_history .wget-hsts > /etc/gitignore-practice \
+    && git config --system core.excludesFile /etc/gitignore-practice
 COPY check-limits.py cleanup.py start-mysql.py restore-mysql.py shell-session.py py-check.py /opt/nanaly/
 USER 10001:10001
 WORKDIR /work

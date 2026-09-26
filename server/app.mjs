@@ -2,9 +2,10 @@ import http from 'node:http';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { ApiError, invariant } from './lib/errors.mjs';
 import { validateRun, languages } from './lib/validation.mjs';
+import { refuse, upgrade } from './lib/websocket.mjs';
 
 const digest = text => createHash('sha256').update(text).digest();
-export function createApp({ store, runner, token, automationToken = null, origins = [], now = Date.now, build = null }) {
+export function createApp({ store, runner, terminals = null, token, automationToken = null, origins = [], now = Date.now, build = null }) {
   const usable = value => typeof value === 'string' && value.length >= 24 && value.length <= 1024 && !value.startsWith('REPLACE_') && !/[\r\n]/.test(value);
   invariant(usable(token), 500, 'TOKEN_REQUIRED', '请配置至少 24 字符的随机访问令牌。');
   invariant(automationToken === null || (usable(automationToken) && automationToken !== token), 500, 'AUTOMATION_TOKEN_INVALID', '后台令牌须为另一串至少 24 字符的随机值。');
@@ -19,6 +20,16 @@ export function createApp({ store, runner, token, automationToken = null, origin
   const json = (res, status, value) => {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(value));
+  };
+  // A reverse proxy shares one socket address across clients. Keep public probes,
+  // failed authentication, and authenticated operations in separate budgets so
+  // an unauthenticated caller cannot lock the owner out. Forwarded IPs are untrusted.
+  const budget = req => {
+    const key = req.socket.remoteAddress || 'local', stamp = now();
+    let rate = rates.get(key);
+    if (!rate || stamp - rate.since > 60000) { rate = { since: stamp, failed: 0, authenticated: 0, health: 0 }; rates.set(key, rate); }
+    if (rates.size > 1000) for (const [ip, record] of rates) if (stamp - record.since > 60000) rates.delete(ip);
+    return rate;
   };
   const body = req => new Promise((resolve, reject) => {
     invariant((req.headers['content-type'] || '').split(';')[0].trim() === 'application/json', 415, 'JSON_REQUIRED', '请使用 application/json。');
@@ -50,17 +61,11 @@ export function createApp({ store, runner, token, automationToken = null, origin
         res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
         res.setHeader('Access-Control-Max-Age', '600'); res.writeHead(204); res.end(); return;
       }
-      const key = req.socket.remoteAddress || 'local', stamp = now();
-      let rate = rates.get(key);
-      if (!rate || stamp - rate.since > 60000) { rate = { since: stamp, failed: 0, authenticated: 0, health: 0 }; rates.set(key, rate); }
-      if (rates.size > 1000) for (const [ip, record] of rates) if (stamp - record.since > 60000) rates.delete(ip);
-      // A reverse proxy shares one socket address across clients. Keep public probes,
-      // failed authentication, and authenticated operations in separate budgets so
-      // an unauthenticated caller cannot lock the owner out. Forwarded IPs are untrusted.
+      const rate = budget(req);
       if (req.method === 'GET' && url.pathname === '/api/health') {
         invariant(++rate.health <= 180, 429, 'RATE_LIMIT', '请求过于频繁，请稍后重试。');
         const runnerState = await runner.health();
-        json(res, 200, { ok: true, version: 1, build, runner: runnerState, capabilities: { state: true, history: true, workspaces: true, languages, runnerReady: runnerState.ready }, recovered: store.recovered }); return;
+        json(res, 200, { ok: true, version: 1, build, runner: runnerState, capabilities: { state: true, history: true, workspaces: true, terminal: !!terminals, languages, runnerReady: runnerState.ready }, recovered: store.recovered }); return;
       }
       const presented = digest(req.headers.authorization || '');
       const owner = timingSafeEqual(expected, presented);
@@ -97,6 +102,10 @@ export function createApp({ store, runner, token, automationToken = null, origin
           json(res, 200, result); return;
         } finally { req.off('aborted', abort); res.off('close', abort); }
       }
+      if (url.pathname === '/api/terminal/ticket' && req.method === 'POST') {
+        invariant(terminals, 503, 'TERMINAL_UNAVAILABLE', '后端没有启用终端。');
+        json(res, 200, terminals.issue(await body(req))); return;
+      }
       if (url.pathname === '/api/runs' && req.method === 'GET') {
         const limit = Number(url.searchParams.get('limit') || 50);
         invariant(Number.isInteger(limit) && limit >= 1 && limit <= 50, 400, 'INVALID_LIMIT', '历史条数必须为 1–50。');
@@ -119,6 +128,19 @@ export function createApp({ store, runner, token, automationToken = null, origin
       if (error instanceof ApiError) json(res, error.status, { error: { code: error.code, message: error.message }, ...error.extra });
       else json(res, 500, { error: { code: 'INTERNAL_ERROR', message: '后端暂时无法完成请求；请稍后重试。' } });
     }
+  });
+  // Browsers cannot put the token on a WebSocket, so the socket accepts only a ticket
+  // issued moments earlier by an authenticated POST /api/terminal/ticket.
+  server.on('upgrade', (req, socket, head) => {
+    socket.on('error', () => socket.destroy());
+    const url = new URL(req.url, 'http://localhost'), origin = req.headers.origin, rate = budget(req);
+    if (url.pathname !== '/api/terminal' || !terminals) { refuse(socket, 404, 'Not Found'); return; }
+    if (origin && !allowed.has(origin)) { refuse(socket, 403, 'Forbidden'); return; }
+    const claim = terminals.claim(url.searchParams.get('ticket'));
+    if (!claim) { refuse(socket, ++rate.failed > 12 ? 429 : 401, 'Unauthorized'); return; }
+    if (++rate.authenticated > 180) { refuse(socket, 429, 'Too Many Requests'); return; }
+    const ws = upgrade(req, socket, head);
+    if (ws) terminals.attach(ws, claim);
   });
   server.requestTimeout = 15000; server.headersTimeout = 10000; server.keepAliveTimeout = 5000;
   server.maxRequestsPerSocket = 100;

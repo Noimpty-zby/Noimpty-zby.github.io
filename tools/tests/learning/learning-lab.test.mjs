@@ -7,7 +7,7 @@ const boot = () => {
   const listeners = []
   const document = { readyState: 'loading', addEventListener: (name, fn) => listeners.push({ name, fn }) }
   const window = { addEventListener: (name, fn) => listeners.push({ name, fn }) }
-  vm.runInNewContext(script, { window, document, AbortController, DOMException, URL, console })
+  vm.runInNewContext(script, { window, document, AbortController, DOMException, URL, console, setTimeout, clearTimeout })
   return window.NOIMPTY_LEARNING
 }
 const api = boot()
@@ -405,6 +405,119 @@ await check('a lost reset response refreshes the workspace list before the next 
   assert.equal(await session.reset(), false)
   assert.equal((await session.run()).status, 'accepted')
   assert.equal(calls.find(call => call.path === '/api/run').body.workspaceId, 'reset-created-workspace')
+})
+
+// Terminal link: a scripted stand-in for the browser WebSocket and the ticket endpoint.
+class FakeSocket {
+  constructor (url) { this.url = url; this.sent = []; this.readyState = 0; FakeSocket.all.push(this) }
+  send (data) { if (this.readyState !== 1) throw new Error('socket not open'); this.sent.push(JSON.parse(data)) }
+  close () { if (this.readyState === 3) return; this.readyState = 3; this.onclose?.({ code: 1000 }) }
+  open () { this.readyState = 1; this.onopen?.() }
+  message (value) { this.onmessage?.({ data: JSON.stringify(value) }) }
+  output (text) { this.onmessage?.({ data: new TextEncoder().encode(text).buffer }) }
+}
+FakeSocket.all = []
+const terminalSetup = ({ ticket = async () => ({ ticket: 'a'.repeat(48), expiresIn: 30 }), workspace = null } = {}) => {
+  const requests = [], events = [], output = []
+  const link = api.createTerminalLink({
+    language: 'linux', WebSocketImpl: FakeSocket, size: () => ({ cols: 90, rows: 25 }), workspace: () => workspace,
+    request: async (path, options) => { requests.push({ path, ...options }); return ticket(options) },
+    socketURL: path => 'wss://api.example' + path,
+    onOutput: bytes => output.push(new TextDecoder().decode(bytes)),
+    onEvent: event => events.push(event)
+  })
+  return { link, requests, events, output, socket: () => FakeSocket.all.at(-1) }
+}
+const tick = () => new Promise(resolve => setTimeout(resolve, 0))
+// Values built inside the script's own context have other prototypes; compare their data.
+const same = (actual, expected, message) => assert.deepEqual(JSON.parse(JSON.stringify(actual)), expected, message)
+
+await check('terminal opens with a one-time ticket, holds early keys until ready and relays output', async () => {
+  const app = terminalSetup({ workspace: { id: 'ws-linux', revision: 3 } })
+  const before = FakeSocket.all.length
+  const connecting = app.link.connect()
+  app.link.write('l')
+  await connecting
+  same(app.requests, [{ path: '/api/terminal/ticket', method: 'POST', body: { language: 'linux', workspaceId: 'ws-linux', cols: 90, rows: 25 } }])
+  assert.equal(FakeSocket.all.length, before + 1)
+  assert.equal(app.socket().url, 'wss://api.example/api/terminal?ticket=' + 'a'.repeat(48))
+  app.link.write('s\r')
+  app.socket().open()
+  same(app.socket().sent, [], 'nothing is sent before the server says ready')
+  app.socket().message({ type: 'ready', workspaceId: 'ws-linux', workspaceRevision: 3 })
+  assert.equal(app.link.state(), 'open')
+  same(app.socket().sent, [{ type: 'input', data: 'ls\r' }])
+  app.socket().output('file.txt\r\n')
+  same(app.output, ['file.txt\r\n'])
+  app.link.resize(120, 40)
+  same(app.socket().sent.at(-1), { type: 'resize', cols: 120, rows: 40 })
+})
+
+await check('ending the terminal waits for the server to confirm the save', async () => {
+  const app = terminalSetup()
+  await app.link.connect(); app.socket().open(); app.socket().message({ type: 'ready', workspaceId: 'w', workspaceRevision: 0 })
+  let finished = null
+  const ending = app.link.end().then(value => { finished = value })
+  same(app.socket().sent.at(-1), { type: 'close' })
+  assert.equal(app.link.state(), 'closing')
+  await tick(); assert.equal(finished, null)
+  app.socket().message({ type: 'saved', committed: true, workspaceId: 'w', workspaceRevision: 1, reason: 'closed' })
+  app.socket().close()
+  await ending
+  assert.equal(finished.workspaceRevision, 1)
+  assert.equal(app.link.state(), 'closed')
+  assert.ok(!app.events.some(event => event.type === 'lost'))
+})
+
+await check('a dropped connection is reported, and the next key reconnects with a new ticket', async () => {
+  const app = terminalSetup()
+  await app.link.connect(); app.socket().open(); app.socket().message({ type: 'ready', workspaceId: 'w', workspaceRevision: 0 })
+  const first = app.socket()
+  first.close()
+  assert.ok(app.events.some(event => event.type === 'lost'))
+  app.link.write('x')
+  await tick()
+  assert.equal(app.requests.length, 2)
+  assert.notEqual(app.socket(), first)
+  same(app.socket().sent, [], 'the key that reopens the terminal is not typed into it')
+})
+
+await check('an older backend without terminals asks for an update instead of failing silently', async () => {
+  const app = terminalSetup({ ticket: async () => { throw Object.assign(new Error('接口不存在。'), { status: 404 }) } })
+  await app.link.connect()
+  assert.equal(app.link.state(), 'closed')
+  assert.match(app.events.find(event => event.type === 'error').message, /更新后端/)
+})
+
+await check('ending while the terminal is still opening never leaves a server session unconfirmed', async () => {
+  const pending = deferred()
+  const app = terminalSetup({ ticket: () => pending.promise })
+  const before = FakeSocket.all.length
+  const connecting = app.link.connect()
+  assert.equal(await app.link.end(), null, 'no socket yet: nothing to save')
+  pending.resolve({ ticket: 'b'.repeat(48) }); await connecting
+  assert.equal(FakeSocket.all.length, before, 'a late ticket opens nothing')
+
+  const later = terminalSetup()
+  await later.link.connect()
+  const ending = later.link.end()
+  later.socket().open()
+  same(later.socket().sent, [{ type: 'close' }], 'close is sent as soon as the socket opens')
+  later.socket().message({ type: 'saved', committed: true, workspaceId: 'w', workspaceRevision: 2 })
+  later.socket().close()
+  assert.equal((await ending).workspaceRevision, 2)
+})
+
+await check('the terminal hands its saved workspace revision to the next script run', async () => {
+  const { session, calls } = setup({ workspaces: () => ({ workspaces: [{ workspaceId: 'terminal-ws', language: 'linux', revision: 2, updatedAt: '2026-09-26T00:00:00Z', busy: false }] }) })
+  session.select('linux')
+  assert.equal(await session.restoreWorkspaces(), true)
+  assert.equal(session.adoptWorkspace('linux', { workspaceId: 'terminal-ws', workspaceRevision: 4 }), true)
+  assert.equal(session.adoptWorkspace('c', { workspaceId: 'x', workspaceRevision: 1 }), false)
+  session.edit({ code: 'pwd' })
+  await session.run()
+  const run = calls.find(call => call.path === '/api/run')
+  assert.equal(run.body.workspaceId, 'terminal-ws'); assert.equal(run.body.workspaceRevision, 4)
 })
 
 console.log(`\n${count} learning controller behavior checks passed`)

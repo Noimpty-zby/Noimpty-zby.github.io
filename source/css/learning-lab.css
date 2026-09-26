@@ -137,7 +137,7 @@
 .learning-select { min-width: 118px; max-width: 100%; min-height: 36px; margin: 0; padding: 6px 30px 6px 12px; border: 1px solid var(--lab-border); border-radius: 10px; background-color: var(--lab-surface); color: var(--lab-ink); font: inherit; font-size: 13px; cursor: pointer; }
 .learning-lab :is(button, summary, select, textarea, a):focus-visible, .learning-launch:focus-visible, .learning-divider:focus-visible, .learning-mobile-switch button:focus-visible { outline: 2px solid var(--lab-accent, #ba547d); outline-offset: 3px; }
 .learning-toolbar { flex: none; justify-content: space-between; gap: 12px; min-height: 53px; padding: 8px 18px; border-bottom: 1px solid var(--lab-border); background: var(--lab-surface); }
-.learning-file-name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; color: var(--lab-ink); font: 12px/1.5 'Cascadia Code', 'SFMono-Regular', Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.learning-file-name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; margin-right: auto; overflow: hidden; color: var(--lab-ink); font: 12px/1.5 'Cascadia Code', 'SFMono-Regular', Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .learning-file-name::before { content: '</>'; color: var(--lab-accent); font-size: 11px; font-weight: 700; }
 .learning-more { position: relative; flex: none; }
 .learning-more > summary { display: flex; align-items: center; justify-content: center; min-width: 34px; min-height: 34px; padding: 5px 9px; border: 1px solid var(--lab-border); border-radius: 10px; color: var(--lab-muted); font-size: 12px; list-style: none; cursor: pointer; }
@@ -149,6 +149,32 @@
 .learning-checkbox input { flex: none; width: 15px; height: 15px; margin: 0; accent-color: var(--lab-accent); }
 .learning-theme-label { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 3px 2px 8px; font-size: 12px; }
 .learning-theme-select { min-width: 91px; min-height: 32px; padding: 4px 24px 4px 8px; border: 1px solid var(--lab-border); border-radius: 8px; background: var(--lab-surface); color: var(--lab-ink); font: inherit; font-size: 12px; cursor: pointer; }
+
+/* Git and Linux: terminal or script. */
+.learning-mode-switch { display: inline-flex; flex: none; gap: 2px; padding: 3px; border: 1px solid var(--lab-border); border-radius: 11px; background: var(--lab-gutter); }
+.learning-lab .learning-mode { min-height: 28px; padding: 3px 13px; border: 0; border-radius: 8px; background: none; color: var(--lab-muted); font-weight: 500; }
+.learning-lab .learning-mode:hover:not(:disabled) { border: 0; background: var(--lab-pink); color: var(--lab-accent); }
+.learning-lab .learning-mode[aria-pressed='true'] { background: var(--lab-surface); color: var(--lab-accent); font-weight: 600; box-shadow: 0 1px 3px #8c56731f; }
+.learning-terminal-state { display: inline-flex; align-items: center; gap: 7px; min-width: 0; margin-right: auto; overflow: hidden; color: var(--lab-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.learning-terminal-state::before { flex: none; width: 7px; height: 7px; border-radius: 50%; background: #b3a2b5; content: ''; }
+.learning-terminal-state[data-state='open'] { color: var(--lab-success); }
+.learning-terminal-state[data-state='open']::before { background: #23a563; box-shadow: 0 0 0 3px #23a5631c; }
+.learning-terminal-state:is([data-state='connecting'], [data-state='closing'])::before { background: #d99822; }
+.learning-terminal-state[data-state='offline']::before { background: #ce4667; }
+
+/* The terminal takes the editor's place; its own scrollback replaces the output panel. */
+.learning-terminal-pane { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; background: var(--lab-editor); }
+.learning-lab:not([data-mode='terminal']) .learning-terminal-pane, .learning-lab[data-mode='terminal'] :is(.learning-editor-wrap, .learning-console-resizer, .learning-console) { display: none; }
+.learning-terminal-hosts { position: relative; flex: 1; min-height: 0; }
+.learning-terminal-host { position: absolute; inset: 12px 6px 8px 16px; }
+.learning-terminal-host .xterm { height: 100%; }
+/* The strip below the last whole row shows the viewport, which xterm.css paints black. */
+.learning-terminal-host .xterm-viewport { background-color: var(--lab-editor) !important; scrollbar-width: thin; scrollbar-color: var(--lab-border) transparent; }
+.learning-terminal-overlay { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; justify-items: center; gap: 14px; padding: 24px; background: var(--lab-editor); color: var(--lab-muted); text-align: center; }
+.learning-lab .learning-terminal-overlay p { margin: 0; font-size: 13px; }
+.learning-terminal-keys { display: none; flex: none; gap: 6px; padding: 7px 10px; overflow-x: auto; border-top: 1px solid var(--lab-border); background: var(--lab-gutter); scrollbar-width: none; }
+.learning-lab .learning-terminal-key { flex: none; min-width: 44px; min-height: 32px; padding: 4px 10px; font: 12px/1 'Cascadia Code', 'SFMono-Regular', Consolas, monospace; }
+@media (pointer: coarse) { .learning-lab[data-mode='terminal'] .learning-terminal-keys { display: flex; } }
 
 /* The editor owns its scrolling. CodeMirror receives the palette above. */
 .learning-editor-pane { display: flex; flex: 1 1 auto; min-width: 0; min-height: 220px; background: var(--lab-editor); }
@@ -294,6 +320,8 @@ html:is(.learning-page, .learning-is-open) :is(#noimpty-music-player, #mao-toggl
   .learning-lab .learning-connect-button { max-width: none; min-width: 126px; }
   .learning-select { min-width: 84px; max-width: 98px; padding-right: 22px; font-size: 12px; }
   .learning-file-name { max-width: 116px; }
+  .learning-lab .learning-mode { padding-right: 10px; padding-left: 10px; }
+  .learning-terminal-host { inset: 10px 4px 6px 10px; }
   .learning-lab .learning-run { min-width: 67px; }
   .learning-toolbar { gap: 6px; }
   .learning-console-tabs { gap: 15px; }

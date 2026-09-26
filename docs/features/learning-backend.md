@@ -1,6 +1,6 @@
 # 娜娜莉私有后端与隔离练习
 
-该服务为博客聊天、目标、笔记与代码小屋提供同一份私有状态；C、C++、Go、Git、Linux 和 MySQL 的代码由真实工具在独立 Docker 容器中执行。前端静态站点不保存访问令牌到仓库；运行依赖未就绪时，服务返回明确错误，不在宿主机直接执行用户代码。
+该服务为博客聊天、目标、笔记与代码小屋提供同一份私有状态；C、C++、Go、Python、Git、Linux 和 MySQL 的代码由真实工具在独立 Docker 容器中执行。前端静态站点不保存访问令牌到仓库；运行依赖未就绪时，服务返回明确错误，不在宿主机直接执行用户代码。
 
 ## 本次验证范围
 
@@ -22,7 +22,7 @@
 ## 部署条件
 
 - Linux 主机、Node.js 22 或更新版本、Docker Engine、启用 memory / pids / cpu controller 的 cgroup v2。
-- 单人使用，默认同时执行 1 个任务；每个工作容器最多 1 CPU、1 GiB 内存及 96 个进程，禁用额外 swap。编译器容器与单个测试容器可能短暂并存，建议主机至少 4 GiB 内存。
+- 单人使用，默认同时执行 1 个任务；名额被占用时新请求最多等待 20 秒（例如刚取消的检查容器还在清理），超时才返回 429 `RUNNER_BUSY`；每个工作容器最多 1 CPU、1 GiB 内存及 96 个进程，禁用额外 swap。编译器容器与单个测试容器可能短暂并存，建议主机至少 4 GiB 内存。
 - API 是需要持久磁盘和 Docker daemon 的常驻服务，不能直接部署到纯静态托管或普通无容器权限的 serverless 函数。
 - 使用专用执行主机或专用 rootless Docker daemon。Docker 本身不是抵御所有内核漏洞的绝对安全边界；不把这个单人服务开放成公共多租户 OJ。
 - rootless Docker 必须获得 cgroup v2 控制器委派。服务会检查 Docker 能力，并在容器中读取实际 memory.max / pids.max / cpu.max，限制未生效时拒绝执行。
@@ -129,7 +129,7 @@ npm run deploy:backend -- --full  # 另外强制跑一遍真实 Docker 集成测
 
 data 为最大 1 MiB 的 JSON 对象，限制深度和字段数量，不允许 prototype 污染字段。服务仅保存状态；目标是否获授权、事实/观察/推测的区别、模型工具授权和人格规则由统一智能体控制层处理。记录经验不代表模型参数已训练。
 
-执行语言为 `c / cpp / go / git / linux / mysql`；代码和单条输入最多 64 KiB；最多 10 个测试，测试合计最多 256 KiB。`revision` 是代码版本，仅用于原样返回并让前端丢弃过期诊断。`workspaceRevision` 是独立的持续工作区 CAS 版本。
+执行语言为 `c / cpp / go / python / git / linux / mysql`；测试用例适用于 c / cpp / go / python；代码和单条输入最多 64 KiB；最多 10 个测试，测试合计最多 256 KiB。`revision` 是代码版本，仅用于原样返回并让前端丢弃过期诊断。`workspaceRevision` 是独立的持续工作区 CAS 版本。
 
 运行结果包含：
 
@@ -157,7 +157,9 @@ status 可为 accepted、wrong_answer、compile_error、runtime_error、timeout�
 
 - 容器无网络、无端口发布、无 capability、禁止新增权限，以 UID/GID 10001 运行，根文件系统只读，保持 Docker 默认 seccomp。
 - 只挂载本次代码与已有快照的只读输入目录；不挂载 Docker socket、私有状态目录或宿主可写目录。
-- 工作目录为 256 MiB tmpfs，临时目录为 128 MiB tmpfs；每条命令输出上限 128 KiB，快照上限 32 MiB。Git/Linux 每次脚本最多执行 30 秒，算法每个用例 3 秒，C/C++编译 30 秒、Go编译 45 秒。容器还有 150 秒固定生存期限。
+- 工作目录为 256 MiB tmpfs，临时目录为 128 MiB tmpfs；每条命令输出上限 128 KiB，快照上限 32 MiB。Git/Linux 每次脚本最多执行 30 秒，算法每个用例 3 秒（Python 15 秒，`import torch` 本身就要几秒），C/C++编译 30 秒、Go编译 45 秒。容器还有 150 秒固定生存期限。
+- 执行镜像另装 `/opt/py` 虚拟环境（NumPy、CPU 版 PyTorch，已在 PATH 最前，Linux 练习里的 `python3` 也是它），设 `OMP_NUM_THREADS=1`。Python 先由 `py-check.py` 编译检查，错误按 gcc 的 `文件:行:列` 格式输出；运行时的 traceback 取 `main.py` 最内层一帧作为诊断行。
+- 镜像构建时预编译常用 Go 标准库到 `/opt/go-cache`，每次编译前复制进可写的 `/tmp/go-cache`（约 31 MB）；否则每次运行都要从空缓存重编标准库，服务器上约 20 秒。
 - C/C++/Go 先编译，再为每个测试新建容器。用例之间不共享可写文件系统或进程。超时或输出超限时杀死容器，并在 finally 中删除容器。
 - Git/Linux 每次执行独立 Bash 脚本；同一工作区会恢复上次保存的当前目录、导出的环境变量、umask、别名、函数及 `/work` 下的文件和权限。普通未导出变量、后台进程及 `/tmp` 文件不跨次保留；工作目录已不存在时回到 `/work` 并给出提示。后台残留进程清理后才生成快照。结果中的 `cwd` 为本次结束目录，`exitCode` 为实际脚本退出码；Git 状态或文件列表通过 workspaceSummary 返回。
 - Linux 工具包括 `ncal` / `cal`、文本过滤、压缩解压、`jq`、`bc`、进程/文件查看及 `man`。Linux 与 Git 工作区均提供默认 Git 提交身份，可在新建子仓库中直接提交，并可用 `git config` 修改。`curl` / `wget` / `ssh` 已安装，但执行容器仍无外网；没有 root / sudo、交互式 PTY 或长期后台服务，不能将此脚本运行区当成完整远程主机。

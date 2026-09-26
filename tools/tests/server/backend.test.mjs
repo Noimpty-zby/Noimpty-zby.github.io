@@ -263,3 +263,13 @@ test('workspace discovery is authenticated, ordered and independent of run histo
   await store.deleteWorkspace(old.workspaceId);
   assert.equal(store.listWorkspaces().length, 2);
 });
+test('diagnostics keep notes informational and parse python syntax errors and tracebacks', async () => {
+  const { diagnostics, pythonTraceback } = await import('../../../server/lib/validation.mjs');
+  assert.deepEqual(diagnostics("/input/main.c:3:18: error: 'x' undeclared\n/input/main.c:3:18: note: each undeclared identifier is reported only once\n/input/main.c:5:7: warning: unused variable 'y'").map(d => d.severity), ['error', 'info', 'warning']);
+  assert.deepEqual(diagnostics("/input/main.py:3:1: error: IndentationError: expected an indented block after 'if' statement on line 2"),
+    [{ severity: 'error', line: 3, column: 1, message: "error: IndentationError: expected an indented block after 'if' statement on line 2" }]);
+  assert.deepEqual(pythonTraceback('Traceback (most recent call last):\n  File "/input/main.py", line 7, in <module>\n    main()\n  File "/input/main.py", line 4, in main\n    return xs[9]\nIndexError: list index out of range\n'),
+    [{ severity: 'error', line: 4, message: 'IndexError: list index out of range' }]);
+  assert.deepEqual(pythonTraceback('Traceback (most recent call last):\n  File "/opt/py/lib/x.py", line 1\nKeyError: 1'), []);
+  assert.equal(validateRun({ language: 'python', code: 'print(1)', tests: [{ input: '', expectedOutput: '1' }] }).language, 'python');
+});

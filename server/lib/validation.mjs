@@ -1,5 +1,7 @@
 import { invariant } from './errors.mjs';
-export const languages = ['c', 'cpp', 'go', 'git', 'linux', 'mysql'];
+export const languages = ['c', 'cpp', 'go', 'python', 'git', 'linux', 'mysql'];
+// Languages whose code runs once per test case in a fresh container.
+export const caseLanguages = ['c', 'cpp', 'go', 'python'];
 export function validateRun(body) {
   invariant(body && typeof body === 'object' && !Array.isArray(body), 400, 'INVALID_REQUEST', '请求必须是对象。');
   invariant(languages.includes(body.language), 400, 'INVALID_LANGUAGE', '不支持此语言。');
@@ -15,7 +17,7 @@ export function validateRun(body) {
   }
   const tests = body.tests ?? [];
   invariant(Array.isArray(tests) && tests.length <= 10, 400, 'INVALID_TESTS', '最多支持 10 个测试用例。');
-  invariant(!tests.length || ['c', 'cpp', 'go'].includes(body.language), 400, 'INVALID_TESTS', '命令及 SQL 不支持算法测试用例。');
+  invariant(!tests.length || caseLanguages.includes(body.language), 400, 'INVALID_TESTS', '命令及 SQL 不支持算法测试用例。');
   invariant(Buffer.byteLength(JSON.stringify(tests)) <= 256 * 1024, 413, 'TESTS_TOO_LARGE', '所有测试用例合计不能超过 256 KiB。');
   for (const test of tests) {
     invariant(test && typeof test.input === 'string' && Buffer.byteLength(test.input) <= 65536, 400, 'INVALID_TEST', '测试输入无效或过大。');
@@ -41,9 +43,19 @@ export function validateRun(body) {
 }
 export function diagnostics(stderr) {
   return stderr.split('\n').slice(0, 200).flatMap(line => {
-    const match = line.match(/(?:main\.(?:c|cpp|go)|main\.sh):(?:(\d+):(?:(\d+):)?| line (\d+):)\s*(.*)/);
+    const match = line.match(/(?:main\.(?:c|cpp|go|py)|main\.sh):(?:(\d+):(?:(\d+):)?| line (\d+):)\s*(.*)/);
     if (!match) return [];
-    return [{ severity: /warning:/.test(match[4]) ? 'warning' : 'error', line: Number(match[1] || match[3]), ...(match[2] ? { column: Number(match[2]) } : {}), message: match[4].slice(0, 2000) }];
+    // gcc's "note:" lines explain the error above them; marking them as errors doubles the red.
+    const severity = /^warning:/.test(match[4]) ? 'warning' : /^note:/.test(match[4]) ? 'info' : 'error';
+    return [{ severity, line: Number(match[1] || match[3]), ...(match[2] ? { column: Number(match[2]) } : {}), message: match[4].slice(0, 2000) }];
   });
+}
+// A Python traceback names the failing line as `File "/input/main.py", line N`; the innermost
+// such frame plus the final exception line become one diagnostic.
+export function pythonTraceback(stderr) {
+  const frames = [...stderr.matchAll(/File "\/input\/main\.py", line (\d+)/g)];
+  if (!frames.length) return [];
+  const message = stderr.trimEnd().split('\n').at(-1).trim();
+  return [{ severity: 'error', line: Number(frames.at(-1)[1]), message: message.slice(0, 2000) }];
 }
 export function normalizeOutput(output) { return output.replace(/\r\n/g, '\n').trimEnd(); }

@@ -170,3 +170,46 @@ test('real Docker execution, diagnostics, boundaries and persisted workspaces', 
     });
   }
 });
+
+test('real Python with NumPy/PyTorch, Python diagnostics, and the warmed Go cache', { skip: process.env.NANALY_DOCKER_TESTS !== '1', timeout: 300000 }, async t => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'nanaly-docker-'));
+  const store = await new PrivateStore(directory).init();
+  const runner = new DockerRunner(store, { image: process.env.NANALY_RUNNER_IMAGE || 'nanaly-runner:1' });
+  t.after(async () => { await runner.close(); await store.close(); await fs.rm(directory, { recursive: true, force: true }); });
+  assert.equal((await runner.health()).ready, true);
+  const run = value => runner.run(validateRun(value));
+
+  const sum = await run({ language: 'python', code: 'a, b = map(int, input().split())\nprint(a + b)\n', tests: [{ input: '2 3', expectedOutput: '5' }, { input: '-4 1', expectedOutput: '-3' }] });
+  assert.equal(sum.status, 'accepted', JSON.stringify(sum)); assert.equal(sum.tests.length, 2);
+
+  const torch = await run({ language: 'python', code: [
+    'import numpy as np, torch',
+    'x = torch.tensor([[1., 2.], [3., 4.]], requires_grad=True)',
+    'y = (x @ x).sum()',
+    'y.backward()',
+    'print(int(y.item()), x.grad.tolist(), np.arange(3).sum(), torch.get_num_threads())'
+  ].join('\n') });
+  assert.equal(torch.status, 'accepted', JSON.stringify(torch));
+  assert.equal(torch.stdout.trim(), '54 [[7.0, 11.0], [9.0, 13.0]] 3 1');
+
+  const syntax = await run({ language: 'python', code: 'x = 1\nif x:\nprint(x)\n', mode: 'check' });
+  assert.equal(syntax.status, 'compile_error'); assert.equal(syntax.diagnostics[0].line, 3);
+  assert.match(syntax.diagnostics[0].message, /IndentationError/);
+  const fine = await run({ language: 'python', code: 'print("ok")\n', mode: 'check' });
+  assert.equal(fine.status, 'checked'); assert.deepEqual(fine.diagnostics, []);
+
+  const crash = await run({ language: 'python', code: 'def pick(xs):\n    return xs[9]\n\nprint(pick([1]))\n' });
+  assert.equal(crash.status, 'runtime_error');
+  assert.deepEqual(crash.diagnostics.map(d => [d.line, d.message]), [[2, 'IndexError: list index out of range']]);
+
+  // Python and its packages are on PATH in the shell environment too.
+  const shell = await run({ language: 'linux', code: 'python3 -c "import torch, numpy; print(torch.__version__.split(\'+\')[0] != \'\')"\ntest -s /opt/go-cache/README && echo cache-ok' });
+  assert.equal(shell.stdout.trim(), 'True\ncache-ok', JSON.stringify(shell));
+
+  // A cold GOCACHE took about 20 s per run on the 2-CPU server; the warmed copy should keep it well under that.
+  const started = Date.now();
+  const go = await run({ language: 'go', code: 'package main\nimport (\n\t"bufio"\n\t"fmt"\n\t"os"\n\t"sort"\n\t"strings"\n)\nfunc main() {\n\tw := strings.Fields(bufio.NewScanner(os.Stdin).Text())\n\tsort.Strings(w)\n\tfmt.Println("go", len(w))\n}\n' });
+  const seconds = (Date.now() - started) / 1000;
+  assert.equal(go.stdout.trim(), 'go 0', JSON.stringify(go));
+  assert.ok(seconds < 12, `Go run took ${seconds}s; the warmed cache is not being used`);
+});

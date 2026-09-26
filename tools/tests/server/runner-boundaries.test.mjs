@@ -239,3 +239,59 @@ test('missing or failed shell state never overwrites the last usable workspace s
     if(metadata.startsWith('{'))assert.ok(result.warnings.includes('session warning'))
   }
 })
+
+test('a run arriving while the only slot is being released waits for it instead of failing busy',async t=>{
+  const store=await fixture(t),release=deferred()
+  let first=true
+  const docker=mockDocker(async args=>{if(args[0]==='create'&&first){first=false;await release.promise}})
+  const runner=new DockerRunner(store,{execute:docker.execute,concurrency:1})
+  const request=validateRun({language:'c',code:'int main(){}',tests:[]})
+  const running=runner.run(request)
+  for(let i=0;i<20&&!runner.active.size;i++)await new Promise(r=>setImmediate(r))
+  assert.equal(runner.active.size,1)
+  const waiting=runner.run(request)
+  await new Promise(r=>setTimeout(r,450))
+  assert.equal(runner.active.size,1,'second run must wait, not start alongside')
+  release.resolve()
+  const [a,b]=await Promise.all([running,waiting])
+  assert.equal(a.status,'accepted');assert.equal(b.status,'accepted')
+})
+
+test('waiting for a slot gives up with RUNNER_BUSY and honours cancellation',async t=>{
+  const store=await fixture(t),hold=deferred()
+  const docker=mockDocker(async args=>{if(args[0]==='create')await hold.promise})
+  const runner=new DockerRunner(store,{execute:docker.execute,concurrency:1})
+  const request=validateRun({language:'c',code:'int main(){}'})
+  const running=runner.run(request)
+  for(let i=0;i<20&&!runner.active.size;i++)await new Promise(r=>setImmediate(r))
+  await assert.rejects(runner.slot(()=>{},300),{code:'RUNNER_BUSY'})
+  const controller=new AbortController()
+  const cancelled=runner.run(request,{signal:controller.signal})
+  setTimeout(()=>controller.abort(),250)
+  await assert.rejects(cancelled,{code:'RUN_CANCELLED'})
+  hold.resolve();await running
+})
+
+test('python syntax is checked with py-check, cases run main.py directly with a longer limit, tracebacks mark the line',async t=>{
+  const store=await fixture(t)
+  const traceback='Traceback (most recent call last):\n  File "/input/main.py", line 3, in <module>\n    print(1/0)\nZeroDivisionError: division by zero\n'
+  const docker=mockDocker(async args=>{if(args.includes('/input/main.py')&&!args.includes('/opt/nanaly/py-check.py'))return {code:1,stdout:Buffer.alloc(0),stderr:Buffer.from(traceback)}})
+  const runner=new DockerRunner(store,{execute:docker.execute,concurrency:1})
+  const result=await runner.run(validateRun({language:'python',code:'import torch\nx=1\nprint(1/0)\n',tests:[{input:'',expectedOutput:'1'}]}))
+  const check=docker.calls.find(c=>c.args.includes('/opt/nanaly/py-check.py'))
+  assert.ok(check,'syntax check ran')
+  const exec=docker.calls.find(c=>c.args[0]==='exec'&&c.args.at(-1)==='/input/main.py'&&c.args.includes('python3')&&!c.args.includes('/opt/nanaly/py-check.py'))
+  assert.ok(exec,'case ran python3 /input/main.py');assert.equal(exec.options.timeout,15000)
+  assert.equal(docker.calls.some(c=>c.args.includes('/work/program')),false,'no binary export for python')
+  assert.equal(result.status,'runtime_error')
+  assert.deepEqual(result.diagnostics,[{severity:'error',line:3,message:'ZeroDivisionError: division by zero'}])
+})
+
+test('go builds seed the writable cache from the warmed image copy first',async t=>{
+  const store=await fixture(t),docker=mockDocker()
+  const runner=new DockerRunner(store,{execute:docker.execute,concurrency:1})
+  await runner.run(validateRun({language:'go',code:'package main\nfunc main(){}\n',mode:'check'}))
+  const copy=docker.calls.findIndex(c=>c.args.join(' ').endsWith('cp -r /opt/go-cache /tmp/go-cache'))
+  const build=docker.calls.findIndex(c=>c.args.includes('go')&&c.args.includes('build'))
+  assert.ok(copy>=0&&build>copy,'cache copied before go build')
+})

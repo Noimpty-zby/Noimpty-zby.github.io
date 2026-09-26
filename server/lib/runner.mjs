@@ -3,10 +3,10 @@ import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { ApiError, invariant } from './errors.mjs';
 import { processResult } from './process.mjs';
-import { diagnostics, normalizeOutput } from './validation.mjs';
+import { diagnostics, normalizeOutput, pythonTraceback } from './validation.mjs';
 
 const LIMIT = 131072, SNAPSHOT_LIMIT = 32 * 1024 * 1024;
-const ext = { c: 'c', cpp: 'cpp', go: 'go', git: 'sh', linux: 'sh', mysql: 'sql' };
+const ext = { c: 'c', cpp: 'cpp', go: 'go', python: 'py', git: 'sh', linux: 'sh', mysql: 'sql' };
 const stringResult = result => ({ ...result, stdout: result.stdout.toString('utf8'), stderr: result.stderr.toString('utf8') });
 const status = result => result.reason || (result.code === 0 ? 'accepted' : 'runtime_error');
 const dockerEnv = () => Object.fromEntries(['PATH', 'HOME', 'DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_CONFIG', 'XDG_RUNTIME_DIR'].filter(key => process.env[key]).map(key => [key, process.env[key]]));
@@ -50,6 +50,16 @@ export class DockerRunner {
       if (/^[a-f0-9-]{36}$/.test(name)) await fs.rm(path.join(this.store.directory, 'jobs', name), { recursive: true, force: true });
     }
   }
+  // Runs and checks share the slots. A run clicked right after a cancelled check waits for that
+  // container's cleanup instead of failing with RUNNER_BUSY; callers set active synchronously after.
+  async slot(notCancelled, wait = 20000) {
+    const deadline = Date.now() + wait;
+    while (this.active.size >= this.concurrency) {
+      invariant(Date.now() < deadline, 429, 'RUNNER_BUSY', '执行队列已满，请稍后重试。');
+      await new Promise(resolve => setTimeout(resolve, 200));
+      notCancelled();
+    }
+  }
   async run(request, { signal } = {}) {
     const notCancelled = () => invariant(!signal?.aborted && !this.closing, 499, 'RUN_CANCELLED', '本次执行已取消。');
     notCancelled();
@@ -57,10 +67,8 @@ export class DockerRunner {
       runId: randomUUID(), revision: request.revision, status: 'unsupported_check', stdout: '', stderr: '', diagnostics: [], tests: [],
       warnings: ['MySQL 仅在明确点击运行后由真实数据库验证；即时检查不执行 SQL。']
     };
-    invariant(this.active.size < this.concurrency, 429, 'RUNNER_BUSY', '执行队列已满，请稍后重试。');
     invariant((await this.health()).ready, 503, 'RUNNER_UNAVAILABLE', '隔离执行环境尚未就绪，请完成后端 Docker 配置。');
-    // Recheck after asynchronous health probe.
-    invariant(this.active.size < this.concurrency, 429, 'RUNNER_BUSY', '执行队列已满，请稍后重试。');
+    await this.slot(notCancelled);
     notCancelled();
     const runId = randomUUID(), name = 'nanaly-' + runId;
     const abort = () => {
@@ -122,7 +130,12 @@ export class DockerRunner {
       let compiled = { code: 0, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
       if (request.language === 'c') compiled = await exec(['gcc', '-std=c17', '-Wall', '-Wextra', '-O0', '/input/main.c', '-o', '/work/program'], null, 30000);
       if (request.language === 'cpp') compiled = await exec(['g++', '-std=c++20', '-Wall', '-Wextra', '-O0', '/input/main.cpp', '-o', '/work/program'], null, 30000);
-      if (request.language === 'go') compiled = await exec(['go', 'build', '-o', '/work/program', '/input/main.go'], null, 45000);
+      if (request.language === 'go') {
+        // Seed the writable cache from the image's warmed copy; a failed copy only means a slow, cold build.
+        await exec(['cp', '-r', '/opt/go-cache', '/tmp/go-cache'], null, 10000);
+        compiled = await exec(['go', 'build', '-o', '/work/program', '/input/main.go'], null, 45000);
+      }
+      if (request.language === 'python') compiled = await exec(['python3', '/opt/nanaly/py-check.py', '/input/main.py'], null, 10000);
       if (['git', 'linux'].includes(request.language)) compiled = await exec(['bash', '-n', '/input/main.sh']);
       result.stderr = compiled.stderr.toString('utf8'); result.diagnostics = diagnostics(result.stderr);
       if (compiled.code !== 0 || compiled.reason) {
@@ -157,12 +170,16 @@ export class DockerRunner {
           }
         } else {
           const cases = request.tests.length ? request.tests : [{ input: request.stdin }];
+          const python = request.language === 'python';
           // Export the compiler output as opaque bytes. Each case gets a fresh sandbox,
           // so one test cannot alter the next test's filesystem, processes or binary.
-          const binary = await exec(['cat', '/work/program'], null, 5000, 16 * 1024 * 1024);
-          invariant(binary.code === 0 && !binary.reason, 500, 'COMPILE_OUTPUT_FAILED', '无法读取编译结果。');
-          await fs.writeFile(path.join(directory, 'program'), binary.stdout, { mode: 0o555 });
-          await fs.chmod(path.join(directory, 'program'), 0o555);
+          // Python runs /input/main.py directly, which every case container already mounts.
+          if (!python) {
+            const binary = await exec(['cat', '/work/program'], null, 5000, 16 * 1024 * 1024);
+            invariant(binary.code === 0 && !binary.reason, 500, 'COMPILE_OUTPUT_FAILED', '无法读取编译结果。');
+            await fs.writeFile(path.join(directory, 'program'), binary.stdout, { mode: 0o555 });
+            await fs.chmod(path.join(directory, 'program'), 0o555);
+          }
           for (const [index, test] of cases.entries()) {
             notCancelled();
             const caseName = name + '-case-' + index;
@@ -177,8 +194,9 @@ export class DockerRunner {
               const caseGuard = await this.cli(['exec', caseName, 'python3', '/opt/nanaly/check-limits.py'], { timeout: 5000 });
               notCancelled();
               invariant(caseGuard.code === 0, 503, 'LIMITS_UNAVAILABLE', '测试容器资源限制未生效。');
-              executed = stringResult(await this.cli(['exec', '-i', caseName, '/input/program'], {
-                input: test.input, timeout: 3000, limit: LIMIT,
+              // `import torch` alone takes a few seconds on one CPU, so Python gets a longer per-case limit.
+              executed = stringResult(await this.cli(['exec', '-i', caseName, ...(python ? ['python3', '/input/main.py'] : ['/input/program'])], {
+                input: test.input, timeout: python ? 15000 : 3000, limit: LIMIT,
                 onLimit: () => { void this.cli(['kill', caseName], { timeout: 5000 }); }
               }));
             } finally { await this.cli(['rm', '-f', caseName], { timeout: 10000 }); this.containers.delete(caseName); }
@@ -190,6 +208,7 @@ export class DockerRunner {
           const failed = result.tests.find(test => test.status !== 'accepted');
           result.status = failed?.status || 'accepted'; result.stdout = result.tests[0]?.stdout || '';
           result.stderr += result.tests[0]?.stderr || '';
+          if (python && failed) result.diagnostics.push(...pythonTraceback(failed.stderr));
         }
       }
       notCancelled();

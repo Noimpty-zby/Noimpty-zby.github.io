@@ -95,6 +95,56 @@ test('health reports the deployed build without authentication', async t => {
   const health = await (await fetch('http://127.0.0.1:' + app.address().port + '/api/health')).json();
   assert.equal(health.build, 'abc1234'); assert.equal(health.runner.ready, true);
 });
+test('background token reads only public memories, appends events, and is refused everywhere else', async t => {
+  const { store } = await storeFixture(t);
+  const automationToken = 'automation-only-9876543210-fedcba';
+  await store.putState(0, {
+    memories: [
+      { kind: 'preference', text: 'PUBLIC_MEMORY', source: 'owner', confirmed: true, publicAllowed: true, extra: 'OMIT' },
+      { kind: 'fact', text: 'SECRET_MEMORY', confirmed: true, publicAllowed: false },
+      { kind: 'fact', text: 'STRING_FLAGS', confirmed: 'true', publicAllowed: 'true' }
+    ],
+    experiences: [{ lesson: 'PUBLIC_METHOD', evidence: 'why', confirmed: true, publicAllowed: true }, { lesson: 'SECRET_METHOD', confirmed: true }],
+    goals: [{ title: 'SECRET_GOAL' }], notes: [{ text: 'SECRET_NOTE' }], events: []
+  });
+  const runner = { busy: new Set(), health: async () => ({ ready: true }), run: async () => { throw new Error('must not run'); } };
+  const app = createApp({ store, runner, token, automationToken, now: () => 1234 });
+  app.listen(0, '127.0.0.1'); await once(app, 'listening');
+  t.after(() => { app.closeAllConnections(); app.close(); });
+  const base = 'http://127.0.0.1:' + app.address().port;
+  const as = (key, url, options = {}) => fetch(base + url, { ...options, headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' } });
+
+  const context = await as(automationToken, '/api/automation/context');
+  assert.equal(context.status, 200);
+  const text = await context.text();
+  assert.deepEqual(JSON.parse(text), { memories: [{ kind: 'preference', text: 'PUBLIC_MEMORY', source: 'owner' }], strategies: [{ lesson: 'PUBLIC_METHOD', evidence: 'why' }] });
+  for (const marker of ['SECRET_', 'STRING_FLAGS', 'OMIT']) assert.equal(text.includes(marker), false);
+
+  const added = await as(automationToken, '/api/automation/events', { method: 'POST', body: JSON.stringify({ kind: 'review', detail: 'x'.repeat(1000), status: 'returned', at: 1, source: 'forged' }) });
+  assert.equal(added.status, 200);
+  const event = store.getState().data.events.at(-1);
+  assert.equal(event.kind, 'review'); assert.equal(event.detail.length, 600); assert.equal(event.status, 'returned');
+  assert.equal(event.at, 1234); assert.equal(event.source, 'background'); assert.match(event.id, /^[0-9a-f-]{36}$/);
+  assert.equal(store.getState().revision, 2); assert.equal(store.getState().data.notes[0].text, 'SECRET_NOTE');
+  assert.equal((await as(automationToken, '/api/automation/events', { method: 'POST', body: JSON.stringify({ kind: '', status: 'returned' }) })).status, 400);
+  assert.equal((await as(automationToken, '/api/automation/events', { method: 'POST', body: JSON.stringify({ kind: 'x', status: 'Returned!' }) })).status, 400);
+
+  for (const [url, options] of [['/api/state', {}], ['/api/state', { method: 'PUT', body: JSON.stringify({ revision: 2, data: {} }) }], ['/api/runs', {}],
+    ['/api/runs', { method: 'DELETE' }], ['/api/run', { method: 'POST', body: JSON.stringify({ language: 'c', code: 'int main(){}' }) }], ['/api/workspaces', {}]]) {
+    const denied = await as(automationToken, url, options);
+    assert.equal(denied.status, 403, url); assert.equal((await denied.json()).error.code, 'SCOPE_DENIED');
+  }
+  assert.equal(store.getState().revision, 2);
+  assert.equal((await as(token, '/api/automation/context')).status, 200);
+  assert.equal((await as(token, '/api/state')).status, 200);
+  assert.equal((await as('wrong-token-0123456789-abcdefgh', '/api/automation/context')).status, 401);
+});
+test('background token must be a distinct, usable secret', () => {
+  const runner = { health: async () => ({ ready: true }) };
+  for (const automationToken of [token, 'short', 'REPLACE_' + 'x'.repeat(30)]) {
+    assert.throws(() => createApp({ store: {}, runner, token, automationToken }), { code: 'AUTOMATION_TOKEN_INVALID' });
+  }
+});
 test('failed authentication behind one proxy cannot block the owner or health probes', async t => {
   const { store } = await storeFixture(t);
   let stamp = 1000;

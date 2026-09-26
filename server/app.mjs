@@ -1,17 +1,21 @@
 import http from 'node:http';
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { ApiError, invariant } from './lib/errors.mjs';
 import { validateRun, languages } from './lib/validation.mjs';
 
 const digest = text => createHash('sha256').update(text).digest();
-export function createApp({ store, runner, token, origins = [], now = Date.now, build = null }) {
-  invariant(typeof token === 'string' && token.length >= 24 && token.length <= 1024 && !token.startsWith('REPLACE_') && !/[\r\n]/.test(token), 500, 'TOKEN_REQUIRED', '请配置至少 24 字符的随机访问令牌。');
+export function createApp({ store, runner, token, automationToken = null, origins = [], now = Date.now, build = null }) {
+  const usable = value => typeof value === 'string' && value.length >= 24 && value.length <= 1024 && !value.startsWith('REPLACE_') && !/[\r\n]/.test(value);
+  invariant(usable(token), 500, 'TOKEN_REQUIRED', '请配置至少 24 字符的随机访问令牌。');
+  invariant(automationToken === null || (usable(automationToken) && automationToken !== token), 500, 'AUTOMATION_TOKEN_INVALID', '后台令牌须为另一串至少 24 字符的随机值。');
   const allowed = new Set(origins.map(origin => {
     const url = new URL(origin);
     invariant(['http:', 'https:'].includes(url.protocol) && url.origin === origin, 500, 'INVALID_ORIGIN', 'CORS 必须填写完整 Origin（不含路径或尾部斜杠）。');
     return origin;
   }));
   const expected = digest('Bearer ' + token), rates = new Map();
+  // The background token (GitHub Actions) may only read public memories and append action events.
+  const automation = automationToken && digest('Bearer ' + automationToken);
   const json = (res, status, value) => {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(value));
@@ -58,11 +62,22 @@ export function createApp({ store, runner, token, origins = [], now = Date.now, 
         const runnerState = await runner.health();
         json(res, 200, { ok: true, version: 1, build, runner: runnerState, capabilities: { state: true, history: true, workspaces: true, languages, runnerReady: runnerState.ready }, recovered: store.recovered }); return;
       }
-      if (!timingSafeEqual(expected, digest(req.headers.authorization || ''))) {
+      const presented = digest(req.headers.authorization || '');
+      const owner = timingSafeEqual(expected, presented);
+      if (!owner && !(automation && timingSafeEqual(automation, presented))) {
         invariant(++rate.failed <= 12, 429, 'RATE_LIMIT', '请求过于频繁，请稍后重试。');
         throw new ApiError(401, 'UNAUTHORIZED', '访问令牌无效。');
       }
       invariant(++rate.authenticated <= 180, 429, 'RATE_LIMIT', '请求过于频繁，请稍后重试。');
+      if (url.pathname === '/api/automation/context' && req.method === 'GET') { json(res, 200, store.publicContext()); return; }
+      if (url.pathname === '/api/automation/events' && req.method === 'POST') {
+        const request = await body(req);
+        const field = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
+        const event = { id: randomUUID(), kind: field(request?.kind, 80), detail: field(request?.detail, 600), status: field(request?.status, 40), at: now(), source: 'background' };
+        invariant(event.kind && /^[a-z_-]+$/.test(event.status), 400, 'INVALID_EVENT', '行动记录需要 kind 和小写英文的 status。');
+        json(res, 200, { event: await store.appendEvent(event) }); return;
+      }
+      invariant(owner, 403, 'SCOPE_DENIED', '后台令牌只能读取公开记忆和写入行动记录。');
       if (url.pathname === '/api/state' && req.method === 'GET') { json(res, 200, store.getState()); return; }
       if (url.pathname === '/api/state' && req.method === 'PUT') {
         const request = await body(req); json(res, 200, await store.putState(request?.revision, request?.data)); return;

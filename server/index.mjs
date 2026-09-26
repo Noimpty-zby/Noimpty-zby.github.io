@@ -9,6 +9,8 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 let store, runner, server;
 async function main() {
   const token = process.env.NANALY_TOKEN_FILE ? (await fs.readFile(process.env.NANALY_TOKEN_FILE, 'utf8')).trim() : process.env.NANALY_TOKEN;
+  // Optional second token for GitHub Actions; a configured but unreadable file stops startup.
+  const automationToken = process.env.NANALY_AUTOMATION_TOKEN_FILE ? (await fs.readFile(process.env.NANALY_AUTOMATION_TOKEN_FILE, 'utf8')).trim() : null;
   const port = Number(process.env.PORT || 4318);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('invalid port');
   store = new PrivateStore(process.env.NANALY_DATA_DIR, { repoRoot });
@@ -16,7 +18,7 @@ async function main() {
   runner = new DockerRunner(store, { image: process.env.NANALY_RUNNER_IMAGE || 'nanaly-runner:1', concurrency: 1 });
   // Written by tools/deploy/backend.sh so /api/health shows which commit is running.
   const build = (await fs.readFile(path.join(repoRoot, 'server', 'BUILD'), 'utf8').catch(() => '')).trim();
-  server = createApp({ store, runner, token, build: /^[0-9a-f]{7,40}$/.test(build) ? build : null, origins: (process.env.NANALY_ALLOWED_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean) });
+  server = createApp({ store, runner, token, automationToken, build: /^[0-9a-f]{7,40}$/.test(build) ? build : null, origins: (process.env.NANALY_ALLOWED_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean) });
   await runner.cleanAbandoned();
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, process.env.HOST || '127.0.0.1', resolve); });
   console.log('娜娜莉私有后端已启动，端口 ' + port + '。访问令牌及私有数据不会写入日志。');

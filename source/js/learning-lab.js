@@ -9,7 +9,7 @@
   const MAX_OUTPUT = 32768
   const MAX_HISTORY = 40
   const STATEFUL = new Set(['git', 'linux', 'mysql'])
-  const CHECKABLE = new Set(['c', 'cpp', 'go', 'git', 'linux'])
+  const CHECKABLE = new Set(['c', 'cpp', 'go', 'python', 'git', 'linux'])
   const STATUS = { accepted: '通过', wrong_answer: '测试未通过', compile_error: '编译错误', runtime_error: '运行错误', timeout: '执行超时', output_limit: '输出超限', checked: '工具检查完成', unsupported_check: '此语言需要实际运行才能检查' }
   const LESSONS = [
     { id: 'c', name: 'C · 两数之和', title: '从标准输入读取两个整数', language: 'c',
@@ -21,6 +21,9 @@
     { id: 'go', name: 'Go · 输入与输出', title: '使用 fmt 读取并计算', language: 'go',
       description: '用 fmt.Fscan 从标准输入读取两个 int64 整数，输出它们的和。比较 C 与 Go 的错误处理方式。',
       code: 'package main\n\nimport (\n    "fmt"\n    "os"\n)\n\nfunc main() {\n    var a, b int64\n    if _, err := fmt.Fscan(os.Stdin, &a, &b); err != nil {\n        fmt.Fprintln(os.Stderr, err)\n        os.Exit(1)\n    }\n    fmt.Println(a + b)\n}\n', stdin: '2 3\n', tests: [{ input: '2 3\n', expectedOutput: '5\n' }, { input: '-4 7\n', expectedOutput: '3\n' }] },
+    { id: 'python', name: 'Python · 读取与计算', title: '读取两个整数并求和', language: 'python',
+      description: '用 input() 读取一行里的两个整数，输出它们的和。环境里已装好 NumPy 和 CPU 版 PyTorch，可以直接 import torch 做张量和自动求导练习。运行环境不联网，不能 pip install；第一次 import torch 要等几秒。',
+      code: 'a, b = map(int, input().split())\nprint(a + b)\n', stdin: '2 3\n', tests: [{ input: '2 3\n', expectedOutput: '5\n' }, { input: '-4 7\n', expectedOutput: '3\n' }] },
     { id: 'git', name: 'Git · 分支与提交', title: '在独立练习仓库中观察 Git', language: 'git',
       description: '每次运行都会在自己的练习目录中执行命令，仓库文件会保留。先初始化仓库并查看状态，再把编辑器中的命令改为 git add notes.txt、git commit 或 git switch。文件、当前目录和 export 变量跨次保留；每次点击会执行编辑器中的完整脚本。',
       code: 'git init\ngit config user.name "Learner"\ngit config user.email "learner@example.invalid"\nprintf "My first practice\\n" > notes.txt\ngit status --short --branch\n', stdin: '', tests: [] },
@@ -39,7 +42,7 @@
   const cleanResult = value => {
     if (!plain(value) || !Object.hasOwn(STATUS, value.status)) throw new Error('执行服务返回了无法识别的结果，请检查服务版本。')
     return { runId: clip(value.runId, 128), revision: value.revision, status: value.status, stdout: clip(value.stdout), stderr: clip(value.stderr),
-      diagnostics: Array.isArray(value.diagnostics) ? value.diagnostics.slice(0, 100).filter(plain).map(d => ({ severity: d.severity === 'warning' ? 'warning' : 'error', message: clip(d.message, 2000), line: Number.isInteger(d.line) && d.line > 0 ? d.line : null, column: Number.isInteger(d.column) && d.column > 0 ? d.column : null })) : [],
+      diagnostics: Array.isArray(value.diagnostics) ? value.diagnostics.slice(0, 100).filter(plain).map(d => ({ severity: ['warning', 'info'].includes(d.severity) ? d.severity : 'error', message: clip(d.message, 2000), line: Number.isInteger(d.line) && d.line > 0 ? d.line : null, column: Number.isInteger(d.column) && d.column > 0 ? d.column : null })) : [],
       tests: Array.isArray(value.tests) ? value.tests.slice(0, 10).filter(plain).map(test => ({ status: clip(test.status, 64), input: clip(test.input, 8192), stdout: clip(test.stdout), stderr: clip(test.stderr), ...(typeof test.expectedOutput === 'string' ? { expectedOutput: clip(test.expectedOutput, 8192) } : {}) })) : [],
       warnings: Array.isArray(value.warnings) ? value.warnings.slice(0, 10).map(item => clip(item, 2000)) : [],
       cwd: typeof value.cwd === 'string' ? clip(value.cwd, 4096) : '', exitCode: Number.isInteger(value.exitCode) ? value.exitCode : null,
@@ -74,7 +77,7 @@
   // A late run may enter history, but can never overwrite a newer editor revision.
   const createSession = ({ request, available = () => true, permitted = () => true, storage, changed = () => {} }) => {
     const cached = permitted() ? safeRead(storage) : null
-    const state = { lessonId: lessonFor(cached?.lessonId).id, revision: 0, code: '', stdin: '', tests: [], exercise: null, result: null, lastOutput: null, checked: null, history: [], backups: [], drafts: {}, workspaces: {}, restoring: false, busy: false, checking: false, error: '', notice: '', storageError: '', persist: cached?.persist !== false, autoCheck: cached?.autoCheck === true }
+    const state = { lessonId: lessonFor(cached?.lessonId).id, revision: 0, code: '', stdin: '', tests: [], exercise: null, result: null, lastOutput: null, checked: null, history: [], backups: [], drafts: {}, workspaces: {}, restoring: false, busy: false, checking: false, error: '', notice: '', storageError: '', persist: cached?.persist !== false, autoCheck: cached?.autoCheck !== false }
     let activeRun = null
     let activeCheck = null
     let activeReset = null
@@ -170,7 +173,9 @@
       return refreshed
     }
     const invalidateWorkspaces = () => { workspacesReady = false; workspaceEpoch++; activeRecovery?.controller.abort(); activeRecovery = null; state.restoring = false }
-    const run = async (mode = 'run', useTests = false) => {
+    // quiet: the automatic check while typing. Its only feedback is the editor marks, so it
+    // neither posts notices nor surfaces transient failures; an explicit run or check still does.
+    const run = async (mode = 'run', useTests = false, { quiet = false } = {}) => {
       if (closed || state.busy) return null
       try { preflight() } catch (error) { state.error = error.message; emit(); return null }
       const lesson = lessonFor(state.lessonId)
@@ -179,7 +184,8 @@
       const operation = { controller: new AbortController(), seq: ++sequence, revision: state.revision, lessonId: state.lessonId, draft: draft(), started: false }
       if (mode === 'check') { activeCheck = operation; state.checking = true }
       else { activeRun = operation; state.busy = true }
-      state.error = ''; state.notice = mode === 'check' ? '正在使用语言工具检查当前版本…' : `正在执行版本 ${operation.revision}…`; emit()
+      if (!quiet) { state.error = ''; state.notice = mode === 'check' ? '正在使用语言工具检查当前版本…' : `正在执行版本 ${operation.revision}…` }
+      emit()
       const current = () => !closed && !operation.controller.signal.aborted && (mode === 'check' ? activeCheck === operation : activeRun === operation)
       try {
         if (mode === 'run' && STATEFUL.has(lesson.language)) {
@@ -205,11 +211,12 @@
           state.notice = state.revision === operation.revision ? `版本 ${operation.revision}：${STATUS[result.status]}` : `版本 ${operation.revision} 已完成并保存到历史；当前版本 ${state.revision} 尚未运行。`
           save()
         } else if (state.revision === operation.revision && state.lessonId === operation.lessonId) {
-          state.checked = result; state.notice = result.status === 'unsupported_check' ? '此语言暂不支持独立语法检查，请明确点击运行后查看实际结果。' : '当前版本已完成工具检查；检查不代表运行或测试通过。'
+          state.checked = result
+          if (!quiet) state.notice = result.status === 'unsupported_check' ? '此语言暂不支持独立语法检查，请明确点击运行后查看实际结果。' : '当前版本已完成工具检查；检查不代表运行或测试通过。'
         }
         return result
       } catch (error) {
-        if (!current()) return null
+        if (!current() || quiet) return null
         state.error = clip(error?.message || '执行服务暂时无法连接，代码未得到可验证结果。', 2000)
         state.notice = ''
         if (mode === 'run' && operation.started && STATEFUL.has(lesson.language)) {
@@ -307,7 +314,7 @@
     }
     const setAutoCheck = enabled => { if (closed || !permitted()) return; state.autoCheck = !!enabled; if (!state.autoCheck) cancelCheck(); save(); emit() }
     const canAutoCheck = () => !closed && state.autoCheck && !!state.code.trim() && permitted() && available() && CHECKABLE.has(lessonFor(state.lessonId).language)
-    const autoCheckCurrent = () => canAutoCheck() ? run('check') : Promise.resolve(null)
+    const autoCheckCurrent = () => canAutoCheck() ? run('check', false, { quiet: true }) : Promise.resolve(null)
     const clearHistory = () => { if (!permitted()) return; state.history = []; save(); emit() }
     const syncHistory = async () => {
       if (closed || activeSync || !permitted() || !available()) return false
@@ -340,8 +347,8 @@
   let mounted = null
   let launch = null
 
-  const LANGUAGE_NAMES = { c: 'C', cpp: 'C++', go: 'Go', git: 'Git', linux: 'Bash', mysql: 'MySQL' }
-  const FILE_NAMES = { c: 'main.c', cpp: 'main.cpp', go: 'main.go', git: 'commands.sh', linux: 'script.sh', mysql: 'query.sql' }
+  const LANGUAGE_NAMES = { c: 'C', cpp: 'C++', go: 'Go', python: 'Python', git: 'Git', linux: 'Bash', mysql: 'MySQL' }
+  const FILE_NAMES = { c: 'main.c', cpp: 'main.cpp', go: 'main.go', python: 'main.py', git: 'commands.sh', linux: 'script.sh', mysql: 'query.sql' }
   const resultLabel = result => result?.status === 'accepted' ? '运行完成' : STATUS[result?.status] || ''
   const mountLab = (container, article = null, onClose = null) => {
     const lifetime = new AbortController()
@@ -409,6 +416,24 @@
     const fallback = node('textarea', 'learning-editor'); fallback.setAttribute('aria-label', '代码编辑器'); fallback.spellcheck = false; fallback.maxLength = MAX_CODE; fallback.wrap = 'off'
     editorWrap.append(editorHost, fallback); editorPane.append(editorWrap)
     const consolePane = node('section', 'learning-console')
+    // Drag bar above the terminal. The chosen height is a per-browser convenience; double-click resets it.
+    const CONSOLE_KEY = 'noimpty-code-console-height'
+    const resizer = button('', () => {}, 'learning-console-resizer')
+    resizer.setAttribute('role', 'separator'); resizer.setAttribute('aria-orientation', 'horizontal'); resizer.setAttribute('aria-label', '拖动调整终端高度，双击恢复默认')
+    const setConsoleHeight = px => {
+      const others = [...root.children].reduce((sum, el) => el === editorPane || el === consolePane ? sum : sum + el.offsetHeight, 0)
+      const room = root.clientHeight - others - (parseFloat(window.getComputedStyle(editorPane).minHeight) || 180)
+      const height = Math.round(Math.max(120, Math.min(Math.max(room, 120), px)))
+      consolePane.style.flexBasis = height + 'px'
+      try { window.localStorage.setItem(CONSOLE_KEY, String(height)) } catch (_) {}
+    }
+    let drag = null
+    resizer.addEventListener('pointerdown', event => { resizer.setPointerCapture(event.pointerId); drag = { y: event.clientY, height: consolePane.offsetHeight }; event.preventDefault() })
+    resizer.addEventListener('pointermove', event => { if (drag && resizer.hasPointerCapture(event.pointerId)) setConsoleHeight(drag.height + drag.y - event.clientY) })
+    resizer.addEventListener('pointerup', event => { if (resizer.hasPointerCapture(event.pointerId)) resizer.releasePointerCapture(event.pointerId); drag = null })
+    resizer.addEventListener('keydown', event => { if (['ArrowUp', 'ArrowDown'].includes(event.key)) { event.preventDefault(); setConsoleHeight(consolePane.offsetHeight + (event.key === 'ArrowUp' ? 24 : -24)) } })
+    resizer.addEventListener('dblclick', () => { consolePane.style.flexBasis = ''; try { window.localStorage.removeItem(CONSOLE_KEY) } catch (_) {} })
+    try { const saved = Number(window.localStorage.getItem(CONSOLE_KEY)); if (saved >= 120) consolePane.style.flexBasis = Math.min(saved, 900) + 'px' } catch (_) {}
     const tabs = node('div', 'learning-console-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', '输入与运行结果')
     const panels = {}; const tabButtons = {}; let currentPanel = 'input'
     for (const [id, label] of [['input', '输入'], ['output', '终端'], ['history', '记录']]) {
@@ -440,9 +465,9 @@
     const status = node('p', 'learning-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite')
     const error = node('p', 'learning-error'); error.setAttribute('role', 'alert')
     const storageStatus = node('p', 'learning-storage-status'); storageStatus.setAttribute('role', 'status')
-    root.append(heading, toolbar, editorPane, consolePane, statusbar, status, error, storageStatus); container.append(root)
+    root.append(heading, toolbar, editorPane, resizer, consolePane, statusbar, status, error, storageStatus); container.append(root)
     let storage; try { storage = window.localStorage } catch (_) {}
-    let timer = null; let adapter = null; let lastAutoRevision = null; let lastResult; let lastChecked; let lastOutputRevision; let lastHistory; let lastBackups
+    let timer = null; let adapter = null; let lastAutoRevision = null; let lastResult; let lastChecked; let lastOutputRevision; let lastHistory; let lastBackups; let lastMarked
     let connectionState = window.NANALY_AGENT?.snapshot?.().connection || (window.NANALY_AGENT?.configured() ? 'connected' : 'disconnected')
     const request = (path, options) => window.NANALY_AGENT.request(path, options)
     const session = createSession({ request, storage, available: () => !!window.NANALY_AGENT?.configured(), permitted: unlocked, changed: () => render() })
@@ -455,7 +480,7 @@
     const publish = () => { if (unlocked()) { try { const data = context(); const signature = JSON.stringify(data); if (signature !== published) { published = signature; window.NANALY_AGENT?.setContext?.(data) } } catch (_) {} } }
     const setPanel = id => { currentPanel = id; for (const key of Object.keys(panels)) { panels[key].hidden = key !== id; tabButtons[key].setAttribute('aria-selected', String(key === id)); tabButtons[key].tabIndex = key === id ? 0 : -1 } }
     const focusEditor = () => adapter ? adapter.focus() : fallback.focus()
-    const syncEditor = () => { const state = session.state; if (adapter) { adapter.setLanguage(state.lessonId); adapter.setValue(state.code) } fallback.value = state.code; stdin.value = state.stdin; select.value = state.lessonId }
+    const syncEditor = () => { const state = session.state; lastMarked = null; if (adapter) { adapter.setLanguage(state.lessonId); adapter.setValue(state.code) } fallback.value = state.code; stdin.value = state.stdin; select.value = state.lessonId }
     const loadPractice = exercise => { const result = session.loadPractice(exercise); syncEditor(); render(); return result }
     const run = () => { window.clearTimeout(timer); setPanel('output'); session.run() }
     const jump = diagnostic => {
@@ -499,7 +524,7 @@
       resultState.dataset.status = (diagnosticResult || visibleResult)?.status || ''
       if (lastResult !== visibleResult || lastChecked !== state.checked || lastOutputRevision !== state.revision) {
         diagnostics.replaceChildren(); output.replaceChildren()
-        for (const d of diagnosticResult?.diagnostics || []) diagnostics.append(button(`${d.line ? `L${d.line}${d.column ? ':' + d.column : ''}  ` : ''}${d.message}`, () => jump(d), 'learning-diagnostic'))
+        for (const d of diagnosticResult?.diagnostics || []) diagnostics.append(button(`${d.line ? `L${d.line}${d.column ? ':' + d.column : ''}  ` : ''}${d.message}`, () => jump(d), `learning-diagnostic learning-diagnostic--${d.severity}`))
         if (visibleResult) {
           if (staleOutput) output.append(node('p', 'learning-muted', '上次运行的输出 · 当前修改尚未运行'))
           if (['git', 'linux'].includes(state.lessonId)) output.append(node('p', 'learning-muted', `${visibleResult.cwd ? `目录 ${visibleResult.cwd} · ` : ''}退出码 ${visibleResult.exitCode == null ? '未返回' : visibleResult.exitCode}`))
@@ -534,6 +559,10 @@
         for (const record of state.backups) backupItems.append(button(`${FILE_NAMES[record.lessonId]} · ${record.at}`, () => { if (session.restoreBackup(record.id)) { syncEditor(); focusEditor() } }))
         lastBackups = state.backups
       }
+      // Red marks in the editor come only from a check or run of the code on screen. Older marks
+      // stay attached to their text through edits until the next check replaces them.
+      const marked = [state.checked, state.result].find(item => item && item.revision === state.revision)
+      if (adapter?.setDiagnostics && marked && marked !== lastMarked) { adapter.setDiagnostics(marked.diagnostics); lastMarked = marked }
       publish()
       if (state.result || state.checked) lastAutoRevision = state.revision
       if (!state.busy && !state.checking && state.revision !== lastAutoRevision && session.canAutoCheck()) scheduleCheck()
@@ -563,10 +592,27 @@
     }
     const unsubscribe = window.NANALY_AGENT?.subscribe?.(connectionChanged)
     window.addEventListener('nanaly:agent-configured', connectionChanged, { signal: lifetime.signal })
+    // Opened next to an article: start in the language the article teaches.
+    if (article?.language && LANGUAGE_NAMES[article.language] && session.state.lessonId !== article.language) session.select(article.language)
     syncEditor(); setPanel('input'); render(); connectionChanged()
     return { session, context, loadPractice, dispose: () => { window.clearTimeout(timer); lifetime.abort(); unsubscribe?.(); session.dispose(); adapter?.destroy(); root.remove(); try { window.NANALY_AGENT?.setContext?.(null) } catch (_) {} } }
   }
 
+  // The practice language an article teaches: its category first (Git posts are full of bash
+  // blocks but want the Git workspace), then its most common code-block language.
+  const BLOCK_LANGUAGES = { c: 'c', cpp: 'cpp', 'c++': 'cpp', go: 'go', golang: 'go', python: 'python', py: 'python', bash: 'linux', sh: 'linux', shell: 'linux', console: 'linux', zsh: 'linux', sql: 'mysql', mysql: 'mysql' }
+  const articleLanguage = article => {
+    // Butterfly renders the category links in the page header (#post-info), outside #post.
+    const categories = [...document.querySelectorAll('#post-info .post-meta-categories')].map(link => link.getAttribute('href') || '').join(' ')
+    if (/\/git\//i.test(categories)) return 'git'
+    if (/\/(linux|shell)[^/]*\//i.test(categories)) return 'linux'
+    const counts = {}
+    for (const figure of article.querySelectorAll('figure.highlight')) {
+      const id = BLOCK_LANGUAGES[[...figure.classList].find(name => BLOCK_LANGUAGES[name])]
+      if (id) counts[id] = (counts[id] || 0) + 1
+    }
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
+  }
   const cleanup = () => { mounted?.dispose(); mounted = null; launch?.remove(); launch = null; document.documentElement.classList.remove('learning-is-open', 'learning-page'); delete document.documentElement.dataset.learningPane }
   const mount = () => {
     cleanup()
@@ -580,7 +626,7 @@
       if (!unlocked()) return
       if (mounted) { mounted.dispose(); mounted = null; launch.focus(); return }
       const scrollY = window.scrollY
-      const data = { title: document.querySelector('h1.post-title')?.textContent || document.title, url: window.location.href, text: clip(article.textContent, 20000) }
+      const data = { title: document.querySelector('h1.post-title')?.textContent || document.title, url: window.location.href, text: clip(article.textContent, 20000), language: articleLanguage(article) }
       const holder = node('aside', 'learning-article-holder')
       const articleTitle = node('h1', 'learning-article-title', data.title); post.prepend(articleTitle)
       const divider = button('⋮', () => {}, 'learning-divider'); divider.setAttribute('role', 'separator'); divider.setAttribute('aria-label', '调整文章与编辑器宽度'); divider.setAttribute('aria-orientation', 'vertical'); divider.setAttribute('aria-valuemin', '30'); divider.setAttribute('aria-valuemax', '70'); divider.setAttribute('aria-valuenow', '50'); divider.type = 'button'
@@ -604,7 +650,7 @@
     article.before(launch)
   }
 
-  window.NOIMPTY_LEARNING = Object.freeze({ createSession, lessons: LESSONS, mount, context: () => unlocked() ? mounted?.context() || null : null })
+  window.NOIMPTY_LEARNING = Object.freeze({ createSession, lessons: LESSONS, mount, articleLanguage, context: () => unlocked() ? mounted?.context() || null : null })
   window.LEARNING_LAB = Object.freeze({
     context: () => unlocked() ? mounted?.context() || null : null,
     loadPractice: exercise => { if (!unlocked() || !mounted) throw new Error('请先解锁并打开练习页面，再载入练习。'); return mounted.loadPractice(exercise) },

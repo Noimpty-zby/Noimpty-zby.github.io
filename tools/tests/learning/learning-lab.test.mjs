@@ -25,11 +25,27 @@ const setupWithCode = options => { const app = setup(options); app.session.edit(
 let count = 0
 const check = async (name, fn) => { await fn(); count++; console.log(`  ✓ ${name}`) }
 
-await check('six real-language lessons contain executable source and explicit algorithm test cases', () => {
-  assert.deepEqual(Array.from(api.lessons, lesson => lesson.language), ['c', 'cpp', 'go', 'git', 'linux', 'mysql'])
+await check('split view starts in the language the article teaches: category first, then code blocks', () => {
+  const page = (categories, blocks) => {
+    const document = { readyState: 'loading', addEventListener() {}, querySelectorAll: selector => selector === '#post-info .post-meta-categories' ? categories.map(href => ({ getAttribute: () => href })) : [] }
+    const window = { addEventListener() {} }
+    vm.runInNewContext(script, { window, document, AbortController, DOMException, URL, console })
+    const article = { querySelectorAll: () => blocks.map(name => ({ classList: ['highlight', name] })) }
+    return window.NOIMPTY_LEARNING.articleLanguage(article)
+  }
+  assert.equal(page(['/categories/extra/ai-infra/git/'], Array(23).fill('bash')), 'git')
+  assert.equal(page(['/categories/extra/ai-infra/linux-intro/'], ['bash', 'plaintext']), 'linux')
+  assert.equal(page(['/categories/in-class/dsa/'], ['c', 'c', 'c', 'cpp', 'plaintext']), 'c')
+  assert.equal(page(['/categories/extra/gamedev/ue5-looman/'], ['cpp', 'text', 'cpp', 'csharp']), 'cpp')
+  assert.equal(page([], ['python', 'py', 'bash']), 'python')
+  assert.equal(page(['/categories/life/'], []), null)
+})
+
+await check('seven real-language lessons contain executable source and explicit algorithm test cases', () => {
+  assert.deepEqual(Array.from(api.lessons, lesson => lesson.language), ['c', 'cpp', 'go', 'python', 'git', 'linux', 'mysql'])
   for (const lesson of api.lessons) {
     assert.ok(lesson.code.trim())
-    if (['c', 'cpp', 'go'].includes(lesson.language)) assert.ok(lesson.tests.length > 1)
+    if (['c', 'cpp', 'go', 'python'].includes(lesson.language)) assert.ok(lesson.tests.length > 1)
     else assert.equal(lesson.tests.length, 0)
   }
 })
@@ -65,10 +81,21 @@ await check('language drafts remain independent and reload restores the last sel
   const cleared = setup({ storage: disk })
   assert.equal(cleared.session.state.lessonId, 'go'); assert.equal(cleared.session.state.code, '')
 })
-await check('editing does not enable automatic checks or send code without the saved opt-in', async () => {
-  const { session, calls } = setupWithCode()
-  assert.equal(session.state.autoCheck, false); assert.equal(session.canAutoCheck(), false)
-  assert.equal(await session.autoCheckCurrent(), null); assert.equal(calls.length, 0)
+await check('automatic checks are on by default so mistakes are marked while typing, and a saved opt-out stops them', async () => {
+  const { session, calls } = setupWithCode({ request: async (_, args) => result(args.body.revision, { status: 'checked' }) })
+  assert.equal(session.state.autoCheck, true); assert.equal(session.canAutoCheck(), true)
+  await session.autoCheckCurrent(); assert.equal(calls.length, 1); assert.equal(calls[0].body.mode, 'check')
+  session.setAutoCheck(false)
+  assert.equal(await session.autoCheckCurrent(), null); assert.equal(calls.length, 1)
+})
+await check('automatic checks stay quiet: marks only, no notices, and a failed background check shows no error', async () => {
+  const good = setupWithCode({ request: async (_, args) => result(args.body.revision, { status: 'checked' }) })
+  await good.session.autoCheckCurrent()
+  assert.equal(good.session.state.checked.status, 'checked'); assert.equal(good.session.state.notice, ''); assert.equal(good.session.state.error, '')
+  await good.session.run('check'); assert.match(good.session.state.notice, /工具检查/, 'an explicit check still reports')
+  const failing = setupWithCode({ request: async () => { throw new Error('执行队列已满，请稍后重试。') } })
+  await failing.session.autoCheckCurrent()
+  assert.equal(failing.session.state.error, ''); assert.equal(failing.session.state.checking, false)
 })
 await check('resetting a compiled-language file clears code and input while retaining run history', async () => {
   const { session, calls } = setupWithCode()
@@ -94,9 +121,11 @@ await check('a missing backend never produces simulated output or a submission',
   assert.equal(calls.length, 0); assert.equal(session.state.result, null); assert.equal(session.state.history.length, 0)
   assert.match(session.state.error, /尚未连接/)
 })
-await check('automatic tool checking defaults off and preserves explicit on and off preferences', () => {
+await check('automatic tool checking defaults on and preserves explicit on and off preferences', () => {
   const disk = storage(); const first = setup({ storage: disk })
-  assert.equal(first.session.state.autoCheck, false)
+  assert.equal(first.session.state.autoCheck, true)
+  first.session.setAutoCheck(false)
+  assert.equal(setup({ storage: disk }).session.state.autoCheck, false)
   first.session.setAutoCheck(true)
   assert.equal(setup({ storage: disk }).session.state.autoCheck, true)
   first.session.setAutoCheck(false)
@@ -110,11 +139,11 @@ await check('automatic tool checking defaults off and preserves explicit on and 
 await check('automatic checking only sends supported connected language checks and never executes SQL or runs code', async () => {
   const { session, calls } = setup({ request: async (_, args) => result(args.body.revision, { status: 'checked' }) })
   session.setAutoCheck(true)
-  for (const language of ['c', 'cpp', 'go', 'git', 'linux']) { session.select(language); session.edit(api.lessons.find(lesson => lesson.language === language)); await session.autoCheckCurrent() }
-  assert.equal(calls.length, 5); assert.ok(calls.every(call => call.path === '/api/run' && call.body.mode === 'check' && call.body.tests.length === 0))
+  for (const language of ['c', 'cpp', 'go', 'python', 'git', 'linux']) { session.select(language); session.edit(api.lessons.find(lesson => lesson.language === language)); await session.autoCheckCurrent() }
+  assert.equal(calls.length, 6); assert.ok(calls.every(call => call.path === '/api/run' && call.body.mode === 'check' && call.body.tests.length === 0))
   assert.equal(session.state.history.length, 0)
-  session.select('mysql'); session.edit({ code: 'SELECT 1;' }); assert.equal(await session.autoCheckCurrent(), null); assert.equal(calls.length, 5)
-  session.select('c'); session.setAutoCheck(false); assert.equal(await session.autoCheckCurrent(), null); assert.equal(calls.length, 5)
+  session.select('mysql'); session.edit({ code: 'SELECT 1;' }); assert.equal(await session.autoCheckCurrent(), null); assert.equal(calls.length, 6)
+  session.select('c'); session.setAutoCheck(false); assert.equal(await session.autoCheckCurrent(), null); assert.equal(calls.length, 6)
   const offline = setupWithCode({ available: () => false }); offline.session.setAutoCheck(true); await offline.session.autoCheckCurrent(); assert.equal(offline.calls.length, 0)
   const locked = setup({ permitted: () => false }); locked.session.setAutoCheck(true); await locked.session.autoCheckCurrent(); assert.equal(locked.calls.length, 0)
 })

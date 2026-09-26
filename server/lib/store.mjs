@@ -111,6 +111,25 @@ export class PrivateStore {
       return this.getState();
     });
   }
+  // Only what the owner marked as confirmed and public, and only the fields background jobs need.
+  publicContext() {
+    const { memories = [], experiences = [] } = this.state.data;
+    return {
+      memories: memories.filter(m => m?.confirmed === true && m.publicAllowed === true).map(m => ({ kind: m.kind, text: m.text, source: m.source })),
+      strategies: experiences.filter(e => e?.confirmed === true && e.publicAllowed === true).map(e => ({ lesson: e.lesson, evidence: e.evidence }))
+    };
+  }
+  // Background jobs append here instead of rewriting the whole state, so they never need to read it.
+  appendEvent(event) {
+    return this.serial(async () => {
+      const data = structuredClone(this.state.data);
+      data.events = [...(Array.isArray(data.events) ? data.events : []), event].slice(-200);
+      validateData(data);
+      const next = { revision: this.state.revision + 1, data };
+      await this.writeRecord('state', next); this.state = next;
+      return structuredClone(event);
+    });
+  }
   listWorkspaces() {
     return Object.values(this.workspaces.items)
       .map(value => structuredClone(value))

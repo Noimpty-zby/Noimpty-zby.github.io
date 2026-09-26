@@ -143,6 +143,7 @@ jobs:
           NANALY_GIT_NAME: ${{ secrets.NANALY_GIT_NAME }}
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           # 可选：独立私有记忆后端；只有允许公开的记忆进入公开内容提示词
+          # NANALY_AGENT_TOKEN 填后端的后台令牌（/etc/nanaly/automation-token），不要填主令牌
           NANALY_AGENT_URL: ${{ secrets.NANALY_AGENT_URL }}
           NANALY_AGENT_TOKEN: ${{ secrets.NANALY_AGENT_TOKEN }}
         run: |

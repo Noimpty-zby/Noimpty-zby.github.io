@@ -61,6 +61,8 @@ sudo runuser -u nanaly -- env DOCKER_HOST="unix:///run/user/${nanaly_uid}/docker
 
 创建 `/srv/nanaly-private`，归属 `nanaly:nanaly`、权限 0700；创建 `/etc/nanaly`，归属 `root:nanaly`、权限 0750。令牌在 `/etc/nanaly/token` 单独生成，内容为 32 字节安全随机数的十六进制文本，归属 `nanaly:nanaly`、权限 0400。不要覆盖已有令牌，也不要将其输出到终端、日志、仓库或部署包。`NANALY_TOKEN` 仍可作为 `NANALY_TOKEN_FILE` 的替代；生产优先使用受权限保护的令牌文件或 secret manager。
 
+可选的后台令牌给 GitHub Actions 用：按同样方式另生成 `/etc/nanaly/automation-token`（必须与主令牌不同），在 `/etc/nanaly.env` 加上 `NANALY_AUTOMATION_TOKEN_FILE=/etc/nanaly/automation-token`。配置了却读不到文件时服务拒绝启动。
+
 示例文件中的 `@NANALY_UID@` 是必须替换的占位符，systemd 不会自动展开它。首次安装时，在仓库根目录执行：
 
 ```sh
@@ -106,7 +108,7 @@ npm run deploy:backend -- --full  # 另外强制跑一遍真实 Docker 集成测
 
 ## API 契约
 
-除 `GET /api/health` 和 CORS 预检之外，所有接口均要求 `Authorization: Bearer <token>`。JSON 写请求要求 `Content-Type: application/json`，请求体上限约 1.2 MB。所有响应使用 `Cache-Control: no-store`；异常响应不包含宿主路径、令牌或错误堆栈。没有登录 cookie，不信任传入的 X-Forwarded-For。正确认证、失败认证和健康探针分别限流，避免反向代理共享 loopback 地址时错误令牌阻断合法操作。
+除 `GET /api/health` 和 CORS 预检之外，所有接口均要求 `Authorization: Bearer <token>`。后台令牌只能访问 `/api/automation/` 下的两个接口，其余一律返回 403 `SCOPE_DENIED`；主令牌可以访问全部接口。JSON 写请求要求 `Content-Type: application/json`，请求体上限约 1.2 MB。所有响应使用 `Cache-Control: no-store`；异常响应不包含宿主路径、令牌或错误堆栈。没有登录 cookie，不信任传入的 X-Forwarded-For。正确认证、失败认证和健康探针分别限流，避免反向代理共享 loopback 地址时错误令牌阻断合法操作。
 
 | 接口 | 请求与结果 |
 | --- | --- |
@@ -120,6 +122,8 @@ npm run deploy:backend -- --full  # 另外强制跑一遍真实 Docker 集成测
 | POST /api/workspaces/reset | `{language,workspaceId?}`，返回全新 `{workspaceId,language,revision:0}` |
 | GET /api/workspaces/:id | 返回 language、revision、busy、updatedAt |
 | DELETE /api/workspaces/:id | 删除此工作区与快照，忙碌时返回 409 |
+| GET /api/automation/context | `{memories,strategies}`：服务器只返回 `confirmed===true` 且 `publicAllowed===true` 的记忆和经验，字段只有 kind/text/source 与 lesson/evidence |
+| POST /api/automation/events | `{kind,detail,status}`，追加一条 `source:'background'` 的行动记录（detail 截到 600 字，status 为小写英文，保留最近 200 条），返回 `{event}`；不需要也不读取整份状态 |
 
 错误格式为 `{error:{code,message},...extra}`。state 版本冲突返回 HTTP 409 和服务器最新 `revision,data`，客户端应合并或让用户决定，不得直接覆盖。工作区冲突返回 `workspaceRevision`。工作区上限 12；重置替换旧编号，旧设备使用旧编号会得到 404，避免 reset 后 revision 归零造成 ABA 覆盖。
 

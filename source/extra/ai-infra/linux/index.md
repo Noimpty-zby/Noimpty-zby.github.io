@@ -12,9 +12,16 @@ description: 拆成两部分——入门管命令怎么用，深入管为什么�
 ---
 
 <header class="noimpty-hero noimpty-hero--linux">
-  <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a></nav>
-  <h1 class="noimpty-hero__title">Linux</h1>
-  <p class="noimpty-hero__sub"><span>命令行与系统</span><span>入门 + 深入</span><span>{% section_stat Linux入门|Linux深入 %}</span></p>
+  <div class="noimpty-hero__text">
+    <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a></nav>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__badge" aria-hidden="true"><i class="fab fa-linux"></i></span><span class="noimpty-hero__name">Linux</span></h1>
+    <p class="noimpty-hero__lead">命令行与系统 · 入门 + 深入</p>
+    <p class="noimpty-hero__sub"><span>2 门课</span><span>{% section_stat Linux入门|Linux深入 %}</span></p>
+  </div>
+  <figure class="noimpty-guide">
+    <figcaption class="noimpty-guide__bubble">先把命令行敲熟，再往系统深处走～入门正在一章章更新！</figcaption>
+    <span class="noimpty-guide__face" style="--guide:url('/img/sections/extra.webp');--guide-size:250%;--guide-pos:43% 20%" role="img" aria-label="娜娜莉"></span>
+  </figure>
 </header>
 
 <div class="noimpty-track-grid noimpty-track-grid--two">

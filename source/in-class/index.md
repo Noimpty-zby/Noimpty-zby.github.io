@@ -11,11 +11,17 @@ sitemap: false
 description: 计算机专业课的自学线：数据结构与算法、计算机系统。操作系统和计算机网络学校会教，不再自学重复一遍。
 ---
 
-<header class="noimpty-hero noimpty-hero--word noimpty-hero--art noimpty-hero--core">
-  <span class="noimpty-hero__art" style="--hero-art:url('/img/sections/in-class.webp');--hero-pos:center 30%" aria-hidden="true"></span>
-  <p class="noimpty-hero__chip"><i class="fas fa-lock" aria-hidden="true"></i>private · 课内</p>
-  <h1 class="noimpty-hero__title">core</h1>
-  <p class="noimpty-hero__sub"><span>自学课内</span><span>2 门课</span><span>{% section_stat DSA|CSAPP %}</span></p>
+<header class="noimpty-hero noimpty-hero--core">
+  <div class="noimpty-hero__text">
+    <p class="noimpty-hero__tape">CORE · 课内</p>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__badge" aria-hidden="true"><i class="fas fa-book"></i></span><span class="noimpty-hero__name">课内自学</span></h1>
+    <p class="noimpty-hero__lead">数据结构与算法 · 计算机系统 CSAPP</p>
+    <p class="noimpty-hero__sub"><span>2 门课</span><span>{% section_stat DSA|CSAPP %}</span></p>
+  </div>
+  <figure class="noimpty-guide">
+    <figcaption class="noimpty-guide__bubble">专业课的自学笔记都在这里～先把数据结构打牢，CSAPP 排在后面！</figcaption>
+    <span class="noimpty-guide__face" style="--guide:url('/img/sections/in-class.webp');--guide-size:234%;--guide-pos:60% 19%" role="img" aria-label="娜娜莉"></span>
+  </figure>
 </header>
 
 <div class="noimpty-track-grid noimpty-track-grid--two">

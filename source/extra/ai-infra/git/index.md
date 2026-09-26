@@ -12,15 +12,18 @@ description: Colt Steele《The Git & Github Bootcamp》的学习记录。
 ---
 
 <header class="noimpty-hero noimpty-hero--git">
-  <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a></nav>
-  <h1 class="noimpty-hero__title">Git &amp; GitHub</h1>
-  <p class="noimpty-hero__sub"><span>The Git &amp; Github Bootcamp</span></p>
-  <div class="noimpty-course-meta">
-    <div><b>讲师</b><span>Colt Steele</span></div>
-    <div><b>平台</b><span>Udemy · 英文授课</span></div>
-    <div><b>配套</b><span>GitHub 协作流程</span></div>
-    <div><b>进度</b><span>命令行速成 + 基本循环 + 分支 + 合并 · {% section_progress Git %}</span></div>
+  <div class="noimpty-hero__text">
+    <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a></nav>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">Git &amp; GitHub</span></h1>
+    <p class="noimpty-hero__lead">The Git &amp; Github Bootcamp</p>
+    <div class="noimpty-course-meta">
+      <div><b>讲师</b><span>Colt Steele</span></div>
+      <div><b>平台</b><span>Udemy · 英文授课</span></div>
+      <div><b>配套</b><span>GitHub 协作流程</span></div>
+      <div><b>进度</b><span>命令行速成 + 基本循环 + 分支 + 合并 · {% section_progress Git %}</span></div>
+    </div>
   </div>
+  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fab fa-git-alt"></i></span>
 </header>
 
 {% section_posts Git %}

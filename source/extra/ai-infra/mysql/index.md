@@ -12,15 +12,18 @@ description: "Colt Steele《The Ultimate MySQL Bootcamp: Go from SQL Beginner to
 ---
 
 <header class="noimpty-hero noimpty-hero--mysql">
-  <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a></nav>
-  <h1 class="noimpty-hero__title">MySQL</h1>
-  <p class="noimpty-hero__sub"><span>The Ultimate MySQL Bootcamp: Go from SQL Beginner to Expert</span></p>
-  <div class="noimpty-course-meta">
-    <div><b>讲师</b><span>Colt Steele</span></div>
-    <div><b>平台</b><span>Udemy · 英文授课</span></div>
-    <div><b>形式</b><span>大量练习 · 一个完整的数据库案例贯穿全课</span></div>
-    <div><b>进度</b><span>{% section_progress MySQL %}</span></div>
+  <div class="noimpty-hero__text">
+    <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a></nav>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">MySQL</span></h1>
+    <p class="noimpty-hero__lead">The Ultimate MySQL Bootcamp: Go from SQL Beginner to Expert</p>
+    <div class="noimpty-course-meta">
+      <div><b>讲师</b><span>Colt Steele</span></div>
+      <div><b>平台</b><span>Udemy · 英文授课</span></div>
+      <div><b>形式</b><span>大量练习 · 一个完整的数据库案例贯穿全课</span></div>
+      <div><b>进度</b><span>{% section_progress MySQL %}</span></div>
+    </div>
   </div>
+  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fas fa-database"></i></span>
 </header>
 
 {% section_posts MySQL %}

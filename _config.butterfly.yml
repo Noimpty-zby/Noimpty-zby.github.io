@@ -1183,6 +1183,7 @@ inject:
     - <script type="text/plain" id="learning-terminal-src" src="/js/learning-terminal.js"></script>
     - <script src="/js/schedule.js"></script>
     - <script src="/js/site-clock.js"></script>
+    - <script src="/js/interior-deco.js"></script>
     - <script src="/js/mao-controls.js"></script>
     - <script src="/js/mao-play.js"></script>
     - <script src="/js/mao-pet.js"></script>

@@ -12,9 +12,16 @@ description: 现在在走的方向：Linux、Git、Go、MySQL 打底，外加 Do
 ---
 
 <header class="noimpty-hero noimpty-hero--aiinfra">
-  <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a></nav>
-  <h1 class="noimpty-hero__title">AI Infra 后端开发</h1>
-  <p class="noimpty-hero__sub"><span>7 门课</span><span>{% section_stat Linux入门|Linux深入|Git|Go|MySQL|Docker|Transformer 推理机制|Python %}</span></p>
+  <div class="noimpty-hero__text">
+    <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a></nav>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__badge" aria-hidden="true"><i class="fas fa-server"></i></span><span class="noimpty-hero__name">AI Infra 后端开发</span></h1>
+    <p class="noimpty-hero__lead">Linux · Git · Go · MySQL · Docker · Python · Transformer</p>
+    <p class="noimpty-hero__sub"><span>7 门课</span><span>{% section_stat Linux入门|Linux深入|Git|Go|MySQL|Docker|Transformer 推理机制|Python %}</span></p>
+  </div>
+  <figure class="noimpty-guide">
+    <figcaption class="noimpty-guide__bubble">这条线的课都在这里，从 Linux 命令行开始，一门一门往下学～</figcaption>
+    <span class="noimpty-guide__face" style="--guide:url('/img/sections/extra.webp');--guide-size:250%;--guide-pos:43% 20%" role="img" aria-label="娜娜莉"></span>
+  </figure>
 </header>
 
 <div class="noimpty-track-grid noimpty-track-grid--seven">

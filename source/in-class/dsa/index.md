@@ -12,15 +12,18 @@ description: Abdul Bari《Mastering Data Structures & Algorithms using C and C++
 ---
 
 <header class="noimpty-hero noimpty-hero--dsa">
-  <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/in-class/">core</a></nav>
-  <h1 class="noimpty-hero__title">数据结构与算法</h1>
-  <p class="noimpty-hero__sub"><span>Mastering Data Structures &amp; Algorithms using C and C++</span></p>
-  <div class="noimpty-course-meta">
-    <div><b>讲师</b><span>Abdul Bari</span></div>
-    <div><b>时长</b><span>约 53 小时视频</span></div>
-    <div><b>语言</b><span>英文授课 · C / C++ 实现</span></div>
-    <div><b>进度</b><span>数组 · {% section_progress DSA %}</span></div>
+  <div class="noimpty-hero__text">
+    <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/in-class/">core</a></nav>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">数据结构与算法</span></h1>
+    <p class="noimpty-hero__lead">Mastering Data Structures &amp; Algorithms using C and C++</p>
+    <div class="noimpty-course-meta">
+      <div><b>讲师</b><span>Abdul Bari</span></div>
+      <div><b>时长</b><span>约 53 小时视频</span></div>
+      <div><b>语言</b><span>英文授课 · C / C++ 实现</span></div>
+      <div><b>进度</b><span>数组 · {% section_progress DSA %}</span></div>
+    </div>
   </div>
+  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fas fa-sitemap"></i></span>
 </header>
 
 {% section_posts DSA %}

@@ -15,6 +15,9 @@ const SNAPSHOT_LIMIT = 32 * 1024 * 1024;
 const PIDFILE = '/tmp/nanaly-shell.pid';
 const HELPER = '/opt/nanaly/shell-session.py';
 const quote = value => "'" + String(value).replace(/'/g, "'\\''") + "'";
+// The service runs with umask 077; the sandbox user is another uid under rootless Docker, so
+// every file it must read gets an explicit world-readable mode.
+const readable = async (file, write) => { await write(); await fs.chmod(file, 0o444); };
 export const TASKS = {
   c: { file: 'main.c', command: 'gcc -std=c17 -Wall -Wextra -g main.c -o main -lm && ./main' },
   cpp: { file: 'main.cpp', command: 'g++ -std=c++20 -Wall -Wextra -g main.cpp -o main && ./main' },
@@ -59,7 +62,8 @@ class ShellHost extends Container {
     try {
       await this.create(Math.ceil(this.manager.lifetime / 1000) + 120);
       if (workspace.revision) {
-        await fs.copyFile(runner.store.snapshotPath(workspace), path.join(this.directory, 'workspace.snapshot'));
+        const snapshot = path.join(this.directory, 'workspace.snapshot');
+        await readable(snapshot, () => fs.copyFile(runner.store.snapshotPath(workspace), snapshot));
         const restored = await this.exec(['tar', '-xzf', '/input/workspace.snapshot', '--no-same-owner', '--same-permissions', '-C', '/work'], { timeout: 10000 });
         invariant(restored.code === 0, 500, 'WORKSPACE_RESTORE_FAILED', '工作区快照恢复失败，请重置运行环境。');
       } else if (this.language === 'git') {
@@ -115,7 +119,8 @@ class TaskHost extends Container {
     const spec = TASKS[this.language];
     try {
       await this.create(Math.ceil(TASK_LIFETIME / 1000) + 60);
-      await fs.writeFile(path.join(this.directory, spec.file), this.code, { mode: 0o444 });
+      const file = path.join(this.directory, spec.file);
+      await readable(file, () => fs.writeFile(file, this.code));
     } catch (error) { await this.remove(); throw error; }
     // Shown as if typed at a prompt, then run for real; the copy into ~ is not shown.
     const prompt = '\\033[01;32mlearner@nanaly\\033[00m:\\033[01;34m~\\033[00m$ ';
@@ -177,7 +182,7 @@ export class SessionManager {
     const stop = () => void host.exec(['pkill', '-KILL', '-f', `/input/run-${id}.sh`]);
     signal?.addEventListener('abort', stop, { once: true });
     try {
-      await fs.writeFile(script, request.code, { mode: 0o444 });
+      await readable(script, () => fs.writeFile(script, request.code));
       const cwd = await host.cwd();
       const executed = await this.runner.cli(['exec', '-i', '-w', cwd, host.name, 'timeout', '-k', '5', '30', 'bash', `/input/run-${id}.sh`],
         { input: request.stdin, timeout: 40000, limit: 131072, onLimit: stop });

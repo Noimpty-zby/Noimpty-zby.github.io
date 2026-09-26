@@ -271,3 +271,29 @@ test('an unwatched shell saves and closes after a while, and shutdown saves open
   assert.equal(api.store.getWorkspace(ready.workspaceId).revision, 2);
   assert.equal(api.runner.containers.size, 0);
 });
+
+test('files handed to a sandbox stay readable to its user under the service umask 077', { skip: !available, timeout: 30000 }, async t => {
+  // Under rootless Docker the sandbox user is another uid, so a 0400 file is unreadable there.
+  const previous = process.umask(0o077);
+  t.after(() => process.umask(previous));
+  const api = await backend(t);
+  const mode = async file => (await fs.stat(file)).mode & 0o777;
+  const run = await api.sessions.task({ language: 'python', code: 'print(1)\n' });
+  assert.equal(await mode(path.join(run.host.directory, 'main.py')), 0o444);
+  await run.hangup();
+  let workspace = await api.store.resetWorkspace(null, 'linux');
+  const archive = spawnSync('tar', ['-czf', '-', '-T', '/dev/null']).stdout;
+  workspace = await api.store.commitWorkspace(workspace, archive);
+  const shell = await api.sessions.shell({ language: 'linux', workspaceId: workspace.workspaceId });
+  assert.equal(await mode(path.join(shell.host.directory, 'workspace.snapshot')), 0o444);
+  const cli = api.runner.cli.bind(api.runner);
+  let scriptMode = null;
+  api.runner.cli = async (args, options) => {
+    const script = args.find(value => /^\/input\/run-.*\.sh$/.test(value));
+    if (script) scriptMode = await mode(path.join(shell.host.directory, path.basename(script)));
+    return cli(args, options);
+  };
+  await api.sessions.runInShell(shell.host, { language: 'linux', code: 'true', stdin: '', revision: 0 });
+  assert.equal(scriptMode, 0o444);
+  await shell.hangup();
+});

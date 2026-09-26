@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 const script = path.resolve('tools/deploy/backend-remote.sh')
-const unitExample = '[Service]\nRequires=user@@NANALY_UID@.service\n'
+const unitExample = '# Replace @NANALY_UID@ before installing.\n[Service]\nRequires=user@@NANALY_UID@.service\n'
 
 const stubs = {
   id: 'echo 1002',
@@ -36,7 +36,8 @@ const setup = ({ images = ['nanaly-runner:old', 'nanaly-runner:older'] } = {}) =
   writeFileSync(path.join(stub, 'calls'), '')
   writeFileSync(path.join(root, 'opt/blog/server/app.mjs'), 'old')
   writeFileSync(path.join(root, 'etc/nanaly.env'), 'NANALY_DATA_DIR=/srv/nanaly-private\nNANALY_RUNNER_IMAGE=nanaly-runner:old\nPORT=4318\n')
-  writeFileSync(path.join(root, 'etc/systemd/system/nanaly.service'), unitExample.replace('@NANALY_UID@', '1002'))
+  // Installed copy without the template's comment line, as on the real server.
+  writeFileSync(path.join(root, 'etc/systemd/system/nanaly.service'), '[Service]\nRequires=user@1002.service\n')
   writeFileSync(path.join(src, 'server/app.mjs'), 'new')
   writeFileSync(path.join(src, 'server/nanaly.service.example'), unitExample)
   writeFileSync(path.join(src, 'server/runner/Dockerfile'), 'FROM scratch\n')

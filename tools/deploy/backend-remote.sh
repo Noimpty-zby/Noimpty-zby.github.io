@@ -22,10 +22,10 @@ tar -xzf "$archive" -C "$next" --no-same-owner
 chmod -R u=rwX,go=rX "$next"
 echo "$build" > "$next/server/BUILD"
 
-expected_unit=$(mktemp)
-sed "s/@NANALY_UID@/$uid/g" "$next/server/nanaly.service.example" > "$expected_unit"
-cmp -s "$expected_unit" "$unit" || echo '  注意：server/nanaly.service.example 和已安装的服务文件不一样，这次没有自动替换。'
-rm -f "$expected_unit"
+# 只比有效行：安装时删掉模板开头的注释很常见，那不算不一样。
+expected_unit=$(sed "s/@NANALY_UID@/$uid/g" "$next/server/nanaly.service.example" | grep -v '^#' || true)
+[ "$expected_unit" = "$(grep -v '^#' "$unit" 2> /dev/null || true)" ] ||
+  echo '  注意：server/nanaly.service.example 和已安装的服务文件不一样，这次没有自动替换。'
 
 needs_tests=''
 if as_nanaly docker image inspect "$image" > /dev/null 2>&1; then

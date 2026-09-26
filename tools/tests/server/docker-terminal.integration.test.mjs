@@ -63,7 +63,10 @@ test('real Docker terminal: interactive Bash with editors, manuals and completio
   await shell.until(/File Name to Write/, mark);
   shell.type('\r');
   await shell.until(/Wrote 1 line/, mark);
+  // nano discards unread keys as it exits, so the next command waits for the prompt, as a person would.
+  mark = shell.mark();
   shell.type('\x18');
+  await shell.until(/learner@nanaly:~\$ $/, mark);
   mark = shell.mark();
   shell.type('mkdir -p lesson && cd lesson && export TOPIC=terminal && cat ../notes.txt; echo done-$((20+22))\r');
   await shell.until(/written in nano\n+done-42\n/, mark);

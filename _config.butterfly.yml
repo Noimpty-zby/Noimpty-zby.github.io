@@ -87,10 +87,12 @@ default_top_img:
 index_img: /img/home-hero.png
 
 # The banner image of archive page
-archive_img:
+# 归档 / 单个标签 / 单个分类这三种生成页不要横幅，标题由 interior.css 排成和其他内页一样的样子。
+# 独立页面（资讯、日程、关于……）的横幅在 scripts/noimpty-interior.js 里关。
+archive_img: false
 
 # Note: tag page, not tags page
-tag_img:
+tag_img: false
 
 # The banner image of tag page, you can set the banner image for each tag
 # Format:
@@ -98,7 +100,7 @@ tag_img:
 tag_per_img:
 
 # Note: category page, not categories page
-category_img:
+category_img: false
 
 # The banner image of category page, you can set the banner image for each category
 # Format:
@@ -1133,6 +1135,8 @@ inject:
     - <link rel="stylesheet" href="/css/schedule.css">
     - <link rel="stylesheet" href="/css/sakura.css">
     - <link rel="stylesheet" href="/css/sakura-components.css">
+    # 内页（板块、课程、资讯、日程、归档……）的页头和卡片。排在上面几个后面，同权重时以它为准。
+    - <link rel="stylesheet" href="/css/interior.css">
     - <link rel="stylesheet" href="/css/nanaly-workspace.css">
     - <link rel="stylesheet" href="/css/nanaly-delight.css">
     - <link rel="stylesheet" href="/css/music-stage.css">

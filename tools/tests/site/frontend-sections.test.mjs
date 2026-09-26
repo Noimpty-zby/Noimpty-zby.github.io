@@ -92,7 +92,8 @@ check('封面路径里的单引号和换行先转义 CSS 字符串再转义 HTML
 
 // Resolve the actual stylesheet cascade for the course grid at several widths.
 // PostCSS is already included by the Hexo CSS renderer.
-const css = postcss.parse(read('source/css/sections.css'))
+// 课程网格在 2026-09-26 内页改版时从 sections.css 搬到了 interior.css
+const css = postcss.parse(read('source/css/interior.css'))
 const gridAt = width => {
   const classes = new Set(['noimpty-track-grid', 'noimpty-track-grid--seven'])
   let result, specificity = -1

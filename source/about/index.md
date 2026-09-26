@@ -5,6 +5,14 @@ type: about
 comments: false
 ---
 
+<header class="noimpty-hero noimpty-hero--word noimpty-hero--about">
+  <p class="noimpty-hero__chip"><i class="fas fa-heart" aria-hidden="true"></i>hello</p>
+  <h1 class="noimpty-hero__title">about</h1>
+  <p class="noimpty-hero__sub"><span>关于</span><span>Noimpty 的个人空间</span></p>
+</header>
+
+<div class="noimpty-sheet">
+
 ## 你好，这里是 Noimpty
 
 这里是我的个人博客，用来记录自学的过程，也保存平时冒出来的想法与生活中的琐事。
@@ -26,3 +34,5 @@ comments: false
 ## 找到我
 
 - [GitHub](https://github.com/noimpty-zby)
+
+</div>

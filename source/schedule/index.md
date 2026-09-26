@@ -9,6 +9,12 @@ private_section: schedule
 sitemap: false
 ---
 
+<header class="noimpty-hero noimpty-hero--word noimpty-hero--schedule">
+  <p class="noimpty-hero__chip"><i class="fas fa-calendar-days" aria-hidden="true"></i>review · plan</p>
+  <h1 class="noimpty-hero__title">schedule</h1>
+  <p class="noimpty-hero__sub"><span>日程</span><span>学习总览与计划</span></p>
+</header>
+
 {% study_data %}
 
 <div id="noimpty-schedule" data-role="root">

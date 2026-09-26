@@ -23,6 +23,8 @@ const path = require('path')
 
 const NEWS_DIR = path.join(hexo.source_dir, 'news')
 const MARK = '<!-- NEWS_LIST -->'
+// 页头上那句「共 N 期」，和列表同一次扫描出来，不会对不上
+const COUNT_MARK = '<!-- NEWS_COUNT -->'
 
 const field = (raw, key) => {
   const fm = raw.match(/^---\r?\n([\s\S]*?)\r?\n---/)
@@ -31,44 +33,86 @@ const field = (raw, key) => {
   return m ? m[1].trim().replace(/^['"]|['"]$/g, '') : ''
 }
 
-const buildList = () => {
-  let dirs = []
+const listDirs = () => {
   try {
-    dirs = fs.readdirSync(NEWS_DIR)
+    return fs.readdirSync(NEWS_DIR)
       .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
       .filter(d => fs.existsSync(path.join(NEWS_DIR, d, 'index.md')))
       .sort().reverse()
   } catch (_) {
-    return '（还没有内容，等第一期生成）'
+    return []
   }
-  if (!dirs.length) return '（还没有内容，等第一期生成）'
+}
 
-  return dirs.map(d => {
+/* 方向是 2026-08-26 换的（游戏客户端 → AI Infra），但搜索用的选题表 09-05 才跟上，
+ * 所以 09-04 及更早的每一期搜的都还是 UE5、引擎和游戏（按内容核对过）。
+ * 旧期数留着没删，在列表里调暗、挂一个「旧方向」，不用再写一段话解释。 */
+const PIVOT = '2026-09-05'
+const WEEKDAY = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+
+const escapeHtml = value => String(value == null ? '' : value)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+
+// 「娜娜莉整理的三日资讯：A、B、C。」→ [A, B, C]
+const topicsOf = desc => {
+  const tail = String(desc || '').split(/[:：]/).slice(1).join('：').replace(/[。.\s]+$/, '')
+  return tail ? tail.split(/[、，,]/).map(t => t.trim()).filter(Boolean) : []
+}
+
+/* 整块输出成一段不带空行的 HTML：markdown 渲染器遇到 HTML 块会原样放过，
+ * 但块里只要出现空行，后半截就会被当成 markdown 重新解析。 */
+const buildList = () => {
+  const dirs = listDirs()
+  if (!dirs.length) return '<p class="noimpty-news-empty">还没有内容，等第一期生成。</p>'
+
+  const months = new Map()
+  for (const d of dirs) {
+    const key = d.slice(0, 7)
+    if (!months.has(key)) months.set(key, [])
+    months.get(key).push(d)
+  }
+
+  const row = (d, latest) => {
     let desc = ''
     try { desc = field(fs.readFileSync(path.join(NEWS_DIR, d, 'index.md'), 'utf8'), 'description') } catch (_) {}
-    return `- [**资讯速览 · ${d}**](/news/${d}/)${desc ? `\n  ${desc}` : ''}`
-  }).join('\n')
+    const [y, m, day] = d.split('-').map(Number)
+    const weekday = WEEKDAY[new Date(Date.UTC(y, m - 1, day)).getUTCDay()]
+    const legacy = d < PIVOT
+    const cls = ['noimpty-issue', latest && 'is-latest', legacy && 'is-legacy'].filter(Boolean).join(' ')
+    const tags = topicsOf(desc).map(t => `<i>${escapeHtml(t)}</i>`).join('')
+    const flag = latest ? '<em class="noimpty-issue__flag">最新</em>' : legacy ? '<em class="noimpty-issue__flag">旧方向</em>' : ''
+    return `<a class="${cls}" href="/news/${d}/" aria-label="资讯速览 ${d}">` +
+      `<span class="noimpty-issue__date"><b>${String(day).padStart(2, '0')}</b><small>${weekday}</small></span>` +
+      `<span class="noimpty-issue__body">${flag}<span class="noimpty-issue__topics">${tags}</span></span>` +
+      '<span class="noimpty-issue__go" aria-hidden="true">→</span></a>'
+  }
+
+  let first = true
+  return '<div class="noimpty-news">' + [...months].map(([key, list]) => {
+    const [y, m] = key.split('-')
+    const rows = list.map(d => { const r = row(d, first); first = false; return r }).join('')
+    return `<section class="noimpty-news__month"><h2 class="noimpty-news__label"><b>${Number(m)} 月</b><small>${y}</small></h2>` +
+      `<div class="noimpty-news__rows">${rows}</div></section>`
+  }).join('') + '</div>'
 }
 
 let filled = 0
 
-// before_post_render 在 markdown 还没被渲染成 HTML 之前触发，
-// 所以这里塞进去的 markdown 列表会被正常渲染成带链接的 <ul>。
+// before_post_render 在 markdown 还没被渲染成 HTML 之前触发。
+// 塞进去的是一整段不带空行的 HTML，markdown 渲染器会原样放过。
 hexo.extend.filter.register('before_post_render', data => {
   if (typeof data.content !== 'string' || data.content.indexOf(MARK) === -1) return data
-  data.content = data.content.replace(MARK, buildList())
+  data.content = data.content
+    .replace(MARK, buildList())
+    .replace(COUNT_MARK, String(listDirs().length))
   filled++
   return data
 })
 
 hexo.extend.filter.register('before_exit', () => {
   if (filled) {
-    let n = 0
-    try {
-      n = fs.readdirSync(NEWS_DIR)
-        .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && fs.existsSync(path.join(NEWS_DIR, d, 'index.md'))).length
-    } catch (_) {}
-    hexo.log.info(`资讯列表：${n} 期`)
+    hexo.log.info(`资讯列表：${listDirs().length} 期`)
   }
 })
 

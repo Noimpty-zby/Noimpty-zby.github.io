@@ -1,0 +1,23 @@
+#!/bin/sh
+# `code FILE` opens FILE in the code studio's editor on the page: the terminal passes the
+# request on as an escape sequence (OSC 7337). There is no desktop VS Code in the sandbox.
+if [ $# -eq 0 ]; then
+  echo "用法：code 文件名（在网页编辑器里打开这个文件）" >&2
+  exit 1
+fi
+status=0
+for file in "$@"; do
+  if [ -d "$file" ]; then
+    echo "code: $file 是一个目录。网页编辑器一次打开一个文件，比如：code $file/文件名" >&2
+    status=1
+    continue
+  fi
+  if [ ! -e "$file" ] && ! : > "$file"; then
+    status=1
+    continue
+  fi
+  target=$(readlink -f -- "$file")
+  printf '\033]7337;open;%s\007' "$(printf %s "$target" | base64 | tr -d '\n')"
+  echo "在网页编辑器中打开了 $target"
+done
+exit $status

@@ -118,7 +118,7 @@ npm run deploy:backend -- --full  # 另外强制跑一遍真实 Docker 集成测
 | POST /api/run | `{language,code,stdin?,tests?,revision?,mode?,workspaceId?,workspaceRevision?,saveHistory?,practice?}` |
 | GET /api/runs?limit=50 | `{runs:[...]}`，按最新在前排列；保留代码、输入、testCases、真实结果及时间 |
 | DELETE /api/runs | 清空服务器历史及其前一版备份，不影响浏览器自己的草稿和历史 |
-| POST /api/terminal/ticket | `{language:'git'\|'linux',workspaceId?,cols?,rows?}`，返回 `{ticket,expiresIn:30}`：一次性、30 秒内有效的终端票据 |
+| POST /api/terminal/ticket | `{kind:'shell',language:'git'\|'linux',workspaceId?,sessionId?,since?}` 或 `{kind:'task',language,code}`，都可带 `cols,rows`；返回 `{ticket,expiresIn:30}`：一次性、30 秒内有效的终端票据 |
 | GET /api/terminal?ticket=… | WebSocket 升级（见下文「交互式终端」）；只认票据，不接受令牌，Origin 须在允许列表内 |
 | GET /api/workspaces | 返回 `{workspaces:[{workspaceId,language,revision,updatedAt,busy,broken?,...}]}`，按最近更新时间排列，供前端权威恢复环境 |
 | POST /api/workspaces/reset | `{language,workspaceId?}`，返回全新 `{workspaceId,language,revision:0}` |
@@ -131,11 +131,17 @@ npm run deploy:backend -- --full  # 另外强制跑一遍真实 Docker 集成测
 
 ### 交互式终端
 
-浏览器的 WebSocket 无法带 `Authorization` 头，所以先用令牌 `POST /api/terminal/ticket` 取票据，再连 `wss://…/api/terminal?ticket=…`。票据只能用一次，30 秒过期；长期令牌不进任何 URL。WebSocket 由 `server/lib/websocket.mjs` 自己实现（部署不带 node_modules），只支持单连接所需的部分：掩码帧、分片、ping/pong、关闭握手，服务端每 25 秒 ping 一次，对端两次不回应即断开。
+浏览器的 WebSocket 无法带 `Authorization` 头，所以先用令牌 `POST /api/terminal/ticket` 取票据，再连 `wss://…/api/terminal?ticket=…`。票据只能用一次，30 秒过期；长期令牌不进任何 URL。WebSocket 由 `server/lib/websocket.mjs` 自己实现（部署不带 node_modules），只支持单连接所需的部分：掩码帧、分片、ping/pong、关闭握手，服务端每 25 秒 ping 一次，对端两次不回应即断开；单条消息上限 2 MB（给编辑器保存文件留的）。
 
-- 浏览器 → 服务：文本帧 JSON，`{type:'input',data}`（单条 ≤ 64 KiB）、`{type:'resize',cols,rows}`、`{type:'close'}`。
-- 服务 → 浏览器：二进制帧是终端原始输出；文本帧 JSON 依次为 `status`（正在启动）、`ready`（`workspaceId`、`workspaceRevision`）、`exit`（Shell 自己退出时的 `code`）、`saved`（`committed`、`workspaceRevision`、`cwd`、`warnings`、`reason`、`message`），或启动失败时的 `error`。`saved` 之后服务端以 1000 关闭连接。
-- `reason`：`closed` 主动关闭、`disconnected` 连接断开、`exit` 输入了 exit、`replaced` 同一工作区在别的窗口打开、`idle` 闲置 30 分钟、`lifetime` 连续 3 小时、`shutdown` 后端重启。无论哪种结束方式，服务端都会保存工作区后再发 `saved`。
+票据请求：
+- `{kind:'shell', language:'git'|'linux', workspaceId?, sessionId?, since?, cols?, rows?}`：接到这个工作区的 Shell。开着的 Shell 所有网页共用；带上次的 `sessionId` 和已收到的字节数 `since` 时只补发缺的部分，否则补发服务端保留的最近 256 KB（页面先清屏）。
+- `{kind:'task', language:'c'|'cpp'|'go'|'python', code, cols?, rows?}`：在一个一次性容器里编译并运行 `code`，同一语言再次运行会结束上一次。
+
+浏览器 → 服务（文本帧 JSON）：`{type:'input',data}`（≤ 64 KiB）、`{type:'resize',cols,rows}`、`{type:'terminate'}`（结束 Shell 或程序）、`{type:'read',id,path}` 与 `{type:'write',id,path,content}`（`code 文件名`，只对 Shell，≤ 1 MB 的 UTF-8 文本）。
+
+服务 → 浏览器：二进制帧是终端原始输出；文本帧 JSON 为 `status`（正在启动）、`ready`（`sessionId`、`offset`、`reset`、`replay` 字节数、`workspaceId`、`workspaceRevision`）、`exit`（`code`、`seconds`、`reason`；Shell 另有 `committed`、`workspaceRevision`、`cwd`、`warnings`、`message`）、`file` / `written`，启动失败时 `error`。`exit` 之后以 1000 关闭；后端重启时以 1012 关闭，页面自行重连。紧跟 `ready` 的 `replay` 字节是补发的旧输出，页面重画但不再执行其中的 `code` 请求。
+
+生命周期：连接断开不结束 Shell；没有页面连着超过 30 分钟、连续 3 小时、输入 `exit`、重置/删除工作区或后端停止时，Shell 挂断并保存工作区（CAS）。程序运行在页面离开时就结束，最长 30 分钟。同时最多 2 个 Shell、2 个程序运行，都不占脚本执行的并发槽。
 
 data 为最大 1 MiB 的 JSON 对象，限制深度和字段数量，不允许 prototype 污染字段。服务仅保存状态；目标是否获授权、事实/观察/推测的区别、模型工具授权和人格规则由统一智能体控制层处理。记录经验不代表模型参数已训练。
 
@@ -172,8 +178,10 @@ status 可为 accepted、wrong_answer、compile_error、runtime_error、timeout�
 - 镜像构建时预编译常用 Go 标准库到 `/opt/go-cache`，每次编译前复制进可写的 `/tmp/go-cache`（约 31 MB）；否则每次运行都要从空缓存重编标准库，服务器上约 20 秒。
 - C/C++/Go 先编译，再为每个测试新建容器。用例之间不共享可写文件系统或进程。超时或输出超限时杀死容器，并在 finally 中删除容器。
 - Git/Linux 每次执行独立 Bash 脚本；同一工作区会恢复上次保存的当前目录、导出的环境变量、umask、别名、函数及 `/work` 下的文件和权限。普通未导出变量、后台进程及 `/tmp` 文件不跨次保留；工作目录已不存在时回到 `/work` 并给出提示。后台残留进程清理后才生成快照。结果中的 `cwd` 为本次结束目录，`exitCode` 为实际脚本退出码；Git 状态或文件列表通过 workspaceSummary 返回。
-- Linux 工具包括 `ncal` / `cal`、文本过滤、压缩解压、`jq`、`bc`、进程/文件查看及 `man`，终端另有 `nano`、`vim` 和 bash-completion（含 Git 子命令补全）。Linux 与 Git 工作区均提供默认 Git 提交身份，可在新建子仓库中直接提交，并可用 `git config` 修改；`.lesshst`、`.viminfo`、`.python_history` 等工具在 HOME（即 `/work`）留下的文件由系统级 excludesFile 忽略。`curl` / `wget` / `ssh` 已安装，但执行容器仍无外网；没有 root / sudo 或长期后台服务。
-- 交互式终端（Git/Linux）用同样限制的容器，外加 `--hostname=nanaly`，生存期 3 小时 + 2 分钟；`shell-session.py terminal` 在容器里开 PTY 运行 `bash -i`，提示符为 `learner@nanaly:~$`，`TERM=xterm-256color`。每条命令结束时（PROMPT_COMMAND）记下当前目录、导出变量、umask、别名、函数，命令历史也存进同一份 Shell 状态（最多 2000 行 / 200 KiB），所以连接意外断开也保留最后一个提示符时的状态。终端开着时独占工作区：同一工作区的脚本执行返回 409（提示先关闭终端），另一个窗口打开同一工作区的终端会让旧会话先保存再交出。同时最多 2 个终端，不占脚本执行的并发槽。结束时 Bash 收到挂断，2 秒不退出就强制结束，然后清理残留进程、快照、按 CAS 提交。
+- Linux 工具包括 `ncal` / `cal`、文本过滤、压缩解压、`jq`、`bc`、进程/文件查看及带手册的 `man`，另有 `nano`、`vim` 和 bash-completion（含 Git 子命令补全）。Linux 与 Git 工作区均提供默认 Git 提交身份，可在新建子仓库中直接提交，并可用 `git config` 修改；`.lesshst`、`.viminfo`、`.python_history` 等工具在 HOME（即 `/work`）留下的文件由系统级 excludesFile 忽略。`curl` / `wget` / `ssh` 已安装，但执行容器仍无外网；没有 root / sudo 或长期后台服务。
+- 交互式终端（Git/Linux）用同样限制的容器（无网络、无 root、只读根文件系统），外加 `--hostname=nanaly`，生存期 3 小时 + 2 分钟；`shell-session.py terminal` 在容器里开 PTY 运行 `bash -i`，提示符为 `learner@nanaly:~$`（同时设窗口标题），`TERM=xterm-256color`，`TZ=Asia/Shanghai`。每条命令结束时（PROMPT_COMMAND）记下当前目录、导出变量、umask、别名、函数，命令历史也存进同一份 Shell 状态（最多 2000 行 / 200 KiB），所以连接意外断开也保留最后一个提示符时的状态。Shell 开着时占用工作区：同一工作区的脚本在这个容器里、Shell 当前目录下执行（`--pidfile` 给出 Shell 的 PID，读 `/proc/<pid>/cwd`），改动随 Shell 一起保存；重置和删除先结束 Shell。结束时 Bash 收到挂断，2 秒不退出就强制结束，然后清理残留进程、快照、按 CAS 提交。
+- 程序运行（C/C++/Go/Python）用同样限制的一次性容器：代码放进只读的 `/input`，`shell-session.py pty` 在 PTY 上跑 `bash -c` 脚本，先显示一行带提示符的命令再真正执行（`gcc -std=c17 -Wall -Wextra -g main.c -o main -lm && ./main` 等，Go 先复制预热缓存）。
+- 镜像去掉了 Ubuntu 最小化镜像对手册的排除，重装常用软件包，`man` / `man -k` 可用；另装 `nano vim tmux htop psmisc lsof strace make tzdata`。`/usr/local/bin/code` 用 OSC 7337 请页面打开文件；`/usr/local/bin/sudo` 只说明没有 root 权限，不是真的 sudo。
 - MySQL 每次建立禁用 TCP 的独立实例，仅开放容器内 Unix socket；learner 账户只有 practice 数据库权限，禁止 FILE、SUPER、LOCAL INFILE 和服务端文件导出。mysql 客户端使用 binary-mode，禁用非交互输入中的 shell 客户端命令。表/行通过私有 SQL 快照跨次恢复。
 - 工作区采用“执行 → 有界快照 → 原子提交 metadata”的顺序。执行被终止、快照超限或保存失败时保留上个已保存版本，并返回 workspaceCommitted:false。SQL/命令产生了输出不代表其变化已持久化；以此字段及 workspaceRevision 为准。
 - 客户端断开会触发取消并杀死本次容器，后端在下一执行/快照阶段停止，取消后不再启动新测试；若断开发生在提交完成之后，提交仍可能已生效。前端通过 `GET /api/workspaces` 恢复当前列表；已知工作区在取消或网络异常后再读取 revision、busy 与 broken。空闲且完好即可继续使用，无需强制重置；忙碌时等待，损坏时要求重置。不会自动重跑有副作用的命令。

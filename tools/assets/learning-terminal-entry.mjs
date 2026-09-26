@@ -25,7 +25,7 @@ const THEMES = {
 };
 
 let styled = false;
-function create(host, { theme = 'light', onData, onResize } = {}) {
+function create(host, { theme = 'light', fontSize = 14, onData, onResize, onTitle, onOpen } = {}) {
   if (!styled) {
     const style = document.createElement('style');
     style.dataset.learningTerminal = '';
@@ -35,7 +35,7 @@ function create(host, { theme = 'light', onData, onResize } = {}) {
   }
   const term = new Terminal({
     fontFamily: "'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', 'Microsoft YaHei', monospace",
-    fontSize: 14,
+    fontSize,
     lineHeight: 1.2,
     cursorBlink: true,
     scrollback: 5000,
@@ -43,6 +43,9 @@ function create(host, { theme = 'light', onData, onResize } = {}) {
     macOptionIsMeta: true,
     theme: THEMES[theme] || THEMES.light
   });
+  // Output replayed after a reconnect is drawn again, but its requests (`code FILE`) were
+  // already handled when it first arrived.
+  let replaying = 0;
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(host);
@@ -59,8 +62,20 @@ function create(host, { theme = 'light', onData, onResize } = {}) {
     }
     return key !== 'v';
   });
-  const dataSubscription = term.onData(data => onData?.(data));
-  const resizeSubscription = term.onResize(({ cols, rows }) => onResize?.(cols, rows));
+  const subscriptions = [
+    term.onData(data => onData?.(data)),
+    term.onResize(({ cols, rows }) => onResize?.(cols, rows)),
+    // The prompt sets the window title to "user@host: dir", as Ubuntu's does.
+    term.onTitleChange(title => onTitle?.(title)),
+    // `code FILE` in the sandbox asks the page to open FILE: OSC 7337 ; open ; base64(path).
+    term.parser.registerOscHandler(7337, data => {
+      const [action, encoded] = data.split(';');
+      if (action === 'open' && encoded && !replaying) {
+        try { onOpen?.(new TextDecoder().decode(Uint8Array.from(atob(encoded), c => c.charCodeAt(0)))); } catch (_) {}
+      }
+      return true;
+    })
+  ];
   let frame = 0;
   const refit = () => {
     cancelAnimationFrame(frame);
@@ -73,15 +88,25 @@ function create(host, { theme = 'light', onData, onResize } = {}) {
   observer.observe(host);
   refit();
   return {
-    write: data => term.write(data),
+    write: (data, replay = false) => {
+      if (!replay) { term.write(data); return; }
+      replaying++; term.write(data, () => { replaying--; });
+    },
     // Messages from the page itself, set apart from shell output by colour and their own line.
-    notice: (text, tone = 'dim') => {
+    // Where the cursor is counts only once earlier output has been drawn, hence the empty write.
+    notice: (text, tone = 'dim') => term.write('', () => {
       const fresh = term.buffer.active.cursorX === 0;
       term.write(`${fresh ? '' : '\r\n'}\x1b[${{ dim: '2', warn: '33', error: '31' }[tone] || '2'}m${String(text).replace(/\n/g, '\r\n')}\x1b[0m\r\n`);
-    },
+    }),
     size: () => ({ cols: term.cols, rows: term.rows }),
     fit: refit,
     focus: () => term.focus(),
+    blur: () => term.blur(),
+    // Typed as one paste, in bracketed-paste form when the program asked for it.
+    paste: text => term.paste(text),
+    // Before a full replay of a session the page did not see from the start.
+    reset: () => term.reset(),
+    setFontSize: size => { term.options.fontSize = size; refit(); },
     applicationCursor: () => term.modes.applicationCursorKeysMode,
     setTheme: name => { term.options.theme = THEMES[name] || THEMES.light; },
     transcript: (lines = 60) => {
@@ -89,7 +114,7 @@ function create(host, { theme = 'light', onData, onResize } = {}) {
       for (let row = Math.max(0, end - lines); row < end; row++) text.push(buffer.getLine(row)?.translateToString(true) ?? '');
       return text.join('\n').replace(/\n+$/, '');
     },
-    dispose: () => { cancelAnimationFrame(frame); observer.disconnect(); dataSubscription.dispose(); resizeSubscription.dispose(); term.dispose(); }
+    dispose: () => { cancelAnimationFrame(frame); observer.disconnect(); for (const subscription of subscriptions) subscription.dispose(); term.dispose(); }
   };
 }
 

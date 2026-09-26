@@ -4,7 +4,6 @@ import { randomUUID, createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { ApiError, invariant } from './errors.mjs';
 import { processResult } from './process.mjs';
-import { TerminalSession } from './terminal.mjs';
 import { diagnostics, normalizeOutput, pythonTraceback } from './validation.mjs';
 
 const LIMIT = 131072, SNAPSHOT_LIMIT = 32 * 1024 * 1024;
@@ -13,11 +12,11 @@ const stringResult = result => ({ ...result, stdout: result.stdout.toString('utf
 const status = result => result.reason || (result.code === 0 ? 'accepted' : 'runtime_error');
 const dockerEnv = () => Object.fromEntries(['PATH', 'HOME', 'DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_CONFIG', 'XDG_RUNTIME_DIR'].filter(key => process.env[key]).map(key => [key, process.env[key]]));
 export class DockerRunner {
-  constructor(store, { image = 'nanaly-runner:1', docker = 'docker', concurrency = 2, execute = processResult, spawnProcess = spawn, maxTerminals = 2, terminal = {} } = {}) {
+  constructor(store, { image = 'nanaly-runner:1', docker = 'docker', concurrency = 2, execute = processResult, spawnProcess = spawn } = {}) {
     this.instanceId = createHash('sha256').update(store.directory).digest('hex').slice(0, 24);
     this.store = store; this.image = image; this.docker = docker; this.concurrency = concurrency; this.execute = execute;
-    this.spawnProcess = spawnProcess; this.maxTerminals = maxTerminals; this.terminalOptions = terminal;
-    this.active = new Map(); this.containers = new Set(); this.busy = new Set(); this.store.busy = this.busy; this.terminals = new Set();
+    this.spawnProcess = spawnProcess;
+    this.active = new Map(); this.containers = new Set(); this.busy = new Set(); this.store.busy = this.busy;
     this.cache = null; this.lastHealth = 0;
     invariant(!store.directory.includes(','), 500, 'INVALID_PATH', '数据目录不能包含逗号。');
   }
@@ -37,32 +36,6 @@ export class DockerRunner {
       '--workdir=/work', '--env=HOME=/work', '--env=GOCACHE=/tmp/go-cache', '--env=GOPATH=/tmp/gopath',
       '--env=CGO_ENABLED=0', '--env=GOTOOLCHAIN=local', '--env=GOPROXY=off',
       this.image, 'sleep', String(seconds)];
-  }
-  terminalFor(workspaceId) { for (const session of this.terminals) if (session.workspace.workspaceId === workspaceId) return session; return null; }
-  // One terminal per workspace: a newer window takes over after the older one has saved.
-  async startTerminal({ language, workspaceId, cols = 80, rows = 24 }) {
-    invariant(!this.closing, 503, 'SERVER_CLOSING', '后端正在停止，请稍后重试。');
-    invariant((await this.health()).ready, 503, 'RUNNER_UNAVAILABLE', '隔离执行环境尚未就绪，请完成后端 Docker 配置。');
-    let workspace = null;
-    if (workspaceId) { try { workspace = this.store.getWorkspace(workspaceId); } catch (error) { if (error.code !== 'WORKSPACE_NOT_FOUND') throw error; } }
-    workspace ||= this.store.listWorkspaces().find(item => item.language === language) || null;
-    if (workspace) {
-      invariant(workspace.language === language, 400, 'WORKSPACE_LANGUAGE', '工作区语言不匹配。');
-      const holder = this.terminalFor(workspace.workspaceId);
-      if (holder) await holder.end('replaced');
-      workspace = this.store.getWorkspace(workspace.workspaceId);
-      invariant(!this.busy.has(workspace.workspaceId), 409, 'WORKSPACE_BUSY', '这个工作区正在执行脚本，请等它结束后再打开终端。');
-    }
-    invariant(this.terminals.size < this.maxTerminals, 429, 'TERMINAL_LIMIT', '同时打开的终端已达上限，请先关闭其他窗口里的终端。');
-    workspace ||= await this.store.resetWorkspace(null, language);
-    invariant(!this.busy.has(workspace.workspaceId), 409, 'WORKSPACE_BUSY', '这个工作区正在执行脚本，请等它结束后再打开终端。');
-    this.busy.add(workspace.workspaceId);
-    const session = new TerminalSession(this, workspace, this.terminalOptions);
-    this.terminals.add(session);
-    session.starting = session.start(cols, rows);
-    try { await session.starting; }
-    catch (error) { await session.end('failed'); throw error; }
-    return session;
   }
   async health(force = false) {
     if (this.pendingHealth) return this.pendingHealth;
@@ -124,7 +97,6 @@ export class DockerRunner {
       if (['git', 'linux', 'mysql'].includes(request.language) && (request.mode === 'run' || request.workspaceId)) {
         workspace = request.workspaceId ? this.store.getWorkspace(request.workspaceId) : await this.store.resetWorkspace(null, request.language);
         invariant(workspace.language === request.language, 400, 'WORKSPACE_LANGUAGE', '工作区语言不匹配。');
-        invariant(!this.terminalFor(workspace.workspaceId), 409, 'WORKSPACE_BUSY', '这个工作区正在终端里使用；关闭终端后才能执行脚本。');
         invariant(!this.busy.has(workspace.workspaceId), 409, 'WORKSPACE_BUSY', '工作区正在执行。');
         invariant(!request.workspaceId || request.workspaceRevision === workspace.revision, 409, 'WORKSPACE_CONFLICT', '工作区已被另一设备修改，请刷新。', { workspaceRevision: workspace.revision });
         this.busy.add(workspace.workspaceId); ownsWorkspace = true;
@@ -307,8 +279,6 @@ export class DockerRunner {
   }
   async close() {
     this.closing = true;
-    // Open terminals save their workspaces first; the stop budget in index.mjs bounds this.
-    await Promise.all([...this.terminals].map(session => session.end('shutdown')));
     await Promise.all([...this.containers].map(name => this.cli(['rm', '-f', name], { timeout: 10000 })));
   }
 }

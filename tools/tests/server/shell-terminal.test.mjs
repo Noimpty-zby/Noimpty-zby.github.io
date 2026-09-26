@@ -132,3 +132,31 @@ test('a program that ignores the hangup is stopped and the session still conclud
   const result = await env.result()
   assert.equal(result.shellStateSaved, true)
 })
+
+test('pty runs any program on a terminal: it sees a tty, reads typed input and reports its exit code', { skip: !available, timeout: 20000 }, async t => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nanaly-pty-test-'))
+  t.after(() => fs.rm(root, { recursive: true, force: true }))
+  const child = spawn('python3', [helper, 'pty', '--cols', '77', '--rows', '19', '--cwd', root, '--', '/bin/bash', '-c', 'test -t 0 && stty size && pwd && read -p "name: " name && echo "hello $name" && exit 5'], { env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' }, stdio: ['pipe', 'pipe', 'pipe'] })
+  t.after(() => { if (child.exitCode === null) child.kill('SIGKILL') })
+  let output = ''
+  child.stdout.on('data', chunk => { output += chunk.toString('utf8') })
+  const exited = new Promise(resolve => child.on('close', resolve))
+  const until = async pattern => { const end = Date.now() + 8000; while (!pattern.test(plain(output))) { assert.ok(Date.now() < end, 'got: ' + plain(output)); await new Promise(resolve => setTimeout(resolve, 20)) } }
+  await until(/name: $/)
+  child.stdin.write(frame('d', 'terminal\r'))
+  assert.equal(await exited, 5)
+  assert.equal(plain(output), `19 77\n${root}\nname: terminal\nhello terminal\n`)
+})
+
+test('the terminal writes its shell pid for scripts that should start where the shell is', { skip: !available, timeout: 20000 }, async t => {
+  const env = await fixture(t)
+  const pidfile = path.join(env.temporary, 'shell.pid')
+  const shell = env.open(['--pidfile', pidfile])
+  await shell.until(/\$ $/)
+  shell.type('mkdir -p deep && cd deep\r')
+  await shell.until(/deep\$ $/)
+  const pid = Number(await fs.readFile(pidfile, 'utf8'))
+  assert.equal(await fs.readlink(`/proc/${pid}/cwd`), path.join(env.workspace, 'deep'))
+  shell.hangup(); await shell.exited
+  await assert.rejects(fs.access(pidfile), 'the pid file goes with the shell')
+})

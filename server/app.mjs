@@ -5,7 +5,7 @@ import { validateRun, languages } from './lib/validation.mjs';
 import { refuse, upgrade } from './lib/websocket.mjs';
 
 const digest = text => createHash('sha256').update(text).digest();
-export function createApp({ store, runner, terminals = null, token, automationToken = null, origins = [], now = Date.now, build = null }) {
+export function createApp({ store, runner, sessions = null, terminals = null, token, automationToken = null, origins = [], now = Date.now, build = null }) {
   const usable = value => typeof value === 'string' && value.length >= 24 && value.length <= 1024 && !value.startsWith('REPLACE_') && !/[\r\n]/.test(value);
   invariant(usable(token), 500, 'TOKEN_REQUIRED', '请配置至少 24 字符的随机访问令牌。');
   invariant(automationToken === null || (usable(automationToken) && automationToken !== token), 500, 'AUTOMATION_TOKEN_INVALID', '后台令牌须为另一串至少 24 字符的随机值。');
@@ -30,6 +30,11 @@ export function createApp({ store, runner, terminals = null, token, automationTo
     if (!rate || stamp - rate.since > 60000) { rate = { since: stamp, failed: 0, authenticated: 0, health: 0 }; rates.set(key, rate); }
     if (rates.size > 1000) for (const [ip, record] of rates) if (stamp - record.since > 60000) rates.delete(ip);
     return rate;
+  };
+  // An open terminal holds its workspace, but scripts can still run inside it, so it is not "busy".
+  const occupancy = id => {
+    const terminal = !!sessions?.shellFor(id);
+    return { busy: runner.busy.has(id) && !terminal, terminal };
   };
   const body = req => new Promise((resolve, reject) => {
     invariant((req.headers['content-type'] || '').split(';')[0].trim() === 'application/json', 415, 'JSON_REQUIRED', '请使用 application/json。');
@@ -93,7 +98,9 @@ export function createApp({ store, runner, terminals = null, token, automationTo
         const abort = () => { if (!res.writableEnded) controller.abort(); };
         req.once('aborted', abort); res.once('close', abort);
         try {
-          const result = await runner.run(request, { signal: controller.signal });
+          // With the workspace's terminal open, a script runs inside that terminal's sandbox.
+          const live = sessions && ['git', 'linux'].includes(request.language) && request.mode === 'run' && request.workspaceId ? sessions.shellFor(request.workspaceId) : null;
+          const result = live ? await sessions.runInShell(live, request, { signal: controller.signal }) : await runner.run(request, { signal: controller.signal });
           invariant(!controller.signal.aborted, 499, 'RUN_CANCELLED', '本次执行已取消。');
           if (request.saveHistory !== false && request.mode !== 'check') {
             try { await store.saveRun({ ...result, language: request.language, code: request.code, stdin: request.stdin, mode: request.mode, testCases: request.tests, ...(request.practice ? { practice: request.practice } : {}), createdAt: new Date().toISOString() }); }
@@ -113,15 +120,16 @@ export function createApp({ store, runner, terminals = null, token, automationTo
       }
       if (url.pathname === '/api/runs' && req.method === 'DELETE') { await store.clearRuns(); json(res, 200, { deleted: true }); return; }
       if (url.pathname === '/api/workspaces' && req.method === 'GET') {
-        json(res, 200, { workspaces: store.listWorkspaces().map(value => ({ ...value, busy: runner.busy.has(value.workspaceId) })) }); return;
+        json(res, 200, { workspaces: store.listWorkspaces().map(value => ({ ...value, ...occupancy(value.workspaceId) })) }); return;
       }
       if (url.pathname === '/api/workspaces/reset' && req.method === 'POST') {
         const request = await body(req);
+        if (sessions && typeof request?.workspaceId === 'string') await sessions.endShell(request.workspaceId);
         json(res, 200, await store.resetWorkspace(request?.workspaceId, request?.language)); return;
       }
       const match = url.pathname.match(/^\/api\/workspaces\/([a-f0-9-]{36})$/);
-      if (match && req.method === 'GET') { const value = store.getWorkspace(match[1]); json(res, 200, { ...value, busy: runner.busy.has(match[1]) }); return; }
-      if (match && req.method === 'DELETE') { json(res, 200, await store.deleteWorkspace(match[1])); return; }
+      if (match && req.method === 'GET') { const value = store.getWorkspace(match[1]); json(res, 200, { ...value, ...occupancy(match[1]) }); return; }
+      if (match && req.method === 'DELETE') { store.getWorkspace(match[1]); await sessions?.endShell(match[1]); json(res, 200, await store.deleteWorkspace(match[1])); return; }
       throw new ApiError(404, 'NOT_FOUND', '接口不存在。');
     } catch (error) {
       if (res.destroyed || res.writableEnded) return;
@@ -139,7 +147,8 @@ export function createApp({ store, runner, terminals = null, token, automationTo
     const claim = terminals.claim(url.searchParams.get('ticket'));
     if (!claim) { refuse(socket, ++rate.failed > 12 ? 429 : 401, 'Unauthorized'); return; }
     if (++rate.authenticated > 180) { refuse(socket, 429, 'Too Many Requests'); return; }
-    const ws = upgrade(req, socket, head);
+    // Room for a 1 MB file saved from the editor (`code FILE`) plus its JSON envelope.
+    const ws = upgrade(req, socket, head, { maxMessage: 2 * 1024 * 1024 });
     if (ws) terminals.attach(ws, claim);
   });
   server.requestTimeout = 15000; server.headersTimeout = 10000; server.keepAliveTimeout = 5000;

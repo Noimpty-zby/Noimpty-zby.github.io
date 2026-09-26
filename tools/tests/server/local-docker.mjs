@@ -1,7 +1,7 @@
 // A stand-in for the Docker CLI that runs the real runner helpers (shell-session.py, tar, git)
-// in local directories, so the terminal path can be exercised end to end without Docker.
-// It provides no isolation: only trusted test commands go through it. cleanup.py is not run,
-// because inside a container it kills every process but its own.
+// in local directories, so the terminal paths can be exercised end to end without Docker.
+// It provides no isolation: only trusted test commands go through it. cleanup.py and the limit
+// check are not run, because inside a container the first kills every process but its own.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -12,14 +12,26 @@ const helpers = fileURLToPath(new URL('../../../server/runner/', import.meta.url
 
 export function localDocker(root, { log = [] } = {}) {
   const containers = new Map();
-  // One pass, so a mapped path that itself starts with /tmp is not mapped again.
-  const mapPath = (container, value) => value.replace(/^(?:\/(work|tmp|input)(?=\/|$)|\/opt\/nanaly\/)/, (_, root) => root ? container[root] : helpers);
-  const env = container => ({ PATH: '/usr/bin:/bin', HOME: container.work, LANG: 'C.UTF-8' });
+  // One pass over every argument, paths inside `sh -c` scripts included, so a mapped path that
+  // itself starts with /tmp is not mapped again. Local paths reported back (a shell's cwd) stay.
+  const mapPaths = (container, value) => value.startsWith(root) ? value : value.replace(/(?<![\w.-])(?:\/(work|tmp|input)(?=\/|\b)|\/opt\/nanaly\/)/g, (_, root) => root ? container[root] : helpers);
+  // The image's /usr/local/bin helpers (`code`, `sudo`) come from the runner directory.
+  const env = container => ({ PATH: helpers + ':/usr/bin:/bin', HOME: container.work, LANG: 'C.UTF-8' });
   const done = (code = 0, stdout = '', stderr = '') => ({ code, stdout: Buffer.from(stdout), stderr: Buffer.from(stderr) });
-  const command = (container, args) => {
-    const mapped = args.map(value => mapPath(container, value));
-    if (args[0] === 'python3' && args[1] === '/opt/nanaly/shell-session.py') mapped.push('--workspace', container.work, '--temporary', container.tmp);
-    return mapped;
+  // `exec [-i] [-w dir] [-u user] [-e K=V]… name command…`
+  const parseExec = args => {
+    let index = 1, cwd = null;
+    while (args[index]?.startsWith('-')) {
+      const flag = args[index++];
+      if (flag === '-w') cwd = args[index++];
+      else if (flag === '-u' || flag === '-e') index++;
+    }
+    const container = containers.get(args[index]);
+    if (!container) return { container: null };
+    const inner = args.slice(index + 1);
+    const mapped = inner.map(value => mapPaths(container, value));
+    if (inner[0] === 'python3' && inner[1] === '/opt/nanaly/shell-session.py' && inner[2] !== 'pty') mapped.push('--workspace', container.work, '--temporary', container.tmp);
+    return { container, inner, mapped, cwd: cwd ? mapPaths(container, cwd) : container.work };
   };
   const execute = async (_docker, args, options = {}) => {
     log.push(args.join(' '));
@@ -30,9 +42,10 @@ export function localDocker(root, { log = [] } = {}) {
     if (verb === 'create') {
       const name = args[args.indexOf('--name') + 1];
       const input = args[args.indexOf('--mount') + 1].match(/src=([^,]+)/)[1];
-      // Like /work in a real container, the path is the same every time, so a saved current
-      // directory still exists in the next session. Containers therefore run one at a time.
-      const container = { name, input, work: path.join(root, 'work'), tmp: path.join(root, 'tmp-' + name) };
+      // Like /work in a real container, a shell's path is the same every time, so a saved current
+      // directory still exists in the next session. Shells therefore run one at a time.
+      const work = name.startsWith('nanaly-task-') ? path.join(root, 'task-' + name) : path.join(root, 'work');
+      const container = { name, input, work, tmp: path.join(root, 'tmp-' + name) };
       await fs.rm(container.work, { recursive: true, force: true });
       await fs.mkdir(container.work, { recursive: true }); await fs.mkdir(container.tmp, { recursive: true });
       containers.set(name, container);
@@ -46,20 +59,18 @@ export function localDocker(root, { log = [] } = {}) {
       return done();
     }
     if (verb === 'exec') {
-      const container = containers.get(args[2]);
+      const { container, inner, mapped, cwd } = parseExec(args);
       if (!container) return done(1, '', 'no such container');
-      const inner = args.slice(3);
       if (inner[1] === '/opt/nanaly/check-limits.py' || inner[1] === '/opt/nanaly/cleanup.py') return done();
-      const [program, ...rest] = command(container, inner);
-      return processResult(program, rest, { ...options, env: env(container) });
+      return processResult('/bin/sh', ['-c', 'cd "$1" && shift && exec "$@"', 'sh', cwd, ...mapped], { ...options, env: env(container) });
     }
     return done(1, '', 'unsupported docker command ' + verb);
   };
   const spawnProcess = (_docker, args, options) => {
     log.push(args.join(' '));
-    const container = containers.get(args[2]);
-    const [program, ...rest] = command(container, args.slice(3));
-    return spawn(program, rest, { ...options, env: env(container) });
+    const { container, mapped, cwd } = parseExec(args);
+    const [program, ...rest] = mapped;
+    return spawn(program, rest, { ...options, cwd, env: env(container) });
   };
   return { execute, spawnProcess, containers };
 }

@@ -10,6 +10,7 @@ import { spawnSync } from 'node:child_process';
 import { PrivateStore } from '../../../server/lib/store.mjs';
 import { DockerRunner } from '../../../server/lib/runner.mjs';
 import { TerminalManager } from '../../../server/lib/terminal.mjs';
+import { SessionManager } from '../../../server/lib/sessions.mjs';
 import { validateRun } from '../../../server/lib/validation.mjs';
 import { upgrade } from '../../../server/lib/websocket.mjs';
 import { createApp } from '../../../server/app.mjs';
@@ -17,7 +18,7 @@ import { localDocker } from './local-docker.mjs';
 
 const token = 'test-only-0123456789-abcdef-abcdef';
 const origin = 'https://blog.example';
-const available = process.platform === 'linux' && spawnSync('python3', ['--version']).status === 0 && spawnSync('tar', ['--version']).status === 0;
+const available = process.platform === 'linux' && ['python3', 'tar', 'git', 'bash'].every(command => spawnSync(command, ['--version']).status === 0);
 const plain = text => text.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07|\r/g, '');
 
 // Raw client frames for the protocol tests: always masked, as a browser sends them.
@@ -81,17 +82,22 @@ test('WebSocket frames: fragments reassemble, pings are answered, unmasked and o
   assert.equal(closed, 1000);
 });
 
-async function backend(t, runnerOptions = {}) {
+async function backend(t, sessionOptions = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nanaly-terminal-api-'));
   const store = await new PrivateStore(path.join(root, 'private')).init();
   const log = [];
   const docker = localDocker(path.join(root, 'containers'), { log });
-  const runner = new DockerRunner(store, { execute: docker.execute, spawnProcess: docker.spawnProcess, ...runnerOptions });
-  const terminals = new TerminalManager(runner);
-  const server = createApp({ store, runner, terminals, token, origins: [origin] });
+  const runner = new DockerRunner(store, { execute: docker.execute, spawnProcess: docker.spawnProcess });
+  const sessions = new SessionManager(runner, sessionOptions);
+  const terminals = new TerminalManager(sessions);
+  const server = createApp({ store, runner, sessions, terminals, token, origins: [origin] });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const base = `http://127.0.0.1:${server.address().port}`;
-  t.after(async () => { await runner.close(); terminals.close(); server.closeAllConnections?.(); await new Promise(resolve => server.close(resolve)); await store.close(); await fs.rm(root, { recursive: true, force: true }); });
+  t.after(async () => { terminals.close(); await sessions.close(); await runner.close(); server.closeAllConnections?.(); await new Promise(resolve => server.close(resolve)); await store.close(); await fs.rm(root, { recursive: true, force: true }); });
+  const api = async (pathname, body, method = 'POST') => {
+    const response = await fetch(base + pathname, { method, headers: { Authorization: 'Bearer ' + token, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+    return { status: response.status, body: await response.json() };
+  };
   const ticket = async (body, auth = token) => {
     const response = await fetch(base + '/api/terminal/ticket', { method: 'POST', headers: { Authorization: 'Bearer ' + auth, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     return { status: response.status, body: await response.json() };
@@ -104,11 +110,11 @@ async function backend(t, runnerOptions = {}) {
   const connect = ticketValue => {
     const ws = new WebSocket(base.replace('http', 'ws') + '/api/terminal?ticket=' + ticketValue, { headers: { Origin: origin } });
     ws.binaryType = 'arraybuffer';
-    const events = []; let output = ''; const waiters = new Set();
+    const events = []; let output = '', bytes = 0; const waiters = new Set();
     const notify = () => { for (const waiter of waiters) waiter(); };
     ws.onmessage = event => {
       if (typeof event.data === 'string') events.push(JSON.parse(event.data));
-      else output += Buffer.from(event.data).toString('utf8');
+      else { output += Buffer.from(event.data).toString('utf8'); bytes += event.data.byteLength; }
       notify();
     };
     const closed = new Promise(resolve => { ws.onclose = event => { events.push({ type: 'socket-closed', code: event.code }); notify(); resolve(event.code); }; });
@@ -121,19 +127,22 @@ async function backend(t, runnerOptions = {}) {
     return {
       ws, events, closed,
       get output () { return plain(output); },
+      get bytes () { return bytes; },
       event: type => wait(() => events.find(item => item.type === type), type),
       until: (pattern, from = 0) => wait(() => plain(output).slice(from).match(pattern), String(pattern)),
-      type: data => ws.send(JSON.stringify({ type: 'input', data })),
-      close: () => ws.send(JSON.stringify({ type: 'close' }))
+      send: value => ws.send(JSON.stringify(value)),
+      type: data => ws.send(JSON.stringify({ type: 'input', data }))
     };
   };
-  return { base, store, runner, terminals, ticket, open, connect, log };
+  return { base, store, runner, sessions, terminals, api, ticket, open, connect, log };
 }
+const prompt = /\$ $/;
 
 test('terminal tickets need the owner token, are single use and only open from allowed origins', { skip: !available, timeout: 30000 }, async t => {
   const api = await backend(t);
   assert.equal((await api.ticket({ language: 'linux' }, 'wrong-token-0123456789-abcdef')).status, 401);
   assert.equal((await api.ticket({ language: 'mysql' })).status, 400);
+  assert.equal((await api.ticket({ kind: 'task', language: 'python', code: '' })).status, 400);
   const issued = await api.ticket({ language: 'linux' });
   assert.match(issued.body.ticket, /^[a-f0-9]{48}$/); assert.equal(issued.body.expiresIn, 30);
   const upgradeStatus = (ticket, headers = {}) => new Promise(resolve => {
@@ -147,73 +156,118 @@ test('terminal tickets need the owner token, are single use and only open from a
   const shell = api.connect(issued.body.ticket);
   await shell.event('ready');
   assert.equal(await upgradeStatus(issued.body.ticket), 401, 'a ticket opens one socket only');
-  shell.close();
-  await shell.event('saved');
 });
 
-test('a terminal session runs real Bash, saves the workspace on close, and resumes directory and variables', { skip: !available, timeout: 30000 }, async t => {
+test('a shell outlives its page: reconnecting replays only what was missed, a new page gets the whole screen', { skip: !available, timeout: 30000 }, async t => {
   const api = await backend(t);
   const first = await api.open();
   const ready = await first.event('ready');
-  assert.equal(ready.language, 'linux'); assert.equal(ready.workspaceRevision, 0);
-  await first.until(/\$ $/);
-  first.type('mkdir -p demo && cd demo && printf "kept\\n" > note.txt && export LESSON=terminal && echo made-$((40+2))\r');
-  await first.until(/made-42\n/);
-  await first.until(/\$ $/, first.output.indexOf('made-42'));
-  first.close();
-  const saved = await first.event('saved');
-  assert.equal(saved.committed, true, JSON.stringify(saved));
-  assert.equal(saved.workspaceId, ready.workspaceId); assert.equal(saved.workspaceRevision, 1);
-  assert.match(saved.cwd, /\/work\/demo$/);
-  assert.equal(await first.closed, 1000);
-  assert.equal(api.runner.busy.size, 0); assert.equal(api.runner.terminals.size, 0);
-
-  const second = await api.open({ language: 'linux', workspaceId: ready.workspaceId, cols: 90, rows: 20 });
-  assert.equal((await second.event('ready')).workspaceRevision, 1);
-  await second.until(/\$ $/);
-  second.type('pwd; cat note.txt; echo "lesson=$LESSON"\r');
-  await second.until(/\/work\/demo\nkept\nlesson=terminal\n/);
-  // A dropped connection saves just like an explicit close.
-  second.ws.close();
-  await second.closed;
-  const deadline = Date.now() + 8000;
-  while (api.store.getWorkspace(ready.workspaceId).revision !== 2 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
-  assert.equal(api.store.getWorkspace(ready.workspaceId).revision, 2);
+  assert.equal(ready.language, 'linux'); assert.equal(ready.reset, true); assert.equal(ready.offset, 0);
+  await first.until(prompt);
+  first.type('mkdir -p demo && cd demo && export LESSON=terminal && echo first-$((40+2))\r');
+  await first.until(/first-42\n/);
+  await first.until(prompt, first.output.indexOf('first-42'));
+  const seen = first.bytes;
+  first.ws.close(); await first.closed;
+  await new Promise(resolve => setTimeout(resolve, 200));
+  assert.equal(api.sessions.shells.size, 1, 'closing the page does not end the shell');
+  // Output produced while nobody watches is kept.
+  const again = await api.open({ language: 'linux', workspaceId: ready.workspaceId, sessionId: ready.sessionId, since: seen, cols: 100, rows: 30 });
+  const resumed = await again.event('ready');
+  assert.equal(resumed.sessionId, ready.sessionId); assert.equal(resumed.reset, false); assert.equal(resumed.offset, seen);
+  again.type('pwd; echo "$LESSON"\r');
+  await again.until(/\/work\/demo\nterminal\n/);
+  assert.doesNotMatch(again.output, /first-42/, 'bytes the page already had are not sent again');
+  const fresh = await api.open({ language: 'linux', cols: 100, rows: 30 });
+  const whole = await fresh.event('ready');
+  assert.equal(whole.sessionId, ready.sessionId); assert.equal(whole.reset, true);
+  await fresh.until(/first-42[\s\S]*\/work\/demo\nterminal\n/);
+  // Both pages see what either one types.
+  fresh.type('echo shared-$((1+1))\r');
+  await again.until(/shared-2\n/);
+  again.type('exit\r');
+  const exit = await fresh.event('exit');
+  assert.equal(exit.code, 0); assert.equal(exit.committed, true); assert.equal(exit.workspaceRevision, 1);
+  assert.equal((await again.event('exit')).workspaceRevision, 1);
+  await fresh.closed;
+  assert.equal(api.runner.busy.size, 0); assert.equal(api.sessions.shells.size, 0);
+  // The next shell starts from the saved state.
+  const next = await api.open({ language: 'linux', cols: 100, rows: 30 });
+  assert.notEqual((await next.event('ready')).sessionId, ready.sessionId);
+  await next.until(prompt);
+  next.type('pwd; echo "$LESSON"; history | grep -c "export LESSON"\r');
+  await next.until(/\/work\/demo\nterminal\n[1-9]/);
 });
 
-test('one terminal per workspace: a new window takes over, scripts wait, typing exit ends and saves', { skip: !available, timeout: 30000 }, async t => {
+test('a script from the editor runs inside the open terminal, where the terminal is', { skip: !available, timeout: 30000 }, async t => {
   const api = await backend(t);
-  const first = await api.open({ language: 'git' });
-  const ready = await first.event('ready');
-  await first.until(/\$ $/);
-  first.type('git status --short --branch\r');
-  await first.until(/## No commits yet on main/);
-  await assert.rejects(api.runner.run(validateRun({ language: 'git', code: 'git status', workspaceId: ready.workspaceId, workspaceRevision: 0 })), error => error.code === 'WORKSPACE_BUSY' && /终端/.test(error.message));
-  const second = await api.open({ language: 'git', workspaceId: ready.workspaceId });
-  const replaced = await first.event('saved');
-  assert.equal(replaced.reason, 'replaced'); assert.match(replaced.message, /另一个窗口/);
-  assert.equal((await second.event('ready')).workspaceRevision, 1);
-  await second.until(/\$ $/);
-  second.type('exit 4\r');
-  assert.equal((await second.event('exit')).code, 4);
-  const saved = await second.event('saved');
-  assert.equal(saved.reason, 'exit'); assert.equal(saved.committed, true); assert.equal(saved.workspaceRevision, 2);
-  await second.closed;
-  assert.equal(api.runner.busy.size, 0);
+  const shell = await api.open();
+  const ready = await shell.event('ready');
+  await shell.until(prompt);
+  shell.type('mkdir -p lab && cd lab && echo terminal-made > from-terminal.txt && echo made\r');
+  await shell.until(/made\n/);
+  await shell.until(prompt, shell.output.indexOf('made\n'));
+  const listed = (await api.api('/api/workspaces', null, 'GET')).body.workspaces.find(item => item.workspaceId === ready.workspaceId);
+  assert.equal(listed.terminal, true); assert.equal(listed.busy, false);
+  const run = await api.api('/api/run', { language: 'linux', code: 'pwd; cat from-terminal.txt; echo script-made > from-script.txt', workspaceId: ready.workspaceId, workspaceRevision: 0 });
+  assert.equal(run.status, 200, JSON.stringify(run.body));
+  assert.match(run.body.stdout, /\/work\/lab\nterminal-made\n/);
+  assert.equal(run.body.exitCode, 0); assert.match(run.body.workspaceSummary, /from-script\.txt/);
+  shell.type('cat from-script.txt\r');
+  await shell.until(/script-made\n/);
+  // `code FILE` reads and saves through the same socket.
+  shell.send({ type: 'write', id: 1, path: ready.workspaceId ? '/work/lab/note.md' : '', content: '# 标题\n' });
+  assert.equal((await shell.event('written')).error, undefined);
+  shell.send({ type: 'read', id: 2, path: '/work/lab/note.md' });
+  const file = await shell.event('file');
+  assert.equal(file.id, 2); assert.equal(file.content, '# 标题\n');
+  // Resetting the environment ends the terminal first.
+  const reset = await api.api('/api/workspaces/reset', { language: 'linux', workspaceId: ready.workspaceId });
+  assert.equal(reset.status, 200, JSON.stringify(reset.body));
+  assert.equal((await shell.event('exit')).message, '运行环境已重置。');
+  assert.equal(api.sessions.shells.size, 0);
 });
 
-test('an idle terminal saves and closes itself, and server shutdown saves open terminals', { skip: !available, timeout: 30000 }, async t => {
-  const api = await backend(t, { terminal: { idle: 1500 } });
-  const idle = await api.open();
-  await idle.event('ready');
-  await idle.until(/\$ $/);
-  const saved = await idle.event('saved');
-  assert.equal(saved.reason, 'idle'); assert.equal(saved.committed, true);
-  const open = await api.open();
+test('Run for a program: compile and run on its own terminal, reading what is typed', { skip: !available, timeout: 30000 }, async t => {
+  const api = await backend(t);
+  const run = await api.open({ kind: 'task', language: 'python', code: 'a, b = map(int, input("两个数: ").split())\nprint("和是", a + b)\n', cols: 90, rows: 20 });
+  assert.equal((await run.event('ready')).language, 'python');
+  await run.until(/learner@nanaly:~\$ python3 main\.py\n两个数: /);
+  run.type('3 4\r');
+  await run.until(/和是 7\n/);
+  const exit = await run.event('exit');
+  assert.equal(exit.code, 0); assert.equal(typeof exit.seconds, 'number');
+  await run.closed;
+  assert.equal(api.sessions.tasks.size, 0); assert.equal(api.runner.containers.size, 0);
+  // Stop ends a program that would run forever; leaving the page ends one too.
+  const loop = await api.open({ kind: 'task', language: 'python', code: 'while True:\n    input()\n' });
+  await loop.event('ready');
+  await loop.until(/python3 main\.py\n/);
+  loop.send({ type: 'terminate' });
+  assert.notEqual((await loop.event('exit')).code, 0);
+  const left = await api.open({ kind: 'task', language: 'python', code: 'import time\ntime.sleep(60)\n' });
+  await left.event('ready');
+  left.ws.close();
+  const deadline = Date.now() + 8000;
+  while (api.sessions.tasks.size && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
+  assert.equal(api.sessions.tasks.size, 0);
+});
+
+test('an unwatched shell saves and closes after a while, and shutdown saves open shells', { skip: !available, timeout: 30000 }, async t => {
+  const api = await backend(t, { detachedTimeout: 800 });
+  const shell = await api.open({ language: 'git' });
+  const ready = await shell.event('ready');
+  await shell.until(prompt);
+  shell.type('git status --short --branch\r');
+  await shell.until(/## No commits yet on main/);
+  shell.ws.close();
+  const deadline = Date.now() + 8000;
+  while (api.store.getWorkspace(ready.workspaceId).revision !== 1 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
+  assert.equal(api.store.getWorkspace(ready.workspaceId).revision, 1);
+  const open = await api.open({ language: 'git' });
   await open.event('ready');
-  await open.until(/\$ $/);
-  await api.runner.close();
-  const shutdown = await open.event('saved');
-  assert.equal(shutdown.reason, 'shutdown'); assert.equal(shutdown.committed, true);
+  await open.until(prompt);
+  await api.sessions.close();
+  assert.equal(api.store.getWorkspace(ready.workspaceId).revision, 2);
   assert.equal(api.runner.containers.size, 0);
 });

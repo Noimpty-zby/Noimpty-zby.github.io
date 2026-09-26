@@ -12,15 +12,18 @@ description: "Colt Steele《The Linux Command Line Bootcamp: Beginner To Power U
 ---
 
 <header class="noimpty-hero noimpty-hero--linux-intro">
-  <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a><a href="/extra/ai-infra/linux/">Linux</a></nav>
-  <h1 class="noimpty-hero__title">Linux 入门</h1>
-  <p class="noimpty-hero__sub"><span>The Linux Command Line Bootcamp: Beginner To Power User</span></p>
-  <div class="noimpty-course-meta">
-    <div><b>讲师</b><span>Colt Steele</span></div>
-    <div><b>平台</b><span>Udemy · 英文授课</span></div>
-    <div><b>环境</b><span>Bash · 任意发行版</span></div>
-    <div><b>进度</b><span>第七章已完成 · {% section_progress Linux入门 %}</span></div>
+  <div class="noimpty-hero__text">
+    <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a><a href="/extra/ai-infra/linux/">Linux</a></nav>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">Linux 入门</span></h1>
+    <p class="noimpty-hero__lead">The Linux Command Line Bootcamp: Beginner To Power User</p>
+    <div class="noimpty-course-meta">
+      <div><b>讲师</b><span>Colt Steele</span></div>
+      <div><b>平台</b><span>Udemy · 英文授课</span></div>
+      <div><b>环境</b><span>Bash · 任意发行版</span></div>
+      <div><b>进度</b><span>第七章已完成 · {% section_progress Linux入门 %}</span></div>
+    </div>
   </div>
+  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fab fa-linux"></i></span>
 </header>
 
 {% section_posts Linux入门 %}

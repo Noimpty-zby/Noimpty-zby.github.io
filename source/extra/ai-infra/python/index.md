@@ -12,12 +12,15 @@ description: 标准库与常用第三方库的使用习惯。学习资料还没�
 ---
 
 <header class="noimpty-hero noimpty-hero--python">
-  <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a></nav>
-  <h1 class="noimpty-hero__title">Python</h1>
-  <div class="noimpty-course-meta">
-    <div><b>资料</b><span>还没定</span></div>
-    <div><b>进度</b><span>{% section_progress Python %}</span></div>
+  <div class="noimpty-hero__text">
+    <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a></nav>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">Python</span></h1>
+    <div class="noimpty-course-meta">
+      <div><b>资料</b><span>还没定</span></div>
+      <div><b>进度</b><span>{% section_progress Python %}</span></div>
+    </div>
   </div>
+  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fab fa-python"></i></span>
 </header>
 
 {% section_posts Python %}

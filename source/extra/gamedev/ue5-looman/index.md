@@ -12,15 +12,18 @@ description: Tom Looman《Professional Game Development in C++ and Unreal Engine
 ---
 
 <header class="noimpty-hero noimpty-hero--ue5">
-  <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/gamedev/">游戏开发</a></nav>
-  <h1 class="noimpty-hero__title">UE5 C++ · Tom Looman</h1>
-  <p class="noimpty-hero__sub"><span>Professional Game Development in C++ and Unreal Engine</span></p>
-  <div class="noimpty-course-meta">
-    <div><b>讲师</b><span>Tom Looman · 前 Epic Games</span></div>
-    <div><b>项目</b><span>ActionRoguelike（第三人称动作 Roguelike）</span></div>
-    <div><b>课程主页</b><span><a href="https://courses.tomlooman.com/p/unrealengine-cpp" target="_blank" rel="noopener">courses.tomlooman.com</a></span></div>
-    <div><b>进度</b><span>第一至第六章 + 作业一、作业二 · 告一段落 · {% section_progress UE5-Looman %}</span></div>
+  <div class="noimpty-hero__text">
+    <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/gamedev/">游戏开发</a></nav>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">UE5 C++ · Tom Looman</span></h1>
+    <p class="noimpty-hero__lead">Professional Game Development in C++ and Unreal Engine</p>
+    <div class="noimpty-course-meta">
+      <div><b>讲师</b><span>Tom Looman · 前 Epic Games</span></div>
+      <div><b>项目</b><span>ActionRoguelike（第三人称动作 Roguelike）</span></div>
+      <div><b>课程主页</b><span><a href="https://courses.tomlooman.com/p/unrealengine-cpp" target="_blank" rel="noopener">courses.tomlooman.com</a></span></div>
+      <div><b>进度</b><span>第一至第六章 + 作业一、作业二 · 告一段落 · {% section_progress UE5-Looman %}</span></div>
+    </div>
   </div>
+  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fas fa-gamepad"></i></span>
 </header>
 
 {% section_posts UE5-Looman %}

@@ -5,10 +5,17 @@ type: about
 comments: false
 ---
 
-<header class="noimpty-hero noimpty-hero--word noimpty-hero--about">
-  <p class="noimpty-hero__chip"><i class="fas fa-heart" aria-hidden="true"></i>hello</p>
-  <h1 class="noimpty-hero__title">about</h1>
-  <p class="noimpty-hero__sub"><span>关于</span><span>Noimpty 的个人空间</span></p>
+<header class="noimpty-hero noimpty-hero--about">
+  <div class="noimpty-hero__text">
+    <p class="noimpty-hero__tape">ABOUT · 关于</p>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__badge" aria-hidden="true"><i class="fas fa-heart"></i></span><span class="noimpty-hero__name">关于这里</span></h1>
+    <p class="noimpty-hero__lead">Noimpty 的个人空间</p>
+    <p class="noimpty-hero__sub"><span>站长</span><span>小站</span></p>
+  </div>
+  <figure class="noimpty-guide">
+    <figcaption class="noimpty-guide__bubble">想认识这个小站和站长？往下看就对啦～</figcaption>
+    <span class="noimpty-guide__face" style="--guide:url('/img/avatar.png');--guide-size:170%;--guide-pos:38% 21%" role="img" aria-label="娜娜莉"></span>
+  </figure>
 </header>
 
 <div class="noimpty-sheet">

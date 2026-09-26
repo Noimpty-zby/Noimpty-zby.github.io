@@ -12,12 +12,15 @@ description: 系统调用、进程与内存、性能排查这一层。等入门�
 ---
 
 <header class="noimpty-hero noimpty-hero--linux-advanced">
-  <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a><a href="/extra/ai-infra/linux/">Linux</a></nav>
-  <h1 class="noimpty-hero__title">Linux 深入</h1>
-  <div class="noimpty-course-meta">
-    <div><b>资料</b><span>还没定</span></div>
-    <div><b>进度</b><span>{% section_progress Linux深入 %}</span></div>
+  <div class="noimpty-hero__text">
+    <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a><a href="/extra/ai-infra/linux/">Linux</a></nav>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">Linux 深入</span></h1>
+    <div class="noimpty-course-meta">
+      <div><b>资料</b><span>还没定</span></div>
+      <div><b>进度</b><span>{% section_progress Linux深入 %}</span></div>
+    </div>
   </div>
+  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fas fa-layer-group"></i></span>
 </header>
 
 {% section_posts Linux深入 %}

@@ -6,10 +6,17 @@ comments: false
 description: 娜娜莉三天一更的行业资讯速览。
 ---
 
-<header class="noimpty-hero noimpty-hero--word noimpty-hero--news">
-  <p class="noimpty-hero__chip"><i class="fas fa-newspaper" aria-hidden="true"></i>娜娜莉 · 每三天一期</p>
-  <h1 class="noimpty-hero__title">news</h1>
-  <p class="noimpty-hero__sub"><span>资讯速览</span><span>共 <!-- NEWS_COUNT --> 期</span><span>AI Infra · 后端求职</span></p>
+<header class="noimpty-hero noimpty-hero--news">
+  <div class="noimpty-hero__text">
+    <p class="noimpty-hero__tape">NEWS · 资讯</p>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__badge" aria-hidden="true"><i class="fas fa-newspaper"></i></span><span class="noimpty-hero__name">资讯速览</span></h1>
+    <p class="noimpty-hero__lead">AI Infra 与后端求职 · 每三天一期</p>
+    <p class="noimpty-hero__sub"><span>共 <!-- NEWS_COUNT --> 期</span><span>娜娜莉整理</span></p>
+  </div>
+  <figure class="noimpty-guide">
+    <figcaption class="noimpty-guide__bubble">每三天我去捞一期新消息：岗位动态、面试干货、踩坑经验，都整理好啦～</figcaption>
+    <span class="noimpty-guide__face" style="--guide:url('/img/avatar.png');--guide-size:170%;--guide-pos:38% 21%" role="img" aria-label="娜娜莉"></span>
+  </figure>
 </header>
 
 <!-- NEWS_LIST -->

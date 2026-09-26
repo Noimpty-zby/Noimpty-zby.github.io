@@ -12,15 +12,18 @@ description: 闫令琪《现代计算机图形学入门》的课程笔记与作�
 ---
 
 <header class="noimpty-hero noimpty-hero--games101">
-  <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/gamedev/">游戏开发</a></nav>
-  <h1 class="noimpty-hero__title">GAMES101</h1>
-  <p class="noimpty-hero__sub"><span>现代计算机图形学入门</span></p>
-  <div class="noimpty-course-meta">
-    <div><b>讲师</b><span>闫令琪 · UCSB</span></div>
-    <div><b>语言</b><span>中文授课 · C++ 作业</span></div>
-    <div><b>课程主页</b><span><a href="https://sites.cs.ucsb.edu/~lingqi/teaching/games101.html" target="_blank" rel="noopener">sites.cs.ucsb.edu</a></span></div>
-    <div><b>进度</b><span>作业一至作业四已完成 · {% section_progress GAMES101 %}</span></div>
+  <div class="noimpty-hero__text">
+    <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/gamedev/">游戏开发</a></nav>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">GAMES101</span></h1>
+    <p class="noimpty-hero__lead">现代计算机图形学入门</p>
+    <div class="noimpty-course-meta">
+      <div><b>讲师</b><span>闫令琪 · UCSB</span></div>
+      <div><b>语言</b><span>中文授课 · C++ 作业</span></div>
+      <div><b>课程主页</b><span><a href="https://sites.cs.ucsb.edu/~lingqi/teaching/games101.html" target="_blank" rel="noopener">sites.cs.ucsb.edu</a></span></div>
+      <div><b>进度</b><span>作业一至作业四已完成 · {% section_progress GAMES101 %}</span></div>
+    </div>
   </div>
+  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fas fa-cubes"></i></span>
 </header>
 
 {% section_posts GAMES101 %}

@@ -12,16 +12,19 @@ description: CMU 15-213 Introduction to Computer Systems 的学习记录与 Lab 
 ---
 
 <header class="noimpty-hero noimpty-hero--csapp">
-  <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/in-class/">core</a></nav>
-  <h1 class="noimpty-hero__title">CSAPP</h1>
-  <p class="noimpty-hero__sub"><span>CMU 15-213：Introduction to Computer Systems</span></p>
-  <div class="noimpty-course-meta">
-    <div><b>学校</b><span>Carnegie Mellon University</span></div>
-    <div><b>教材</b><span>Computer Systems: A Programmer's Perspective, 3rd Edition</span></div>
-    <div><b>课程主页</b><span><a href="http://csapp.cs.cmu.edu/" target="_blank" rel="noopener">csapp.cs.cmu.edu</a></span></div>
-    <div><b>投入</b><span>约 150 小时 · 难度 5/5</span></div>
-    <div><b>进度</b><span>{% section_progress CSAPP %}</span></div>
+  <div class="noimpty-hero__text">
+    <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/in-class/">core</a></nav>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">CSAPP</span></h1>
+    <p class="noimpty-hero__lead">CMU 15-213：Introduction to Computer Systems</p>
+    <div class="noimpty-course-meta">
+      <div><b>学校</b><span>Carnegie Mellon University</span></div>
+      <div><b>教材</b><span>Computer Systems: A Programmer's Perspective, 3rd Edition</span></div>
+      <div><b>课程主页</b><span><a href="http://csapp.cs.cmu.edu/" target="_blank" rel="noopener">csapp.cs.cmu.edu</a></span></div>
+      <div><b>投入</b><span>约 150 小时 · 难度 5/5</span></div>
+      <div><b>进度</b><span>{% section_progress CSAPP %}</span></div>
+    </div>
   </div>
+  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fas fa-microchip"></i></span>
 </header>
 
 {% section_posts CSAPP %}

@@ -10,11 +10,17 @@ private_section: Life
 sitemap: false
 ---
 
-<header class="noimpty-hero noimpty-hero--word noimpty-hero--art noimpty-hero--life">
-  <span class="noimpty-hero__art" style="--hero-art:url('/img/sections/life.webp');--hero-pos:center 16%" aria-hidden="true"></span>
-  <p class="noimpty-hero__chip"><i class="fas fa-lock" aria-hidden="true"></i>private · 生活</p>
-  <h1 class="noimpty-hero__title">life</h1>
-  <p class="noimpty-hero__sub"><span>生活片段</span><span>{% section_stat Life %}</span></p>
+<header class="noimpty-hero noimpty-hero--life">
+  <div class="noimpty-hero__text">
+    <p class="noimpty-hero__tape">LIFE · 生活</p>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__badge" aria-hidden="true"><i class="fas fa-heart"></i></span><span class="noimpty-hero__name">生活碎碎念</span></h1>
+    <p class="noimpty-hero__lead">学习以外的随笔和小日常</p>
+    <p class="noimpty-hero__sub"><span>{% section_stat Life %}</span></p>
+  </div>
+  <figure class="noimpty-guide">
+    <figcaption class="noimpty-guide__bubble">这里没有代码，只有生活的小碎片 ♡ 随便逛逛吧～</figcaption>
+    <span class="noimpty-guide__face" style="--guide:url('/img/sections/life.webp');--guide-size:190%;--guide-pos:56% 23%" role="img" aria-label="娜娜莉"></span>
+  </figure>
 </header>
 
 {% section_posts Life %}

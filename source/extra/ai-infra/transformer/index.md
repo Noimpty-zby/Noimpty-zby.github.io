@@ -12,12 +12,15 @@ description: 推理时到底在算什么——attention、KV cache、批处理�
 ---
 
 <header class="noimpty-hero noimpty-hero--transformer">
-  <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a></nav>
-  <h1 class="noimpty-hero__title">Transformer 推理机制</h1>
-  <div class="noimpty-course-meta">
-    <div><b>资料</b><span>还没定</span></div>
-    <div><b>进度</b><span>{% section_progress Transformer 推理机制 %}</span></div>
+  <div class="noimpty-hero__text">
+    <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a></nav>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">Transformer 推理机制</span></h1>
+    <div class="noimpty-course-meta">
+      <div><b>资料</b><span>还没定</span></div>
+      <div><b>进度</b><span>{% section_progress Transformer 推理机制 %}</span></div>
+    </div>
   </div>
+  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fas fa-brain"></i></span>
 </header>
 
 {% section_posts Transformer 推理机制 %}

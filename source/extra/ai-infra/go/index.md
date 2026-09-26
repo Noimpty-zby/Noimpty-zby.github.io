@@ -12,15 +12,18 @@ description: "Stephen Grider《Go: The Complete Developer's Guide (Golang)》的
 ---
 
 <header class="noimpty-hero noimpty-hero--go">
-  <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a></nav>
-  <h1 class="noimpty-hero__title">Go</h1>
-  <p class="noimpty-hero__sub"><span>Go: The Complete Developer's Guide (Golang)</span></p>
-  <div class="noimpty-course-meta">
-    <div><b>讲师</b><span>Stephen Grider</span></div>
-    <div><b>平台</b><span>Udemy · 英文授课</span></div>
-    <div><b>形式</b><span>边讲边写 · 每章一个可运行的小程序</span></div>
-    <div><b>进度</b><span>{% section_progress Go %}</span></div>
+  <div class="noimpty-hero__text">
+    <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a></nav>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">Go</span></h1>
+    <p class="noimpty-hero__lead">Go: The Complete Developer's Guide (Golang)</p>
+    <div class="noimpty-course-meta">
+      <div><b>讲师</b><span>Stephen Grider</span></div>
+      <div><b>平台</b><span>Udemy · 英文授课</span></div>
+      <div><b>形式</b><span>边讲边写 · 每章一个可运行的小程序</span></div>
+      <div><b>进度</b><span>{% section_progress Go %}</span></div>
+    </div>
   </div>
+  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fab fa-golang"></i></span>
 </header>
 
 {% section_posts Go %}

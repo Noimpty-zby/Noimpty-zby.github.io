@@ -12,13 +12,16 @@ description: 容器化：镜像、容器、Dockerfile、网络与卷。学习资
 ---
 
 <header class="noimpty-hero noimpty-hero--docker">
-  <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a></nav>
-  <h1 class="noimpty-hero__title">Docker</h1>
-  <div class="noimpty-course-meta">
-    <div><b>资料</b><span>还没定</span></div>
-    <div><b>环境</b><span>Linux · Docker Engine</span></div>
-    <div><b>进度</b><span>{% section_progress Docker %}</span></div>
+  <div class="noimpty-hero__text">
+    <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a></nav>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">Docker</span></h1>
+    <div class="noimpty-course-meta">
+      <div><b>资料</b><span>还没定</span></div>
+      <div><b>环境</b><span>Linux · Docker Engine</span></div>
+      <div><b>进度</b><span>{% section_progress Docker %}</span></div>
+    </div>
   </div>
+  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fab fa-docker"></i></span>
 </header>
 
 {% section_posts Docker %}

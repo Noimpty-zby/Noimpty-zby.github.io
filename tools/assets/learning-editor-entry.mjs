@@ -11,12 +11,14 @@ import { HighlightStyle, StreamLanguage, indentUnit, syntaxHighlighting } from '
 import { completeFromList } from '@codemirror/autocomplete';
 import { cpp } from '@codemirror/lang-cpp';
 import { go } from '@codemirror/lang-go';
+import { python } from '@codemirror/lang-python';
+import { lintGutter, setDiagnostics } from '@codemirror/lint';
 import { MySQL, sql } from '@codemirror/lang-sql';
 import { shell } from '@codemirror/legacy-modes/mode/shell';
 import { tags } from '@lezer/highlight';
 
 const MAX_CODE_LENGTH = 65536;
-const LANGUAGES = new Set(['c', 'cpp', 'go', 'git', 'linux', 'mysql']);
+const LANGUAGES = new Set(['c', 'cpp', 'go', 'python', 'git', 'linux', 'mysql']);
 const normalizeLanguage = value => LANGUAGES.has(value) ? value : 'c';
 const words = (text, type = 'keyword') => text.split(/\s+/).map(label => ({ label, type }));
 const completions = {
@@ -28,6 +30,11 @@ const completions = {
     ...words('alignas auto bool break case catch char class const constexpr continue decltype default delete do double else enum explicit false float for friend if int long namespace new nullptr operator override private protected public return short signed sizeof static struct switch template this throw true try typedef typename union unsigned using virtual void volatile while'),
     ...words('std cout cin endl string vector map set sort begin end push_back size', 'variable')
   ],
+  python: [
+    ...words('and as assert break class continue def del elif else except False finally for from global if import in is lambda None nonlocal not or pass raise return True try while with yield'),
+    ...words('print input range len int float str list dict set tuple enumerate zip map filter sorted sum min max abs open isinstance', 'function'),
+    ...words('numpy torch np nn optim tensor zeros ones randn arange reshape backward no_grad', 'variable')
+  ],
   git: words('git status add commit diff log branch switch checkout restore reset stash merge rebase fetch pull push remote tag init clone show', 'function'),
   linux: [
     ...words('if then else elif fi for in do done while case esac function export return'),
@@ -37,6 +44,7 @@ const completions = {
 const shellLanguage = StreamLanguage.define(shell);
 function languageExtension(id) {
   const language = id === 'go' ? go()
+    : id === 'python' ? python()
     : id === 'mysql' ? sql({ dialect: MySQL, upperCaseKeywords: true })
     : id === 'git' || id === 'linux' ? shellLanguage : cpp();
   const options = completions[id];
@@ -150,7 +158,7 @@ function create(host, options = {}) {
   const makeState = value => EditorState.create({
     doc: String(value ?? '').slice(0, MAX_CODE_LENGTH),
     extensions: [
-      basicSetup, layout, syntax, theme.of(palette(dark)), language.of(languageExtension(currentLanguage)),
+      basicSetup, lintGutter(), layout, syntax, theme.of(palette(dark)), language.of(languageExtension(currentLanguage)),
       EditorState.tabSize.of(4), indentUnit.of('    '),
       EditorState.transactionFilter.of(transaction => transaction.newDoc.length > MAX_CODE_LENGTH ? [] : transaction),
       EditorView.contentAttributes.of({
@@ -203,6 +211,27 @@ function create(host, options = {}) {
       currentLanguage = next;
       view.setState(makeState(view.state.doc.toString()));
       reportCursor(view);
+    },
+    // Backend diagnostics become wavy underlines plus a gutter marker. Positions are mapped
+    // through later edits, so a mark stays on its text until the next check replaces the set.
+    setDiagnostics(list = []) {
+      if (destroyed) return;
+      const doc = view.state.doc;
+      const marks = [];
+      for (const item of Array.isArray(list) ? list : []) {
+        const number = Number(item?.line);
+        if (!Number.isInteger(number) || number < 1 || number > doc.lines) continue;
+        const line = doc.line(number);
+        const column = Number(item.column);
+        let from = Number.isInteger(column) && column > 0 ? Math.min(line.from + column - 1, line.to) : line.from;
+        let to = line.to;
+        // Underline the word the compiler points at; without a column, the whole line.
+        const word = Number.isInteger(column) && column > 0 ? view.state.wordAt(from) : null;
+        if (word) ({ from, to } = word);
+        else from = line.from;
+        marks.push({ from, to, severity: ['warning', 'info'].includes(item.severity) ? item.severity : 'error', message: String(item.message || '') });
+      }
+      view.dispatch(setDiagnostics(view.state, marks));
     },
     focus() { if (!destroyed) view.focus(); },
     jump(position = {}) {

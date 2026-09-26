@@ -161,7 +161,12 @@
 .learning-code-editor .cm-tooltip { border-color: var(--lab-border); background: var(--lab-surface); color: var(--lab-ink); }
 .learning-editor { display: block; flex: 1; width: 100%; height: 100%; min-height: 220px; margin: 0; padding: 17px 20px; border: 0; border-radius: 0; background: var(--lab-editor); color: var(--lab-ink); font: 14px/1.7 'Cascadia Code', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; letter-spacing: 0; tab-size: 4; white-space: pre; resize: none; overscroll-behavior: contain; }
 .learning-editor:focus-visible, .learning-input:focus-visible { outline-offset: -3px !important; }
-.learning-console { flex: 0 0 187px; min-height: 0; overflow: hidden; border-top: 1px solid var(--lab-border); background: var(--lab-surface); }
+.learning-lab .learning-console-resizer { position: relative; z-index: 1; flex: none; display: block; width: 100%; min-height: 0; height: 9px; margin: -4px 0 -5px; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; cursor: row-resize; touch-action: none; }
+.learning-lab .learning-console-resizer:hover { background: none; }
+.learning-console-resizer::after { position: absolute; top: 3px; left: calc(50% - 22px); width: 44px; height: 3px; border-radius: 3px; background: var(--lab-border); content: ''; }
+.learning-console-resizer:hover::after, .learning-console-resizer:focus-visible::after { background: var(--lab-accent); }
+/* Shrinkable so a dragged-tall terminal gives way to notices instead of pushing the status bar out. */
+.learning-console { flex: 0 1 187px; min-height: 120px; overflow: hidden; border-top: 1px solid var(--lab-border); background: var(--lab-surface); }
 .learning-console-tabs { gap: 19px; height: 42px; padding: 0 19px; border-bottom: 1px solid var(--lab-border); background: var(--lab-gutter); }
 .learning-lab .learning-console-tab { align-self: stretch; position: relative; margin: 0; padding: 0 1px; border: 0; border-radius: 0; background: none; color: var(--lab-muted); font: inherit; font-size: 12px; cursor: pointer; }
 .learning-lab .learning-console-tab:hover { background: none; }
@@ -184,6 +189,7 @@
 .learning-diagnostics:empty { display: none; }
 .learning-lab .learning-diagnostic { display: block; width: 100%; margin: 0 0 7px; padding: 7px 9px; border: 1px solid var(--lab-border); border-radius: 7px; background: var(--lab-pink); color: var(--lab-error); font: inherit; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; cursor: pointer; }
 .learning-lab .learning-diagnostic--warning { color: var(--lab-warning); }
+.learning-lab .learning-diagnostic--info { background: var(--lab-surface); color: var(--lab-muted); }
 .learning-history-list { min-width: 0; }
 .learning-console-panel[data-panel='history'] > .learning-actions { margin-bottom: 12px; }
 .learning-history-entry { margin: 0 0 8px; padding: 0 0 8px; border-bottom: 1px solid var(--lab-border); }

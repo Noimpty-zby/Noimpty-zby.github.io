@@ -16,9 +16,9 @@ async function fixture(t){
   const args=['--workspace',workspace,'--temporary',temporary]
   // These fixtures contain only trusted test scripts and never inherit host credentials.
   const options={encoding:'utf8',timeout:5000,maxBuffer:2*1024*1024,env:{PATH:'/usr/bin:/bin',HOME:workspace,LANG:'C.UTF-8'}}
-  return {workspace,temporary,async run(code,input=''){
+  return {workspace,temporary,async run(code,input='',environment={}){
     await fs.writeFile(script,code)
-    const result=spawnSync('python3',[helper,'run',script,...args],{...options,input})
+    const result=spawnSync('python3',[helper,'run',script,...args],{...options,input,env:{...options.env,...environment}})
     assert.ifError(result.error)
     const metadata=JSON.parse(await fs.readFile(path.join(temporary,'nanaly-shell-result.json'),'utf8'))
     return {...result,...metadata}
@@ -101,4 +101,28 @@ test('user EXIT handlers still run and restricted PATH does not break session ca
   env.persist()
   const second=await env.run('printf "%s" "$PATH"')
   assert.equal(second.status,0,second.stderr);assert.equal(second.stdout,'/nonexistent')
+})
+
+test('only learner-made environment changes persist, so a new image PATH reaches existing workspaces',{skip:!available},async t=>{
+  const env=await fixture(t)
+  const first=await env.run('export MINE=kept\nexport LANG=C\n')
+  assert.equal(first.shellStateSaved,true);env.persist()
+  const saved=JSON.parse(await fs.readFile(path.join(env.workspace,'.nanaly-shell-session.json'),'utf8'))
+  assert.equal(saved.env,'diff')
+  assert.match(saved.shell,/MINE=/);assert.match(saved.shell,/LANG=/)
+  assert.doesNotMatch(saved.shell,/declare -x (PATH|HOME)=/)
+  const second=await env.run('printf "%s|%s|%s\\n" "$PATH" "$MINE" "$LANG"\n','',{PATH:'/opt/py/bin:/usr/bin:/bin'})
+  assert.equal(second.stdout,'/opt/py/bin:/usr/bin:/bin|kept|C\n')
+})
+
+test('a legacy full-environment state gets the current container values back and keeps learner variables',{skip:!available},async t=>{
+  const env=await fixture(t)
+  await fs.writeFile(path.join(env.workspace,'.nanaly-shell-session.json'),JSON.stringify({version:1,cwd:env.workspace,
+    shell:'declare -x PATH="/old/image/bin"\ndeclare -x HOME="/old/home"\ndeclare -x LAB_TOPIC="linux practice"\nbuiltin umask 0022\n'}))
+  const result=await env.run('printf "%s|%s|%s\\n" "$PATH" "$HOME" "$LAB_TOPIC"\n','',{PATH:'/opt/py/bin:/usr/bin:/bin'})
+  assert.equal(result.status,0,result.stderr)
+  assert.equal(result.stdout,`/opt/py/bin:/usr/bin:/bin|${env.workspace}|linux practice\n`)
+  env.persist()
+  const saved=JSON.parse(await fs.readFile(path.join(env.workspace,'.nanaly-shell-session.json'),'utf8'))
+  assert.equal(saved.env,'diff');assert.match(saved.shell,/LAB_TOPIC=/);assert.doesNotMatch(saved.shell,/declare -x (PATH|HOME)=/)
 })

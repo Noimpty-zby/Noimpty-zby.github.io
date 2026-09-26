@@ -58,6 +58,8 @@ def validate_state(state):
     cwd = state.get('cwd')
     if not isinstance(cwd, str) or not cwd.startswith('/') or '\0' in cwd or len(cwd) > 4096:
         raise ValueError('invalid working directory')
+    if state.get('env', 'full') not in ('full', 'diff'):
+        raise ValueError('invalid environment mode')
     return state
 
 
@@ -83,6 +85,9 @@ def run(workspace, temporary, script):
             file.unlink()
         except FileNotFoundError:
             pass
+    # States saved before 'diff' captured every exported variable, freezing the image's own PATH,
+    # HOME and so on; after restoring one, the container's current values are put back on top.
+    legacy = '1' if state.get('env', 'full') == 'full' and state['shell'] else '0'
     cwd = state['cwd']
     if not os.path.isdir(cwd) or not os.access(cwd, os.X_OK):
         cwd = str(workspace)
@@ -99,6 +104,12 @@ def run(workspace, temporary, script):
         # All user-controlled Bash is evaluated only by Bash in this sandbox.
         # Do not use errexit/pipefail: a script retains ordinary Bash semantics.
         wrapper.write_text(r'''builtin shopt -s expand_aliases
+# The container's environment as it starts. Only variables the learner added or changed are
+# saved, so a new runner image's PATH or settings reach existing workspaces.
+builtin declare -A __nanaly_base
+while IFS= builtin read -r __nanaly_name; do
+  __nanaly_base[$__nanaly_name]=${!__nanaly_name}
+done < <(builtin compgen -e)
 __nanaly_save_session() {
   local __nanaly_status="$1" __nanaly_name __nanaly_mask
   builtin set +e +u
@@ -109,6 +120,7 @@ __nanaly_save_session() {
       case "$__nanaly_name" in
         BASHOPTS|SHELLOPTS|SHLVL|PWD|HOSTNAME|_|__nanaly_*) continue ;;
       esac
+      [[ -v "__nanaly_base[$__nanaly_name]" && "${__nanaly_base[$__nanaly_name]}" == "${!__nanaly_name}" ]] && continue
       builtin declare -p -- "$__nanaly_name"
     done < <(builtin compgen -e)
     while IFS= builtin read -r __nanaly_name; do
@@ -129,6 +141,11 @@ __nanaly_save_session() {
 }
 builtin trap '__nanaly_save_session "$?"' EXIT
 builtin source __RESTORE__
+if [[ __LEGACY__ == 1 ]]; then
+  for __nanaly_name in "${!__nanaly_base[@]}"; do
+    builtin export "$__nanaly_name=${__nanaly_base[$__nanaly_name]}" 2>/dev/null
+  done
+fi
 builtin source __SCRIPT__
 __nanaly_status=$?
 __nanaly_save_session "$__nanaly_status"
@@ -136,7 +153,7 @@ builtin exit "$__nanaly_status"
 '''.replace('__CAPTURE__', shlex.quote(str(capture))).replace('__LOCATION__', shlex.quote(str(location)))
             .replace('__FINISHED__', shlex.quote(str(finished))).replace('__RESTORE__', shlex.quote(str(restore)))
             .replace('__WORKSPACE__', shlex.quote(str(workspace))).replace('__FALLBACK__', shlex.quote(str(fallback)))
-            .replace('__SCRIPT__', shlex.quote(str(script))), encoding='utf-8')
+            .replace('__SCRIPT__', shlex.quote(str(script))).replace('__LEGACY__', legacy), encoding='utf-8')
         completed = subprocess.run(['/bin/bash', '--noprofile', '--norc', str(wrapper)], cwd=cwd)
         saved_ok = False
         final_cwd = cwd
@@ -145,7 +162,7 @@ builtin exit "$__nanaly_status"
                 raise ValueError('shell did not save its state')
             shell = read_regular(capture).decode('utf-8')
             final_cwd = read_regular(location, 4097).decode('utf-8').removesuffix('\n')
-            state = validate_state({'version': 1, 'cwd': final_cwd, 'shell': shell})
+            state = validate_state({'version': 1, 'cwd': final_cwd, 'shell': shell, 'env': 'diff'})
             write_json(temporary / PENDING_NAME, state)
             saved_ok = True
             if fallback.exists():

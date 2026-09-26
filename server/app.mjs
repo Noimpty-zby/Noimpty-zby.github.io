@@ -4,7 +4,7 @@ import { ApiError, invariant } from './lib/errors.mjs';
 import { validateRun, languages } from './lib/validation.mjs';
 
 const digest = text => createHash('sha256').update(text).digest();
-export function createApp({ store, runner, token, origins = [], now = Date.now }) {
+export function createApp({ store, runner, token, origins = [], now = Date.now, build = null }) {
   invariant(typeof token === 'string' && token.length >= 24 && token.length <= 1024 && !token.startsWith('REPLACE_') && !/[\r\n]/.test(token), 500, 'TOKEN_REQUIRED', '请配置至少 24 字符的随机访问令牌。');
   const allowed = new Set(origins.map(origin => {
     const url = new URL(origin);
@@ -56,7 +56,7 @@ export function createApp({ store, runner, token, origins = [], now = Date.now }
       if (req.method === 'GET' && url.pathname === '/api/health') {
         invariant(++rate.health <= 180, 429, 'RATE_LIMIT', '请求过于频繁，请稍后重试。');
         const runnerState = await runner.health();
-        json(res, 200, { ok: true, version: 1, runner: runnerState, capabilities: { state: true, history: true, workspaces: true, languages, runnerReady: runnerState.ready }, recovered: store.recovered }); return;
+        json(res, 200, { ok: true, version: 1, build, runner: runnerState, capabilities: { state: true, history: true, workspaces: true, languages, runnerReady: runnerState.ready }, recovered: store.recovered }); return;
       }
       if (!timingSafeEqual(expected, digest(req.headers.authorization || ''))) {
         invariant(++rate.failed <= 12, 429, 'RATE_LIMIT', '请求过于频繁，请稍后重试。');

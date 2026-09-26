@@ -18,6 +18,7 @@
     "vendor:live2d": "node tools/assets/vendor-live2d.mjs",
     "server:agent": "node server/index.mjs",
     "test:runner": "NANALY_DOCKER_TESTS=1 node --test tools/tests/server/docker*.integration.test.mjs",
+    "deploy:backend": "bash tools/deploy/backend.sh",
     "build:learning-editor": "node tools/assets/build-learning-editor.mjs"
   },
   "hexo": {

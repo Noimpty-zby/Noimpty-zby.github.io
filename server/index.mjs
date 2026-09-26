@@ -14,7 +14,9 @@ async function main() {
   store = new PrivateStore(process.env.NANALY_DATA_DIR, { repoRoot });
   await store.init();
   runner = new DockerRunner(store, { image: process.env.NANALY_RUNNER_IMAGE || 'nanaly-runner:1', concurrency: 1 });
-  server = createApp({ store, runner, token, origins: (process.env.NANALY_ALLOWED_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean) });
+  // Written by tools/deploy/backend.sh so /api/health shows which commit is running.
+  const build = (await fs.readFile(path.join(repoRoot, 'server', 'BUILD'), 'utf8').catch(() => '')).trim();
+  server = createApp({ store, runner, token, build: /^[0-9a-f]{7,40}$/.test(build) ? build : null, origins: (process.env.NANALY_ALLOWED_ORIGINS || '').split(',').map(value => value.trim()).filter(Boolean) });
   await runner.cleanAbandoned();
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, process.env.HOST || '127.0.0.1', resolve); });
   console.log('娜娜莉私有后端已启动，端口 ' + port + '。访问令牌及私有数据不会写入日志。');

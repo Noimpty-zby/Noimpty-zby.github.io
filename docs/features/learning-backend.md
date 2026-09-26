@@ -85,13 +85,32 @@ service 依赖实际 `user@UID.service`，启动前通过同一 `DOCKER_HOST` �
 
 使用官方 Caddy 软件包管理 HTTPS，将 `server/Caddyfile.example` 的 API 域名替换为实际域名，配置 DNS A 记录并放行公网 TCP 80/443，再执行 `caddy validate` 和启动服务。Caddy 上游 keepalive 为 4 秒，低于 Node 的 5 秒；响应头超时为 150 秒。保留默认客户端取消传播，不添加 `flush_interval -1`。代理超时与容器的 150 秒生存期不是同一个计时器，完整批次仍需通过实际 HTTPS 链路验收。
 
+## 更新部署
+
+首次安装按上一节手动完成。之后每次更新后端，提交代码后在仓库根目录执行：
+
+```sh
+npm run deploy:backend            # 执行镜像没变时约半分钟
+npm run deploy:backend -- --full  # 另外强制跑一遍真实 Docker 集成测试
+```
+
+脚本 `tools/deploy/backend.sh` 只部署已提交的代码：本地后端测试通过后，用 `git archive` 打包 `server/`、`tools/tests/server/`、课程参考代码和服务器端脚本，经部署密钥传到服务器，由 `tools/deploy/backend-remote.sh` 以 root 执行：
+
+1. 解包到 `/opt/blog.next`，写入 `server/BUILD`（提交号）。
+2. 执行镜像按 `server/runner/` 的 git 树哈希命名为 `nanaly-runner:<哈希>`；不存在时在 nanaly 的 rootless daemon 中构建，并用新镜像跑真实 Docker 集成测试。测试失败即停止，线上目录、环境配置和服务都不动。
+3. 把 `/etc/nanaly.env` 的 `NANALY_RUNNER_IMAGE` 换成新镜像，`/opt/blog` 与新目录对调（旧版留在 `/opt/blog.prev`），重启 `nanaly.service`。
+4. 本机健康检查必须在 40 秒内报出新提交号且执行环境就绪；否则把目录和环境配置换回上一版并重启，失败版本留在 `/opt/blog.failed`。
+5. 成功后只保留当前和上一版执行镜像。
+
+最后脚本从公网复查 `GET /api/health` 的 `build` 字段。重启会中断正在执行的代码。`server/nanaly.service.example` 与已安装的服务文件不同时只提示，不自动替换；Caddy 配置也不在脚本范围内。服务器地址、密钥和 known_hosts 可用 `NANALY_DEPLOY_HOST`、`NANALY_DEPLOY_KEY`、`NANALY_DEPLOY_KNOWN_HOSTS` 覆盖。
+
 ## API 契约
 
 除 `GET /api/health` 和 CORS 预检之外，所有接口均要求 `Authorization: Bearer <token>`。JSON 写请求要求 `Content-Type: application/json`，请求体上限约 1.2 MB。所有响应使用 `Cache-Control: no-store`；异常响应不包含宿主路径、令牌或错误堆栈。没有登录 cookie，不信任传入的 X-Forwarded-For。正确认证、失败认证和健康探针分别限流，避免反向代理共享 loopback 地址时错误令牌阻断合法操作。
 
 | 接口 | 请求与结果 |
 | --- | --- |
-| GET /api/health | 返回 version、runner.ready、capabilities；API在线不等于执行容器已就绪 |
+| GET /api/health | 返回 version、build（部署的提交号，手动部署时为 null）、runner.ready、capabilities；API在线不等于执行容器已就绪 |
 | GET /api/state | `{revision,data}`，初始 data 包含 memories/goals/notes/experiences/events 数组 |
 | PUT /api/state | `{revision,data}`；原子替换并返回新 revision，保留调用者发送的未知字段 |
 | POST /api/run | `{language,code,stdin?,tests?,revision?,mode?,workspaceId?,workspaceRevision?,saveHistory?,practice?}` |

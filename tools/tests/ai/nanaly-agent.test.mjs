@@ -412,6 +412,16 @@ await test('tool failures emit error, while disconnect clears activity and ignor
   const count=env.events.length;agent.activity({id:'prepare',phase:'complete'});assert.equal(env.events.length,count)
 })
 
+await test('manual disconnect is remembered for vault auto-connect until the user explicitly connects again',async()=>{
+  const server=backend(),storage=sessionStorage(),env=environment(server.fetch),agent=env.create({sessionStorage:storage,permitted:()=>true})
+  assert.equal(agent.manuallyDisconnected(),false)
+  await agent.connect('https://test',token);agent.disconnect()
+  assert.equal(agent.manuallyDisconnected(),true)
+  assert.equal(await agent.resume(),null);assert.equal(agent.manuallyDisconnected(),true)
+  await agent.connect('https://test',token)
+  assert.equal(agent.manuallyDisconnected(),false);assert.equal(agent.configured(),true)
+})
+
 function uiEnvironment () {
   let subscriber,snapshot={connected:false,revision:null,data:empty(),problem:''},document
   const all=[]
@@ -471,5 +481,13 @@ await test('disconnect clears every private draft and detached list, preventing 
   }
   app.window.NANALY_AGENT_UI.open()
   assert.ok(app.all.filter(node=>node.tagName==='SELECT').some(node=>node.options.length===0))
+})
+await test('studio vault shortcut closes the studio and opens the key vault',()=>{
+  const app=uiEnvironment();let unlocks=0
+  app.window.NANALY={requestUnlock:()=>{unlocks++}}
+  app.window.NANALY_AGENT_UI.open()
+  const modal=app.all.find(node=>node.className==='nanaly-studio');assert.equal(modal.open,true)
+  app.all.find(node=>node.tagName==='BUTTON'&&node.textContent==='打开密钥保险箱').fire('click')
+  assert.equal(modal.open,false);assert.equal(unlocks,1)
 })
 console.log(`\n${passed} 私有代理状态与工作室回归通过`)

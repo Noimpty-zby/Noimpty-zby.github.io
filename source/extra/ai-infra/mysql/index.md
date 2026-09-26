@@ -23,7 +23,7 @@ description: "Colt Steele《The Ultimate MySQL Bootcamp: Go from SQL Beginner to
       <div><b>进度</b><span>{% section_progress MySQL %}</span></div>
     </div>
   </div>
-  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fas fa-database"></i></span>
+  <figure class="noimpty-scene noimpty-scene--one" data-lines="表、行、列，一层一层装得好好的|SELECT 一下就能找到我～">{% kawaii database stage %}</figure>
 </header>
 
 {% section_posts MySQL %}

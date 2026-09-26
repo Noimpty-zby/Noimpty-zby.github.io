@@ -23,7 +23,7 @@ description: Abdul Bari《Mastering Data Structures & Algorithms using C and C++
       <div><b>进度</b><span>数组 · {% section_progress DSA %}</span></div>
     </div>
   </div>
-  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fas fa-sitemap"></i></span>
+  <figure class="noimpty-scene noimpty-scene--one" data-lines="树上结的果子就是节点哦～|先把递归想明白，树就不难啦">{% kawaii tree stage %}</figure>
 </header>
 
 {% section_posts DSA %}

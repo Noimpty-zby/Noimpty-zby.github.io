@@ -14,62 +14,62 @@ description: 现在在走的方向：Linux、Git、Go、MySQL 打底，外加 Do
 <header class="noimpty-hero noimpty-hero--aiinfra">
   <div class="noimpty-hero__text">
     <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a></nav>
-    <h1 class="noimpty-hero__title"><span class="noimpty-hero__badge" aria-hidden="true"><i class="fas fa-server"></i></span><span class="noimpty-hero__name">AI Infra 后端开发</span></h1>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">AI Infra 后端开发</span></h1>
     <p class="noimpty-hero__lead">Linux · Git · Go · MySQL · Docker · Python · Transformer</p>
     <p class="noimpty-hero__sub"><span>7 门课</span><span>{% section_stat Linux入门|Linux深入|Git|Go|MySQL|Docker|Transformer 推理机制|Python %}</span></p>
   </div>
-  <figure class="noimpty-guide">
-    <figcaption class="noimpty-guide__bubble">这条线的课都在这里，从 Linux 命令行开始，一门一门往下学～</figcaption>
-    <span class="noimpty-guide__face" style="--guide:url('/img/sections/extra.webp');--guide-size:250%;--guide-pos:43% 20%" role="img" aria-label="娜娜莉"></span>
+  <figure class="noimpty-scene" data-lines="机器人：Transformer 推理排在最后，等我哦 (・ω・)|服务器：灯一闪一闪的，是在认真干活！">
+    <figcaption class="noimpty-scene__bubble">这条线的课都在这里，从 Linux 命令行开始，一门一门往下学～ <span class="noimpty-kaomoji">(｀・ω・´)ゞ</span></figcaption>
+    {% kawaii aiinfra %}
   </figure>
 </header>
 
 <div class="noimpty-track-grid noimpty-track-grid--seven">
   <a class="noimpty-track-card noimpty-track-card--linux" href="/extra/ai-infra/linux/">
     <span class="noimpty-track-card__index">01</span>
-    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fab fa-linux"></i></span>
+    <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii penguin %}</span>
     <h3>Linux</h3>
     <span class="noimpty-track-card__by">Colt Steele · Beginner To Power User</span>
     <span class="noimpty-track-card__stat">{% section_stat 入门=Linux入门|深入=Linux深入 %}</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--git" href="/extra/ai-infra/git/">
     <span class="noimpty-track-card__index">02</span>
-    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fab fa-git-alt"></i></span>
+    <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii git %}</span>
     <h3>Git &amp; GitHub</h3>
     <span class="noimpty-track-card__by">Colt Steele · The Git &amp; Github Bootcamp</span>
     <span class="noimpty-track-card__stat">{% section_stat Git %}</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--go" href="/extra/ai-infra/go/">
     <span class="noimpty-track-card__index">03</span>
-    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fab fa-golang"></i></span>
+    <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii gopher %}</span>
     <h3>Go</h3>
     <span class="noimpty-track-card__by">Stephen Grider · The Complete Developer's Guide</span>
     <span class="noimpty-track-card__stat">{% section_stat Go %}</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--mysql" href="/extra/ai-infra/mysql/">
     <span class="noimpty-track-card__index">04</span>
-    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fas fa-database"></i></span>
+    <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii database %}</span>
     <h3>MySQL</h3>
     <span class="noimpty-track-card__by">Colt Steele · SQL Beginner to Expert</span>
     <span class="noimpty-track-card__stat">{% section_stat MySQL %}</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--docker" href="/extra/ai-infra/docker/">
     <span class="noimpty-track-card__index">05</span>
-    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fab fa-docker"></i></span>
+    <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii whale %}</span>
     <h3>Docker</h3>
     <span class="noimpty-track-card__by">具体教材还没定</span>
     <span class="noimpty-track-card__stat">{% section_stat Docker %}</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--transformer" href="/extra/ai-infra/transformer/">
     <span class="noimpty-track-card__index">06</span>
-    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fas fa-brain"></i></span>
+    <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii robot %}</span>
     <h3>Transformer 推理机制</h3>
     <span class="noimpty-track-card__by">具体资料还没定</span>
     <span class="noimpty-track-card__stat">{% section_stat Transformer 推理机制 %}</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--python" href="/extra/ai-infra/python/">
     <span class="noimpty-track-card__index">07</span>
-    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fab fa-python"></i></span>
+    <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii snake %}</span>
     <h3>Python</h3>
     <span class="noimpty-track-card__by">具体教材还没定</span>
     <span class="noimpty-track-card__stat">{% section_stat Python %}</span>

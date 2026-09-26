@@ -100,6 +100,23 @@ private_section: 课外        # 课外 / 课内 / Life，决定解锁框上显�
 现在前三处自动，profile 那处在 `news.mjs` 读取时自动追加一份真实清单。
 `tools/tests/site/section-stats.test.mjs` 拦着，不许再写回去。
 
+### 内页的小角色
+
+内页页头右边和课程卡片上那些长了脸的小物件是手写的 SVG（`tools/kawaii-art.cjs`），
+由 `{% kawaii %}` 在构建时嵌进页面（`scripts/noimpty-kawaii.js`）：
+
+```
+{% kawaii core %}          → 页头场景：彩虹下面站着两三个角色（core、extra、life、news……）
+{% kawaii penguin stage %} → 课程页页头：单个角色带一道小彩虹
+{% kawaii penguin %}       → 课程卡片上的图标
+```
+
+页头场景外面包 `<figure class="noimpty-scene" data-lines="第二句|第三句">`，
+第一句写在 `<figcaption class="noimpty-scene__bubble">` 里；点一下角色会跳起来换下一句
+（`source/js/interior-deco.js`）。新课程照抄同级页面，从 `kawaii-art.cjs` 的 `SINGLE`
+里挑一个角色，或者照着同一套画法（小脸放低、粉彩填色、深梅色描边）加一个。
+每个角色另外输出成 `/img/kawaii/<名字>.svg`，归档、分类、标签这几种主题生成的页头拿它当图用。
+
 ### 首页分区图片来源
 
 首页三张分区背景图片均来自 Pixiv（P站）：

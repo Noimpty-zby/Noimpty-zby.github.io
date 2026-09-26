@@ -23,7 +23,7 @@ description: "Colt Steele《The Linux Command Line Bootcamp: Beginner To Power U
       <div><b>进度</b><span>第七章已完成 · {% section_progress Linux入门 %}</span></div>
     </div>
   </div>
-  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fab fa-linux"></i></span>
+  <figure class="noimpty-scene noimpty-scene--one" data-lines="命令敲错了也没关系，再来一遍～|学到的命令，去代码小屋的终端里试试！">{% kawaii penguin stage %}</figure>
 </header>
 
 {% section_posts Linux入门 %}

@@ -21,7 +21,7 @@ description: 容器化：镜像、容器、Dockerfile、网络与卷。学习资
       <div><b>进度</b><span>{% section_progress Docker %}</span></div>
     </div>
   </div>
-  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fab fa-docker"></i></span>
+  <figure class="noimpty-scene noimpty-scene--one" data-lines="背上的箱子就是容器哦～|搬到哪儿都能原样跑起来！">{% kawaii whale stage %}</figure>
 </header>
 
 {% section_posts Docker %}

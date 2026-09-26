@@ -14,27 +14,27 @@ description: 课表之外自己挑的课：AI Infra 后端开发，以及此前�
 <header class="noimpty-hero noimpty-hero--extra">
   <div class="noimpty-hero__text">
     <p class="noimpty-hero__tape">EXTRA · 课外</p>
-    <h1 class="noimpty-hero__title"><span class="noimpty-hero__badge" aria-hidden="true"><i class="fas fa-compass"></i></span><span class="noimpty-hero__name">课外自学</span></h1>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">课外自学</span></h1>
     <p class="noimpty-hero__lead">AI Infra 后端开发 · 游戏开发</p>
     <p class="noimpty-hero__sub"><span>2 条线</span><span>{% section_stat Linux入门|Linux深入|Git|Go|MySQL|Docker|Transformer 推理机制|Python|GAMES101|UE5-Looman %}</span></p>
   </div>
-  <figure class="noimpty-guide">
-    <figcaption class="noimpty-guide__bubble">现在主攻 AI Infra 后端喵！以前的游戏开发笔记也好好收着～</figcaption>
-    <span class="noimpty-guide__face" style="--guide:url('/img/sections/extra.webp');--guide-size:250%;--guide-pos:43% 20%" role="img" aria-label="娜娜莉"></span>
+  <figure class="noimpty-scene" data-lines="服务器：Linux、Git、Go、Docker……都归我管 (•ω•)b|手柄：游戏开发先告一段落，我去睡一会儿 zzZ">
+    <figcaption class="noimpty-scene__bubble">现在主攻 AI Infra 后端！以前的游戏开发笔记也好好收着～ <span class="noimpty-kaomoji">ヽ(°▽°)ノ</span></figcaption>
+    {% kawaii extra %}
   </figure>
 </header>
 
 <div class="noimpty-track-grid noimpty-track-grid--two">
   <a class="noimpty-track-card noimpty-track-card--aiinfra" href="/extra/ai-infra/">
     <span class="noimpty-track-card__index">01</span>
-    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fas fa-server"></i></span>
+    <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii server %}</span>
     <h3>AI Infra 后端开发</h3>
     <span class="noimpty-track-card__by">Linux · Git · Go · MySQL · Docker · Python · Transformer</span>
     <span class="noimpty-track-card__stat">7 门课 · {% section_stat Linux入门|Linux深入|Git|Go|MySQL|Docker|Transformer 推理机制|Python %}</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--gamedev" href="/extra/gamedev/">
     <span class="noimpty-track-card__index">02</span>
-    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fas fa-gamepad"></i></span>
+    <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii gamepad %}</span>
     <h3>游戏开发</h3>
     <span class="noimpty-track-card__by">GAMES101 · UE5 C++ · Tom Looman</span>
     <span class="noimpty-track-card__stat">{% section_stat GAMES101|UE5-Looman %} · 告一段落</span>

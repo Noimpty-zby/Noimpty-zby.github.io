@@ -14,27 +14,27 @@ description: 之前那条线：GAMES101 图形学与 Tom Looman 的 UE5 C++，�
 <header class="noimpty-hero noimpty-hero--gamedev">
   <div class="noimpty-hero__text">
     <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a></nav>
-    <h1 class="noimpty-hero__title"><span class="noimpty-hero__badge" aria-hidden="true"><i class="fas fa-gamepad"></i></span><span class="noimpty-hero__name">游戏开发</span></h1>
+    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">游戏开发</span></h1>
     <p class="noimpty-hero__lead">GAMES101 · UE5 C++</p>
     <p class="noimpty-hero__sub"><span>2 门课</span><span>{% section_stat GAMES101|UE5-Looman %}</span><span>告一段落</span></p>
   </div>
-  <figure class="noimpty-guide">
-    <figcaption class="noimpty-guide__bubble">游戏开发这条线已经告一段落啦，图形学和 UE5 的复盘都留在这里～</figcaption>
-    <span class="noimpty-guide__face" style="--guide:url('/img/sections/in-class.webp');--guide-size:234%;--guide-pos:60% 19%" role="img" aria-label="娜娜莉"></span>
+  <figure class="noimpty-scene" data-lines="茶壶：我是图形学里最有名的那只茶壶！|手柄：存档已保存 ♪">
+    <figcaption class="noimpty-scene__bubble">GAMES101 和 UE5 的笔记都收在这里，这条线先告一段落啦～ <span class="noimpty-kaomoji">(～￣▽￣)～</span></figcaption>
+    {% kawaii gamedev %}
   </figure>
 </header>
 
 <div class="noimpty-track-grid noimpty-track-grid--two">
   <a class="noimpty-track-card noimpty-track-card--games101" href="/extra/gamedev/games101/">
     <span class="noimpty-track-card__index">01</span>
-    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fas fa-cubes"></i></span>
+    <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii teapot %}</span>
     <h3>GAMES101</h3>
     <span class="noimpty-track-card__by">闫令琪 · UC Santa Barbara</span>
     <span class="noimpty-track-card__stat">{% section_stat GAMES101 %}</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--ue5" href="/extra/gamedev/ue5-looman/">
     <span class="noimpty-track-card__index">02</span>
-    <span class="noimpty-track-card__icon" aria-hidden="true"><i class="fas fa-gamepad"></i></span>
+    <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii gamepad-blue %}</span>
     <h3>UE5 C++ · Tom Looman</h3>
     <span class="noimpty-track-card__by">Professional Game Development in C++ and Unreal Engine</span>
     <span class="noimpty-track-card__stat">{% section_stat UE5-Looman %}</span>

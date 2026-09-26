@@ -24,7 +24,7 @@ description: CMU 15-213 Introduction to Computer Systems 的学习记录与 Lab 
       <div><b>进度</b><span>{% section_progress CSAPP %}</span></div>
     </div>
   </div>
-  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fas fa-microchip"></i></span>
+  <figure class="noimpty-scene noimpty-scene--one" data-lines="CSAPP 讲的就是我肚子里的事～|虚拟内存、异常控制流……排在算法后面学">{% kawaii chip stage %}</figure>
 </header>
 
 {% section_posts CSAPP %}

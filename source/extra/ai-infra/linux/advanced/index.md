@@ -20,7 +20,7 @@ description: 系统调用、进程与内存、性能排查这一层。等入门�
       <div><b>进度</b><span>{% section_progress Linux深入 %}</span></div>
     </div>
   </div>
-  <span class="noimpty-hero__mark" aria-hidden="true"><i class="fas fa-layer-group"></i></span>
+  <figure class="noimpty-scene noimpty-scene--one" data-lines="戴上眼镜，准备深入啦 (・ω・)|入门那段学完再来找我～">{% kawaii penguin-glasses stage %}</figure>
 </header>
 
 {% section_posts Linux深入 %}

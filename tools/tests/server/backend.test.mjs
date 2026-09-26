@@ -84,7 +84,16 @@ test('HTTP authentication, origin policy, state conflicts and private run histor
   await call('/api/runs', { method: 'DELETE' });
   assert.equal(store.history.runs.length, 0);
   assert.equal((await store.readRecord('history', null)).runs.length, 0);
-  assert.equal((await fetch(base + '/api/health')).status, 200);
+  const health = await fetch(base + '/api/health');
+  assert.equal(health.status, 200); assert.equal((await health.json()).build, null);
+});
+test('health reports the deployed build without authentication', async t => {
+  const { store } = await storeFixture(t);
+  const app = createApp({ store, runner: { health: async () => ({ ready: true }) }, token, build: 'abc1234' });
+  app.listen(0, '127.0.0.1'); await once(app, 'listening');
+  t.after(() => { app.closeAllConnections(); app.close(); });
+  const health = await (await fetch('http://127.0.0.1:' + app.address().port + '/api/health')).json();
+  assert.equal(health.build, 'abc1234'); assert.equal(health.runner.ready, true);
 });
 test('failed authentication behind one proxy cannot block the owner or health probes', async t => {
   const { store } = await storeFixture(t);

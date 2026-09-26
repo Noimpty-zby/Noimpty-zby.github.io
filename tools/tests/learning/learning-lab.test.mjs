@@ -417,10 +417,10 @@ class FakeSocket {
   output (text) { this.onmessage?.({ data: new TextEncoder().encode(text).buffer }) }
 }
 FakeSocket.all = []
-const terminalSetup = ({ ticket = async () => ({ ticket: 'a'.repeat(48), expiresIn: 30 }), workspace = null } = {}) => {
+const terminalSetup = ({ ticket = async () => ({ ticket: 'a'.repeat(48), expiresIn: 30 }), workspace = null, kind = 'shell', language = 'linux', code = '' } = {}) => {
   const requests = [], events = [], output = []
   const link = api.createTerminalLink({
-    language: 'linux', WebSocketImpl: FakeSocket, size: () => ({ cols: 90, rows: 25 }), workspace: () => workspace,
+    kind, language, code, delays: [5], WebSocketImpl: FakeSocket, size: () => ({ cols: 90, rows: 25 }), workspace: () => workspace,
     request: async (path, options) => { requests.push({ path, ...options }); return ticket(options) },
     socketURL: path => 'wss://api.example' + path,
     onOutput: bytes => output.push(new TextDecoder().decode(bytes)),
@@ -432,19 +432,19 @@ const tick = () => new Promise(resolve => setTimeout(resolve, 0))
 // Values built inside the script's own context have other prototypes; compare their data.
 const same = (actual, expected, message) => assert.deepEqual(JSON.parse(JSON.stringify(actual)), expected, message)
 
-await check('terminal opens with a one-time ticket, holds early keys until ready and relays output', async () => {
+await check('a shell opens with a one-time ticket, holds early keys until ready and relays output', async () => {
   const app = terminalSetup({ workspace: { id: 'ws-linux', revision: 3 } })
   const before = FakeSocket.all.length
-  const connecting = app.link.connect()
+  app.link.connect()
   app.link.write('l')
-  await connecting
-  same(app.requests, [{ path: '/api/terminal/ticket', method: 'POST', body: { language: 'linux', workspaceId: 'ws-linux', cols: 90, rows: 25 } }])
+  await tick()
+  same(app.requests, [{ path: '/api/terminal/ticket', method: 'POST', body: { kind: 'shell', language: 'linux', workspaceId: 'ws-linux', cols: 90, rows: 25 } }])
   assert.equal(FakeSocket.all.length, before + 1)
   assert.equal(app.socket().url, 'wss://api.example/api/terminal?ticket=' + 'a'.repeat(48))
   app.link.write('s\r')
   app.socket().open()
   same(app.socket().sent, [], 'nothing is sent before the server says ready')
-  app.socket().message({ type: 'ready', workspaceId: 'ws-linux', workspaceRevision: 3 })
+  app.socket().message({ type: 'ready', sessionId: 's1', offset: 0, reset: true, workspaceId: 'ws-linux' })
   assert.equal(app.link.state(), 'open')
   same(app.socket().sent, [{ type: 'input', data: 'ls\r' }])
   app.socket().output('file.txt\r\n')
@@ -453,59 +453,68 @@ await check('terminal opens with a one-time ticket, holds early keys until ready
   same(app.socket().sent.at(-1), { type: 'resize', cols: 120, rows: 40 })
 })
 
-await check('ending the terminal waits for the server to confirm the save', async () => {
+await check('a dropped shell reconnects by itself and asks only for the output it missed', async () => {
   const app = terminalSetup()
-  await app.link.connect(); app.socket().open(); app.socket().message({ type: 'ready', workspaceId: 'w', workspaceRevision: 0 })
-  let finished = null
-  const ending = app.link.end().then(value => { finished = value })
-  same(app.socket().sent.at(-1), { type: 'close' })
-  assert.equal(app.link.state(), 'closing')
-  await tick(); assert.equal(finished, null)
-  app.socket().message({ type: 'saved', committed: true, workspaceId: 'w', workspaceRevision: 1, reason: 'closed' })
-  app.socket().close()
-  await ending
-  assert.equal(finished.workspaceRevision, 1)
-  assert.equal(app.link.state(), 'closed')
-  assert.ok(!app.events.some(event => event.type === 'lost'))
-})
-
-await check('a dropped connection is reported, and the next key reconnects with a new ticket', async () => {
-  const app = terminalSetup()
-  await app.link.connect(); app.socket().open(); app.socket().message({ type: 'ready', workspaceId: 'w', workspaceRevision: 0 })
+  app.link.connect(); await tick()
+  app.socket().open(); app.socket().message({ type: 'ready', sessionId: 's1', offset: 100, reset: true })
+  app.socket().output('12345')
   const first = app.socket()
   first.close()
   assert.ok(app.events.some(event => event.type === 'lost'))
+  assert.equal(app.link.state(), 'reconnecting')
+  await new Promise(resolve => setTimeout(resolve, 20))
+  same(app.requests.at(-1).body, { kind: 'shell', language: 'linux', sessionId: 's1', since: 105, cols: 90, rows: 25 })
+  app.link.write('typed while away')
+  app.socket().open(); app.socket().message({ type: 'ready', sessionId: 's1', offset: 105, reset: false })
+  const ready = app.events.filter(event => event.type === 'ready').at(-1)
+  assert.equal(ready.resumed, true); assert.equal(ready.replaced, false)
+  same(app.socket().sent, [{ type: 'input', data: 'typed while away' }])
+})
+
+await check('after the shell exits, the next key opens a fresh one instead of resuming', async () => {
+  const app = terminalSetup()
+  app.link.connect(); await tick()
+  app.socket().open(); app.socket().message({ type: 'ready', sessionId: 's1', offset: 0, reset: true })
+  app.socket().message({ type: 'exit', code: 0, committed: true })
+  app.socket().close()
+  assert.equal(app.link.state(), 'exited')
+  assert.ok(!app.events.some(event => event.type === 'lost'))
   app.link.write('x')
   await tick()
-  assert.equal(app.requests.length, 2)
-  assert.notEqual(app.socket(), first)
-  same(app.socket().sent, [], 'the key that reopens the terminal is not typed into it')
+  same(app.requests.at(-1).body, { kind: 'shell', language: 'linux', cols: 90, rows: 25 })
+  assert.ok(!app.socket().sent.length, 'the key that reopens the shell is not typed into it')
 })
 
-await check('an older backend without terminals asks for an update instead of failing silently', async () => {
+await check('an older backend without terminals asks for an update and does not retry', async () => {
   const app = terminalSetup({ ticket: async () => { throw Object.assign(new Error('接口不存在。'), { status: 404 }) } })
-  await app.link.connect()
+  app.link.connect(); await tick(); await tick()
   assert.equal(app.link.state(), 'closed')
   assert.match(app.events.find(event => event.type === 'error').message, /更新后端/)
+  assert.equal(app.requests.length, 1)
 })
 
-await check('ending while the terminal is still opening never leaves a server session unconfirmed', async () => {
-  const pending = deferred()
-  const app = terminalSetup({ ticket: () => pending.promise })
-  const before = FakeSocket.all.length
-  const connecting = app.link.connect()
-  assert.equal(await app.link.end(), null, 'no socket yet: nothing to save')
-  pending.resolve({ ticket: 'b'.repeat(48) }); await connecting
-  assert.equal(FakeSocket.all.length, before, 'a late ticket opens nothing')
+await check('a program run sends its code, does not reconnect, and script mode waits for the shell', async () => {
+  const run = terminalSetup({ kind: 'task', language: 'python', code: 'print(1)' })
+  run.link.connect(); await tick()
+  same(run.requests[0].body, { kind: 'task', language: 'python', code: 'print(1)', cols: 90, rows: 25 })
+  run.socket().open(); run.socket().message({ type: 'ready', sessionId: 't1', offset: 0, reset: true })
+  run.link.terminate()
+  same(run.socket().sent, [{ type: 'terminate' }])
+  run.socket().close()
+  assert.equal(run.link.state(), 'closed')
+  await new Promise(resolve => setTimeout(resolve, 20))
+  assert.equal(run.requests.length, 1)
 
-  const later = terminalSetup()
-  await later.link.connect()
-  const ending = later.link.end()
-  later.socket().open()
-  same(later.socket().sent, [{ type: 'close' }], 'close is sent as soon as the socket opens')
-  later.socket().message({ type: 'saved', committed: true, workspaceId: 'w', workspaceRevision: 2 })
-  later.socket().close()
-  assert.equal((await ending).workspaceRevision, 2)
+  const shell = terminalSetup()
+  let opened = false
+  const waiting = shell.link.opened().then(() => { opened = true })
+  await tick()
+  assert.equal(opened, false)
+  shell.socket().open(); shell.socket().message({ type: 'ready', sessionId: 's9', offset: 0, reset: true })
+  await waiting
+  assert.equal(opened, true)
+  shell.link.close()
+  assert.equal(shell.link.state(), 'closed')
 })
 
 await check('the terminal hands its saved workspace revision to the next script run', async () => {

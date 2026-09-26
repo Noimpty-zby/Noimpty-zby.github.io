@@ -7,7 +7,8 @@ Only the runner's final, post-cleanup persist step puts it back for snapshotting
 
 `run` executes one script. `terminal` gives the learner an interactive Bash on a
 pseudo-terminal and relays it over stdin/stdout; the state is captured after every
-command, so a dropped connection still keeps the last directory and variables.
+command, so a dropped connection still keeps the last directory and variables. `pty` runs
+any other program the same way (the code studio's interactive C/C++/Go/Python runs).
 """
 import argparse
 import errno
@@ -152,7 +153,8 @@ done < <(builtin compgen -A function)
 HISTFILESIZE=2000
 HISTCONTROL=ignoreboth
 builtin shopt -s histappend checkwinsize huponexit
-PS1='\[\e[01;32m\]\u@\h\[\e[00m\]:\[\e[01;34m\]\w\[\e[00m\]\$ '
+# Ubuntu's prompt, including the window title the page shows above the terminal.
+PS1='\[\e]0;\u@\h: \w\a\]\[\e[01;32m\]\u@\h\[\e[00m\]:\[\e[01;34m\]\w\[\e[00m\]\$ '
 __nanaly_prompt() {
   local __nanaly_status=$?
   builtin history -a
@@ -328,10 +330,35 @@ def relay(pid, master):
                 pass
     if status is None:
         _, status = os.waitpid(pid, 0)
-    return os.waitstatus_to_exitcode(status)
+    code = os.waitstatus_to_exitcode(status)
+    return code if code >= 0 else 128 - code
 
 
-def terminal(workspace, temporary, cols, rows):
+def spawn(argv, cwd, environment, cols, rows, pidfile=None):
+    pid, master = pty.fork()
+    if pid == 0:
+        try:
+            os.chdir(cwd)
+            os.execvpe(argv[0], argv, environment)
+        finally:
+            os._exit(127)
+    # Lets a script run from the editor start in the directory the terminal is in.
+    if pidfile:
+        Path(pidfile).write_text(str(pid), encoding='ascii')
+    try:
+        set_size(master, cols, rows)
+        os.set_blocking(master, False)
+        return relay(pid, master)
+    finally:
+        os.close(master)
+        if pidfile:
+            try:
+                os.unlink(pidfile)
+            except OSError:
+                pass
+
+
+def terminal(workspace, temporary, cols, rows, pidfile=None):
     state, cwd, legacy, warnings = prepare(workspace, temporary)
     with tempfile.TemporaryDirectory(prefix='nanaly-term-', dir=temporary) as job:
         job = Path(job)
@@ -344,19 +371,7 @@ def terminal(workspace, temporary, cols, rows):
         for warning in warnings:
             write_out(('\x1b[33m' + warning + '\x1b[0m\r\n').encode('utf-8'))
         environment = {**os.environ, 'TERM': 'xterm-256color', 'HISTFILE': str(history)}
-        pid, master = pty.fork()
-        if pid == 0:
-            try:
-                os.chdir(cwd)
-                os.execve('/bin/bash', ['bash', '--noprofile', '--rcfile', str(rcfile), '-i'], environment)
-            finally:
-                os._exit(127)
-        try:
-            set_size(master, cols, rows)
-            os.set_blocking(master, False)
-            code = relay(pid, master)
-        finally:
-            os.close(master)
+        code = spawn(['/bin/bash', '--noprofile', '--rcfile', str(rcfile), '-i'], cwd, environment, cols, rows, pidfile)
         try:
             lines = read_regular(history, 4 * MAX_HISTORY).decode('utf-8', 'replace').replace('\0', '').splitlines()
             kept = '\n'.join(lines[-HISTORY_LINES:]) + '\n' if lines else ''
@@ -374,6 +389,18 @@ def persist(workspace, temporary):
 
 
 def main():
+    if sys.argv[1:2] == ['pty']:
+        parser = argparse.ArgumentParser(prog='shell-session.py pty')
+        parser.add_argument('--cols', type=int, default=80)
+        parser.add_argument('--rows', type=int, default=24)
+        parser.add_argument('--cwd', default='/work')
+        parser.add_argument('command', nargs=argparse.REMAINDER)
+        args = parser.parse_args(sys.argv[2:])
+        command = args.command[1:] if args.command[:1] == ['--'] else args.command
+        if not command:
+            parser.error('missing command')
+        environment = {**os.environ, 'TERM': 'xterm-256color'}
+        return spawn(command, args.cwd, environment, max(2, min(args.cols, 500)), max(2, min(args.rows, 300)))
     parser = argparse.ArgumentParser()
     parser.add_argument('action', choices=['run', 'persist', 'terminal'])
     parser.add_argument('script', nargs='?', default='/input/main.sh')
@@ -381,13 +408,14 @@ def main():
     parser.add_argument('--temporary', default='/tmp')
     parser.add_argument('--cols', type=int, default=80)
     parser.add_argument('--rows', type=int, default=24)
+    parser.add_argument('--pidfile')
     args = parser.parse_args()
     workspace = Path(args.workspace).absolute()
     temporary = Path(args.temporary).absolute()
     if args.action == 'run':
         return run(workspace, temporary, Path(args.script).absolute())
     if args.action == 'terminal':
-        return terminal(workspace, temporary, max(2, min(args.cols, 500)), max(2, min(args.rows, 300)))
+        return terminal(workspace, temporary, max(2, min(args.cols, 500)), max(2, min(args.rows, 300)), args.pidfile)
     persist(workspace, temporary)
     return 0
 

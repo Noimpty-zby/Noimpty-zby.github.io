@@ -18,7 +18,8 @@ import { shell } from '@codemirror/legacy-modes/mode/shell';
 import { tags } from '@lezer/highlight';
 
 const MAX_CODE_LENGTH = 65536;
-const LANGUAGES = new Set(['c', 'cpp', 'go', 'python', 'git', 'linux', 'mysql']);
+// 'text' is a file opened from the terminal with `code` that no mode fits: no highlighting.
+const LANGUAGES = new Set(['c', 'cpp', 'go', 'python', 'git', 'linux', 'mysql', 'text']);
 const normalizeLanguage = value => LANGUAGES.has(value) ? value : 'c';
 const words = (text, type = 'keyword') => text.split(/\s+/).map(label => ({ label, type }));
 const completions = {
@@ -43,6 +44,7 @@ const completions = {
 };
 const shellLanguage = StreamLanguage.define(shell);
 function languageExtension(id) {
+  if (id === 'text') return [];
   const language = id === 'go' ? go()
     : id === 'python' ? python()
     : id === 'mysql' ? sql({ dialect: MySQL, upperCaseKeywords: true })
@@ -171,6 +173,8 @@ function create(host, options = {}) {
           if (typeof options.onRun === 'function') options.onRun();
           return true;
         } },
+        // Only claimed while a file from the terminal is open; otherwise the browser keeps it.
+        { key: 'Mod-s', run: () => typeof options.onSave === 'function' && options.onSave() === true },
         indentWithTab
       ])),
       EditorView.updateListener.of(update => {

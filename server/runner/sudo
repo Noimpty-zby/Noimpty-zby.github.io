@@ -1,0 +1,5 @@
+#!/bin/sh
+# The sandbox has no root, so there is no real sudo. Say that plainly instead of
+# "command not found", which reads as if the command itself did not exist.
+echo "sudo: 这个练习环境没有管理员（root）权限，sudo 和需要 root 的命令在这里执行不了。" >&2
+exit 1

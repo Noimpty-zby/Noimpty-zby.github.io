@@ -235,7 +235,7 @@ await test('Lookup failure does not also tell the model that the subject was nev
 })
 
 await test('Wrong vault password never replaces the current in-memory keys or settings', async () => {
-  const fields = Object.fromEntries(['apiKey', 'tavilyKey', 'ghToken', 'visionKey', 'pass', 'baseURL', 'model', 'reasonModel', 'reasonEffort', 'visionBaseURL', 'visionModel', 'proactive']
+  const fields = Object.fromEntries(['apiKey', 'tavilyKey', 'ghToken', 'visionKey', 'backendToken', 'pass', 'baseURL', 'model', 'reasonModel', 'reasonEffort', 'visionBaseURL', 'visionModel', 'proactive']
     .map(name => [name, { value: '' }]))
   let click
   const box = { isConnected: true, querySelector: selector => fields[selector.match(/"([^"]+)"/)[1]],
@@ -280,7 +280,7 @@ await test('Double submit during local navigation lookup cannot issue duplicate 
 
 await test('Locking while vault encryption is pending cannot save or unlock keys afterward', async () => {
   const pending = deferred(), started = deferred()
-  const fields = Object.fromEntries(['apiKey', 'tavilyKey', 'ghToken', 'visionKey', 'pass', 'baseURL', 'model', 'reasonModel', 'reasonEffort', 'visionBaseURL', 'visionModel', 'proactive']
+  const fields = Object.fromEntries(['apiKey', 'tavilyKey', 'ghToken', 'visionKey', 'backendToken', 'pass', 'baseURL', 'model', 'reasonModel', 'reasonEffort', 'visionBaseURL', 'visionModel', 'proactive']
     .map(name => [name, { value: '' }]))
   let click, writes = 0
   const box = { isConnected: true, querySelector: selector => fields[selector.match(/"([^"]+)"/)[1]],
@@ -306,6 +306,78 @@ await test('Locking while vault encryption is pending cannot save or unlock keys
   assert.equal(getState().secrets, secrets)
 })
 
+
+const setupHarness = overrides => {
+  const fields = Object.fromEntries(['apiKey', 'tavilyKey', 'ghToken', 'visionKey', 'backendToken', 'pass', 'baseURL', 'model', 'reasonModel', 'reasonEffort', 'visionBaseURL', 'visionModel', 'proactive']
+    .map(name => [name, { value: '' }]))
+  let click
+  const box = { isConnected: true, querySelector: selector => fields[selector.match(/"([^"]+)"/)[1]],
+    querySelectorAll: () => [], addEventListener: (_, fn) => { click = fn } }
+  const cfg = { baseURL: 'https://api.example.test', model: 'm', reasonModel: 'r', reasonEffort: 'high', visionBaseURL: 'https://api.siliconflow.cn/v1', visionModel: 'v' }
+  const calls = { sealed: [], connects: [], errors: [] }
+  const subject = run(cut('  const showSetup =', '  const addSetupError') + '\nconst getSecrets = () => secrets', {
+    cfg, secrets: { apiKey: 'k' }, DEFAULTS: cfg, readCfg: () => cfg, setupShell: () => box, escapeHtml: text => text,
+    hasCrypto: () => true, hasVault: () => false, openSecrets: async () => null,
+    sealSecrets: async value => { calls.sealed.push(value); return 'sealed' }, uiRevision: 0,
+    LS_VAULT: 'nanaly-vault-v1', voiceController: null, localStorage: { setItem() {} }, writeCfg() {}, writeSession() {}, markOwnerIfMine() {}, backToChat() {}, resetDwell() {}, addMsg() {},
+    connectBackend: options => { calls.connects.push(options) }, addSetupError: (_, message) => { calls.errors.push(message) }, ...overrides
+  }, ['showSetup', 'getSecrets'])
+  subject.showSetup()
+  return { fields, calls, getSecrets: subject.getSecrets, save: () => click({ target: { closest: () => ({ dataset: { a: 'save' } }) } }) }
+}
+
+await test('Vault saves the personal backend token encrypted and connects right after saving', async () => {
+  const setup = setupHarness()
+  const backend = 'b'.repeat(64)
+  setup.fields.apiKey.value = 'k'
+  setup.fields.pass.value = 'vault-pass'
+  setup.fields.backendToken.value = backend
+  await setup.save()
+  assert.deepEqual(setup.calls.errors, [])
+  assert.equal(setup.calls.sealed.length, 1)
+  assert.equal(setup.calls.sealed[0].backendToken, backend)
+  assert.equal(setup.getSecrets().backendToken, backend)
+  assert.equal(setup.calls.connects.length, 1)
+  assert.equal(setup.calls.connects[0].explicit, true)
+})
+
+await test('Vault rejects a malformed backend token before encrypting anything', async () => {
+  for (const bad of ['too-short', 'has space in the middle of a long token value']) {
+    const setup = setupHarness()
+    setup.fields.apiKey.value = 'k'
+    setup.fields.pass.value = 'vault-pass'
+    setup.fields.backendToken.value = bad
+    await setup.save()
+    assert.equal(setup.calls.sealed.length, 0)
+    assert.equal(setup.calls.connects.length, 0)
+    assert.match(setup.calls.errors.at(-1), /个人后端令牌/)
+  }
+})
+
+await test('Backend auto-connect needs the site gate and a stored token, and respects manual disconnects', () => {
+  const connectCode = cut('  const BACKEND_DEFAULT', '  // 深度思考')
+  const harness = ({ token = 't'.repeat(64), gate = true, configured = false, connecting = false, off = false, url = null } = {}) => {
+    const connects = []
+    const agent = { configured: () => configured, snapshot: () => ({ connection: connecting ? 'connecting' : 'disconnected' }),
+      manuallyDisconnected: () => off, connect: (...args) => { connects.push(args); return Promise.resolve() } }
+    const { connectBackend } = run(connectCode, {
+      secrets: { backendToken: token }, localStorage: { getItem: () => url },
+      window: { NANALY_AGENT: agent, NOIMPTY_GATE: { unlocked: () => gate } }
+    }, ['connectBackend'])
+    return { connectBackend, connects }
+  }
+  let h = harness(); h.connectBackend()
+  assert.deepEqual(h.connects, [['https://api.noimpty-zby.cn', 't'.repeat(64)]])
+  h = harness({ url: 'https://other.example' }); h.connectBackend()
+  assert.equal(h.connects[0][0], 'https://other.example')
+  for (const blocked of [{ token: '' }, { gate: false }, { configured: true }, { connecting: true }, { off: true }]) {
+    h = harness(blocked); h.connectBackend(); assert.equal(h.connects.length, 0, JSON.stringify(blocked))
+  }
+  h = harness({ off: true }); h.connectBackend({ explicit: true })
+  assert.equal(h.connects.length, 1)
+  h = harness({ gate: false }); h.connectBackend({ explicit: true })
+  assert.equal(h.connects.length, 0)
+})
 
 await test('SSE length/content_filter termination rejects while preserving the received delta', async () => {
   for (const reason of ['length', 'content_filter']) {

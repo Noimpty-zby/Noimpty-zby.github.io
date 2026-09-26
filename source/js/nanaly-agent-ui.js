@@ -30,6 +30,10 @@
   url.input.placeholder = 'https://你的后端地址'; url.input.required = true; token.input.required = true; token.input.autocomplete = 'off'
   form(connection,[url,token],'连接并读取',async () => { const address=url.input.value; await agent.connect(address,token.input.value); token.input.value = ''; renderLists(); try { localStorage.setItem('nanaly-agent-url',address) } catch (_) {} })
   connection.append(button('重新读取最新记录',() => agent.configured() ? agent.refresh() : agent.resume()),button('断开并清除本页私有数据',() => agent.disconnect()))
+  // 令牌存进娜娜莉的密钥保险箱后，解锁保险箱就自动连接（noimpty-ai.js 的 connectBackend）。
+  const vault = node('button','打开密钥保险箱'); vault.type = 'button'
+  vault.addEventListener('click',() => { close(); window.NANALY?.requestUnlock?.() })
+  connection.append(node('p','不想每次都贴令牌：在密钥保险箱里填上「个人后端令牌」，以后解锁保险箱就会自动连接。'),vault)
   const memory = section('统一记忆'), kind = field('记忆类型','select'), content = field('确认要记住的内容','textarea'), publicMemory = field('允许用于公开回复与随笔','input','','checkbox')
   for (const [value,label] of Object.entries({ preference:'偏好',goal:'学习目标',fact:'确认事实',todo:'未解决问题',correction:'纠正记录',progress:'学习进度' })) { const o = node('option',label); o.value = value; kind.input.append(o) }
   content.input.required = true; content.input.maxLength = 800

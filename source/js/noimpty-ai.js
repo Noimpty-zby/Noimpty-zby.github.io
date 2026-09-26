@@ -46,7 +46,7 @@
     'deepseek-chat': 'deepseek-v4-flash',
     'deepseek-reasoner': 'deepseek-v4-pro'
   }
-  const EMPTY_SECRETS = { apiKey: '', tavilyKey: '', ghToken: '', visionKey: '' }
+  const EMPTY_SECRETS = { apiKey: '', tavilyKey: '', ghToken: '', visionKey: '', backendToken: '' }
 
   const isRecord = value => !!value && typeof value === 'object' && !Array.isArray(value)
   const cleanSecrets = value => Object.fromEntries(Object.keys(EMPTY_SECRETS)
@@ -279,6 +279,22 @@
   }
 
   const locked = () => hasVault() && !secrets.apiKey && !secrets.visionKey
+
+  /* 保险箱里存了个人后端令牌，就顺手连上后端 —— 不用每开一个新标签页再贴一遍那串 64 位令牌。
+   *
+   * 两个时刻会连：刚解锁 / 刚保存（explicit），以及打开页面时保险箱本来就是解锁的。
+   * 后一种要让着用户：站点暗号没开、已经连着或正在连、这个标签页里手动断开过，都不连。
+   * 地址用工作室里存过的那个，没有就用默认的。 */
+  const BACKEND_DEFAULT = 'https://api.noimpty-zby.cn'
+  const connectBackend = ({ explicit = false } = {}) => {
+    const agent = window.NANALY_AGENT
+    if (!secrets.backendToken || !agent || window.NOIMPTY_GATE?.unlocked?.() !== true) return
+    if (agent.configured() || agent.snapshot().connection === 'connecting') return
+    if (!explicit && agent.manuallyDisconnected?.()) return
+    let url = ''
+    try { url = localStorage.getItem('nanaly-agent-url') || '' } catch (_) {}
+    agent.connect(url || BACKEND_DEFAULT, secrets.backendToken).catch(() => {})
+  }
 
   // 深度思考：切到推理模型，能看到她的推导过程
   const LS_DEEP = 'nanaly-deep-v1'
@@ -1734,6 +1750,8 @@
       <input type="password" data-f="tavilyKey" placeholder="tvly-..." autocomplete="off">
       <label>GitHub Token（日程保存 / 后台链接巡检，可留空）</label>
       <input type="password" data-f="ghToken" placeholder="github_pat_..." autocomplete="off">
+      <label>个人后端令牌（代码小屋和工作室用，可留空）</label>
+      <input type="password" data-f="backendToken" placeholder="存进来以后，解锁就自动连接后端" autocomplete="off">
       <label>解锁密码（每次重开浏览器输一次）</label>
       <input type="password" data-f="pass" placeholder="自己设一个" autocomplete="new-password">
       <div class="nanaly-tip" style="margin-top:12px">
@@ -1772,6 +1790,7 @@
     box.querySelector('[data-f="apiKey"]').value = secrets.apiKey || ''
     box.querySelector('[data-f="tavilyKey"]').value = secrets.tavilyKey || ''
     box.querySelector('[data-f="ghToken"]').value = secrets.ghToken || ''
+    box.querySelector('[data-f="backendToken"]').value = secrets.backendToken || ''
 
     let saving = false
     box.addEventListener('click', async e => {
@@ -1784,6 +1803,8 @@
       const pass = get('pass')
       if (!get('apiKey') && !get('visionKey')) return addSetupError(box, '请填写文字模型或硅基流动 API Key')
       if (pass.length < 4) return addSetupError(box, '解锁密码太短了，至少 4 位')
+      const backendToken = get('backendToken')
+      if (backendToken && (backendToken.length < 24 || backendToken.length > 4096 || /\s/.test(backendToken))) return addSetupError(box, '个人后端令牌不对：应该是一整串没有空格的字符，至少 24 位')
       if (!hasCrypto()) return addSetupError(box, '这个环境不支持加密（需要 HTTPS 或 localhost）')
 
       const nextCfg = {
@@ -1795,7 +1816,7 @@
         visionModel: get('visionModel') || DEFAULTS.visionModel,
         proactive: get('proactive') === 'off' ? 'off' : 'gentle'
       }
-      const nextSecrets = { apiKey: get('apiKey'), tavilyKey: get('tavilyKey'), ghToken: get('ghToken'), visionKey: get('visionKey') }
+      const nextSecrets = { apiKey: get('apiKey'), tavilyKey: get('tavilyKey'), ghToken: get('ghToken'), visionKey: get('visionKey'), backendToken }
       try {
         for (const field of ['baseURL', 'visionBaseURL']) {
         const url = new URL(nextCfg[field])
@@ -1826,6 +1847,7 @@
         backToChat()
         resetDwell()
         addMsg('sys', '已加密保存并解锁')
+        connectBackend({ explicit: true })
       } catch (err) {
         if (revision === uiRevision && box.isConnected) addSetupError(box, '保存失败：' + (err && err.message || err))
       } finally {
@@ -1881,6 +1903,7 @@
         markOwnerIfMine()
         backToChat()
         addMsg('sys', '解锁成功')
+        connectBackend({ explicit: true })
       } catch (_) {
         if (revision !== uiRevision || !box.isConnected) return
         addSetupError(box, '密码不对喵。再试一次？')
@@ -3035,6 +3058,7 @@
   }
   refreshContext()
   resetDwell()
+  connectBackend()
   window.addEventListener('pjax:complete', () => setTimeout(() => { refreshContext(); resetDwell() }, 60))
   window.addEventListener('noimpty:search-reset', () => {
     searchRevision++

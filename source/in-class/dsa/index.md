@@ -11,20 +11,23 @@ sitemap: false
 description: Abdul Bari《Mastering Data Structures & Algorithms using C and C++》的学习记录。
 ---
 
-<header class="noimpty-page-intro">
-  <p class="noimpty-page-intro__eyebrow">课内 · 01</p>
-  <h2>Mastering Data Structures &amp; Algorithms using C and C++</h2>
-  <p>Abdul Bari。约 53 小时。他的讲法是先在纸上把结构画出来、把每一步指针的走向说清楚，再落到代码 —— 所以适合当第一遍，也适合把之前糊过去的地方补上。</p>
+<header class="noimpty-hero noimpty-hero--dsa">
+  <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/in-class/">core</a></nav>
+  <h1 class="noimpty-hero__title">数据结构与算法</h1>
+  <p class="noimpty-hero__sub"><span>Mastering Data Structures &amp; Algorithms using C and C++</span></p>
+  <div class="noimpty-course-meta">
+    <div><b>讲师</b><span>Abdul Bari</span></div>
+    <div><b>时长</b><span>约 53 小时视频</span></div>
+    <div><b>语言</b><span>英文授课 · C / C++ 实现</span></div>
+    <div><b>进度</b><span>数组 · {% section_progress DSA %}</span></div>
+  </div>
 </header>
 
-<div class="noimpty-course-meta">
-  <div><b>讲师</b><span>Abdul Bari</span></div>
-  <div><b>时长</b><span>约 53 小时视频</span></div>
-  <div><b>语言</b><span>英文授课 · C / C++ 实现</span></div>
-  <div><b>进度</b><span>数组 · {% section_progress DSA %}</span></div>
-</div>
+{% section_posts DSA %}
 
-<div class="noimpty-plan">
+<details class="noimpty-fold">
+  <summary>关于这门课</summary>
+  <p>Abdul Bari。约 53 小时。他的讲法是先在纸上把结构画出来、把每一步指针的走向说清楚，再落到代码 —— 所以适合当第一遍，也适合把之前糊过去的地方补上。</p>
   <h3>课程覆盖</h3>
   <ul>
     <li><b>递归</b> —— 尾递归、头递归、树形递归、间接递归、嵌套递归，以及递归树与时间分析</li>
@@ -36,9 +39,6 @@ description: Abdul Bari《Mastering Data Structures & Algorithms using C and C++
     <li><b>哈希</b> —— 冲突处理、开放寻址与链地址</li>
     <li><b>排序</b> —— 各类排序的实现与稳定性、时间空间取舍</li>
   </ul>
-
   <h3>这里会写什么</h3>
   <p>不复述课程内容 —— 那是笔记软件的活。这里只写三类：<b>写崩过的地方</b>（指针、边界、递归返回值），<b>两种实现的取舍</b>（为什么这里用链式而不是数组），<b>和后面课程的接口</b>（比如 AVL 的旋转和 OS 里的红黑树差在哪）。</p>
-</div>
-
-{% section_posts DSA %}
+</details>

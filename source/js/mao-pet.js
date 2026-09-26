@@ -781,8 +781,8 @@
         return title && count ? [`${title.slice(0, 40)}已经记录 ${count[1]} 篇笔记喵。`, '笑'] : null
       }).filter(Boolean)
       if (lines.length) return lines
-      const grid = document.querySelector('.noimpty-post-grid[data-section]')
-      if (grid) return [[`这一栏目前有 ${grid.querySelectorAll('.noimpty-post-card').length} 篇笔记，可以挑一篇继续看。`, '平静']]
+      const list = document.querySelector('.noimpty-post-list[data-section]')
+      if (list) return [[`这一栏目前有 ${list.querySelectorAll('.noimpty-post-card').length} 篇笔记，可以挑一篇继续看。`, '平静']]
     } catch (_) {}
     return []
   }

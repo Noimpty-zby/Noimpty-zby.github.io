@@ -10,10 +10,11 @@ private_section: Life
 sitemap: false
 ---
 
-<header class="noimpty-page-intro">
-  <p class="noimpty-page-intro__eyebrow">Private · Life</p>
-  <h2>生活片段</h2>
-  <p>日常琐事、偶尔的感受，以及值得留下来的生活记录。娜娜莉自己写的随笔也归在这里。</p>
+<header class="noimpty-hero noimpty-hero--word noimpty-hero--art noimpty-hero--life">
+  <span class="noimpty-hero__art" style="--hero-art:url('/img/sections/life.webp');--hero-pos:center 16%" aria-hidden="true"></span>
+  <p class="noimpty-hero__chip"><i class="fas fa-lock" aria-hidden="true"></i>private · 生活</p>
+  <h1 class="noimpty-hero__title">life</h1>
+  <p class="noimpty-hero__sub"><span>生活片段</span><span>{% section_stat Life %}</span></p>
 </header>
 
 {% section_posts Life %}

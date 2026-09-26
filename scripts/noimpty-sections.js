@@ -144,19 +144,26 @@ const statsOf = section => {
 hexo.extend.tag.register('section_stat', args => {
   const parts = args.join(' ').split('|').map(x => x.trim()).filter(Boolean)
   const labeled = parts.some(p => p.includes('='))
+  // 外面包一层带状态的 span：卡片据此把「还没开始」的那几门调暗，
+  // 已经在写的保持高亮 —— 一眼就能看出现在在推哪几门。
+  const wrap = (text, active) =>
+    `<span class="noimpty-stat noimpty-stat--${active ? 'active' : 'idle'}">${escapeHtml(text)}</span>`
 
   if (!labeled) {
     const n = parts.reduce((sum, leaf) => sum + statsOf(leaf).n, 0)
-    return escapeHtml(n ? `已写 ${n} 篇` : '还没开始')
+    return wrap(n ? `已写 ${n} 篇` : '还没开始', n > 0)
   }
-  return escapeHtml(parts.map(part => {
+  let total = 0
+  const text = parts.map(part => {
     const i = part.indexOf('=')
     const label = i > -1 ? part.slice(0, i).trim() : ''
     const leaf = i > -1 ? part.slice(i + 1).trim() : part
     const { n } = statsOf(leaf)
+    total += n
     if (!n) return label ? `${label}还没开始` : '还没开始'
     return label ? `${label} ${n} 篇` : `已写 ${n} 篇`
-  }).join(' · '))
+  }).join(' · ')
+  return wrap(text, total > 0)
 })
 
 /* {% section_progress 分类 %} —— track 页「进度」那一格，可以长一点。
@@ -178,22 +185,32 @@ hexo.extend.tag.register('section_posts', args => {
     return `<div class="noimpty-empty-state"><span class="noimpty-empty-state__icon" aria-hidden="true">✦</span><h3>${escapeHtml(msg.title)}</h3><p>${escapeHtml(msg.body)}</p></div>`
   }
 
-  const cards = posts.map(post => {
+  /* 最新一篇单独占一整行（封面在左、摘要在右），其余排成网格。
+   * 课程是按章节往下写的，最新那篇就是「接着读」的入口，值得大一点。
+   * 其余几张的列数按剩下的篇数挑：能被 3 整除用三列，否则能被 2 整除用两列，
+   * 尽量别让最后一行只剩一张。 */
+  const card = (post, lead) => {
     const title = escapeHtml(post.title || '未命名文章')
     const href = normalizeWebPath(post.path)
     const cover = withRoot(post.cover || '/img/cover-blue.svg')
     const date = post.date && typeof post.date.format === 'function' ? post.date.format('YYYY-MM-DD') : ''
     const description = escapeHtml(post.description || '')
 
-    return `<article class="noimpty-post-card">
+    return `<article class="noimpty-post-card${lead ? ' noimpty-post-card--lead' : ''}">
       <a class="noimpty-post-card__cover" href="${escapeHtml(href)}" style="background-image:url('${escapeHtml(cssString(cover))}')" aria-label="阅读：${title}"></a>
       <div class="noimpty-post-card__body">
-        <div class="noimpty-post-card__meta"><time>${escapeHtml(date)}</time></div>
+        <div class="noimpty-post-card__meta">${lead ? '<span class="noimpty-post-card__new">最新</span>' : ''}<time>${escapeHtml(date)}</time></div>
         <h3><a href="${escapeHtml(href)}">${title}</a></h3>
         ${description ? `<p class="noimpty-post-card__description">${description}</p>` : ''}
       </div>
     </article>`
-  }).join('')
+  }
 
-  return `<div class="noimpty-post-grid" data-section="${escapeHtml(section)}">${cards}</div>`
+  const [first, ...rest] = posts
+  const cols = rest.length % 3 === 0 ? 3 : rest.length % 2 === 0 ? 2 : 3
+  const lead = posts.length === 2 ? '' : card(first, true)
+  const grid = (posts.length === 2 ? posts : rest).map(post => card(post, false)).join('')
+
+  return `<div class="noimpty-post-list" data-section="${escapeHtml(section)}">${lead}${grid
+    ? `<div class="noimpty-post-grid noimpty-post-grid--${posts.length === 2 ? 2 : cols}">${grid}</div>` : ''}</div>`
 })

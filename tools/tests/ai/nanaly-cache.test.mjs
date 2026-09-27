@@ -49,6 +49,7 @@ const boot = (kind, entries = [], { writable = true, gate = false, sessions = fa
     URL, TextDecoder, TextEncoder, DataView, Uint8Array, Blob, File, crypto, DOMException, AbortController, setTimeout, clearTimeout })
   return { api: kind === 'vision' ? window.NANALY_VISION : window.NANALY_FILES, data, reads,
     countOf: id => reads.filter(x => x === id).length,
+    setWritable: value => { writable = value },
     release: () => { const waiting = held.splice(0); waiting.forEach(fn => fn()) } }
 }
 
@@ -152,22 +153,45 @@ await test('★ 落盘成功的条目不带内存标记，重新读出来也不�
   assert.equal(h.data.get(saved.id).temporary, undefined, '这个标记只属于内存，不该写进存储')
 })
 
-await test('★★ 读到一半被删掉的条目不会又活过来', async () => {
-  // load() 在途时 prune() 把它删了。如果在途的那次读取照样回填内存，
-  // 已经被清理掉的图片就会从缓存里继续被端出来。
-  const stale = { ...image('race-aaaaaaaa'), at: Date.now() - 7200000 }
-  const h = boot('vision', [stale], { gate: true, sessions: true })
-  const list = [ref(stale)]
-  const reading = h.api.decorate(new Element('div'), list)
-  await tick()
-  // prune 扫到它没人引用且已过期，于是删掉 —— 这一步内部会 remove()。
-  await h.api.prune({}, [])
-  assert.equal(h.data.has(stale.id), false, '前提：prune 确实把它从存储里删了')
-  h.release(); await reading
-  const before = h.countOf(stale.id)
-  const second = h.api.decorate(new Element('div'), list)
-  await tick(); h.release(); await second
-  assert.ok(h.countOf(stale.id) > before, '它还在内存里被端出来 —— 删过的条目又活了')
+await test('deleted attachments do not return from a pending read or re-enter the cache', async () => {
+  for (const kind of ['vision', 'files']) {
+    const item = kind === 'vision' ? image('race-aaaaaaaa') : doc('race-aaaaaaaa')
+    item.at = Date.now() - 7200000
+    const h = boot(kind, [item], { gate: true, sessions: true }), list = [ref(item)]
+    const read = () => kind === 'vision' ? h.api.imageContent('read', list) : h.api.content('read', list)
+    const reading = assert.rejects(read(), /重新附加/)
+    await tick()
+    await h.api.prune({}, [])
+    assert.equal(h.data.has(item.id), false)
+    h.release(); await reading
+    const before = h.countOf(item.id), second = assert.rejects(read(), /重新附加/)
+    await tick(); h.release(); await second
+    assert.ok(h.countOf(item.id) > before, kind + ': deleted content must not remain cached')
+  }
+})
+
+await test('temporary document storage has a hard cap without discarding earlier attachments', async () => {
+  const h = boot('files', [], { writable: false })
+  const saved = []
+  for (let i = 0; i < 48; i++) saved.push(await h.api.prepare(new File(['temporary-' + i], 'temp-' + i + '.txt')))
+  await assert.rejects(h.api.prepare(new File(['one too many'], 'overflow.txt')), /暂存已满/)
+  assert.match(await h.api.content('read', [ref(saved[0])]), /temporary-0/)
+  assert.match(await h.api.content('read', [ref(saved[47])]), /temporary-47/)
+  assert.equal(h.reads.length, 0, 'previous temporary files must remain in memory')
+  h.setWritable(true)
+  const durable = await h.api.prepare(new File(['saved after quota recovery'], 'durable.txt'))
+  assert.equal(durable.temporary, undefined)
+  assert.ok(h.data.has(durable.id), 'a full temporary cache must not reject a successful persistent write')
+  assert.match(await h.api.content('read', [ref(durable)]), /saved after quota recovery/)
+  assert.match(await h.api.content('read', [ref(saved[0])]), /temporary-0/)
+})
+
+await test('an oversized stored document can be read without retaining it beyond the cache budget', async () => {
+  const item = { ...doc('oversize-document'), text: 'x'.repeat(25 * 1024 * 1024) }
+  const h = boot('files', [item])
+  await h.api.content('read', [ref(item)])
+  await h.api.content('read again', [ref(item)])
+  assert.equal(h.countOf(item.id), 2, 'the oversized item must not remain in the bounded cache')
 })
 
 console.log(`\n${passed} 项通过`)

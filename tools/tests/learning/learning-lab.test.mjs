@@ -417,15 +417,17 @@ class FakeSocket {
   output (text) { this.onmessage?.({ data: new TextEncoder().encode(text).buffer }) }
 }
 FakeSocket.all = []
-const terminalSetup = ({ ticket = async () => ({ ticket: 'a'.repeat(48), expiresIn: 30 }), workspace = null, kind = 'shell', language = 'linux', code = '' } = {}) => {
+const terminalLinks = []
+const terminalSetup = ({ connectTimeout = 30000, ticket = async () => ({ ticket: 'a'.repeat(48), expiresIn: 30 }), workspace = null, kind = 'shell', language = 'linux', code = '' } = {}) => {
   const requests = [], events = [], output = []
   const link = api.createTerminalLink({
-    kind, language, code, delays: [5], WebSocketImpl: FakeSocket, size: () => ({ cols: 90, rows: 25 }), workspace: () => workspace,
-    request: async (path, options) => { requests.push({ path, ...options }); return ticket(options) },
+    kind, language, code, connectTimeout, delays: [5], WebSocketImpl: FakeSocket, size: () => ({ cols: 90, rows: 25 }), workspace: () => workspace,
+    request: async (path, options) => { const { signal, ...record } = options; requests.push({ path, ...record }); return ticket(options) },
     socketURL: path => 'wss://api.example' + path,
     onOutput: bytes => output.push(new TextDecoder().decode(bytes)),
     onEvent: event => events.push(event)
   })
+  terminalLinks.push(link)
   return { link, requests, events, output, socket: () => FakeSocket.all.at(-1) }
 }
 const tick = () => new Promise(resolve => setTimeout(resolve, 0))
@@ -528,5 +530,49 @@ await check('the terminal hands its saved workspace revision to the next script 
   const run = calls.find(call => call.path === '/api/run')
   assert.equal(run.body.workspaceId, 'terminal-ws'); assert.equal(run.body.workspaceRevision, 4)
 })
+
+await check('a hanging ticket times out, aborts its request and ignores a late response', async () => {
+  const pending = deferred()
+  let signal
+  const app = terminalSetup({ kind: 'task', connectTimeout: 15, ticket: options => { signal = options.signal; return pending.promise } })
+  const sockets = FakeSocket.all.length
+  await assert.rejects(app.link.opened(), /终端没有连上/)
+  assert.equal(app.link.state(), 'closed')
+  assert.equal(signal.aborted, true)
+  assert.match(app.events.find(event => event.type === 'error').message, /超时/)
+  pending.resolve({ ticket: 'a'.repeat(48) }); await tick()
+  assert.equal(FakeSocket.all.length, sockets)
+  app.link.close()
+})
+
+await check('a socket that never becomes ready reconnects and ignores its stale ready event', async () => {
+  const app = terminalSetup({ connectTimeout: 15 })
+  app.link.connect(); await tick()
+  const stale = app.socket()
+  await new Promise(resolve => setTimeout(resolve, 25))
+  assert.ok(app.requests.length >= 2, 'a stalled WebSocket must not lock the UI in connecting')
+  stale.message({ type: 'ready', sessionId: 'stale', offset: 0 })
+  assert.notEqual(app.link.state(), 'open')
+  app.socket().open(); app.socket().message({ type: 'ready', sessionId: 'fresh', offset: 0 })
+  assert.equal(app.link.state(), 'open')
+  assert.equal(app.events.filter(event => event.type === 'ready').at(-1).sessionId, 'fresh')
+  app.link.close()
+})
+
+await check('closing a connecting terminal aborts the ticket and promptly rejects future waits', async () => {
+  const pending = deferred()
+  let signal
+  const app = terminalSetup({ ticket: options => { signal = options.signal; return pending.promise } })
+  const sockets = FakeSocket.all.length
+  const waiting = app.link.opened()
+  app.link.close()
+  await assert.rejects(waiting, /终端没有连上/)
+  await assert.rejects(app.link.opened(), /终端已关闭/)
+  assert.equal(signal.aborted, true)
+  pending.resolve({ ticket: 'a'.repeat(48) }); await tick()
+  assert.equal(FakeSocket.all.length, sockets)
+})
+
+for (const link of terminalLinks) link.close()
 
 console.log(`\n${count} learning controller behavior checks passed`)

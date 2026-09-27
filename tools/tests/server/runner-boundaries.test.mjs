@@ -327,9 +327,10 @@ test('a Docker cleanup exception still releases the slot, workspace lock and inp
   const runner=new DockerRunner(store,{execute:docker.execute,concurrency:1})
   const request=validateRun({language:'linux',code:'true'})
   await assert.rejects(runner.run(request),/Docker cleanup failed/)
-  assert.equal(runner.active.size,0);assert.equal(runner.busy.size,0);assert.equal(runner.containers.size,0)
+  assert.equal(runner.active.size,0);assert.equal(runner.busy.size,0);assert.equal(runner.containers.size,1,'failed cleanup stays tracked for shutdown retry')
   assert.deepEqual(await fs.readdir(path.join(store.directory,'jobs')),[])
   assert.equal((await runner.run(request)).status,'accepted','the next request can use the released slot')
+  await runner.close();assert.equal(runner.containers.size,0)
 })
 
 test('waiting for a slot gives up with RUNNER_BUSY and honours cancellation',async t=>{

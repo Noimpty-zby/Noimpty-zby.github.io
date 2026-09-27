@@ -82,7 +82,7 @@ await check('file type and size allowlists reject binary executables, empty file
   const { api } = boot()
   for (const name of ['report.pdf', 'report.docx', 'a.py', 'a.tsx', 'a.md', 'a.json', 'a.csv']) assert.doesNotThrow(() => api.validateFile({ name, size: 2 }))
   for (const name of ['a.exe', 'a.doc', 'a.zip', 'a.pptx']) assert.throws(() => api.validateFile({ name, size: 2 }), /支持/)
-  for (const size of [0, api.LIMITS.bytes + 1]) assert.throws(() => api.validateFile({ name: 'a.txt', size }), /10 MB/)
+  for (const size of [0, -1, 1.5, NaN, Infinity, '2', api.LIMITS.bytes + 1]) assert.throws(() => api.validateFile({ name: 'a.txt', size }), /10 MB/)
 })
 await check('UTF-8 and UTF-16 text decode locally; binary and invalid encoding are rejected', async () => {
   const { api } = boot()

@@ -1,272 +1,117 @@
 # Noimpty 的个人空间
 
-基于 Hexo 8 与 Butterfly 5 的个人博客。
+基于 Hexo 8 与 Butterfly 5 的个人博客，包含学习记录、资讯、日程、娜娜莉聊天与工作室、代码小屋和 Mao 看板娘。静态前端发布到 [noimpty-zby.cn](https://noimpty-zby.cn)，私有状态和 Docker 隔离执行由独立后端提供。
+
+**隐私边界：页面暗号是前端软锁，文章正文仍在 HTML 中。** 不应把它当作服务器鉴权或正文加密。搜索、日程和行动日志的加密方式及缺省行为见下文。
 
 ## 本地运行
 
-需要 Node.js 20.19 或更高版本，推荐使用项目 `.nvmrc` 中的 Node.js 24。
+使用 [.nvmrc](.nvmrc) 指定的 Node.js 24；安装了 nvm 时先运行 `nvm use`。以下命令在仓库根目录、Bash 或 WSL 中执行：
 
-```bash
+```sh
 npm ci
-npm run clean
+export NOIMPTY_PASSPHRASE='local-preview-only'
+npm run build
 npm run server
 ```
 
-浏览器打开 `http://localhost:4000`。
+打开 <http://localhost:4000>。上面的暗号仅用于本地预览，可自行替换，不要把线上暗号写进仓库。`npm run build` 会先重建编辑器与终端组件、清除 Hexo 缓存，再生成 `public/`；只需要清理产物时运行 `npm run clean`。
+
+聊天需要在浏览器里配置自己的模型服务；代码执行还需要已配置的私有后端。后端安装、环境变量、令牌与运行条件见 [私有后端说明](docs/features/learning-backend.md)，本地启动入口为 `npm run server:agent`。
+
+## 功能与文档
+
+| 要做的事 | 文档 |
+| --- | --- |
+| 写文章、维护分类与进度、替换图片和音乐 | [内容与素材维护](docs/content-authoring.md) |
+| 使用聊天、话题、附件和语音 | [娜娜莉聊天工作区](docs/features/nanaly-chat.md) |
+| 管理共享记忆、笔记、目标与任务 | [娜娜莉工作室](docs/features/nanaly-agent.md) |
+| 边读边练，使用 C/C++/Go/Python、Git/Linux 终端和 MySQL | [代码小屋](docs/features/learning-lab.md) |
+| 安装、更新和验收私有后端 | [后端与隔离练习](docs/features/learning-backend.md) |
+| 导出本机加密备份、迁移域名 | [本机备份与迁移](docs/features/nanaly-local-backup.md) |
+| 设置 Mao、阅读快捷操作和互动 | [Mao 看板娘](docs/features/mao.md) |
+| 找实现位置与后续工作 | [项目结构](docs/architecture.md) · [项目待办](docs/backlog.md) |
+
+日程页 `/schedule/` 支持本地草稿、完成条件和三方合并，点击「保存到仓库」才提交修改。存储不可用或空间不足时会明确提示，避免把内存草稿当成已保存。普通站内跳转使用 PJAX，音乐播放与常驻组件会继续保留；代码小屋的编辑器、终端和其他较大的可选资源按需加载。
 
 ## 常用目录
 
-- `source/_posts/`、`source/news/`：文章与资讯
-- `source/_data/`：日程、旁注、日志与用量数据
-- `source/js/`、`source/css/`：自有功能与样式
-- `source/img/`、`source/music/`、`source/live2d/`：图片、音乐和角色模型
-- `scripts/`：Hexo 构建插件
-- `tools/nanaly/`、`tools/daily-report/`：助手自动任务与日报
-- `tools/checks/`、`tools/assets/`：检查入口与模型资源工具
-- `tools/tests/`：按功能分类的离线回归
-- `docs/features/`、`docs/maintenance/`：使用说明与维护记录
-- `_config.yml`：Hexo 主配置
-- `_config.butterfly.yml`：Butterfly 主题配置
+| 路径 | 用途 |
+| --- | --- |
+| `source/_posts/`、`source/news/`、`source/in-class/`、`source/extra/`、`source/life/` | 文章、资讯和栏目页 |
+| `source/_data/` | 日程、助手旁注、日志、用量与背景资料 |
+| `source/js/`、`source/css/` | 自有前端功能与样式 |
+| `source/img/`、`source/music/`、`source/live2d/`、`source/lib/` | 素材及自托管运行库，保留署名与许可证 |
+| `scripts/` | Hexo 构建插件 |
+| `server/` | 私有后端、Docker 执行环境与服务配置示例 |
+| `tools/assets/`、`tools/checks/`、`tools/tests/` | 资源构建、质量检查与分模块回归 |
+| `tools/nanaly/`、`tools/daily-report/`、`tools/deploy/` | 助手自动任务、日报与后端部署 |
+| `docs/features/`、`docs/maintenance/` | 功能说明与按日期保存的维护记录 |
+| `_config.yml`、`_config.butterfly.yml` | Hexo 与主题配置 |
 
-完整的功能与文件映射见 [项目结构](docs/architecture.md)。
+`public/`、`db.json` 和 `node_modules/` 是可重建的产物、缓存与依赖。不要直接修改 `node_modules/hexo-theme-butterfly/`，重新安装会覆盖修改；自有适配放在仓库代码中。
 
-不要直接修改 `node_modules/hexo-theme-butterfly/`，重新安装依赖会覆盖里面的内容。
+## 暗号与公开内容
 
-## 内容模块
+[scripts/noimpty-lockdown.js](scripts/noimpty-lockdown.js) 使用默认拒绝规则：首页 `/` 公开，内容页和 `/about/` 默认上锁，新栏目自动继承规则。构建同时清空首页文章列表、关闭侧栏文章与分类入口，移除 RSS 和 sitemap，并让 `robots.txt` 拒绝全站抓取。
 
-首页是三个入口，**除首页之外全站上锁**（见下节）—— 包括 `/about/`。
+构建暗号来自 `NOIMPTY_PASSPHRASE`，GitHub Actions 中对应仓库 secret `SITE_PASSPHRASE`：
 
-```
-/in-class/    自学课内 —— 数据结构与算法 / CSAPP（操作系统、计算机网络跟学校课走，不再自学）
-/extra/       自学课外 —— 两条线：
-  /extra/ai-infra/   AI Infra 后端开发（现在这条）—— Linux（入门/深入）/ Git / Go / MySQL / Docker / Transformer 推理机制 / Python
-  /extra/gamedev/    游戏开发（之前那条，已告一段落）—— GAMES101 / UE5·Tom Looman
-/life/        Life
-/news/        资讯
-/schedule/    日程
-```
+- 设置暗号：搜索索引 `search.xml`、日程和行动日志使用 AES-256-GCM 信封；密钥由暗号经 PBKDF2 派生，解锁后在浏览器读取。
+- **未设置暗号：构建仍可成功，但搜索索引被清空，日程与行动日志不发布。** 这时站内搜索不可用，源数据文件不变。
+- 修改暗号后必须重新构建、部署，让页面校验和加密数据保持一致。
 
-### 写新文章时的 front-matter
+页面正文仍可从 HTML 源码读取，`robots.txt` 也不是访问控制；真正保密的正文需要另行加密或放在有服务器鉴权的系统中。
 
-```yaml
-categories:
-  - [课外, AI Infra, Go]    # 三级，见下表
-tags:
-  - 具体的技术标签           # 别再写和分类重复的标签
-privacy: protected          # 全站上锁，每篇都要
-sitemap: false
-private_section: 课外        # 课外 / 课内 / Life，决定解锁框上显示的板块名
+## 验证
+
+```sh
+npm run check
 ```
 
-| 内容 | categories |
-|---|---|
-| Linux 入门 | `- [课外, AI Infra, Linux入门]` |
-| Linux 深入 | `- [课外, AI Infra, Linux深入]` |
-| Git & GitHub | `- [课外, AI Infra, Git]` |
-| Go | `- [课外, AI Infra, Go]` |
-| MySQL | `- [课外, AI Infra, MySQL]` |
-| Docker | `- [课外, AI Infra, Docker]` |
-| Transformer 推理机制 | `- [课外, AI Infra, Transformer 推理机制]` |
-| Python | `- [课外, AI Infra, Python]` |
-| GAMES101 | `- [课外, 游戏开发, GAMES101]` |
-| UE5 · Tom Looman | `- [课外, 游戏开发, UE5-Looman]` |
-| 数据结构与算法 | `- [课内, DSA]` |
-| CSAPP | `- [课内, CSAPP]` |
-| 生活 | `- Life` |
+该命令依次执行 `npm test`、干净构建、站内链接检查和公开页内容检查。发布前应设置构建暗号；否则按上面的缺省规则生成。涉及布局、媒体、输入或 PJAX 的修改，还应在真实浏览器里检查。
 
-分类的 slug 映射在 `_config.yml` 的 `category_map` 里 —— 加新分类记得同步，
-否则 URL 会变成一长串百分号编码。
+| 命令 | 范围与条件 |
+| --- | --- |
+| `npm test` | 递归执行 `tools/tests/` 中的回归；默认不运行真实 Docker 场景，不部署、不调用付费模型 |
+| `npm run test:runner` | 真实 Docker 隔离与语言集成，需要准备相应执行镜像；用 `NANALY_RUNNER_IMAGE` 选择镜像，见后端说明 |
+| `npm run emotioncheck` | 默认离线校验情绪样例与分段契约；`npm run emotioncheck -- --live` 会调用真实模型 |
+| `npm run voicecheck` | 联网、可能计费的真实语音链路检查，需要时明确运行 |
+| `npm run svgcheck -- <文件…>` | 估算配图文字边界；仍需检查实际渲染 |
 
-### 「这一栏有几篇」不要手写
+最近一次完整审查的环境、结果和未验边界见 [2026-09-27 健壮性审查](docs/maintenance/2026-09-27-robustness.md)。测试通过只说明相应环境和测试范围通过，不代表前后端已发布。
 
-板块页上的篇数由两个标签在构建时现数，别再写死数字（`scripts/noimpty-sections.js`）：
+## 前后端部署
 
-```
-{% section_stat Git %}                         → 已写 2 篇 / 还没开始
-{% section_stat 入门=Linux入门|深入=Linux深入 %}   → 入门 3 篇 · 深入还没开始
-{% section_stat GAMES101|UE5-Looman %}          → 已写 16 篇（不带标签就是求和）
-{% section_progress DSA %}                      → 已写 2 篇，最近一篇 09-14
-```
+### 静态前端：GitHub Pages
 
-分隔符用 `|` 不用空格 —— 叶子名里本来就带空格（`Transformer 推理机制`）。
+仓库 **Settings → Pages → Source** 选择 **GitHub Actions**，并配置 `SITE_PASSPHRASE`。提交并推送到 `main` 后，[pages.yml](.github/workflows/pages.yml) 会执行测试、构建、空页面检查、链接检查、公开内容检查和上锁自检，再发布 `public/`；也可手动触发该工作流。
 
-**语义那半仍然要手写**：「递归」「第三章已完成」「告一段落」说的是学到哪了，
-数不出来。写法是 `<span>递归 · {% section_progress DSA %}</span>`。
+当前 `_config.yml` 使用 `url: https://noimpty-zby.cn` 和 `root: /`。更换域名前先处理 [浏览器本机数据迁移](docs/features/nanaly-local-backup.md)；改为仓库子路径站点时，还需核对页面及自有脚本中的根路径引用，不能只改 `url` 就认为迁移完成。
 
-为什么非要这样：这个数字以前在四个地方各写一遍（hub 卡片、track 页进度、
-娜娜莉的 `PERSONA`、`noimpty-profile.md`），发一篇文章要记得同步四处，
-漏了**不报错、构建全绿、测试也全过**。2026-08-28 发 DSA 开篇那次就漏了 ——
-首页还写着「还没开始」，而娜娜莉当面否认了刚发布的文章。
-现在前三处自动，profile 那处在 `news.mjs` 读取时自动追加一份真实清单。
-`tools/tests/site/section-stats.test.mjs` 拦着，不许再写回去。
+### 私有后端：独立部署
 
-### 内页的小角色
+GitHub Pages 不会更新后端。首次安装按 [后端说明](docs/features/learning-backend.md) 配置；后续先提交需部署的代码，再运行：
 
-内页页头右边和课程卡片上那些长了脸的小物件是手写的 SVG（`tools/kawaii-art.cjs`），
-由 `{% kawaii %}` 在构建时嵌进页面（`scripts/noimpty-kawaii.js`）：
-
-```
-{% kawaii core %}          → 页头场景：彩虹下面站着两三个角色（core、extra、life、news……）
-{% kawaii penguin stage %} → 课程页页头：单个角色带一道小彩虹
-{% kawaii penguin %}       → 课程卡片上的图标
+```sh
+npm run deploy:backend
+# 强制重新运行真实 Docker 集成验收：
+npm run deploy:backend -- --full
 ```
 
-页头场景外面包 `<figure class="noimpty-scene" data-lines="第二句|第三句">`，
-第一句写在 `<figcaption class="noimpty-scene__bubble">` 里；点击角色，或用 `Tab` 聚焦后按
-`Enter` / 空格，会跳起来换下一句（`source/js/interior-deco.js`）。角色有可见的键盘焦点，
-新台词通过状态区域提供给辅助技术；手机端的课程角色气泡显示在角色下方，避免被页头裁切。
-新课程照抄同级页面，从 `kawaii-art.cjs` 的 `SINGLE`
-里挑一个角色，或者照着同一套画法（小脸放低、粉彩填色、深梅色描边）加一个。
-每个角色另外输出成 `/img/kawaii/<名字>.svg`，归档、分类、标签这几种主题生成的页头拿它当图用。
+脚本只打包已提交内容，使用互斥锁避免并发发布，验收候选版本后再切换。配置、目录切换、重启或健康检查失败会尝试恢复上一版，并明确报告恢复失败；重启会中断正在运行的代码。验收缓存条件、部署连接配置和恢复边界见 [后端更新部署](docs/features/learning-backend.md#更新部署)。
 
-### 首页分区图片来源
+## 自动化与维护记录
 
-首页三张分区背景图片均来自 Pixiv（P站）：
+| 工作流 | 作用与触发 |
+| --- | --- |
+| [pages.yml](.github/workflows/pages.yml) | `main` 推送或手动触发，发布静态前端 |
+| [nanaly.yml](.github/workflows/nanaly.yml) | 回评、巡逻、批注、资讯与随笔；具体班次和手动演练选项见工作流 |
+| [daily-report.yml](.github/workflows/daily-report.yml) | 北京时间每天 22:00 计划生成日报，可手动运行；调度可能延迟 |
+| [nanaly-article-check.yml](.github/workflows/nanaly-article-check.yml) | 手动派发的只读文章检查 |
 
-1. `自学课内` 背景图：KirinMusic
-2. `自学课外` 背景图：Matchacora
-3. `Life` 背景图：安哈娜
+- [2026-09-27 健壮性与轻量化审查](docs/maintenance/2026-09-27-robustness.md)：最新修复、资源体积口径及验证边界。
+- [2026-09-27 修复记录](docs/maintenance/2026-09-27-fixes.md)：终端、内页角色与部署脚本修复。
+- [2026-09-26 终端改版](docs/maintenance/2026-09-26-terminal.md) · [2026-09-25 审查](docs/maintenance/2026-09-25-audit.md) · [2026-09-19 审查](docs/maintenance/2026-09-19-audit.md)。
 
-## 全站上锁
-
-`scripts/noimpty-lockdown.js` 负责，采用**默认拒绝**：白名单（现在只有 `/`）之外一律锁。
-`/about/` 一度也在白名单里，后来收回去了 —— 那一页把站上有什么逐条列了出来，
-放在锁外面等于这整套上锁没有意义。理由写在 `PUBLIC_PATHS` 上面的注释里。
-新加板块会自动被锁，不需要记着往清单里加。
-
-它同时处理这几个「不用打开页面就能拿到内容」的口子：
-
-- `search.xml`（全站正文）→ **AES-256-GCM 加密**，密钥由暗号经 PBKDF2 派生
-- `atom.xml` / `sitemap.xml` → 移除
-- `robots.txt` → 拒绝全站抓取
-- 侧边栏的最新文章 / 分类 / 标签 / 归档 → 从构建源头关掉，不是用 JS 藏
-- 首页文章列表 → 构建时清空
-
-⚠️ **这是前端软锁。** 打开任何一个上锁页面按 F12，正文就在 HTML 里。
-它挡的是路过的人和搜索引擎，不是有心的人。真正挡住需要正文加密或平台鉴权 ——
-详见 `scripts/noimpty-lockdown.js` 顶部的说明。
-
-构建时需要环境变量 `NOIMPTY_PASSPHRASE`（线上是仓库 secret `SITE_PASSPHRASE`）。
-不设的话构建仍然成功，但 `search.xml` 会被清空，站内搜索用不了，日程和行动日志也不会发布。日程数据与搜索索引使用相同的 AES-GCM 信封，仅在输入站点暗号后解密；源数据文件不变。
-
-`pages.yml` 里有一步「上锁自检」，上述任何一条不过就直接让部署失败。
-
-## 自动化
-
-| 工作流 | 干什么 | 频率 |
-|---|---|---|
-| `pages.yml` | 测试 → 构建 → 上锁自检 → 部署 | push 到 main |
-| `nanaly.yml` | 回评论 / 巡逻 / 批注 / 资讯 / 随笔 | 见文件内的 cron |
-| `daily-report.yml` | 每晚站点日报邮件 | 每天 22:00 |
-
-`npm test` 会跑 `tools/tests/` 下各分类目录中的全部测试。部署前会自动跑一遍，红了就不部署。
-
-**策划室已于 2026-08-26 整个删掉**（原本是一周三次自动写游戏策划书）。方向转去
-AI Infra 之后它没有存在意义了，页面、脚本、工作流和测试都已移除。它的产出在一个
-独立的私有仓库里，那边一个字没动；仓库设置里的 `IDEAS_TOKEN` / `IDEAS_REPO`
-两个 secret 现在没有任何工作流会用，可以删掉。
-
-## 文章推荐与目录
-
-- 文章底部只推荐拥有共同标签的文章；越少见、越具体的共同标签权重越高，同分时按发布日期和标题稳定排序，不使用随机推荐。
-- 推荐卡片会直接显示“共同标签”，方便确认推荐依据。
-- 右侧目录根据标题在当前页面中的实时位置更新。图片或字体加载导致文章高度变化时也会重新计算；目录只在当前项超出可视范围时滚动，不会不断抢先居中。
-
-## 背景音乐
-
-播放器位于页面左下角，包含 10 首本地音乐，默认开启随机模式。支持播放/暂停、上一首、下一首、随机/顺序切换、进度拖动、音量调节与收起。播放器会保存当前曲目、进度、音量和播放模式；站内页面使用 PJAX 切换，因此播放中的音乐不会因普通站内跳转而中断。
-
-音乐文件位于 `source/music/`，播放清单在 `source/js/music-player.js`。浏览器不允许网页在用户没有操作时自动播放，所以首次访问需要点击一次播放键。将音乐公开部署前，请确认拥有相应授权。
-
-音乐来源：网易云音乐；音乐作者：三Z-STUDIO、HOYO-MiX。网页播放器中将这些曲目标注为“我喜欢的音乐”。
-
-## 替换头像
-
-当前头像位于 `source/img/avatar.png`。以后需要替换时：
-
-1. 用新的正方形图片覆盖 `source/img/avatar.png`。
-2. 执行 `npm run clean && npm run server` 检查效果。
-
-建议使用正方形图片，并避免把重要内容贴近边缘。
-
-## 发布到 GitHub Pages
-
-项目已包含 `.github/workflows/pages.yml`。将代码推送到 `main` 分支后，在仓库的 **Settings → Pages → Source** 中选择 **GitHub Actions**。
-
-当前使用自定义域名 `https://noimpty-zby.cn`，`_config.yml` 中的 `url` 为该地址、`root` 为 `/`。如果以后改为 GitHub Pages 的仓库子路径站点，需要把 `url` 改成 `https://noimpty-zby.github.io/仓库名`，并把 `root` 改成 `/仓库名/`。
-
-## 代码小屋与私有后端
-
-代码小屋支持 Git/Linux 交互式终端，以及 C/C++/Go/Python 运行和 MySQL 练习；操作方式见
-[代码小屋](docs/features/learning-lab.md)。服务安装、令牌、隔离环境与接口见
-[私有后端](docs/features/learning-backend.md)。
-
-GitHub Pages 工作流发布静态网页；后端代码需要在提交后另行运行 `npm run deploy:backend`。
-部署脚本先验收再切换，重启或健康检查失败时恢复上一版。已有镜像只有在实际镜像及后端验收输入
-都与成功记录相同的情况下才跳过集成测试，`-- --full` 可强制重测；失败重试不会沿用失败的验收。
-具体步骤与恢复边界见 [后端更新部署](docs/features/learning-backend.md#更新部署)。
-
-## 代码健壮性检查
-
-`npm run check` 会依次运行全部离线回归、干净构建、站内链接检查与公开页内容检查。
-`npm run build` 现在会先清理 Hexo 生成缓存，避免文章日期或板块列表沿用旧缓存。
-发布前设置 `NOIMPTY_PASSPHRASE`，否则搜索、日程和行动日志按上文的缺省规则处理。
-
-另有三个**手动**检查，都不在 `npm test` 里，需要时自己跑：
-
-| 命令 | 做什么 | 为什么不进 `npm test` |
-| --- | --- | --- |
-| `npm run voicecheck` | 对着真实语音服务跑完整链路，报告语气提示泄漏率和补尾音是否生效 | 要花钱、要联网，结果带随机性 |
-| `npm run emotioncheck` | 校验情绪样例与分段契约；加 `--live` 才会真调模型 | 默认离线免费，`--live` 要花钱 |
-| `npm run svgcheck <文件…>` | 估算配图里文字的包围盒，查出框和压字 | 只在写文章配图时用得上 |
-
-`svgcheck` 仅估算文字几何范围，配图仍应在浏览器中检查实际渲染。
-
-聊天取消、清空、保险箱锁定会终止旧轮请求；截断或错误的流式回答会保留已收到内容并提示未完成。
-日程未提交草稿使用本机缓存保留，刷新时按原基线合并；保存期间继续编辑不会被较早的保存结果覆盖。
-撤销自动完成会保留原 `autoAt` 作为手动覆盖标记，后台不会再自动勾上；修改完成条件后旧标记失效，新规则重新生效。
-
-Hexo 与娜娜莉统一使用 Markdown-it 15；本地渲染适配器保留原有数学公式、任务列表、图片与标题锚点配置。
-主题资源按当前启用功能生成，不再安装所有可选评论系统；新增本地插件时需声明其依赖，或配置对应的 `CDN.option`。
-自动任务统一使用 `npm ci`；日报的邮件依赖也已纳入锁文件。2026-09-25 的 `npm audit` 结果为 0 项已知漏洞。
-
-最新修复与验证见 [2026-09-27 维护记录](docs/maintenance/2026-09-27-fixes.md)；终端改版见
-[2026-09-26 终端记录](docs/maintenance/2026-09-26-terminal.md)，此前审查见
-[2026-09-25 维护记录](docs/maintenance/2026-09-25-audit.md) 与
-[2026-09-19 代码审查](docs/maintenance/2026-09-19-audit.md)。
-
-## 视觉设计
-
-首页以原有二次元插画为主体，保留圆润卡片和动态效果，配色恢复为视觉改版前的原始主题。桌面端将人物与文字分开排布，手机端使用上图下文。保留三张入口插画和暗号校验，不在公开首页展示文章信息。
-
-样式集中在 `source/css/sakura.css` 与 `source/css/sakura-components.css`；`source/js/sakura-motion.js` 管理短页面入场、卡片动效与首屏花瓣。动画不阻挡路由，不改变内容的默认可见性。减少动态、后台或省流量模式下停止增强；首屏离开视口后暂停环境动画。
-
-首页插画周围增加少量萤光、轻漂的心形光点和间歇流星，沿用原始玫瑰粉配色。装饰只挂在首屏、不接收点击，也不进入无障碍朗读；手机减少数量，减少动态时隐藏。它们复用现有环境动画开关，无需额外计时器、动画脚本或外部资源。
-
-恢复原来的默认暗色，仍保留主题原生深浅色切换和已有用户偏好。全局颜色由 `source/css/custom.css` 管理，聊天、音乐、日程和暗号页使用各自原有的颜色样式；增强层只负责布局、圆角和动态反馈，没有新增第三方运行依赖。
-
-### 娜娜莉聊天小屋
-
-娜娜莉默认在右侧展开宽敞聊天窗口，可切换靠边、可拖动浮窗和专注模式，拖动边缘或使用方向键调整尺寸。手机接近全屏，并适配软键盘；话题与记忆使用独立侧栏，减少长回答、输入框和工具挤在一起的情况。
-
-新话题无需命名：第一次回答后由模型概括标题，空白话题不会堆积到历史中。“话题”里的“⋯”菜单支持重命名和删除，删除/清空可在 15 分钟内撤销最近一次操作。
-
-输入区支持图片，以及 PDF、DOCX、文本、CSV、JSON 和常见代码文件。文件在本机解析，点击发送后才把读取到的内容交给模型；每次两份、每份 10 MB，单份文字最多 60,000 字符。PDF 最多读取前 30 页，扫描图与普通图片共享每轮两张的名额，文件卡会明确列出未读取范围。
-
-声音共用已保存的硅基流动密钥：默认 `FunAudioLLM/CosyVoice2-0.5B` 的 `diana` 女声，提供清甜猫娘、温柔陪伴和元气声线，可试听、朗读回复、调语速及关闭提示音。自动朗读默认关闭；试听/朗读按硅基流动实际用量收费，本机提示音不请求模型。图文与文件默认使用 `Pro/moonshotai/Kimi-K2.6`，文字模型保留现有配置。
-
-布局、历史和声音偏好保存在当前浏览器；文件和图片保存在本机 IndexedDB。配置、读取限制、费用说明及操作方法见 [娜娜莉聊天工作区](docs/features/nanaly-chat.md)。
-
-
-### 娜娜莉表情与音乐小舞台
-
-娜娜莉的猫猫头像在打开、思考和成功回复时给出小表情。历史恢复不触发完成庆祝；取消、错误、锁定或收起时结束当前反馈。装饰与聊天请求分开管理，不依赖额外接口或图片资源。
-
-音乐面板中的迷你耳机包含真实音频频谱，切歌时歌名短暂滑入。浏览器支持音频捕获时，频谱使用旁路读取，不接管原播放器的声音输出；不支持时保留静态耳机，不影响播放。动画在暂停、面板收起、后台、减少动态或省流量模式下停止。
-
-两项样式分别放在 `source/css/nanaly-delight.css`、`source/css/music-stage.css`，与原始配色和页面动效一起加载。
-
-
-### Mao 看板娘
-
-帽子旁的小齿轮提供设置和三个阅读快捷操作。Mao 可跟随聊天进展、共用现有朗读与语气、读取真实课程和日程进度，支持拖动、头像模式、安静陪伴、省电和加载重试。使用方法、设置和接口见 [Mao 看板娘说明](docs/features/mao.md)。
+图片、音乐和模型的来源、署名与授权提醒集中在 [素材维护与署名](docs/content-authoring.md#素材维护与署名)。仓库中附带素材不意味着它们可以任意再分发。

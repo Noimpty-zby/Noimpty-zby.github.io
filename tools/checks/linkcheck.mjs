@@ -1,131 +1,94 @@
-/* 站内死链全量检查。
- *
- * 板块结构一改，最容易漏的就是「正文里、模板里、配置里那些手写的站内链接」——
- * 它们不会报错，只会在你点下去的时候 404，而且你多半永远不会点到。
- *
- * 所以这里直接扫构建产物：每一个 HTML 里的每一个 href/src，
- * 只要是站内的，就去 public/ 下面找对应的文件，找不到就报出来。
- *
- * ⚠️ 路径分隔符：磁盘上的路径在 Windows 是反斜杠（public\css\custom.css），
- *    而网页里的链接永远是正斜杠（/css/custom.css）。
- *    第一版没做归一化，结果在 Windows 上**每一条链接都对不上**，
- *    报了 179 条死链而站本身完全正常。所以下面 walk 出来的路径
- *    立刻就转成「站内路径」形态（前导 /、正斜杠），后面全程只用这一种。
- */
-import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs'
-import { join, posix, sep } from 'node:path'
+/* Check generated href/src links against files in public/, using browser URL
+ * resolution. This is an offline check: external URLs are never requested. */
+import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs'
+import { join, posix, relative, resolve, sep } from 'node:path'
 
-// 相对于仓库根目录跑：node tools/checks/linkcheck.mjs
-const ROOT = process.env.LINKCHECK_ROOT || join(process.cwd(), 'public')
-// 站点自己的绝对地址也要当站内链接查 —— 有些模板会输出全路径
-const SITE = (process.env.LINKCHECK_SITE || 'https://noimpty-zby.cn').replace(/\/$/, '')
+const ROOT = resolve(process.env.LINKCHECK_ROOT || join(process.cwd(), 'public'))
+const SITE = new URL(process.env.LINKCHECK_SITE || 'https://noimpty-zby.cn')
 
-if (!existsSync(ROOT)) {
-  console.error(`没有找到构建产物：${ROOT}\n先跑 npm run build。`)
+if (!existsSync(ROOT) || !statSync(ROOT).isDirectory()) {
+  console.error('没有找到构建目录：' + ROOT + '\n先跑 npm run build。')
   process.exit(1)
 }
 
-/** 磁盘路径 → 站内路径（永远是 /a/b/c 这种形态，和 HTML 里的写法一致） */
-const toWebPath = abs => {
-  let p = abs.slice(ROOT.length)
-  if (sep !== '/') p = p.split(sep).join('/')
-  return p.startsWith('/') ? p : '/' + p
-}
-
-const walk = (dir, out = []) => {
-  for (const name of readdirSync(dir)) {
-    const p = join(dir, name)
-    /* statSync 可能抛：旧产物里存在过名字结尾带空格的目录
-     * （Windows 解析路径时会把结尾空格吃掉，于是「存在但打不开」）。
-     * 跳过就好 —— 为一个畸形目录让整个检查崩掉不划算。 */
-    let st
-    try { st = statSync(p) } catch (_) { continue }
-    if (st.isDirectory()) walk(p, out)
-    else out.push(p)
-  }
-  return out
-}
-
+const walk = dir => readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+  const file = join(dir, entry.name)
+  if (entry.isDirectory()) return walk(file)
+  if (!entry.isFile()) throw new Error('构建产物包含不支持的文件类型：' + file)
+  return [file]
+})
+const toWebPath = file => '/' + relative(ROOT, file).split(sep).join('/')
 const files = walk(ROOT).map(toWebPath)
-const htmlPaths = files.filter(f => f.endsWith('.html'))
+const htmlPaths = files.filter(file => /\.html$/i.test(file))
 const have = new Set(files)
+if (!htmlPaths.length) {
+  console.error('构建产物没有 HTML 页面，不能通过死链检查')
+  process.exit(1)
+}
+console.log('扫 ' + htmlPaths.length + ' 个 HTML，产物共 ' + files.length + ' 个文件\n')
 
-console.log(`扫 ${htmlPaths.length} 个 HTML，产物共 ${files.length} 个文件\n`)
-
-/** 这个站内路径在产物里找不找得到 */
-const resolves = raw => {
-  let p = raw.split('#')[0].split('?')[0]
-  if (!p) return true                      // 纯锚点
-  try { p = decodeURI(p) } catch (_) {}
-  if (!p.startsWith('/')) return null      // 相对路径由调用方先解析好
-  return have.has(p) ||
-    have.has(posix.join(p, 'index.html')) ||
-    have.has(p + '.html') ||
-    have.has(p + '/index.html')
+const decodeAttribute = value => value.replace(/&(?:#(x[0-9a-f]+|\d+)|amp|quot|apos|lt|gt);/gi, (entity, code) => {
+  if (!code) return { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' }[entity.slice(1, -1).toLowerCase()]
+  const n = code[0].toLowerCase() === 'x' ? parseInt(code.slice(1), 16) : Number(code)
+  return n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : '\ufffd'
+})
+const attributes = body => {
+  // Comments and script/style text are not HTML elements with usable links.
+  const html = body.replace(/<!--[\s\S]*?-->|<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,
+    match => /^<!--/.test(match) ? '' : match.slice(0, match.indexOf('>') + 1))
+  return [...html.matchAll(/<[a-z][\w:-]*\b(?:[^<>"']|"[^"]*"|'[^']*')*>/gi)].flatMap(tag => {
+    const attrs = new Map()
+    for (const attr of tag[0].matchAll(/\s([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g)) {
+      const name = attr[1].toLowerCase()
+      if (!attrs.has(name)) attrs.set(name, attr[2] ?? attr[3] ?? attr[4] ?? '')
+    }
+    return ['href', 'src', 'data-src', 'data-lazy-src']
+      .filter(name => attrs.has(name)).map(name => decodeAttribute(attrs.get(name)))
+  })
+}
+const resolves = pathname => {
+  let file
+  try { file = decodeURIComponent(pathname) } catch (_) { return false }
+  return have.has(file) || have.has(posix.join(file, 'index.html')) || have.has(file + '.html')
 }
 
-const dead = new Map()   // 目标 → 出现在哪些页面
-let checked = 0
-
+const dead = new Map()
+const distinctTargets = new Set()
+let checked = 0, empty = 0
 for (const webPath of htmlPaths) {
-  const where = webPath.replace(/\/index\.html$/, '/') || '/'
+  const where = webPath.replace(/\/index\.html$/i, '/') || '/'
   const body = readFileSync(join(ROOT, webPath.slice(1).split('/').join(sep)), 'utf8')
-
-  for (const m of body.matchAll(/(?:href|src)="([^"]+)"/g)) {
-    let url = m[1].trim()
-    if (!url || url.startsWith('#') || url.startsWith('data:') ||
-        url.startsWith('mailto:') || url.startsWith('javascript:')) continue
-
-    // 绝对 URL：只查指向本站的
-    if (/^https?:\/\//i.test(url)) {
-      let parsed
-      try { parsed = new URL(url) } catch (_) { continue }
-      if (parsed.origin !== new URL(SITE).origin) continue
-      url = parsed.pathname + parsed.search
-    } else if (url.startsWith('//')) {
-      continue                              // 协议相对的外链
-    }
-
-    if (!url.startsWith('/')) {
-      // 相对路径：按当前页面所在目录解析
-      const base = where.endsWith('/') ? where : posix.dirname(where) + '/'
-      url = posix.normalize(base + url)
-    }
-
+  if (!body.trim()) {
+    console.error('空页面：' + where)
+    empty++
+    continue
+  }
+  for (const raw of attributes(body)) {
+    const value = raw.trim()
+    if (!value || value.startsWith('#')) continue
+    let url
+    try { url = new URL(value, new URL(webPath, SITE)) } catch (_) { continue }
+    if (!['http:', 'https:'].includes(url.protocol) || url.origin !== SITE.origin) continue
     checked++
-    if (resolves(url) === false) {
-      if (!dead.has(url)) dead.set(url, new Set())
-      dead.get(url).add(where)
+    distinctTargets.add(url.pathname)
+    if (!resolves(url.pathname)) {
+      if (!dead.has(url.pathname)) dead.set(url.pathname, new Set())
+      dead.get(url.pathname).add(where)
     }
   }
 }
-
-console.log(`检查了 ${checked} 个站内链接\n`)
-
-if (!dead.size) {
+console.log('检查了 ' + checked + ' 个站内链接\n')
+if (!dead.size && !empty) {
   console.log('✓ 没有死链')
   process.exit(0)
 }
-
-/* 全站的不同链接目标一共也就一两百个。如果「死链」多到接近这个量级，
- * 那不是站坏了，是这个工具本身没跑对（路径分隔符、ROOT 指错了之类）。
- * 真的站内死链从来是零星几条 —— 一次冒出上百条，先怀疑工具。 */
-const distinctTargets = new Set()
-for (const webPath of htmlPaths) {
-  const body = readFileSync(join(ROOT, webPath.slice(1).split('/').join(sep)), 'utf8')
-  for (const m of body.matchAll(/(?:href|src)="(\/[^"/][^"]*)"/g)) distinctTargets.add(m[1])
-}
 if (distinctTargets.size && dead.size / distinctTargets.size > 0.5) {
-  console.log('⚠️ 等一下 —— 全站一共只有', distinctTargets.size, '个不同的链接目标，')
-  console.log('   而「死链」有', dead.size, '个，等于几乎全死。这种比例几乎不可能是站的问题。')
-  console.log('   先怀疑这个检查工具：ROOT 指对了吗？是不是在仓库根目录之外跑的？')
-  console.log(`   当前 ROOT = ${ROOT}\n`)
+  console.log('⚠️ 大量链接无法解析，请同时检查构建是否完整以及 ROOT 是否正确：' + ROOT + '\n')
 }
-
-console.log(`✗ ${dead.size} 个目标解析不到：\n`)
+console.log('✗ ' + dead.size + ' 个目标解析不到，' + empty + ' 个空页面：\n')
 for (const [target, wheres] of [...dead].sort((a, b) => b[1].size - a[1].size)) {
   const list = [...wheres]
-  console.log(`  ${target}`)
-  console.log(`      出现在 ${list.length} 个页面：${list.slice(0, 4).join('、')}${list.length > 4 ? ' …' : ''}`)
+  console.log('  ' + target)
+  console.log('      出现在 ' + list.length + ' 个页面：' + list.slice(0, 4).join('、') + (list.length > 4 ? ' …' : ''))
 }
 process.exit(1)

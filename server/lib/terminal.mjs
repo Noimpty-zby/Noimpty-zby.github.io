@@ -8,6 +8,35 @@ import { TASKS } from './sessions.mjs';
 // pages, replaying what a reconnecting page missed); `task` runs the editor's program.
 const size = (value, fallback, min, max) => Number.isInteger(value) ? Math.max(min, Math.min(max, value)) : fallback;
 const FILE_LIMIT = 1024 * 1024;
+// Receive the complete UTF-8 file before replacing it. A failed/disconnected Docker
+// exec must not truncate the learner's original file. Follow symlinks like an editor
+// save, and preserve executable bits on existing regular files.
+const WRITE_FILE = `import os, stat, sys, tempfile
+target = os.path.realpath(sys.argv[1])
+expected = int(sys.argv[2])
+data = sys.stdin.buffer.read(expected + 1)
+if len(data) != expected:
+    raise OSError('文件内容传输不完整')
+try:
+    current = os.stat(target)
+except FileNotFoundError:
+    current = None
+if current and not stat.S_ISREG(current.st_mode):
+    raise OSError('不是普通文件')
+mask = os.umask(0)
+os.umask(mask)
+fd, temporary = tempfile.mkstemp(prefix='.nanaly-edit-', dir=os.path.dirname(target))
+try:
+    with os.fdopen(fd, 'wb') as stream:
+        stream.write(data)
+        stream.flush()
+        os.fsync(stream.fileno())
+        os.fchmod(stream.fileno(), stat.S_IMODE(current.st_mode) if current else 0o666 & ~mask)
+    os.replace(temporary, target)
+finally:
+    if os.path.exists(temporary):
+        os.unlink(temporary)
+`;
 const utf8 = new TextDecoder('utf-8', { fatal: true });
 const validPath = value => typeof value === 'string' && value.startsWith('/') && value.length <= 4096 && !value.includes('\0');
 
@@ -86,8 +115,10 @@ export class TerminalManager {
   // inside the shell's own sandbox, as the learner.
   async read(host, { id, path }) {
     if (!validPath(path)) return { type: 'file', id, path, error: '文件路径无效。' };
-    const result = await host.exec(['sh', '-c', 'test -f "$1" || { echo "不是普通文件" >&2; exit 2; }; head -c 1048577 -- "$1"', 'sh', path], { limit: FILE_LIMIT + 4096 });
-    if (result.code !== 0) return { type: 'file', id, path, error: result.stderr.toString('utf8').trim().slice(0, 300) || '读取失败。' };
+    let result;
+    try { result = await host.exec(['sh', '-c', 'test -f "$1" || { echo "不是普通文件" >&2; exit 2; }; head -c 1048577 -- "$1"', 'sh', path], { limit: FILE_LIMIT + 4096 }); }
+    catch { return { type: 'file', id, path, error: '读取失败；终端可能已经关闭。' }; }
+    if (result.code !== 0 || result.reason) return { type: 'file', id, path, error: result.stderr.toString('utf8').trim().slice(0, 300) || '读取失败。' };
     if (result.stdout.length > FILE_LIMIT) return { type: 'file', id, path, error: '文件超过 1 MB，请用 nano 或 vim 编辑。' };
     if (result.stdout.includes(0)) return { type: 'file', id, path, error: '这是二进制文件，不能在编辑器里打开。' };
     try { return { type: 'file', id, path, content: utf8.decode(result.stdout) }; }
@@ -95,8 +126,10 @@ export class TerminalManager {
   }
   async write(host, { id, path, content }) {
     if (!validPath(path) || typeof content !== 'string' || Buffer.byteLength(content) > FILE_LIMIT) return { type: 'written', id, path, error: '文件路径或内容无效。' };
-    const result = await host.exec(['sh', '-c', 'cat > "$1"', 'sh', path], { input: content });
-    return result.code === 0 ? { type: 'written', id, path } : { type: 'written', id, path, error: result.stderr.toString('utf8').trim().slice(0, 300) || '保存失败。' };
+    let result;
+    try { result = await host.exec(['python3', '-c', WRITE_FILE, path, String(Buffer.byteLength(content))], { input: content }); }
+    catch { return { type: 'written', id, path, error: '保存失败；终端可能已经关闭。' }; }
+    return result.code === 0 && !result.reason ? { type: 'written', id, path } : { type: 'written', id, path, error: result.stderr.toString('utf8').trim().slice(0, 300) || '保存失败。' };
   }
   close() {
     for (const ws of this.sockets) {

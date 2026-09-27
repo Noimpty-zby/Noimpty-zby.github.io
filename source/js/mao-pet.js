@@ -681,20 +681,31 @@
       if (window.NOIMPTY_GATE && !window.NOIMPTY_GATE.unlocked()) return Promise.resolve(null)
     } catch (_) { return Promise.resolve(null) }
     const version = stateVersion
-    const job = Promise.resolve().then(async () => {
+    const controller = new AbortController()
+    let timeout
+    // Greeting already has a short UI deadline. The shared background load also
+    // needs a deadline, including response-body reads, or future checks never retry.
+    const deadline = new Promise(resolve => {
+      timeout = setTimeout(() => { controller.abort(); resolve(null) }, 20000)
+    })
+    const request = Promise.resolve().then(async () => {
       try {
-        const res = await fetch('/schedule/data.json?t=' + Date.now(), { cache: 'no-store' })
+        const res = await fetch('/schedule/data.json?t=' + Date.now(), { cache: 'no-store', signal: controller.signal })
         if (!res.ok) return null
         const payload = await res.json()
         const raw = payload && payload.alg === 'AES-GCM'
           ? JSON.parse(await window.NOIMPTY_SEARCH.decryptPayload(payload))
           : payload
-        if (version !== stateVersion || !stateAllowed()) { if (!stateAllowed()) clearState(); return null }
+        if (controller.signal.aborted || version !== stateVersion || !stateAllowed()) { if (!stateAllowed()) clearState(); return null }
         stateRaw = raw
         stateDay = ymd(rightNow())
         siteState = summarize(raw)
         return siteState
-      } catch (_) { return null } finally { if (statePending === job) statePending = null }
+      } catch (_) { return null }
+    })
+    const job = Promise.race([request, deadline]).finally(() => {
+      clearTimeout(timeout)
+      if (statePending === job) statePending = null
     })
     statePending = job
     return job

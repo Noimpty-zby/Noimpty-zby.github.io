@@ -354,8 +354,9 @@
   // carries keystrokes one way and raw terminal output the other. A shell lives on the server
   // between connections, so a dropped socket reconnects by itself and asks only for the output
   // it missed; a program run (`task`) ends with its socket.
-  const createTerminalLink = ({ kind = 'shell', language, code = '', request, socketURL, WebSocketImpl, size, workspace = () => null, onOutput, onEvent, retry = kind === 'shell', delays = [1000, 2000, 4000, 8000, 15000] }) => {
+  const createTerminalLink = ({ kind = 'shell', language, code = '', request, socketURL, WebSocketImpl, size, workspace = () => null, onOutput, onEvent, retry = kind === 'shell', delays = [1000, 2000, 4000, 8000, 15000], connectTimeout = 30000 }) => {
     let state = 'idle', socket = null, generation = 0, pending = '', sessionId = null, offset = 0, exited = null, attempts = 0, retryTimer = null, disposed = false, replayLeft = 0
+    let handshakeTimer = null, ticketController = null
     const waiters = new Set()
     const setState = next => {
       if (state === next) return
@@ -369,8 +370,25 @@
       setState('reconnecting')
       retryTimer = setTimeout(() => { retryTimer = null; void open() }, delay)
     }
+    const failed = error => {
+      if (retry && !disposed && !error?.status && attempts < 30) { schedule(); return }
+      setState('closed')
+      onEvent({ type: 'error', message: error?.status === 404 ? '后端还没有终端功能，需要先更新后端。' : clip(error?.message || '终端连接失败。', 300) })
+    }
     const open = async () => {
+      if (disposed) return
       const current = ++generation
+      const controller = new AbortController()
+      ticketController = controller
+      // Bound both ticket issuance and the WebSocket ready handshake. Some network
+      // failures never dispatch close; those must still leave a retryable terminal.
+      handshakeTimer = setTimeout(() => {
+        if (current !== generation) return
+        generation++; controller.abort(); ticketController = null
+        try { socket?.close() } catch (_) {}
+        socket = null
+        failed(new Error('终端连接超时，请检查网络后重试。'))
+      }, connectTimeout)
       exited = null
       if (state !== 'reconnecting') setState('connecting')
       let ws
@@ -378,16 +396,15 @@
         const target = workspace()
         const body = kind === 'task' ? { kind, language, code, ...size() }
           : { kind, language, ...(target?.id ? { workspaceId: target.id } : {}), ...(sessionId ? { sessionId, since: offset } : {}), ...size() }
-        const issued = await request('/api/terminal/ticket', { method: 'POST', body })
+        const issued = await request('/api/terminal/ticket', { method: 'POST', body, signal: controller.signal })
         if (current !== generation) return
         if (typeof issued?.ticket !== 'string' || !/^[a-f0-9]{48}$/.test(issued.ticket)) throw new Error('终端响应无效，请检查后端版本。')
         ws = new WebSocketImpl(socketURL('/api/terminal?ticket=' + issued.ticket))
       } catch (error) {
         if (current !== generation) return
+        clearTimeout(handshakeTimer); ticketController = null
         // A network failure is worth retrying for a shell; a refusal from the server is not.
-        if (retry && !error?.status && attempts < 30) { schedule(); return }
-        setState('closed')
-        onEvent({ type: 'error', message: error?.status === 404 ? '后端还没有终端功能，需要先更新后端。' : clip(error?.message || '终端连接失败。', 300) })
+        failed(error)
         return
       }
       socket = ws; ws.binaryType = 'arraybuffer'
@@ -403,6 +420,7 @@
         try { message = JSON.parse(event.data) } catch (_) { return }
         if (!plain(message)) return
         if (message.type === 'ready') {
+          clearTimeout(handshakeTimer); ticketController = null
           ready = true; attempts = 0
           const previous = sessionId
           sessionId = typeof message.sessionId === 'string' ? message.sessionId : null
@@ -419,11 +437,12 @@
       }
       ws.onclose = event => {
         if (current !== generation) return
+        generation++; clearTimeout(handshakeTimer); ticketController = null
         socket = null; pending = ''
         if (exited) { sessionId = null; offset = 0; setState('exited'); return }
         if (refused || (!ready && event?.code === 1000)) { setState('closed'); return }
         onEvent({ type: 'lost', code: event?.code })
-        if (retry && !disposed) schedule(); else setState('closed')
+        if (retry && !disposed) failed(new Error('终端连接断开，请重试。')); else setState('closed')
       }
       ws.onerror = () => {}
     }
@@ -439,6 +458,7 @@
     const message = value => state === 'open' && send(value)
     // Resolves once the connection is open (connecting first if needed); rejects if it closes.
     const opened = (timeout = 30000) => {
+      if (disposed) return Promise.reject(new Error('终端已关闭。'))
       if (state === 'open') return Promise.resolve()
       connect()
       return new Promise((resolve, reject) => {
@@ -446,10 +466,11 @@
         const check = () => { if (state === 'open') finish(); else if (state === 'closed' || state === 'exited') finish(new Error('终端没有连上。')) }
         const timer = setTimeout(() => finish(new Error('终端连接超时。')), timeout)
         waiters.add(check)
+        check()
       })
     }
     // Detaches this page: a shell keeps running on the server for a while, a program run stops.
-    const close = () => { disposed = true; generation++; clearTimeout(retryTimer); try { socket?.close() } catch (_) {} socket = null; state = 'closed'; for (const waiter of [...waiters]) waiter() }
+    const close = () => { disposed = true; generation++; clearTimeout(retryTimer); clearTimeout(handshakeTimer); ticketController?.abort(); ticketController = null; pending = ''; try { socket?.close() } catch (_) {} socket = null; state = 'closed'; for (const waiter of [...waiters]) waiter() }
     return { connect, write, resize, terminate, message, opened, close, state: () => state, active: () => ['connecting', 'open', 'reconnecting'].includes(state) }
   }
 
@@ -468,17 +489,29 @@
   const FONT_KEY = 'noimpty-code-terminal-font'
   const readStore = key => { try { return window.localStorage.getItem(key) } catch (_) { return null } }
   const writeStore = (key, value) => { try { window.localStorage.setItem(key, value) } catch (_) {} }
-  // xterm.js is only fetched the first time a terminal is shown.
-  let terminalBundle = null
-  const loadTerminalBundle = () => terminalBundle ||= new Promise((resolve, reject) => {
-    if (window.NOIMPTY_TERMINAL) { resolve(window.NOIMPTY_TERMINAL); return }
-    const script = document.createElement('script')
-    // The inert tag in the page carries the fingerprinted URL, so a new build is never cached stale.
-    script.src = document.getElementById('learning-terminal-src')?.getAttribute('src') || '/js/learning-terminal.js'; script.async = true
-    script.onload = () => window.NOIMPTY_TERMINAL ? resolve(window.NOIMPTY_TERMINAL) : reject(new Error('终端组件加载失败。'))
-    script.onerror = () => { terminalBundle = null; script.remove(); reject(new Error('终端组件加载失败，请检查网络后刷新。')) }
-    document.head.append(script)
-  })
+  // Keep both large editor/terminal bundles off pages that never open the studio.
+  // Concurrent mounts share one load; a failed load can be retried on this page.
+  const bundleLoader = (name, sourceId, fallbackURL, label) => {
+    let pending = null
+    return () => pending ||= new Promise((resolve, reject) => {
+      if (typeof window[name]?.create === 'function') { resolve(window[name]); return }
+      const script = document.createElement('script')
+      let settled = false
+      const finish = error => {
+        if (settled) return
+        settled = true; clearTimeout(timeout); script.onload = script.onerror = null
+        if (error) { script.remove(); reject(error) } else resolve(window[name])
+      }
+      const timeout = setTimeout(() => finish(new Error(`${label}组件加载超时，请检查网络后重试。`)), 20000)
+      // Inert page tags carry fingerprinted URLs without fetching their contents.
+      script.src = document.getElementById(sourceId)?.getAttribute('src') || fallbackURL; script.async = true
+      script.onload = () => finish(typeof window[name]?.create === 'function' ? null : new Error(`${label}组件加载失败，请重试。`))
+      script.onerror = () => finish(new Error(`${label}组件加载失败，请检查网络后重试。`))
+      document.head.append(script)
+    }).catch(error => { pending = null; throw error })
+  }
+  const loadEditorBundle = bundleLoader('NOIMPTY_CODE_EDITOR', 'learning-editor-src', '/js/learning-editor.js', '编辑器')
+  const loadTerminalBundle = bundleLoader('NOIMPTY_TERMINAL', 'learning-terminal-src', '/js/learning-terminal.js', '终端')
   const resultLabel = result => result?.status === 'accepted' ? '运行完成' : STATUS[result?.status] || ''
   const homePath = path => String(path).replace(/^\/work(?=\/|$)/, '~')
   const mountLab = (container, article = null, onClose = null) => {
@@ -616,7 +649,8 @@
     const terminalHosts = node('div', 'learning-terminal-hosts')
     const terminalOverlay = node('div', 'learning-terminal-overlay')
     const overlayText = node('p', '', '连接后端后就能使用终端。')
-    terminalOverlay.append(overlayText, button('连接后端', () => window.NANALY_AGENT?.open?.(), 'learning-run'))
+    const overlayButton = button('连接后端', () => { if (terminalProblem) void showTerminal(); else window.NANALY_AGENT?.open?.() }, 'learning-run')
+    terminalOverlay.append(overlayText, overlayButton)
     // Touch keyboards have no Tab, Ctrl or arrow keys. pointerdown keeps focus in the terminal.
     const terminalKeys = node('div', 'learning-terminal-keys'); terminalKeys.setAttribute('role', 'toolbar'); terminalKeys.setAttribute('aria-label', '终端按键')
     for (const [label, sequence, cursorKey] of [['Tab', '\t'], ['Esc', '\x1b'], ['Ctrl+C', '\x03'], ['Ctrl+D', '\x04'], ['Ctrl+L', '\x0c'], ['↑', 'A', true], ['↓', 'B', true], ['←', 'D', true], ['→', 'C', true]]) {
@@ -695,7 +729,7 @@
     }
     const inputTo = (entry, data) => entry.shell ? entry.link.write(data) : entry.task?.write(data)
     const loadView = entry => entry.loading ||= loadTerminalBundle().then(bundle => {
-      if (lifetime.signal.aborted) return null
+      if (lifetime.signal.aborted || views[entry.key] !== entry) return null
       terminalProblem = ''
       entry.view = bundle.create(entry.host, {
         theme: root.dataset.editorTheme, fontSize: fontSize(),
@@ -706,7 +740,7 @@
       })
       if (!entry.shell) entry.view.notice('按「运行」后，程序在这里编译和运行；要输入时直接在这里打字。')
       return entry.view
-    }).catch(problem => { entry.loading = null; terminalProblem = problem.message; render(); return null })
+    }).catch(problem => { entry.loading = null; if (!lifetime.signal.aborted && views[entry.key] === entry) { terminalProblem = problem.message; render() }; return null })
     // Shows the current language's terminal; a shell connects the first time it is seen.
     const showTerminal = async ({ focus = true } = {}) => {
       const key = viewKey()
@@ -773,12 +807,14 @@
       render()
     }
     const runInShell = async () => {
+      const language = session.state.lessonId
       const text = session.state.code.replace(/\s+$/, '')
       if (!text || !connected()) return
       setPanel('terminal')
       const entry = await showTerminal({ focus: false })
       if (!entry) return
       try { await entry.link.opened() } catch (problem) { session.note(problem.message); return }
+      if (lifetime.signal.aborted || !connected() || session.state.lessonId !== language || views[entry.key] !== entry) return
       entry.view.paste(text); entry.link.write('\r'); entry.view.focus()
     }
     const run = () => {
@@ -921,6 +957,7 @@
       autoCheck.checked = state.autoCheck; autoCheck.disabled = !CHECKABLE.has(state.lessonId); persist.checked = state.persist
       terminalOverlay.hidden = !viewKey() || (isConnected && !terminalProblem)
       overlayText.textContent = terminalProblem || '连接后端后就能使用终端。'
+      overlayButton.textContent = terminalProblem ? '重新加载终端' : '连接后端'
       shortcut.textContent = { terminal: '关掉网页后终端还会保留 30 分钟', script: 'Ctrl / ⌘ ↵ 在终端执行', file: 'Ctrl / ⌘ S 保存', code: 'Ctrl / ⌘ ↵ 运行', sql: 'Ctrl / ⌘ ↵ 运行' }[current]
       cursor.hidden = current === 'terminal'
 
@@ -981,15 +1018,27 @@
       if (state.result || state.checked) lastAutoRevision = state.revision
       if (!fileEdit && !state.busy && !state.checking && state.revision !== lastAutoRevision && session.canAutoCheck()) scheduleCheck()
     }
-    try {
-      if (window.NOIMPTY_CODE_EDITOR) adapter = window.NOIMPTY_CODE_EDITOR.create(editorHost, {
-        value: session.state.code, language: session.state.lessonId,
-        onChange: value => { if (fileEdit && !fileEdit.loading) { fileEdit.content = value; render() } else { session.edit({ code: value }); scheduleCheck() } },
-        onRun: run, onSave: () => fileEdit ? saveFile() : false,
-        onCursor: position => { cursor.textContent = `Ln ${position.line}, Col ${position.column}` }
-      })
-    } catch (_) { editorHost.replaceChildren() }
-    fallback.hidden = !!adapter; editorHost.hidden = !adapter
+    const upgradeEditor = () => {
+      if (adapter || lifetime.signal.aborted || !window.NOIMPTY_CODE_EDITOR) return
+      try {
+        const editing = fileEdit && !fileEdit.loading
+        adapter = window.NOIMPTY_CODE_EDITOR.create(editorHost, {
+          // The user may have typed in the textarea while the bundle was loading.
+          value: editing ? fileEdit.content : session.state.code,
+          language: editing ? fileEdit.language : session.state.lessonId,
+          selection: { anchor: fallback.selectionDirection === 'backward' ? fallback.selectionEnd : fallback.selectionStart, head: fallback.selectionDirection === 'backward' ? fallback.selectionStart : fallback.selectionEnd },
+          onChange: value => { if (fileEdit && !fileEdit.loading) { fileEdit.content = value; render() } else { session.edit({ code: value }); scheduleCheck() } },
+          onRun: run, onSave: () => fileEdit ? saveFile() : false,
+          onCursor: position => { cursor.textContent = `Ln ${position.line}, Col ${position.column}` }
+        })
+        syncEditor(); lastMarked = null; render()
+        if (document.activeElement === fallback) adapter.focus()
+      } catch (_) { editorHost.replaceChildren(); adapter = null }
+      fallback.hidden = !!adapter; editorHost.hidden = !adapter
+    }
+    fallback.hidden = false; editorHost.hidden = true
+    if (window.NOIMPTY_CODE_EDITOR) upgradeEditor()
+    else void loadEditorBundle().then(upgradeEditor, () => { /* The textarea remains fully usable. */ })
     fallback.addEventListener('input', () => { if (fileEdit && !fileEdit.loading) { fileEdit.content = fallback.value; render() } else { session.edit({ code: fallback.value }); scheduleCheck() } })
     fallback.addEventListener('keydown', event => {
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); run() }

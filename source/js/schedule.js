@@ -94,6 +94,7 @@
   let focusInput = false     // 下次 render 之后要不要把光标放进输入框
   let loaded = false
   let loadPending = null
+  let cacheError = false
 
   const cloneDays = d => JSON.parse(JSON.stringify(d || {}))
 
@@ -163,7 +164,8 @@
       localStorage.setItem(LS_CACHE, JSON.stringify({
         updatedAt: data.updatedAt, days: data.days, _dirty: dirty, _base: baseline
       }))
-    } catch (_) {}
+      cacheError = false
+    } catch (_) { cacheError = true }
   }
 
   const loadData = () => {
@@ -861,6 +863,7 @@
         </details>
 
         <div class="sch-status" data-role="status"></div>
+        ${dirty && cacheError ? '<p class="sch-status is-warn" role="status">浏览器未能保存本地草稿（存储不可用或空间不足）。改动目前只在此页面内存中，请先保存到仓库，再刷新或关闭网页。</p>' : ''}
 
         ${dirty || saving ? `
           <div class="sch-savebar">
@@ -1131,16 +1134,16 @@
   }
 
   // 有未保存的改动时离开页面提醒一下。
-  // 注意：dirty 已经写进 localStorage 了，所以就算硬关掉，回来内容也还在。
+  // 本地缓存失败时，PJAX 离开日程后也须保留关闭提醒，内存仍是草稿的唯一副本。
   window.addEventListener('beforeunload', e => {
-    if (!dirty || !root) return
+    if (!dirty || (!root && !cacheError)) return
     e.preventDefault()
     e.returnValue = ''
   })
   // pjax 换页不触发 beforeunload，这里只提示一句，不拦（拦不干净）
   window.addEventListener('pjax:send', () => {
     if (dirty && root) {
-      try { console.info('[日程] 有还没保存到仓库的改动，已存在本地，回到 /schedule/ 还能看到。') } catch (_) {}
+      try { console.info(cacheError ? '[日程] 本地缓存失败，改动只在当前页面内存中。请回到 /schedule/ 保存到仓库后再关闭网页。' : '[日程] 有还没保存到仓库的改动，已存在本地，回到 /schedule/ 还能看到。') } catch (_) {}
     }
   })
 

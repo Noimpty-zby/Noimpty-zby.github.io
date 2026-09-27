@@ -121,7 +121,7 @@ const boot = ({ saved = null, innerWidth = 1440, innerHeight = 900, failAt = nul
   }
 
   const sandbox = {
-    window: window_, document, localStorage,
+    window: window_, document, localStorage, AbortController,
     console: { warn: () => {} },
     Math, JSON, Object, Number, String, Set, Map, Promise, Error, Array, Boolean,
     /* 真 Date，但「现在」由上面那块表说了算：new Date() 不给参数就取 clock。
@@ -138,7 +138,7 @@ const boot = ({ saved = null, innerWidth = 1440, innerHeight = 900, failAt = nul
   }
   sandbox.globalThis = sandbox
   sandbox.fetch = undefined
-  vm.runInNewContext(petSource, sandbox)
+  vm.runInNewContext(petSource.replace('window.MAO_PET = Object.freeze({', 'window.MAO_PET = Object.freeze({ testLoadState: loadState,'), sandbox)
 
   const stage = () => [...attached].find(n => n.id === 'mao-stage')
   return {
@@ -1891,6 +1891,30 @@ await test('关闭表情联动仍暂停游戏，重叠任务的一次完成不�
   assert.equal(play.occupied(), true); assert.equal(play.paused.at(-1), true)
   emit({ id: 'second', phase: 'cancelled', text: '已停止本次任务' })
   assert.equal(env.bubble().textContent, '已停止本次任务'); assert.equal(play.paused.at(-1), false)
+})
+
+await test('辅助日程正文悬挂会超时释放共享请求，重试成功后迟到正文不能覆盖', async () => {
+  const env = boot()
+  withSite(env, { days: {} })
+  let releaseBody, signal
+  env.sandbox.fetch = async (_, options) => {
+    signal = options.signal
+    return { ok: true, json: () => new Promise(resolve => { releaseBody = resolve }) }
+  }
+  const pending = env.win.MAO_PET.testLoadState()
+  await tick()
+  assert.equal(env.win.MAO_PET.testLoadState(), pending, '并发请求应共享读取')
+  env.fireTimeout(20000)
+  assert.equal(await pending, null)
+  assert.equal(signal.aborted, true)
+  withSite(env, { days: { [todayKey(env)]: [{ done: false }] } })
+  const fresh = await env.win.MAO_PET.testLoadState()
+  assert.equal(fresh.total, 1); assert.equal(fresh.left, 1)
+  releaseBody({ days: { [todayKey(env)]: [{ done: true, autoWhy: '你发了旧文章' }] } })
+  await tick()
+  const retained = await env.win.MAO_PET.testLoadState()
+  assert.equal(retained.left, 1); assert.equal(retained.published, false)
+  assert.ok(env.timers.timeout.every(timer => !timer || timer.ms !== 20000), '完成的请求不能遗留截止定时器')
 })
 
 console.log(`\n${passed} 项通过`)

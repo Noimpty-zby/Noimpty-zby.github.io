@@ -52,7 +52,7 @@ const SCHED = {
 }
 
 /** 最小 DOM：够 mount() → render() 跑完就行 */
-const boot = ({ study = STUDY, sched = SCHED, mounted = true } = {}) => {
+const boot = ({ study = STUDY, sched = SCHED, mounted = true, storageFails = false } = {}) => {
   const handlers = new Map()
   let html = ''
   const node = () => ({
@@ -68,7 +68,7 @@ const boot = ({ study = STUDY, sched = SCHED, mounted = true } = {}) => {
     NOIMPTY_STUDY: study,
     addEventListener (name, fn) { handlers.set(name, fn) }, setTimeout, clearTimeout,
     location: { origin: 'https://x.test', pathname: '/schedule/' },
-    localStorage: { getItem: () => null, setItem () {}, removeItem () {} },
+    localStorage: { getItem: () => null, setItem () { if (storageFails) throw new Error('quota') }, removeItem () {} },
     fetch: () => Promise.resolve({ ok: true, json: async () => sched, text: async () => JSON.stringify(sched) })
   }
   const ctx = vm.createContext({
@@ -80,8 +80,8 @@ const boot = ({ study = STUDY, sched = SCHED, mounted = true } = {}) => {
     localStorage: win.localStorage, fetch: win.fetch, setTimeout, clearTimeout,
     Intl, Date, JSON, Math, console, URL
   })
-  vm.runInContext(SRC, ctx)
-  return { first: html, settled: () => html,
+  vm.runInContext(SRC.replace('    mergeDays,', '    mergeDays, testSetTasks: setTasks,'), ctx)
+  return { first: html, settled: () => html, api: win.NOIMPTY_SCHEDULE, storageFailure: value => { storageFails = value },
     navigate: study => { win.NOIMPTY_STUDY = study; mounted = true; handlers.get('pjax:complete')() }
   }
 }
@@ -163,6 +163,22 @@ await acheck('首页加载后经 PJAX 首次进入日程，读取该页新的学
   assert.match(b.settled(), /数据结构与算法/)
   assert.match(b.settled(), /Go 多一篇/)
   assert.match(b.settled(), /sch-courses/)
+})
+
+
+
+await acheck('本地配额失败保留草稿并明确提示；存储恢复后取消内存独有警告', async () => {
+  const h = boot({ storageFails: true })
+  await h.api.reload()
+  h.api.testSetTasks(TODAY, [{ id: 'quota-draft', text: 'must survive in memory', done: false }])
+  assert.equal(h.api.dirty(), true)
+  assert.equal(h.api.data().days[TODAY][0].text, 'must survive in memory')
+  assert.match(h.settled(), /浏览器未能保存本地草稿/)
+  assert.match(h.settled(), /只在此页面内存中/)
+  h.storageFailure(false)
+  h.api.testSetTasks(TODAY, [{ id: 'quota-draft', text: 'storage recovered', done: false }])
+  assert.doesNotMatch(h.settled(), /浏览器未能保存本地草稿/)
+  assert.equal(h.api.dirty(), true, '本地成功保存不等于已提交仓库')
 })
 
 console.log(`\n${pass} 项通过`)

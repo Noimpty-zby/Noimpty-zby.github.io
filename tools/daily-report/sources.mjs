@@ -34,9 +34,18 @@ export const WINDOW_LABEL = `${fmtCN(WINDOW.start)} — ${fmtCN(WINDOW.end)}（�
 const timeout = (ms = 20000) => AbortSignal.timeout(ms)
 
 const jget = async (url, headers = {}, ms) => {
-  const res = await fetch(url, { headers, signal: timeout(ms) })
+  const res = await fetch(url, { headers, signal: timeout(ms), redirect: 'error' })
   if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 160)}`)
   return res.json()
+}
+
+// A successful JSON response with a missing/broken count is not evidence of zero traffic.
+const counter = (value, label) => {
+  const raw = value && typeof value === 'object' ? value.value : value
+  if (!['number', 'string'].includes(typeof raw) || (typeof raw === 'string' && !raw.trim())) throw new Error(label + ' is missing or invalid')
+  const number = Number(raw)
+  if (!Number.isFinite(number) || number < 0) throw new Error(label + ' is missing or invalid')
+  return number
 }
 
 // ---------------- Umami ----------------
@@ -93,7 +102,7 @@ export const getTrafficGoatCounter = async () => {
     return {
       ok: true,
       source: 'GoatCounter',
-      pageviews: Number(total.total || 0),
+      pageviews: counter(total?.total, 'GoatCounter total'),
       // null = 查不到，别据此下任何结论
       everRecorded: ever ? Number(ever.total || 0) > 0 : null,
       // GoatCounter 不提供和 Umami 同口径的「访客数」，不编造，留空由渲染层处理
@@ -131,7 +140,7 @@ export const getTrafficUmami = async () => {
     return {
       ok: true,
       source: 'Umami',
-      pageviews: num(stats.pageviews),
+      pageviews: counter(stats?.pageviews, 'Umami pageviews'),
       visitors: num(stats.visitors),
       visits: num(stats.visits),
       bounces: num(stats.bounces),

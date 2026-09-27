@@ -37,11 +37,13 @@ export class WebSocketConnection extends EventEmitter {
       this.awaitingPong = true; this.frame(9, Buffer.alloc(0));
     }, heartbeat) : null;
     this.heartbeat?.unref?.();
-    if (head?.length) this.receive(head);
+    // HTTP may deliver the first frame together with the upgrade. The caller still
+    // needs to attach its message/close handlers before we dispatch that frame.
+    if (head?.length) queueMicrotask(() => this.receive(head));
   }
   get buffered() { return this.socket.writableLength; }
   receive(chunk) {
-    if (this.closed) return;
+    if (this.closed || this.closeSent) return;
     this.buffer = this.buffer.length ? Buffer.concat([this.buffer, chunk]) : chunk;
     for (let frame; !this.closeSent && (frame = this.parse());) this.handle(frame);
   }
@@ -70,6 +72,10 @@ export class WebSocketConnection extends EventEmitter {
       if (!fin || payload.length > 125) { this.fail(1002, 'protocol error'); return; }
       if (opcode === 8) {
         const code = payload.length >= 2 ? payload.readUInt16BE(0) : 1005;
+        if (payload.length === 1 || (payload.length >= 2 && !((code >= 1000 && code <= 1014 && ![1004, 1005, 1006].includes(code)) || (code >= 3000 && code <= 4999)))) {
+          this.fail(1002, 'invalid close code'); return;
+        }
+        try { utf8.decode(payload.subarray(2)); } catch { this.fail(1007, 'invalid close reason'); return; }
         this.closeCode = code;
         this.close(code === 1005 ? 1000 : code);
         return;
@@ -83,7 +89,7 @@ export class WebSocketConnection extends EventEmitter {
     if (opcode) this.fragmentOpcode = opcode;
     this.fragmentSize += payload.length;
     if (this.fragmentSize > this.maxMessage) { this.fail(1009, 'message too large'); return; }
-    this.fragments.push(payload);
+    if (payload.length) this.fragments.push(payload);
     if (!fin) return;
     const data = Buffer.concat(this.fragments), binary = this.fragmentOpcode === 2;
     this.fragments = []; this.fragmentSize = 0; this.fragmentOpcode = 0;
@@ -107,7 +113,13 @@ export class WebSocketConnection extends EventEmitter {
   send(data) { return typeof data === 'string' ? this.frame(1, Buffer.from(data, 'utf8')) : this.frame(2, data); }
   close(code = 1000, reason = '') {
     if (this.closeSent || this.socket.destroyed) return;
-    const text = Buffer.from(String(reason).slice(0, 60), 'utf8');
+    let text = Buffer.from(String(reason), 'utf8');
+    if (text.length > 123) {
+      let end = 123;
+      while ((text[end] & 0xc0) === 0x80) end--;
+      text = text.subarray(0, end);
+    }
+    this.buffer = Buffer.alloc(0); this.fragments = []; this.fragmentSize = 0; this.fragmentOpcode = 0;
     const payload = Buffer.alloc(2 + text.length);
     payload.writeUInt16BE(code); text.copy(payload, 2);
     if (this.closeCode === 1006) this.closeCode = code;
@@ -120,6 +132,7 @@ export class WebSocketConnection extends EventEmitter {
   finish() {
     if (this.closed) return;
     this.closed = true; clearInterval(this.heartbeat);
+    this.buffer = Buffer.alloc(0); this.fragments = []; this.fragmentSize = 0; this.fragmentOpcode = 0;
     this.emit('close', this.closeCode);
   }
 }

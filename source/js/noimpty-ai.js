@@ -2570,7 +2570,10 @@
       return { tool, source: article.url, title: article.title, passages: window.NanalyResearch.selectArticle(article, input, location.origin, 5), at: Date.now() }
     }
     if (tool === 'search_blog') return { tool, query: input, passages: window.NanalyResearch.search(await abortable(loadCorpus(),signal), input, location.origin, 5), at: Date.now() }
-    if (tool === 'search_web') return { tool, query: input, results: await abortable(searchWeb(input),signal), at: Date.now() }
+    if (tool === 'search_web') {
+      const timeout = AbortSignal.timeout(45000), combined = signal ? AbortSignal.any([signal, timeout]) : timeout
+      return { tool, query: input, results: await abortable(searchWeb(input, 5, combined), combined), at: Date.now() }
+    }
     if (tool === 'review') {
       if (busy) throw new Error('请等待当前聊天完成，再整理复盘。')
       if (!secrets.apiKey && !secrets.visionKey) throw new Error('请先解锁模型密钥。')
@@ -2584,7 +2587,7 @@
       const result = await res.json(); signal?.throwIfAborted(); addUsage(result.usage)
       const text = result.choices?.[0]?.message?.content
       if (typeof text !== 'string' || !text.trim()) throw new Error('模型没有返回复盘内容。')
-      const note = await window.NANALY_AGENT.saveNote({id:'review-'+stepId,title:'复盘：'+(goal?.title || '当前练习'),text:text.slice(0,12000),source:'模型根据已记录步骤整理；结论仍需核实'})
+      const note = await window.NANALY_AGENT.saveNote({id:'review-'+stepId,title:'复盘：'+(goal?.title || '当前练习'),text:text.slice(0,12000),source:'模型根据已记录步骤整理；结论仍需核实'}, signal)
       return {tool,text:note.text,noteId:note.id,source:'AI 整理的复盘',verified:false}
     }
     throw new Error('不支持的工具。')

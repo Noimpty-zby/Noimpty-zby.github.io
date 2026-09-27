@@ -25,7 +25,7 @@ export const TASKS = {
   python: { file: 'main.py', command: 'python3 main.py' }
 };
 const MESSAGES = {
-  closed: '终端已保存并关闭。', idle: '网页离开超过 30 分钟，终端已保存并关闭。', lifetime: '终端已连续开了 3 小时，已保存；会自动重新打开。',
+  closed: '终端已保存并关闭。', input_limit: '输入积压过多，终端已关闭；请重新打开。', idle: '网页离开超过 30 分钟，终端已保存并关闭。', lifetime: '终端已连续开了 3 小时，已保存；会自动重新打开。',
   shutdown: '后端正在更新，终端已保存；稍后会自动重新连接。', reset: '运行环境已重置。', exit: '', disconnected: '连接断开，终端已保存。'
 };
 
@@ -47,9 +47,8 @@ class Container {
     invariant(guard.code === 0, 503, 'LIMITS_UNAVAILABLE', '容器资源限制未生效，已拒绝打开终端。');
   }
   async remove() {
-    if (this.created) await this.runner.cli(['rm', '-f', this.name], { timeout: 10000 });
-    this.runner.containers.delete(this.name);
-    await fs.rm(this.directory, { recursive: true, force: true });
+    try { if (this.created) await this.runner.removeContainer(this.name); }
+    finally { await fs.rm(this.directory, { recursive: true, force: true }); }
   }
 }
 
@@ -70,11 +69,11 @@ class ShellHost extends Container {
         const init = await this.exec(['git', 'init', '-q', '-b', 'main', '/work']);
         invariant(init.code === 0, 500, 'WORKSPACE_INIT_FAILED', '练习仓库初始化失败。');
       }
+      this.pty = new PtySession({ kind: 'shell', cols, rows, keep: this.manager.keep, detachedTimeout: this.manager.detachedTimeout, lifetime: this.manager.lifetime, finalize: () => this.finish() });
+      this.pty.host = this;
+      this.pty.spawn(runner, ['exec', '-i', this.name, 'python3', HELPER, 'terminal', '--cols', String(cols), '--rows', String(rows), '--pidfile', PIDFILE]);
+      return this.pty;
     } catch (error) { await this.remove(); throw error; }
-    this.pty = new PtySession({ kind: 'shell', cols, rows, keep: this.manager.keep, detachedTimeout: this.manager.detachedTimeout, lifetime: this.manager.lifetime, finalize: () => this.finish() });
-    this.pty.host = this;
-    this.pty.spawn(runner, ['exec', '-i', this.name, 'python3', HELPER, 'terminal', '--cols', String(cols), '--rows', String(rows), '--pidfile', PIDFILE]);
-    return this.pty;
   }
   // Runs after the shell has exited, however it ended: stop leftovers, capture, snapshot, commit.
   async finish() {
@@ -82,9 +81,12 @@ class ShellHost extends Container {
     try { Object.assign(outcome, await this.save()); }
     catch (error) { outcome.warnings.push(error instanceof ApiError ? error.message : '终端的改动没能保存。'); }
     finally {
-      await this.remove();
-      this.manager.shells.delete(this.workspace.workspaceId);
-      this.runner.busy.delete(this.workspace.workspaceId);
+      try { await this.remove(); }
+      catch { outcome.warnings.push('终端容器暂未清理完成，后端关闭时会重试。'); }
+      finally {
+        this.manager.shells.delete(this.workspace.workspaceId);
+        this.runner.busy.delete(this.workspace.workspaceId);
+      }
     }
     if (!outcome.committed) outcome.warnings.push('这次终端里的改动没有保存；下次打开时从上次保存的版本继续。');
     return { ...outcome, message: MESSAGES[this.pty.exited.reason] ?? '' };
@@ -121,14 +123,14 @@ class TaskHost extends Container {
       await this.create(Math.ceil(TASK_LIFETIME / 1000) + 60);
       const file = path.join(this.directory, spec.file);
       await readable(file, () => fs.writeFile(file, this.code));
+      // Shown as if typed at a prompt, then run for real; the copy into ~ is not shown.
+      const prompt = '\\033[01;32mlearner@nanaly\\033[00m:\\033[01;34m~\\033[00m$ ';
+      const script = [spec.prepare, `cp /input/${spec.file} ${spec.file} || exit 1`, `printf '${prompt}%s\\n' ${quote(spec.command)}`, spec.command].filter(Boolean).join('\n');
+      this.pty = new PtySession({ kind: 'task', cols, rows, keep: this.manager.keep, lifetime: TASK_LIFETIME, finalize: async () => { try { await this.remove(); return {}; } finally { this.manager.tasks.delete(this); } } });
+      this.pty.host = this;
+      this.pty.spawn(this.runner, ['exec', '-i', '-w', '/work', this.name, 'python3', HELPER, 'pty', '--cols', String(cols), '--rows', String(rows), '--cwd', '/work', '--', '/bin/bash', '-c', script]);
+      return this.pty;
     } catch (error) { await this.remove(); throw error; }
-    // Shown as if typed at a prompt, then run for real; the copy into ~ is not shown.
-    const prompt = '\\033[01;32mlearner@nanaly\\033[00m:\\033[01;34m~\\033[00m$ ';
-    const script = [spec.prepare, `cp /input/${spec.file} ${spec.file} || exit 1`, `printf '${prompt}%s\\n' ${quote(spec.command)}`, spec.command].filter(Boolean).join('\n');
-    this.pty = new PtySession({ kind: 'task', cols, rows, keep: this.manager.keep, lifetime: TASK_LIFETIME, finalize: async () => { await this.remove(); this.manager.tasks.delete(this); return {}; } });
-    this.pty.host = this;
-    this.pty.spawn(this.runner, ['exec', '-i', '-w', '/work', this.name, 'python3', HELPER, 'pty', '--cols', String(cols), '--rows', String(rows), '--cwd', '/work', '--', '/bin/bash', '-c', script]);
-    return this.pty;
   }
 }
 
@@ -137,11 +139,24 @@ export class SessionManager {
     this.runner = runner; this.store = runner.store;
     this.maxShells = maxShells; this.maxTasks = maxTasks; this.detachedTimeout = detachedTimeout; this.lifetime = lifetime; this.keep = keep;
     this.shells = new Map(); this.tasks = new Set();
+    this.starts = { shell: Promise.resolve(), task: Promise.resolve() }; this.closing = false;
   }
+  // Serialize admission and startup, not the session lifetime. This reserves capacity
+  // across health/create awaits and lets a second page join a shell still starting.
+  start(kind, operation) {
+    const pending = this.starts[kind].then(() => {
+      invariant(!this.closing && !this.runner.closing, 503, 'SERVER_CLOSING', '后端正在停止，请稍后重试。');
+      return operation();
+    });
+    this.starts[kind] = pending.catch(() => {});
+    return pending;
+  }
+  shell(request) { return this.start('shell', () => this.openShell(request)); }
+  task(request) { return this.start('task', () => this.openTask(request)); }
   shellFor(workspaceId) { const host = this.shells.get(workspaceId); return host && !host.pty?.exited ? host : null; }
   // The shell of a Git/Linux workspace: the running one if there is one (every page shares
   // it), otherwise a new one on the latest saved state.
-  async shell({ language, workspaceId, cols = 80, rows = 24 }) {
+  async openShell({ language, workspaceId, cols = 80, rows = 24 }) {
     invariant(!this.runner.closing, 503, 'SERVER_CLOSING', '后端正在停止，请稍后重试。');
     let workspace = null;
     if (workspaceId) { try { workspace = this.store.getWorkspace(workspaceId); } catch (error) { if (error.code !== 'WORKSPACE_NOT_FOUND') throw error; } }
@@ -164,32 +179,40 @@ export class SessionManager {
     try { return await host.starting; }
     catch (error) { this.shells.delete(workspace.workspaceId); this.runner.busy.delete(workspace.workspaceId); throw error; }
   }
-  async task({ language, code, cols = 80, rows = 24 }) {
+  async openTask({ language, code, cols = 80, rows = 24 }) {
     invariant(!this.runner.closing, 503, 'SERVER_CLOSING', '后端正在停止，请稍后重试。');
     invariant(Object.hasOwn(TASKS, language), 400, 'INVALID_LANGUAGE', '这个语言不能在终端里运行。');
     // A new run replaces the one still going, as pressing Run again in an IDE does.
-    for (const old of [...this.tasks]) if (old.language === language || this.tasks.size >= this.maxTasks) void old.pty?.hangup('replaced');
+    for (const old of [...this.tasks]) if (old.language === language) await old.pty.hangup('replaced');
+    while (this.tasks.size >= this.maxTasks) await this.tasks.values().next().value.pty.hangup('replaced');
     invariant((await this.runner.health()).ready, 503, 'RUNNER_UNAVAILABLE', '隔离执行环境尚未就绪，请完成后端 Docker 配置。');
     const host = new TaskHost(this, language, code);
     this.tasks.add(host);
-    try { return await host.start(cols, rows); }
+    host.starting = host.start(cols, rows);
+    try { return await host.starting; }
     catch (error) { this.tasks.delete(host); throw error; }
   }
   // A script sent to /api/run while the workspace's shell is open runs inside that shell's
   // container, in the directory the shell is in; its file changes are saved with the shell.
   async runInShell(host, request, { signal } = {}) {
+    const notCancelled = () => invariant(!signal?.aborted, 499, 'RUN_CANCELLED', '本次执行已取消。');
+    notCancelled();
     const id = randomUUID(), script = path.join(host.directory, `run-${id}.sh`);
-    const stop = () => void host.exec(['pkill', '-KILL', '-f', `/input/run-${id}.sh`]);
+    const stop = () => { void host.exec(['pkill', '-KILL', '-f', `/input/run-${id}.sh`]).catch(() => {}); };
     signal?.addEventListener('abort', stop, { once: true });
     try {
       await readable(script, () => fs.writeFile(script, request.code));
+      notCancelled();
       const cwd = await host.cwd();
+      // Cancellation while the source or cwd was being prepared must not start code.
+      notCancelled();
       const executed = await this.runner.cli(['exec', '-i', '-w', cwd, host.name, 'timeout', '-k', '5', '30', 'bash', `/input/run-${id}.sh`],
         { input: request.stdin, timeout: 40000, limit: 131072, onLimit: stop });
-      invariant(!signal?.aborted, 499, 'RUN_CANCELLED', '本次执行已取消。');
+      notCancelled();
       const stderr = executed.stderr.toString('utf8').replaceAll(`/input/run-${id}.sh`, 'main.sh');
       const status = executed.reason || (executed.code === 124 ? 'timeout' : executed.code === 0 ? 'accepted' : 'runtime_error');
       const summary = await host.exec(request.language === 'git' ? ['git', '-C', cwd, '-c', 'core.fsmonitor=false', 'status', '--short', '--branch'] : ['find', cwd, '-maxdepth', '2', '-not', '-path', '*/.git/*'], { timeout: 2000, limit: 8192 });
+      notCancelled();
       return { runId: id, revision: request.revision, status, stdout: executed.stdout.toString('utf8'), stderr, diagnostics: diagnostics(stderr), tests: [],
         exitCode: executed.code, cwd, workspaceSummary: summary.stdout.toString('utf8'), workspaceId: host.workspace.workspaceId, workspaceRevision: host.workspace.revision,
         workspaceCommitted: false, warnings: ['终端开着：这次的改动在终端的环境里，终端关闭时一起保存。'] };
@@ -204,8 +227,12 @@ export class SessionManager {
     await host.starting?.catch(() => {});
     if (host.pty) await host.pty.hangup(reason);
   }
-  async close() {
-    await Promise.all([...this.shells.values()].map(host => host.starting?.catch(() => {}).then(() => host.pty?.hangup('shutdown'))));
-    await Promise.all([...this.tasks].map(host => host.pty?.hangup('shutdown')));
+  close() {
+    this.closing = true;
+    return this.closePromise ||= (async () => {
+      // Finish startup before taking the snapshot: an admitted task may not yet have a PTY.
+      await Promise.all(Object.values(this.starts));
+      await Promise.all([...this.shells.values(), ...this.tasks].map(host => host.pty?.hangup('shutdown')));
+    })();
   }
 }

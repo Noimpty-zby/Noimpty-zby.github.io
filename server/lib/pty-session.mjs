@@ -66,11 +66,19 @@ export class PtySession extends EventEmitter {
     if (!this.detachedTimeout) { void this.hangup('disconnected'); return; }
     this.detachTimer = setTimeout(() => void this.hangup('idle'), this.detachedTimeout); this.detachTimer.unref?.();
   }
-  write(data) { if (!this.exited && this.child) this.child.stdin.write(frame('d', data)); }
+  write(data) { this.input('d', data); }
+  input(kind, data) {
+    if (this.exited || this.reason || !this.child) return;
+    const bytes = frame(kind, data);
+    // Bound the host-side pipe as well as the helper's input queue. A paused learner
+    // program must not turn repeated browser input into unbounded Node.js memory.
+    if (this.child.stdin.writableLength + bytes.length > 1024 * 1024) { void this.hangup('input_limit'); return; }
+    this.child.stdin.write(bytes);
+  }
   resize(cols, rows) {
-    if (this.exited || !this.child) return;
+    if (this.exited || this.reason || !this.child) return;
     this.cols = clamp(cols, this.cols, 2, 500); this.rows = clamp(rows, this.rows, 2, 300);
-    this.child.stdin.write(frame('r', `${this.cols} ${this.rows}`));
+    this.input('r', `${this.cols} ${this.rows}`);
   }
   // A slow browser pauses the program's output instead of buffering it without bound.
   pause(client) { this.paused.add(client); this.child?.stdout.pause(); }

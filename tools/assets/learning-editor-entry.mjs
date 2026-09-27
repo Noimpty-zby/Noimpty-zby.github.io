@@ -184,7 +184,12 @@ function create(host, options = {}) {
     ]
   });
   host.classList.add('learning-code-editor');
-  const view = new EditorView({ state: makeState(options.value), parent: host });
+  let initial = makeState(options.value);
+  if (options.selection) {
+    const clamp = value => Number.isInteger(value) ? Math.max(0, Math.min(initial.doc.length, value)) : 0;
+    initial = initial.update({ selection: { anchor: clamp(options.selection.anchor), head: clamp(options.selection.head) } }).state;
+  }
+  const view = new EditorView({ state: initial, parent: host });
   const observer = new scope.MutationObserver(() => {
     const next = isDark();
     if (next !== dark && !destroyed) {

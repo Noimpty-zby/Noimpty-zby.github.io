@@ -56,6 +56,17 @@ await test('encrypted round trip includes ciphertext vault, chat/drafts/memory, 
   assert.deepEqual(Object.fromEntries(target.stored),clone(collected.local));assert.deepEqual(target.data.files,payload.files);assert.equal(target.api.pending(),false)
   assert.ok(target.ops.every(([,key])=>key!=='nanaly-session-v1'&&!key.includes('private-pass')))
 })
+await test('Python drafts, history and restore points survive encrypted backup and restore',async()=>{
+  const payload=fixture(),learning={version:1,persist:true,lessonId:'python',autoCheck:true,
+    drafts:{python:{code:'print(42)\n',stdin:'',tests:[],exercise:null}},
+    history:[{id:'python-run',lessonId:'python',code:'print(42)\n',stdin:'',tests:[]}],
+    backups:[{id:'python-backup',lessonId:'python',code:'print(41)\n',stdin:'',tests:[]}]}
+  payload.local['noimpty-learning-v1']=JSON.stringify(learning)
+  const old=environment(payload.local,payload),collected=await old.api.collect()
+  const target=environment(),decoded=await target.api.inspect(await old.api.seal(collected,pass),pass)
+  await target.api.restore(decoded)
+  assert.deepEqual(JSON.parse(target.stored.get('noimpty-learning-v1')),learning)
+})
 await test('backend session credentials are excluded from local backups and rejected on import',async()=>{
   const key='nanaly-agent-session-v1',secret='private-backend-token-must-not-export'
   const env=environment({...fixture().local,[key]:JSON.stringify({version:1,base:'https://api.example',token:secret})})

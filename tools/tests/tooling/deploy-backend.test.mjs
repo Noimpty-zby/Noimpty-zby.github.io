@@ -31,6 +31,7 @@ echo "curl $build" >> "$STUB/calls"
 if [ -n "$HEALTH_FAIL" ] || { [ -n "$HEALTH_FAIL_BUILD" ] && [ "$HEALTH_FAIL_BUILD" = "$build" ]; }; then exit 7; fi
 printf '{"ok":true,"build":"%s","runner":{"ready":true}}' "$build"`,
   journalctl: 'echo "service log"',
+  mv: 'if [ -n "$MOVE_FAIL_SUFFIX" ] && [[ "$1" == *"$MOVE_FAIL_SUFFIX" ]]; then exit 1; fi\nexec /usr/bin/mv "$@"',
   sleep: 'true'
 }
 
@@ -212,4 +213,28 @@ test('rollback restart or health failures are reported without claiming recovery
     assert.match(result.stderr, /旧版重启或健康检查仍失败/)
     assert.doesNotMatch(result.stderr, /已退回且旧版健康检查通过/)
   }
+})
+
+test('a failed directory swap restores the live directory and previous environment', t => {
+  for (const suffix of ['/opt/blog', '/opt/blog.next']) {
+    const s = setup(); t.after(s.cleanup)
+    const result = s.run(['abc123def456', 'feed00000001'], { MOVE_FAIL_SUFFIX: suffix })
+    assert.notEqual(result.status, 0, result.stdout + result.stderr)
+    assert.equal(s.read('opt/blog/server/app.mjs'), 'old')
+    assert.match(s.read('etc/nanaly.env'), /^NANALY_RUNNER_IMAGE=nanaly-runner:old$/m)
+    assert.match(result.stderr, /旧版健康检查通过/)
+  }
+})
+
+test('a concurrent deploy is refused before staging or live files are changed', t => {
+  const s = setup(); t.after(s.cleanup)
+  const result = spawnSync('flock', ['-n', path.join(s.root, 'opt/.nanaly-deploy.lock'), 'bash', script,
+    path.join(s.dir, 'a.tgz'), 'abc123def456', 'feed00000001'], {
+    encoding: 'utf8', env: { ...process.env, NANALY_DEPLOY_ROOT: s.root }
+  })
+  assert.notEqual(result.status, 0, result.stdout + result.stderr)
+  assert.match(result.stderr, /Another backend deployment/)
+  assert.equal(s.read('opt/blog/server/app.mjs'), 'old')
+  assert.equal(existsSync(path.join(s.root, 'opt/blog.next')), false)
+  assert.equal(s.calls(), '')
 })

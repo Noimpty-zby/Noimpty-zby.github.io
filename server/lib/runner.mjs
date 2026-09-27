@@ -24,6 +24,14 @@ export class DockerRunner {
     invariant(!this.closing || args[0] !== 'create', 503, 'SERVER_CLOSING', '后端正在停止，请稍后重试。');
     return this.execute(this.docker, args, { ...options, env: dockerEnv() }); }
   environment() { return dockerEnv(); }
+  async removeContainer(name) {
+    const result = await this.cli(['rm', '-f', name], { timeout: 10000 });
+    invariant(!result.reason && (result.code === 0 || result.stderr.toString('utf8').includes('No such container:')), 503,
+      'RUNNER_CLEANUP_FAILED', '隔离容器清理失败，后端关闭时将重试清理。');
+    // Keep failed removals tracked so shutdown can retry them even after the run's
+    // slot, workspace lock and input directory have been released.
+    this.containers.delete(name);
+  }
   containerArgs(name, directory, { seconds = 150, hostname = null } = {}) {
     return ['create', '--name', name, '--pull=never', '--label', 'nanaly.runner=1', '--label', 'nanaly.owner=' + this.instanceId,
       ...(hostname ? ['--hostname=' + hostname] : []),
@@ -217,7 +225,7 @@ export class DockerRunner {
                 input: test.input, timeout: python ? 15000 : 3000, limit: LIMIT,
                 onLimit: () => { void this.cli(['kill', caseName], { timeout: 5000 }); }
               }));
-            } finally { await this.cli(['rm', '-f', caseName], { timeout: 10000 }); this.containers.delete(caseName); }
+            } finally { await this.removeContainer(caseName); }
             let verdict = status(executed);
             if (verdict === 'accepted' && test.expectedOutput !== undefined && normalizeOutput(executed.stdout) !== normalizeOutput(test.expectedOutput)) verdict = 'wrong_answer';
             result.tests.push({ status: verdict, input: test.input, stdout: executed.stdout, stderr: executed.stderr, ...(test.expectedOutput === undefined ? {} : { expectedOutput: test.expectedOutput }) });
@@ -255,9 +263,8 @@ export class DockerRunner {
     } finally {
       signal?.removeEventListener('abort', abort);
       try {
-        if (containerCreated) await this.cli(['rm', '-f', name], { timeout: 10000 });
+        if (containerCreated) await this.removeContainer(name);
       } finally {
-        this.containers.delete(name);
         if (ownsWorkspace) this.busy.delete(workspace.workspaceId);
         try { if (directory) await fs.rm(directory, { recursive: true, force: true }); }
         finally { this.active.delete(runId); }
@@ -294,6 +301,6 @@ export class DockerRunner {
   }
   async close() {
     this.closing = true;
-    await Promise.all([...this.containers].map(name => this.cli(['rm', '-f', name], { timeout: 10000 })));
+    await Promise.all([...this.containers].map(name => this.removeContainer(name)));
   }
 }

@@ -141,7 +141,10 @@ export function createApp({ store, runner, sessions = null, terminals = null, to
   // issued moments earlier by an authenticated POST /api/terminal/ticket.
   server.on('upgrade', (req, socket, head) => {
     socket.on('error', () => socket.destroy());
-    const url = new URL(req.url, 'http://localhost'), origin = req.headers.origin, rate = budget(req);
+    let url;
+    try { url = new URL(req.url, 'http://localhost'); }
+    catch { refuse(socket, 400, 'Bad Request'); return; }
+    const origin = req.headers.origin, rate = budget(req);
     if (url.pathname !== '/api/terminal' || !terminals) { refuse(socket, 404, 'Not Found'); return; }
     if (origin && !allowed.has(origin)) { refuse(socket, 403, 'Forbidden'); return; }
     const claim = terminals.claim(url.searchParams.get('ticket'));

@@ -10,6 +10,12 @@ archive=$1 build=$2 tag=$3 full=${4:-}
 root=${NANALY_DEPLOY_ROOT:-}  # 只给测试用：把整套路径挪进临时目录
 live=$root/opt/blog next=$root/opt/blog.next prev=$root/opt/blog.prev failed=$root/opt/blog.failed
 env_file=$root/etc/nanaly.env unit=$root/etc/systemd/system/nanaly.service
+# Two SSH sessions must not share or remove each other's staging/backup directories.
+exec 9>"$root/opt/.nanaly-deploy.lock"
+if ! flock -n 9; then
+  echo 'Another backend deployment is running; no files were changed.' >&2
+  exit 1
+fi
 uid=$(id -u nanaly)
 as_nanaly() { runuser -u nanaly -- env DOCKER_HOST="unix:///run/user/$uid/docker.sock" XDG_RUNTIME_DIR="/run/user/$uid" "$@"; }
 image=nanaly-runner:$tag
@@ -73,24 +79,39 @@ healthy() {
 
 echo "▸ 切换到 $build 并重启服务"
 cp -p "$env_file" "$env_file.prev"
-sed -i "s|^NANALY_RUNNER_IMAGE=.*|NANALY_RUNNER_IMAGE=$image|" "$env_file"
 rm -rf "$prev"
+# Once the config can change, every failure must restore it, including a failed
+# directory rename or an interrupted SSH session before systemctl is reached.
+rollback() {
+  local status=$? restored=1
+  trap - EXIT INT TERM
+  set +e
+  echo '✗ 新版本切换、重启或健康检查失败，退回上一版。最近的服务日志：' >&2
+  journalctl -u nanaly -n 20 --no-pager >&2
+  if [ -d "$prev" ]; then
+    if [ -e "$live" ]; then
+      rm -rf "$failed" && mv "$live" "$failed" || restored=0
+    fi
+    if [ "$restored" = 1 ]; then mv "$prev" "$live" || restored=0; fi
+  fi
+  cp -p "$env_file.prev" "$env_file" || restored=0
+  if [ "$restored" = 1 ] && systemctl restart nanaly && healthy "$old_build"; then
+    echo "  已退回且旧版健康检查通过。失败版本或暂存目录保留，方便查看。" >&2
+  else
+    echo "  目录与配置恢复或旧版重启或健康检查仍失败，需要检查 nanaly.service。失败版本在 $failed。" >&2
+  fi
+  [ "$status" -ne 0 ] || status=1
+  exit "$status"
+}
+trap rollback EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+sed -i "s|^NANALY_RUNNER_IMAGE=.*|NANALY_RUNNER_IMAGE=$image|" "$env_file"
 mv "$live" "$prev"
 mv "$next" "$live"
-if ! { systemctl restart nanaly && healthy "$build"; }; then
-  echo '✗ 新版本重启或健康检查失败，退回上一版。最近的服务日志：' >&2
-  journalctl -u nanaly -n 20 --no-pager >&2 || true
-  rm -rf "$failed"
-  mv "$live" "$failed"
-  mv "$prev" "$live"
-  cp -p "$env_file.prev" "$env_file"
-  if systemctl restart nanaly && healthy "$old_build"; then
-    echo "  已退回且旧版健康检查通过。失败的版本留在 $failed 方便查看。" >&2
-  else
-    echo "  目录与配置已恢复，但旧版重启或健康检查仍失败，需要检查 nanaly.service。失败版本在 $failed。" >&2
-  fi
-  exit 1
-fi
+systemctl restart nanaly
+healthy "$build"
+trap - EXIT INT TERM
 # 只有测试通过并且新版实际启动成功，后续部署才可以复用这次验收。
 printf '%s\n' "$check_key" > "$live/.backend-tested"
 echo "✓ 服务器上已是 $build"

@@ -98,9 +98,9 @@ npm run deploy:backend -- --full  # 另外强制跑一遍真实 Docker 集成测
 
 脚本 `tools/deploy/backend.sh` 只部署已提交的代码：本地后端测试通过后，用 `git archive` 打包 `server/`、`tools/tests/server/`、课程参考代码和服务器端脚本，经部署密钥传到服务器，由 `tools/deploy/backend-remote.sh` 以 root 执行：
 
-1. 解包到 `/opt/blog.next`，写入 `server/BUILD`（提交号）。
+1. 取得 `/opt/.nanaly-deploy.lock` 互斥锁；已有部署运行时明确退出。解包到 `/opt/blog.next`，写入 `server/BUILD`（提交号）。
 2. 执行镜像按 `server/runner/` 的 git 树哈希命名为 `nanaly-runner:<哈希>`；不存在时在 nanaly 的 rootless daemon 中构建。只有镜像实际 ID、后端代码、服务器测试、课程参考代码和部署脚本的内容均与当前线上成功验收记录一致时，才跳过真实 Docker 集成测试；没有记录、输入变化或加了 `--full` 都要测试。测试失败即停止，线上运行代码、环境配置和服务都不动；同一组输入强制重测失败时，其旧验收记录会失效，普通重试也必须重新测试。
-3. 把 `/etc/nanaly.env` 的 `NANALY_RUNNER_IMAGE` 换成新镜像，`/opt/blog` 与新目录对调（旧版留在 `/opt/blog.prev`），重启 `nanaly.service`。
+3. 修改前先启用退出回滚，随后把 `/etc/nanaly.env` 的 `NANALY_RUNNER_IMAGE` 换成新镜像，`/opt/blog` 与新目录对调（旧版留在 `/opt/blog.prev`），重启 `nanaly.service`。配置写入、目录移动失败或收到可捕获的退出信号也进入回滚。
 4. 重启命令必须成功，本机健康检查也必须报出新提交号且执行环境就绪（最多检查 40 次，每次请求超时 3 秒、间隔 1 秒）。任一步失败都会把目录和环境配置换回上一版并重启，再检查旧版健康状态；恢复失败会明确报错，不会宣称回滚成功。失败版本留在 `/opt/blog.failed`。
 5. 新版健康检查通过后，才把验收记录写入 `/opt/blog/.backend-tested`，并只保留当前和上一版执行镜像。缓存镜像本身不算验收通过；升级前没有记录的版本会先补跑一次测试。
 
@@ -138,6 +138,8 @@ npm run deploy:backend -- --full  # 另外强制跑一遍真实 Docker 集成测
 - `{kind:'task', language:'c'|'cpp'|'go'|'python', code, cols?, rows?}`：在一个一次性容器里编译并运行 `code`，同一语言再次运行会结束上一次。
 
 浏览器 → 服务（文本帧 JSON）：`{type:'input',data}`（≤ 64 KiB）、`{type:'resize',cols,rows}`、`{type:'terminate'}`（结束 Shell 或程序）、`{type:'read',id,path}` 与 `{type:'write',id,path,content}`（`code 文件名`，只对 Shell，≤ 1 MB 的 UTF-8 文本）。
+
+文件保存先完整接收，再以同目录临时文件原子替换，保留原文件权限并跟随符号链接；传输不完整不会提前截断原文件。替换会更换 inode，因此不保留硬链接关系；多页面同时编辑没有版本冲突提示，以最后一次成功保存为准。PTY 待写入队列超过 1 MiB 时以 `input_limit` 挂断，避免输入持续积压。
 
 服务 → 浏览器：二进制帧是终端原始输出；文本帧 JSON 为 `status`（正在启动）、`ready`（`sessionId`、`offset`、`reset`、`replay` 字节数、`workspaceId`、`workspaceRevision`）、`exit`（`code`、`seconds`、`reason`；Shell 另有 `committed`、`workspaceRevision`、`cwd`、`warnings`、`message`）、`file` / `written`，启动失败时 `error`。`exit` 之后以 1000 关闭；后端重启时以 1012 关闭，页面自行重连。紧跟 `ready` 的 `replay` 字节是补发的旧输出，页面重画但不再执行其中的 `code` 请求。
 

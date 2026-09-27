@@ -6,6 +6,7 @@ import path from 'node:path';
 import { PrivateStore } from '../../../server/lib/store.mjs';
 import { DockerRunner } from '../../../server/lib/runner.mjs';
 import { SessionManager } from '../../../server/lib/sessions.mjs';
+import { TerminalManager } from '../../../server/lib/terminal.mjs';
 import { validateRun } from '../../../server/lib/validation.mjs';
 
 // The interactive terminals in the real runner image: PTY, prompt, editors, manuals, completion,
@@ -76,6 +77,29 @@ test('real Docker terminal: interactive Bash with editors, manuals and completio
   const inside = await sessions.runInShell(first.host, validateRun({ language: 'linux', code: 'pwd; cat ../notes.txt; touch from-script', workspaceId, workspaceRevision: 0 }));
   assert.equal(inside.status, 'accepted', JSON.stringify(inside));
   assert.match(inside.stdout, /^\/work\/lesson\nwritten in nano\n/);
+  await t.test('editor saves preserve UTF-8, mode and symlinks, and incomplete transfers keep the original file', async () => {
+    const target = '/work/editor-target.sh', link = '/work/editor-link.sh';
+    const prepared = await first.host.exec(['sh', '-c', 'printf "before\n" > /work/editor-target.sh && chmod 750 /work/editor-target.sh && ln -s editor-target.sh /work/editor-link.sh']);
+    assert.equal(prepared.code, 0, prepared.stderr.toString('utf8'));
+    const before = await first.host.exec(['cat', target]);
+    assert.equal(before.code, 0);
+    const terminals = new TerminalManager(sessions);
+    const content = '#!/bin/sh\nprintf "你好，编辑器\n"\n';
+    const interruptedHost = { exec: (args, options) => first.host.exec(args, { ...options, input: options.input.slice(0, 2) }) };
+    const failed = await terminals.write(interruptedHost, { id: 1, path: link, content });
+    assert.ok(failed.error, 'an incomplete Docker stdin transfer must report failure');
+    const retained = await first.host.exec(['cat', target]);
+    assert.equal(retained.code, 0);
+    assert.deepEqual(retained.stdout, before.stdout, 'a failed save must preserve the original bytes');
+    const written = await terminals.write(first.host, { id: 2, path: link, content });
+    assert.equal(written.error, undefined, JSON.stringify(written));
+    const [text, mode, symlink] = await Promise.all([
+      first.host.exec(['cat', target]), first.host.exec(['stat', '-c', '%a', target]), first.host.exec(['readlink', link])
+    ]);
+    assert.equal(text.code, 0); assert.equal(text.stdout.toString('utf8'), content);
+    assert.equal(mode.code, 0); assert.equal(mode.stdout.toString('utf8').trim(), '750');
+    assert.equal(symlink.code, 0); assert.equal(symlink.stdout.toString('utf8').trim(), 'editor-target.sh');
+  });
   const saved = await first.hangup('closed');
   assert.equal(saved.committed, true, JSON.stringify(saved));
   assert.equal(saved.cwd, '/work/lesson');

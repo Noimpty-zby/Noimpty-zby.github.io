@@ -58,6 +58,10 @@
       // temporary 的条目只存在于内存里（IndexedDB 写失败），淘汰它就是丢文件。
       if (!cached.temporary && id !== item.id) drop(id)
     }
+    if (memory.size > MEM.count || memoryBytes > MEM.bytes) {
+      drop(item.id)
+      if (item.temporary) throw new Error('本机文件暂存已满，已有文件仍保留；请启用浏览器存储后重试')
+    }
     return item
   }
   const load = async id => {
@@ -68,8 +72,8 @@
       let item = null
       try { item = await transact('readonly', store => store.get(id)) } catch (_) { item = null }
       // 读取途中可能被 remove() 删掉。那就不该再把它放回内存，否则删过的又活了。
-      if (item && pending.get(id) === job) touch(item)
-      return item || null
+      if (pending.get(id) !== job) return null
+      return item ? touch(item) : null
     })()
     pending.set(id, job)
     try { return await job } finally { if (pending.get(id) === job) pending.delete(id) }
@@ -100,7 +104,7 @@
     } catch (_) {}
   }
   const validateFile = file => {
-    if (!file || !file.size || file.size > LIMITS.bytes) throw new Error('每份文件请控制在 10 MB 以内')
+    if (!file || !Number.isSafeInteger(file.size) || file.size <= 0 || file.size > LIMITS.bytes) throw new Error('每份文件请控制在 10 MB 以内')
     const ext = String(file.name || '').toLowerCase().split('.').pop()
     if (ext === 'pdf' || ext === 'docx') return ext
     if (TEXT_EXT.has(ext)) return 'text'
@@ -300,12 +304,11 @@
     // 不留原始 File。解析结果（正文和已渲染好的扫描图）就是后面唯一会用到的东西，
     // 而原件能占一条记录的九成九 —— 留着它，内存和 IndexedDB 都是白付。
     const item = { id: crypto.randomUUID(), name: String(file.name || '文件').slice(0, 160), type, size: file.size, at: Date.now(), ...parsed }
-    // 先当作没落盘：这样它在写入期间不会被别的读取挤出内存。存进去的那份不带这个内存标记。
-    const stored = { ...item }
-    item.temporary = true
-    touch(item)
-    try { await transact('readwrite', store => store.put(stored)); delete item.temporary } catch (_) {}
+    // 写入期间由局部变量保留内容；落盘成功不占用不可淘汰的暂存名额。
+    // 只有确实写不进去时才暂存，并在满额时拒绝新文件，保留已有附件。
+    try { await transact('readwrite', store => store.put({ ...item })) } catch (_) { item.temporary = true }
     if (signal?.aborted) { await remove(item.id); abort(signal) }
+    touch(item)
     return item
   }
   const content = async (text, files, { strict = true, imageBudget = 2, textBudget = 48000, onTextUsed, signal } = {}) => {

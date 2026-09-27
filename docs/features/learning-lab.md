@@ -19,6 +19,7 @@ Python 环境已装好 NumPy 与 CPU 版 PyTorch，第一次 `import torch` 需�
 
 真实的交互式 Bash：逐条输入命令、回车就执行，提示符是 `learner@nanaly:~$`，工具栏显示终端当前所在目录。可以用 `nano`、`vim` 编辑文件，`man` 查手册（`man -k` 搜索），`↑ ↓` 翻命令历史（`history`、`!!`、`Ctrl+R` 都能用），`Tab` 补全文件名和 Git 子命令，`Ctrl+C` 中断，`Ctrl+L` 清屏，还有 `less`、`tail -f`、`tmux`、`htop`、`make` 等。`date` 按北京时间显示。选中文字后 `Ctrl+C` 是复制，`Ctrl+V` 粘贴。手机上终端下方有一排 Tab、Esc、Ctrl+C、Ctrl+D、Ctrl+L 和方向键。
 
+- 取票据和建立终端连接共用 30 秒期限，网络悬挂也会退出连接中状态；Shell 自动退避重连，连续失败有上限，之后可按任意键重试。收起代码小屋会取消仍在等待的票据，迟到响应不再创建连接。
 - **终端不随网页关闭**：刷新、换页、关掉分屏再打开，终端都还在（正在跑的命令也还在跑），屏幕内容原样回来；网络断了会自己重连，只补发没收到的部分。离开超过 30 分钟，或者连续开了 3 小时，终端会保存后关闭。
 - 文件、当前目录、导出的变量、别名、函数和命令历史都会保存：输入 `exit`、闲置关闭、后端更新都会先保存。下次打开从上次停下的地方继续。退出后按任意键重新打开。
 - 「脚本」模式：上面是编辑器，下面是同一个终端；「在终端执行」把整段命令粘进终端执行，效果和手敲一样（`cd` 之后留在那个目录）。
@@ -44,7 +45,9 @@ Python 环境已装好 NumPy 与 CPU 版 PyTorch，第一次 `import torch` 需�
 
 ## 集成接口
 
-注入顺序：`privacy-gate.js` → `nanaly-agent.js` 与 `noimpty-ai.js` → `learning-editor.js` → `learning-lab.js`。样式为 `source/css/learning-lab.css`。终端的 xterm.js 打包在 `learning-terminal.js`（约 350 KB），只在第一次打开终端时加载；页面里一个 `type="text/plain"` 的 `#learning-terminal-src` 标签带着它的内容指纹 URL，不会被执行。两个包都由 `npm run build:learning-editor` 从 `tools/assets/*-entry.mjs` 构建。只有 `NOIMPTY_GATE.unlocked() === true` 时才读取记录、挂载页面、同步或发送代码。
+注入顺序：`privacy-gate.js` → `nanaly-agent.js` 与 `noimpty-ai.js` → `learning-lab.js`。样式为 `source/css/learning-lab.css`。CodeMirror 编辑器 `learning-editor.js`（约 646 KiB）在打开代码小屋时加载，xterm.js 终端 `learning-terminal.js`（约 350 KiB）在第一次显示终端时加载；普通阅读不下载这两份依赖。页面里的 `type="text/plain"` 标签 `#learning-editor-src` 与 `#learning-terminal-src` 提供内容指纹 URL，本身不执行。两个包都由 `npm run build:learning-editor` 从 `tools/assets/*-entry.mjs` 构建。只有 `NOIMPTY_GATE.unlocked() === true` 时才读取记录、挂载页面、同步或发送代码。
+
+编辑器下载期间保留可操作的 textarea，升级时沿用当前语言、草稿、选区和焦点；下载失败仍能编辑和运行，收起后重开会重新尝试加载。组件加载有 20 秒期限，终端加载失败时可点「重新加载终端」重试。页面卸载后，迟到的组件不会再挂载。
 
 使用 `NANALY_AGENT.configured()`、`request(path, {method, body, signal})`、`socketURL(path)`（终端 WebSocket 地址）、`setContext(object | null)`、`subscribe(callback)` 与 `open()`。调用 `NANALY.askPractice({question, context})` 返回 Promise<boolean> 接入聊天。
 
@@ -68,3 +71,5 @@ Python 环境已装好 NumPy 与 CPU 版 PyTorch，第一次 `import torch` 需�
 ## 验证
 
 `tools/tests/learning/learning-lab.test.mjs` 覆盖终端连接（票据、早按的键、断线自动重连只补缺、退出后开新终端、旧后端提示更新、程序运行不重连）、隐私门控、未连接拒绝、实际请求快照、失败版本恢复、过期诊断、并发、取消后的状态不确定性、CAS、存储失败、跨设备记录、销毁与异步回调等行为。这些测试使用明确标记的请求替身，仅验证前端状态机；真实容器及参考解验收由后端集成测试执行。
+
+`tools/tests/learning/terminal-loading.test.mjs` 覆盖组件共享下载、缺失导出、超时、失败重试和指纹 URL；`editor-loading.test.mjs` 使用真实 `mountLab` 搭配 DOM 替身，覆盖加载期间编辑与选区迁移、语言切换、卸载后的迟到响应和重新打开。这些是离线行为回归，不代替真实浏览器的布局与输入验收。

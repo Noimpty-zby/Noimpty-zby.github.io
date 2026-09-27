@@ -94,8 +94,8 @@
       check(exact(value,['hit','miss','out','turns','since']));for(const v of Object.values(value))check(typeof v==='number'&&Number.isFinite(v)&&v>=0)
     }else if(key==='noimpty-learning-v1'){
       check(record(value)&&value.version===1);if(value.persist!==undefined)check(typeof value.persist==='boolean');if(value.autoCheck!==undefined)check(typeof value.autoCheck==='boolean')
-      if(value.drafts!==undefined){check(record(value.drafts));for(const[k,d]of Object.entries(value.drafts))check(['c','cpp','go','git','linux','mysql'].includes(k)&&record(d)&&string(d.code,65536)&&string(d.stdin,8192)&&list(d.tests,10))}
-      for(const field of ['history','backups'])if(value[field]!==undefined){check(list(value[field],field==='history'?40:10));for(const r of value[field])check(record(r)&&string(r.code,65536)&&['c','cpp','go','git','linux','mysql'].includes(r.lessonId))}
+      if(value.drafts!==undefined){check(record(value.drafts));for(const[k,d]of Object.entries(value.drafts))check(['c','cpp','go','python','git','linux','mysql'].includes(k)&&record(d)&&string(d.code,65536)&&string(d.stdin,8192)&&list(d.tests,10))}
+      for(const field of ['history','backups'])if(value[field]!==undefined){check(list(value[field],field==='history'?40:10));for(const r of value[field])check(record(r)&&string(r.code,65536)&&['c','cpp','go','python','git','linux','mysql'].includes(r.lessonId))}
     }
     return value
   }

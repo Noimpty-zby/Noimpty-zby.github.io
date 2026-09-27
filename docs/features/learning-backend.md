@@ -92,17 +92,17 @@ service 依赖实际 `user@UID.service`，启动前通过同一 `DOCKER_HOST` �
 首次安装按上一节手动完成。之后每次更新后端，提交代码后在仓库根目录执行：
 
 ```sh
-npm run deploy:backend            # 执行镜像没变时约半分钟
+npm run deploy:backend            # 镜像和后端验收输入均未变时约半分钟
 npm run deploy:backend -- --full  # 另外强制跑一遍真实 Docker 集成测试
 ```
 
 脚本 `tools/deploy/backend.sh` 只部署已提交的代码：本地后端测试通过后，用 `git archive` 打包 `server/`、`tools/tests/server/`、课程参考代码和服务器端脚本，经部署密钥传到服务器，由 `tools/deploy/backend-remote.sh` 以 root 执行：
 
 1. 解包到 `/opt/blog.next`，写入 `server/BUILD`（提交号）。
-2. 执行镜像按 `server/runner/` 的 git 树哈希命名为 `nanaly-runner:<哈希>`；不存在时在 nanaly 的 rootless daemon 中构建，并用新镜像跑真实 Docker 集成测试。测试失败即停止，线上目录、环境配置和服务都不动。
+2. 执行镜像按 `server/runner/` 的 git 树哈希命名为 `nanaly-runner:<哈希>`；不存在时在 nanaly 的 rootless daemon 中构建。只有镜像实际 ID、后端代码、服务器测试、课程参考代码和部署脚本的内容均与当前线上成功验收记录一致时，才跳过真实 Docker 集成测试；没有记录、输入变化或加了 `--full` 都要测试。测试失败即停止，线上运行代码、环境配置和服务都不动；同一组输入强制重测失败时，其旧验收记录会失效，普通重试也必须重新测试。
 3. 把 `/etc/nanaly.env` 的 `NANALY_RUNNER_IMAGE` 换成新镜像，`/opt/blog` 与新目录对调（旧版留在 `/opt/blog.prev`），重启 `nanaly.service`。
-4. 本机健康检查必须在 40 秒内报出新提交号且执行环境就绪；否则把目录和环境配置换回上一版并重启，失败版本留在 `/opt/blog.failed`。
-5. 成功后只保留当前和上一版执行镜像。
+4. 重启命令必须成功，本机健康检查也必须报出新提交号且执行环境就绪（最多检查 40 次，每次请求超时 3 秒、间隔 1 秒）。任一步失败都会把目录和环境配置换回上一版并重启，再检查旧版健康状态；恢复失败会明确报错，不会宣称回滚成功。失败版本留在 `/opt/blog.failed`。
+5. 新版健康检查通过后，才把验收记录写入 `/opt/blog/.backend-tested`，并只保留当前和上一版执行镜像。缓存镜像本身不算验收通过；升级前没有记录的版本会先补跑一次测试。
 
 最后脚本从公网复查 `GET /api/health` 的 `build` 字段。重启会中断正在执行的代码。`server/nanaly.service.example` 与已安装的服务文件不同时只提示，不自动替换；Caddy 配置也不在脚本范围内。服务器地址、密钥和 known_hosts 可用 `NANALY_DEPLOY_HOST`、`NANALY_DEPLOY_KEY`、`NANALY_DEPLOY_KNOWN_HOSTS` 覆盖。
 

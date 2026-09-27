@@ -13,6 +13,7 @@ env_file=$root/etc/nanaly.env unit=$root/etc/systemd/system/nanaly.service
 uid=$(id -u nanaly)
 as_nanaly() { runuser -u nanaly -- env DOCKER_HOST="unix:///run/user/$uid/docker.sock" XDG_RUNTIME_DIR="/run/user/$uid" "$@"; }
 image=nanaly-runner:$tag
+old_build=$(cat "$live/server/BUILD" 2>/dev/null || true)
 old_image=$(sed -n 's/^NANALY_RUNNER_IMAGE=//p' "$env_file")
 
 echo "▸ 解包到 $next"
@@ -27,31 +28,42 @@ expected_unit=$(sed "s/@NANALY_UID@/$uid/g" "$next/server/nanaly.service.example
 [ "$expected_unit" = "$(grep -v '^#' "$unit" 2> /dev/null || true)" ] ||
   echo '  注意：server/nanaly.service.example 和已安装的服务文件不一样，这次没有自动替换。'
 
-needs_tests=''
 if as_nanaly docker image inspect "$image" > /dev/null 2>&1; then
   echo "  执行镜像 $image 已有，不重建"
 else
   echo "▸ 构建执行镜像 $image（第一次要几分钟）"
   as_nanaly docker build -q -t "$image" "$next/server/runner" > /dev/null
-  needs_tests=yes
 fi
-if [ -n "$needs_tests$full" ]; then
+# 镜像存在不代表验收过。只复用当前线上成功版本的验收，且镜像实体和测试输入都必须相同。
+# BUILD 只标记提交；无关页面更新不应让相同后端重复跑慢测试。
+image_id=$(as_nanaly docker image inspect --format '{{.Id}}' "$image")
+inputs=$(cd "$next" && find server tools/tests/server source/js/learning-lab.js tools/deploy/backend-remote.sh \
+  -type f ! -path server/BUILD -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d ' ' -f 1)
+check_key=$(printf '%s\n%s\n' "$image_id" "$inputs" | sha256sum | cut -d ' ' -f 1)
+verified=$(cat "$live/.backend-tested" 2>/dev/null || true)
+if [ -n "$full" ] || [ "$verified" != "$check_key" ]; then
+  # --full 对同一组输入重新验收；若这次失败，下次不能继续信任旧的成功记录。
+  if [ "$verified" = "$check_key" ]; then rm -f "$live/.backend-tested"; fi
   echo '▸ 用新版本跑真实 Docker 集成测试（两分钟左右）'
   log=$(mktemp)
   if ! (cd "$next" && as_nanaly env NANALY_RUNNER_IMAGE="$image" NANALY_DOCKER_TESTS=1 node --test tools/tests/server/docker*.integration.test.mjs) > "$log" 2>&1; then
     tail -40 "$log"
-    echo '✗ 集成测试没过。线上版本没有动。' >&2
+    rm -f "$log"
+    echo '✗ 集成测试没过。线上运行代码、配置和服务没有动。' >&2
     exit 1
   fi
   { grep -E '^ℹ (pass|fail|skipped)' "$log" || true; } | tr '\n' ' '; echo
   rm -f "$log"
+else
+  echo '  镜像与后端测试输入和已验收的线上版本相同，跳过集成测试（--full 可强制重测）'
 fi
 
 healthy() {
-  local out
+  local expected_build=$1 out
   for _ in $(seq 40); do
     if out=$(curl -fsS -m 3 http://127.0.0.1:4318/api/health 2> /dev/null) &&
-      echo "$out" | grep -q "\"build\":\"$build\"" && echo "$out" | grep -q '"ready":true'; then
+      echo "$out" | grep -q '"ready":true' &&
+      { [ -z "$expected_build" ] || echo "$out" | grep -q "\"build\":\"$expected_build\""; }; then
       return 0
     fi
     sleep 1
@@ -65,19 +77,22 @@ sed -i "s|^NANALY_RUNNER_IMAGE=.*|NANALY_RUNNER_IMAGE=$image|" "$env_file"
 rm -rf "$prev"
 mv "$live" "$prev"
 mv "$next" "$live"
-systemctl restart nanaly
-
-if ! healthy; then
-  echo '✗ 新版本启动后健康检查不过，退回上一版。最近的服务日志：' >&2
+if ! { systemctl restart nanaly && healthy "$build"; }; then
+  echo '✗ 新版本重启或健康检查失败，退回上一版。最近的服务日志：' >&2
   journalctl -u nanaly -n 20 --no-pager >&2 || true
   rm -rf "$failed"
   mv "$live" "$failed"
   mv "$prev" "$live"
   cp -p "$env_file.prev" "$env_file"
-  systemctl restart nanaly
-  echo "  已退回。失败的版本留在 $failed 方便查看。" >&2
+  if systemctl restart nanaly && healthy "$old_build"; then
+    echo "  已退回且旧版健康检查通过。失败的版本留在 $failed 方便查看。" >&2
+  else
+    echo "  目录与配置已恢复，但旧版重启或健康检查仍失败，需要检查 nanaly.service。失败版本在 $failed。" >&2
+  fi
   exit 1
 fi
+# 只有测试通过并且新版实际启动成功，后续部署才可以复用这次验收。
+printf '%s\n' "$check_key" > "$live/.backend-tested"
 echo "✓ 服务器上已是 $build"
 
 # 只留当前和上一版镜像：上一版给回退用，再往前的占地方（每个 1.3 GB 左右）。

@@ -67,14 +67,20 @@ export class DockerRunner {
     }
   }
   // Runs and checks share the slots. A run clicked right after a cancelled check waits for that
-  // container's cleanup instead of failing with RUNNER_BUSY; callers set active synchronously after.
+  // container's cleanup instead of failing with RUNNER_BUSY. Reserve before returning: several
+  // callers may resume together after health(), so reserving after await slot() would race.
   async slot(notCancelled, wait = 20000) {
+    notCancelled();
     const deadline = Date.now() + wait;
     while (this.active.size >= this.concurrency) {
       invariant(Date.now() < deadline, 429, 'RUNNER_BUSY', '执行队列已满，请稍后重试。');
       await new Promise(resolve => setTimeout(resolve, 200));
       notCancelled();
     }
+    notCancelled();
+    const runId = randomUUID(), name = 'nanaly-' + runId;
+    this.active.set(runId, name);
+    return { runId, name };
   }
   async run(request, { signal } = {}) {
     const notCancelled = () => invariant(!signal?.aborted && !this.closing, 499, 'RUN_CANCELLED', '本次执行已取消。');
@@ -84,17 +90,19 @@ export class DockerRunner {
       warnings: ['MySQL 仅在明确点击运行后由真实数据库验证；即时检查不执行 SQL。']
     };
     invariant((await this.health()).ready, 503, 'RUNNER_UNAVAILABLE', '隔离执行环境尚未就绪，请完成后端 Docker 配置。');
-    await this.slot(notCancelled);
-    notCancelled();
-    const runId = randomUUID(), name = 'nanaly-' + runId;
+    const { runId, name } = await this.slot(notCancelled);
     const abort = () => {
       for (const container of this.containers) if (container === name || container.startsWith(name + '-case-')) void this.cli(['kill', container], { timeout: 5000 });
     };
-    signal?.addEventListener('abort', abort, { once: true });
-    this.active.set(runId, name);
     let workspace, directory, containerCreated = false, ownsWorkspace = false;
     try {
-      if (['git', 'linux', 'mysql'].includes(request.language) && (request.mode === 'run' || request.workspaceId)) {
+      // Cancellation or shutdown can happen between reserving the slot and resuming here.
+      // Keep this check inside finally's scope so that reservation is always released.
+      notCancelled();
+      signal?.addEventListener('abort', abort, { once: true });
+      // Syntax checks only need submitted source. Older pages also send a workspace ID;
+      // ignore it here so a live shell (or a stale revision) cannot block a pure check.
+      if (['git', 'linux', 'mysql'].includes(request.language) && request.mode === 'run') {
         workspace = request.workspaceId ? this.store.getWorkspace(request.workspaceId) : await this.store.resetWorkspace(null, request.language);
         invariant(workspace.language === request.language, 400, 'WORKSPACE_LANGUAGE', '工作区语言不匹配。');
         invariant(!this.busy.has(workspace.workspaceId), 409, 'WORKSPACE_BUSY', '工作区正在执行。');
@@ -128,7 +136,7 @@ export class DockerRunner {
         const restored = await exec(['tar', '-xzf', '/input/workspace.snapshot', '--no-same-owner', '--same-permissions', '-C', '/work'], null, 10000);
         invariant(restored.code === 0, 500, 'WORKSPACE_RESTORE_FAILED', '工作区快照恢复失败，请重置工作区。');
       }
-      if (request.language === 'git' && !workspace?.revision) {
+      if (request.language === 'git' && workspace && !workspace.revision) {
         const init = await exec(['git', 'init', '-b', 'main', '/work']);
         invariant(init.code === 0, 500, 'WORKSPACE_INIT_FAILED', '练习仓库初始化失败。');
       }
@@ -243,10 +251,14 @@ export class DockerRunner {
       return result;
     } finally {
       signal?.removeEventListener('abort', abort);
-      if (containerCreated) await this.cli(['rm', '-f', name], { timeout: 10000 });
-      this.containers.delete(name); this.active.delete(runId);
-      if (ownsWorkspace) this.busy.delete(workspace.workspaceId);
-      if (directory) await fs.rm(directory, { recursive: true, force: true });
+      try {
+        if (containerCreated) await this.cli(['rm', '-f', name], { timeout: 10000 });
+      } finally {
+        this.containers.delete(name);
+        if (ownsWorkspace) this.busy.delete(workspace.workspaceId);
+        try { if (directory) await fs.rm(directory, { recursive: true, force: true }); }
+        finally { this.active.delete(runId); }
+      }
     }
   }
   async mysql(exec, request, workspace) {

@@ -258,6 +258,25 @@ html[data-theme='dark'] .noimpty-hero .noimpty-course-meta b { color: color-mix(
 .noimpty-scene--one { width: clamp(200px, 20vw, 260px); margin: -10px clamp(0px, 1vw, 12px) -26px 0; }
 .noimpty-scene .kw { display: block; width: 100%; height: auto; overflow: visible; }
 
+.noimpty-scene__button {
+  appearance: none;
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.noimpty-scene__button:focus-visible {
+  outline: 2px solid var(--hero-accent);
+  outline-offset: -4px;
+}
+
 .noimpty-scene__bubble {
   position: relative;
   z-index: 2;
@@ -1322,7 +1341,9 @@ html[data-theme='dark'] :is(#body-wrap:is(.type-categories, .type-tags, .type-ne
   .noimpty-scene--one { position: absolute; top: 8px; right: 0; width: 124px; margin: 0; }
   .noimpty-hero:has(.noimpty-scene--one) .noimpty-hero__crumbs { max-width: calc(100% - 92px); }
   #article-container .noimpty-hero:has(.noimpty-scene--one) .noimpty-hero__title { padding-right: 76px; }
-  .noimpty-scene--one .noimpty-scene__bubble { right: 30%; bottom: 92%; max-width: 200px; }
+  /* 角色贴着页头上沿，台词放到它下面，避免被页头的 overflow:hidden 裁掉。 */
+  .noimpty-scene--one .noimpty-scene__bubble { top: 100%; right: 12px; bottom: auto; max-width: 200px; }
+  .noimpty-scene--one .noimpty-scene__bubble::after { top: -9px; bottom: auto; transform: rotate(225deg); }
 
   .noimpty-track-grid,
   .noimpty-track-grid--two,

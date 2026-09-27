@@ -112,8 +112,10 @@ private_section: 课外        # 课外 / 课内 / Life，决定解锁框上显�
 ```
 
 页头场景外面包 `<figure class="noimpty-scene" data-lines="第二句|第三句">`，
-第一句写在 `<figcaption class="noimpty-scene__bubble">` 里；点一下角色会跳起来换下一句
-（`source/js/interior-deco.js`）。新课程照抄同级页面，从 `kawaii-art.cjs` 的 `SINGLE`
+第一句写在 `<figcaption class="noimpty-scene__bubble">` 里；点击角色，或用 `Tab` 聚焦后按
+`Enter` / 空格，会跳起来换下一句（`source/js/interior-deco.js`）。角色有可见的键盘焦点，
+新台词通过状态区域提供给辅助技术；手机端的课程角色气泡显示在角色下方，避免被页头裁切。
+新课程照抄同级页面，从 `kawaii-art.cjs` 的 `SINGLE`
 里挑一个角色，或者照着同一套画法（小脸放低、粉彩填色、深梅色描边）加一个。
 每个角色另外输出成 `/img/kawaii/<名字>.svg`，归档、分类、标签这几种主题生成的页头拿它当图用。
 
@@ -191,7 +193,18 @@ AI Infra 之后它没有存在意义了，页面、脚本、工作流和测试�
 
 项目已包含 `.github/workflows/pages.yml`。将代码推送到 `main` 分支后，在仓库的 **Settings → Pages → Source** 中选择 **GitHub Actions**。
 
-当前按用户站点 `https://noimpty-zby.github.io` 配置。如果仓库名称不是 `noimpty-zby.github.io`，需要把 `_config.yml` 中的 `url` 改成 `https://noimpty-zby.github.io/仓库名`，并把 `root` 改成 `/仓库名/`。
+当前使用自定义域名 `https://noimpty-zby.cn`，`_config.yml` 中的 `url` 为该地址、`root` 为 `/`。如果以后改为 GitHub Pages 的仓库子路径站点，需要把 `url` 改成 `https://noimpty-zby.github.io/仓库名`，并把 `root` 改成 `/仓库名/`。
+
+## 代码小屋与私有后端
+
+代码小屋支持 Git/Linux 交互式终端，以及 C/C++/Go/Python 运行和 MySQL 练习；操作方式见
+[代码小屋](docs/features/learning-lab.md)。服务安装、令牌、隔离环境与接口见
+[私有后端](docs/features/learning-backend.md)。
+
+GitHub Pages 工作流发布静态网页；后端代码需要在提交后另行运行 `npm run deploy:backend`。
+部署脚本先验收再切换，重启或健康检查失败时恢复上一版。已有镜像只有在实际镜像及后端验收输入
+都与成功记录相同的情况下才跳过集成测试，`-- --full` 可强制重测；失败重试不会沿用失败的验收。
+具体步骤与恢复边界见 [后端更新部署](docs/features/learning-backend.md#更新部署)。
 
 ## 代码健壮性检查
 
@@ -217,7 +230,10 @@ Hexo 与娜娜莉统一使用 Markdown-it 15；本地渲染适配器保留原有
 主题资源按当前启用功能生成，不再安装所有可选评论系统；新增本地插件时需声明其依赖，或配置对应的 `CDN.option`。
 自动任务统一使用 `npm ci`；日报的邮件依赖也已纳入锁文件。2026-09-25 的 `npm audit` 结果为 0 项已知漏洞。
 
-最新修复与验证见 [2026-09-25 维护记录](docs/maintenance/2026-09-25-audit.md)；此前记录见 [2026-09-19 代码审查](docs/maintenance/2026-09-19-audit.md)。
+最新修复与验证见 [2026-09-27 维护记录](docs/maintenance/2026-09-27-fixes.md)；终端改版见
+[2026-09-26 终端记录](docs/maintenance/2026-09-26-terminal.md)，此前审查见
+[2026-09-25 维护记录](docs/maintenance/2026-09-25-audit.md) 与
+[2026-09-19 代码审查](docs/maintenance/2026-09-19-audit.md)。
 
 ## 视觉设计
 

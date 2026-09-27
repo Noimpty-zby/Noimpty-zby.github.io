@@ -110,6 +110,20 @@
 
     const scenes = [...document.querySelectorAll('.noimpty-scene')]
     for (const scene of scenes) {
+      // Keep the figure/caption, but give its mascot a native keyboard action.
+      // Reuse the button on PJAX refresh so it keeps focus and never nests.
+      const art = scene.querySelector('svg.kw')
+      if (art && !scene.querySelector('.noimpty-scene__button')) {
+        const button = document.createElement('button')
+        button.type = 'button'
+        button.className = 'noimpty-scene__button'
+        button.setAttribute('aria-label', `和${art.getAttribute('aria-label') || '小角色'}说句话`)
+        art.setAttribute('aria-hidden', 'true')
+        art.replaceWith(button)
+        button.append(art)
+      }
+      scene.querySelector('.noimpty-scene__bubble')?.setAttribute('role', 'status')
+      // Native Enter/Space clicks bubble here too; one listener handles all input.
       const onTap = () => talk(scene, still)
       scene.addEventListener('click', onTap)
       cleanups.push(() => scene.removeEventListener('click', onTap))

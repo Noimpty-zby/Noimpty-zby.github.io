@@ -136,10 +136,34 @@ test('syntax-only workspace check never commits or creates a replacement workspa
   const store=await fixture(t),workspace=await store.resetWorkspace(null,'linux')
   const docker=mockDocker(),runner=new DockerRunner(store,{execute:docker.execute})
   const result=await runner.run(validateRun({language:'linux',code:'touch should-not-exist',mode:'check',workspaceId:workspace.workspaceId,workspaceRevision:0}))
-  assert.equal(result.status,'checked');assert.equal(result.workspaceCommitted,false)
+  assert.equal(result.status,'checked');assert.equal(result.workspaceId,undefined)
+  assert.equal(result.workspaceCommitted,undefined)
   assert.equal(store.getWorkspace(workspace.workspaceId).revision,0)
   const commands=docker.calls.filter(call=>call.args.includes('/input/main.sh'))
   assert.equal(commands.length,1);assert.ok(commands[0].args.includes('-n'))
+})
+
+for(const language of ['git','linux'])test(`${language} syntax checks ignore a live shell's lock and stale workspace revision`,async t=>{
+  const store=await fixture(t)
+  let workspace=await store.resetWorkspace(null,language)
+  const snapshot=Buffer.from('unchanged saved workspace')
+  workspace=await store.commitWorkspace(workspace,snapshot)
+  const docker=mockDocker(),runner=new DockerRunner(store,{execute:docker.execute})
+  // SessionManager holds this lock for the whole lifetime of an interactive shell.
+  runner.busy.add(workspace.workspaceId)
+  const result=await runner.run(validateRun({language,code:'touch must-not-run',mode:'check',workspaceId:workspace.workspaceId,workspaceRevision:0}))
+  assert.equal(result.status,'checked')
+  assert.equal(result.workspaceId,undefined,'a check must not report or replace workspace state')
+  assert.equal(runner.busy.has(workspace.workspaceId),true,'the live shell still owns its lock')
+  assert.equal(store.getWorkspace(workspace.workspaceId).revision,1)
+  assert.deepEqual(await fs.readFile(store.snapshotPath(workspace)),snapshot)
+  assert.equal(store.listWorkspaces().length,1)
+  const commands=docker.calls.filter(call=>call.args.includes('/input/main.sh'))
+  assert.equal(commands.length,1);assert.ok(commands[0].args.includes('bash'));assert.ok(commands[0].args.includes('-n'))
+  assert.equal(docker.calls.some(call=>call.args.includes('-xzf')||call.args.includes('-czf')||call.args.includes('init')),false)
+  // A deleted workspace ID from an older page must not prevent standalone syntax checking either.
+  const stale=await runner.run(validateRun({language,code:'true',mode:'check',workspaceId:'11111111-1111-4111-8111-111111111111',workspaceRevision:5}))
+  assert.equal(stale.status,'checked')
 })
 
 test('cancelling a running shell kills its container and cannot commit the changed workspace',{timeout:5000},async t=>{
@@ -255,6 +279,55 @@ test('a run arriving while the only slot is being released waits for it instead 
   release.resolve()
   const [a,b]=await Promise.all([running,waiting])
   assert.equal(a.status,'accepted');assert.equal(b.status,'accepted')
+})
+
+test('simultaneous checks reserve the only free slot before any container starts',async t=>{
+  const store=await fixture(t),compiling=deferred(),release=deferred()
+  let peak=0
+  const docker=mockDocker(async args=>{
+    if(args[0]==='create')peak=Math.max(peak,runner.active.size)
+    if(args.includes('gcc')){compiling.resolve();await release.promise}
+  })
+  const runner=new DockerRunner(store,{execute:docker.execute,concurrency:1})
+  const request=validateRun({language:'c',code:'int main(){}',mode:'check'})
+  const work=Promise.all(Array.from({length:3},()=>runner.run(request)))
+  try{
+    await compiling.promise
+    assert.equal(runner.active.size,1,'cold simultaneous requests must not all acquire the free slot')
+    assert.equal(docker.calls.filter(call=>call.args[0]==='create').length,1)
+  }finally{release.resolve();await work}
+  assert.equal(peak,1)
+  assert.equal(runner.active.size,0)
+  assert.deepEqual(await fs.readdir(path.join(store.directory,'jobs')),[])
+})
+
+for(const action of ['cancel','close'])test(`${action} after slot acquisition releases the reservation without creating a container`,async t=>{
+  const store=await fixture(t),docker=mockDocker(),controller=new AbortController()
+  const runner=new DockerRunner(store,{execute:docker.execute,concurrency:1})
+  const slot=runner.slot.bind(runner)
+  // Interleave at the await boundary where run resumes after acquiring its slot.
+  runner.slot=async(...args)=>{
+    const reservation=await slot(...args)
+    if(action==='cancel')controller.abort()
+    else await runner.close()
+    return reservation
+  }
+  await assert.rejects(runner.run(validateRun({language:'c',code:'int main(){}',mode:'check'}),{signal:controller.signal}),{code:'RUN_CANCELLED'})
+  assert.equal(runner.active.size,0)
+  assert.equal(docker.calls.some(call=>call.args[0]==='create'),false)
+  assert.deepEqual(await fs.readdir(path.join(store.directory,'jobs')),[])
+})
+
+test('a Docker cleanup exception still releases the slot, workspace lock and input files',async t=>{
+  const store=await fixture(t)
+  let fail=true
+  const docker=mockDocker(args=>{if(args[0]==='rm'&&fail){fail=false;throw new Error('Docker cleanup failed')}})
+  const runner=new DockerRunner(store,{execute:docker.execute,concurrency:1})
+  const request=validateRun({language:'linux',code:'true'})
+  await assert.rejects(runner.run(request),/Docker cleanup failed/)
+  assert.equal(runner.active.size,0);assert.equal(runner.busy.size,0);assert.equal(runner.containers.size,0)
+  assert.deepEqual(await fs.readdir(path.join(store.directory,'jobs')),[])
+  assert.equal((await runner.run(request)).status,'accepted','the next request can use the released slot')
 })
 
 test('waiting for a slot gives up with RUNNER_BUSY and honours cancellation',async t=>{

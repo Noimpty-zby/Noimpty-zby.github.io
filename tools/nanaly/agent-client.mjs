@@ -19,7 +19,7 @@ const request = async (path, options = {}) => {
 }
 let cachedContext
 // Uses the backend's restricted automation endpoints: the server filters to confirmed public records,
-// so the GitHub secret can be the background token that cannot read notes, goals or private memories.
+// This endpoint remains public-confirmed context only. Private workflow documents use separate scoped routes.
 export const sharedContext = async () => {
   if(!url())return ''
   if(cachedContext)return cachedContext

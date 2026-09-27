@@ -37,6 +37,12 @@ function backend (data=empty()) {
   }
   return {fetch,requests,state:()=>copy(state),replace:fn=>{fn(state.data);state.revision++},delayRead:hold=>{readDelay=hold},delayWrite:hold=>{writeDelay=hold}}
 }
+const sessionKey='nanaly-agent-session-v1'
+const savedSession=(base='https://test',secret=token)=>JSON.stringify({version:1,base,token:secret})
+function sessionStorage(initial={}) {
+  const entries=new Map(Object.entries(initial)),reads=[],writes=[]
+  return {entries,reads,writes,getItem:key=>{reads.push(key);return entries.get(key)??null},setItem:(key,value)=>{writes.push([key,value]);entries.set(key,String(value))},removeItem:key=>entries.delete(key)}
+}
 let passed=0
 async function test(label,fn){try{await fn();passed++;console.log('  ✓ '+label)}catch(error){process.exitCode=1;console.error('  ✗ '+label,error)}}
 
@@ -53,6 +59,81 @@ await test('API query requests preserve same origin and reject external/traversa
   const count=server.requests.length
   for(const path of ['https://evil.test/api/runs','//evil.test/api/runs','/api/../admin','/api/runs#fragment','/api/\\evil.test'])await assert.rejects(agent.request(path),/无效/)
   assert.equal(server.requests.length,count)
+})
+await test('private content requires permission and a verified backend, and never reads static documents',async()=>{
+  let allowed=false
+  const calls=[], storage=sessionStorage({[sessionKey]:savedSession()})
+  const io=async(url,opts)=>{
+    calls.push({url,...opts})
+    return response(url.endsWith('/api/state')?{revision:0,data:empty()}:{revision:3,data:{entries:[]}})
+  }
+  const agent=environment(io).create({sessionStorage:storage,permitted:()=>allowed})
+  await assert.rejects(agent.privateContent('journal'),/解锁/)
+  assert.equal(calls.length,0);assert.equal(storage.reads.length,0)
+  allowed=true
+  const journal=await agent.privateContent('journal')
+  assert.equal(journal.revision,3)
+  assert.deepEqual(calls.map(c=>c.url),['https://test/api/state','https://test/api/private-content/journal'])
+  assert.ok(calls.every(c=>c.method==='GET'&&c.headers.Authorization==='Bearer '+token&&c.redirect==='error'))
+  const count=calls.length
+  await assert.rejects(agent.privateContent('../state'),/未知/)
+  assert.equal(calls.length,count)
+  agent.disconnect()
+  await assert.rejects(agent.privateContent('journal'),/连接私有后端/)
+  assert.equal(calls.length,count)
+})
+await test('private content rechecks permission after restoring and after receiving the response',async()=>{
+  let allowed=true,requested=0
+  const restored=deferred(),body=deferred()
+  const agent=environment(async url=>{
+    if(url.endsWith('/api/state'))return restored.promise
+    requested++;return body.promise
+  }).create({sessionStorage:sessionStorage({[sessionKey]:savedSession()}),permitted:()=>allowed})
+  const first=agent.privateContent('journal');allowed=false
+  restored.resolve(response({revision:0,data:empty()}))
+  await assert.rejects(first,/解锁/);assert.equal(requested,0)
+  allowed=true
+  const second=agent.privateContent('journal');await flush();assert.equal(requested,1)
+  allowed=false;body.resolve(response({revision:2,data:{entries:[{private:'old'}]}}))
+  await assert.rejects(second,/解锁状态已改变/)
+})
+await test('a backend switch during private-content resume or body read never returns old data or reads a replacement backend implicitly',async()=>{
+  const hold=deferred(),requests=[]
+  const agent=environment(async(url,opts)=>{
+    requests.push(url)
+    if(url.endsWith('/api/state'))return response({revision:0,data:empty()})
+    return hold.promise
+  }).create({permitted:()=>true})
+  await agent.connect('https://a.test',token)
+  const beforeResume=agent.privateContent('journal')
+  const changed=agent.connect('https://b.test',token+'-b')
+  await assert.rejects(beforeResume,/连接已改变/);await changed
+  assert.equal(requests.filter(url=>url.includes('/private-content/')).length,0)
+  const reading=agent.privateContent('journal');await flush()
+  assert.equal(requests.at(-1),'https://b.test/api/private-content/journal')
+  await agent.connect('https://c.test',token+'-c')
+  hold.resolve(response({revision:1,data:{entries:[{private:'b only'}]}}))
+  await assert.rejects(reading,/连接已改变/)
+  assert.equal(agent.snapshot().connection,'connected')
+})
+await test('private content exposes authorization/shape errors without changing private state or claiming success',async()=>{
+  let reply=response({error:{message:'read forbidden'}},403)
+  const requests=[]
+  const agent=environment(async(url,opts)=>{
+    requests.push({url,...opts})
+    return url.endsWith('/api/state')?response({revision:7,data:empty()}):reply
+  }).create({permitted:()=>true})
+  await agent.connect('https://test',token)
+  const before=copy(agent.snapshot().data)
+  await assert.rejects(agent.privateContent('journal'),/read forbidden/)
+  assert.deepEqual(copy(agent.snapshot().data),before);assert.equal(agent.snapshot().revision,7)
+  assert.equal(requests.at(-1).method,'GET')
+  for(const value of [null,{},[],{revision:-1,data:{}},{revision:1}]){
+    reply=response(value);await assert.rejects(agent.privateContent('journal'),/私密资料格式/)
+  }
+  reply=response({revision:9,data:{entries:[]}})
+  assert.equal((await agent.privateContent('journal')).revision,9)
+  assert.equal(agent.snapshot().revision,7,'document revision must not overwrite memory revision')
 })
 await test('connection status verifies initial state before turning green and emits disconnects immediately',async()=>{
   const hold=deferred(),env=environment(()=>hold.promise),agent=env.create(),states=[]
@@ -110,12 +191,6 @@ await test('caller cancellation preserves connection health, while request timeo
   const timed=agent.request('/api/runs');timeout();await assert.rejects(timed,/后端请求超时/)
   assert.equal(agent.snapshot().connection,'error');assert.equal(agent.configured(),true)
 })
-const sessionKey='nanaly-agent-session-v1'
-const savedSession=(base='https://test',secret=token)=>JSON.stringify({version:1,base,token:secret})
-function sessionStorage(initial={}) {
-  const entries=new Map(Object.entries(initial)),reads=[],writes=[]
-  return {entries,reads,writes,getItem:key=>{reads.push(key);return entries.get(key)??null},setItem:(key,value)=>{writes.push([key,value]);entries.set(key,String(value))},removeItem:key=>entries.delete(key)}
-}
 await test('only verified credentials enter session storage and never enter snapshots or local storage',async()=>{
   const hold=deferred(),storage=sessionStorage(),env=environment(()=>hold.promise,{localStorage:{setItem(){throw Error('must not use localStorage')}}}),agent=env.create({sessionStorage:storage})
   const pending=agent.connect('https://test/',token)
@@ -491,3 +566,48 @@ await test('studio vault shortcut closes the studio and opens the key vault',()=
   assert.equal(modal.open,false);assert.equal(unlocks,1)
 })
 console.log(`\n${passed} 私有代理状态与工作室回归通过`)
+
+await test('connection identity is origin-bound random server metadata and survives same-store token rotation', async () => {
+  const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  let returnedIdentity = id
+  const agent = environment(async () => response({ revision: 0, data: empty(), identity: returnedIdentity })).create({ permitted: () => true })
+  assert.equal(agent.identity(), null)
+  await agent.connect('https://a.test', token)
+  assert.equal(agent.identity(), 'https://a.test/' + id)
+  assert.equal(agent.identity().includes(token), false)
+  agent.disconnect(); assert.equal(agent.identity(), null)
+  await agent.connect('https://a.test', token + '-rotated')
+  assert.equal(agent.identity(), 'https://a.test/' + id)
+  await agent.connect('https://b.test', token)
+  assert.equal(agent.identity(), 'https://b.test/' + id)
+  returnedIdentity = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  await assert.rejects(agent.refresh(), /身份已改变/)
+  assert.equal(agent.identity(), null)
+  assert.equal(agent.configured(), false)
+})
+
+await test('private reads and writes fail closed when a store is replaced at the same origin', async () => {
+  const first = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', second = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  let identity = first, writes = 0
+  const requests = []
+  const agent = environment(async (url, opts) => {
+    requests.push({ url, ...opts })
+    if (url.endsWith('/api/state')) return response({ revision: 0, data: empty(), identity })
+    if (opts.method === 'PUT') {
+      if (JSON.parse(opts.body).identity !== identity) return response({ error: { code: 'PRIVATE_CONTENT_IDENTITY_CHANGED', message: '后端身份已改变' } }, 409)
+      writes++
+    }
+    return response({ revision: 1, data: { days: {} }, identity })
+  }).create({ permitted: () => true })
+  await agent.connect('https://a.test', token)
+  await agent.privateContent('schedule')
+  identity = second
+  await assert.rejects(agent.privateContent('schedule', { method: 'PUT', body: { revision: 1, data: { days: {} } } }), /身份已改变/)
+  assert.equal(JSON.parse(requests.at(-1).body).identity, first)
+  assert.equal(writes, 0); assert.equal(agent.identity(), null)
+  await agent.connect('https://a.test', token)
+  assert.equal(agent.identity(), 'https://a.test/' + second)
+  identity = first
+  await assert.rejects(agent.privateContent('schedule'), /身份已改变/)
+  assert.equal(agent.identity(), null); assert.equal(agent.configured(), false)
+})

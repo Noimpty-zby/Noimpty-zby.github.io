@@ -1,3 +1,5 @@
+import { privateFixture } from '../private-fixture.mjs'
+import { readPrivateContent } from '../../private-content-client.mjs'
 /* 日程自动完成 + 共用 git 工具的测试。
  *
  * 重点验的是「不该发生的事没发生」：
@@ -32,6 +34,7 @@ const TOMORROW = bjKey(new Date(Date.now() + 86400000))
 const NEXT_WEEK = bjKey(new Date(Date.now() + 7 * 86400000))
 
 // ---------- 沙盒：一个临时的迷你仓库 ----------
+const fixture = await privateFixture()
 const box = mkdtempSync(join(tmpdir(), 'sched-'))
 mkdirSync(join(box, 'source/_data'), { recursive: true })
 mkdirSync(join(box, 'source/_posts'), { recursive: true })
@@ -42,10 +45,8 @@ git('init', '-q')
 git('config', 'user.email', 't@t.t'); git('config', 'user.name', 't')
 git('add', '-A'); git('commit', '-q', '-m', 'init')
 
-const writeSchedule = days => writeFileSync(
-  join(box, 'source/_data/schedule.json'),
-  JSON.stringify({ updatedAt: '2026-01-01T00:00:00Z', days }, null, 2) + '\n')
-const readSchedule = () => JSON.parse(readFileSync(join(box, 'source/_data/schedule.json'), 'utf8'))
+const writeSchedule = days => fixture.write('schedule', { updatedAt: '2026-01-01T00:00:00Z', days })
+const readSchedule = () => readPrivateContent('schedule')
 
 const { autoComplete } = await import('file://' + join(REPO, 'tools/daily-report/schedule-auto.mjs'))
 
@@ -64,7 +65,8 @@ const addPost = (slug, title, day, leaf) => {
 }
 const dropPost = slug => { try { rmSync(join(POSTS_BOX, slug + '.md')) } catch (_) {} }
 
-const run = opts => {
+const run = async opts => {
+  await fixture.reload()
   process.chdir(box)
   return autoComplete({ ownerLogin: 'Noimpty-zby', ...opts })
     .finally(() => process.chdir(REPO))
@@ -153,11 +155,11 @@ console.log('\n日程自动完成 · 不该发生的事')
 await acheck('★ 演练模式：报告会勾什么，但文件一个字节都不动', async () => {
   addPost('hw2', 'UE5 作业二复盘', TODAY)
   writeSchedule({ [TODAY]: [T('a', '写作业二复盘', { type: 'post', match: '作业二' })] })
-  const before = readFileSync(join(box, 'source/_data/schedule.json'), 'utf8')
+  const before = readFileSync(join(fixture.directory, 'schedule.json'), 'utf8')
   const r = await run({ dry: true })
   assert.equal(r.changed, 1)
   assert.equal(r.dry, true)
-  assert.equal(readFileSync(join(box, 'source/_data/schedule.json'), 'utf8'), before, '演练把文件改了')
+  assert.equal(readFileSync(join(fixture.directory, 'schedule.json'), 'utf8'), before, '演练把文件改了')
   dropPost('hw2')
 })
 
@@ -372,5 +374,6 @@ check('带数字 ID 前缀的（小号自己的）照常用', () => {
   assert.ok(calls.find(a => a[1] === 'user.name'), '名字也要配，不然提交会用 runner 的默认身份')
 })
 
+fixture.close()
 rmSync(box, { recursive: true, force: true })
 console.log(`\n${pass} 项通过`)

@@ -54,10 +54,10 @@ check('★★ 栏目页上写的栏目名和代码里的一致', () => {
   assert.deepEqual(missing, [], '这些栏目在 source/news/index.md 上没写（或者写的是旧名字）：' + missing.join('、'))
 })
 
-check('主人的方向说明还在，她搜之前读得到', () => {
-  const profile = readFileSync('source/_data/noimpty-profile.md', 'utf8')
-  assert.ok(profile.includes('AI Infra'), 'profile 里找不到现在的方向')
-  assert.ok(/❌.*游戏/.test(profile), 'profile 里应该明确把游戏行业列进不要的那一栏')
+check('资讯只从鉴权镜像读取背景，不再访问公开仓库文件', () => {
+  const source = readFileSync('tools/nanaly/news.mjs', 'utf8')
+  assert.match(source, /readPrivateContent\('profile'\)/)
+  assert.doesNotMatch(source, /readFileSync\(PROFILE_FILE/)
 })
 
 console.log(`\n${pass} 项通过`)

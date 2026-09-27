@@ -1,3 +1,5 @@
+import { privateFixture } from '../private-fixture.mjs'
+import { readPrivateContent } from '../../private-content-client.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
@@ -33,6 +35,7 @@ await test('HTTP errors and malformed GitHub JSON cannot masquerade as zero comm
 
 await test('Chinese filenames survive Git output and future/draft posts stay out of daily reports', async () => {
   const repo = process.cwd(), dir = mkdtempSync(join(tmpdir(), 'blog-daily-'))
+  const fixture = await privateFixture()
   try {
     mkdirSync(join(dir, 'source/_posts'), { recursive: true })
     mkdirSync(join(dir, 'source/_data'), { recursive: true })
@@ -47,20 +50,21 @@ await test('Chinese filenames survive Git output and future/draft posts stay out
     const result = await getNewPosts()
     assert.equal(result.ok, true)
     assert.deepEqual(result.items.map(p => p.title), ['中文笔记'])
-    const file = join(dir, 'source/_data/schedule.json')
+    const file = join(fixture.directory, 'schedule.json')
     const raw = JSON.stringify({ days: { [today]: [
       { id: 'a', text: '已撤销的自动任务', done: false, autoAt: '2026-01-01', when: { type: 'edit', match: '中文笔记' } },
       { id: 'b', text: '正常任务', done: false, when: { type: 'edit', match: '中文笔记' } },
       { id: 'c', text: '坏类型', done: false, when: { type: 'constructor' } }
     ] } })
-    writeFileSync(file, raw)
+    await fixture.set('schedule', JSON.parse(raw))
+    const before = readFileSync(file, 'utf8')
     const dry = await autoComplete({ dry: true })
     assert.equal(dry.changed, 1)
-    assert.equal(readFileSync(file, 'utf8'), raw)
+    assert.equal(readFileSync(file, 'utf8'), before)
     const done = await autoComplete()
     assert.equal(done.changed, 1)
-    assert.equal(JSON.parse(readFileSync(file, 'utf8')).days[today][0].done, false)
-  } finally { process.chdir(repo); rmSync(dir, { recursive: true, force: true }) }
+    assert.equal(readPrivateContent('schedule').days[today][0].done, false)
+  } finally { fixture.close(); process.chdir(repo); rmSync(dir, { recursive: true, force: true }) }
 })
 
 await test('privacy health does not call failed HTTP checks or unknown HTML responses safe', async () => {

@@ -9,7 +9,7 @@
  * 这里守三件事：
  *   1. 默认拒绝：白名单之外一律锁，新板块不配置也自动被锁
  *   2. 路径归一化的边界，以及**出错时要倒向「锁」那一侧**
- *   3. 两组跨文件常量不许各改各的（走散了是指不到原因的故障）
+ *   3. 对外 API 和会话存储边界；加密互通由 site-crypto-security 覆盖
  *
  * 这是浏览器脚本，没法 import，所以按字符串边界切一段出来在隔离作用域里求值
  * （和 nanaly-chat.test.mjs 同一个办法，测的仍是真代码）。
@@ -27,9 +27,6 @@ const check = (name, fn) => {
 
 const read = p => readFileSync(join(process.cwd(), p), 'utf8')
 const GATE = read('source/js/privacy-gate.js')
-const LOCKDOWN = read('scripts/noimpty-lockdown.js')
-const CRYPTO = read('tools/site-crypto.cjs')
-const SEARCH = read('source/js/noimpty-search.js')
 
 /* 切出「判哪些路径要锁」那一段：从读清单开始，到 unlocked() 为止。
  * 这一段只碰 window.NOIMPTY_PRIVACY，不碰 document，所以喂个空壳就能跑。 */
@@ -44,7 +41,7 @@ const SEG = cut(GATE, '  const privacy = window.NOIMPTY_PRIVACY', '  const unloc
 /** 用一份指定的锁清单，把那段逻辑跑起来 */
 const gateWith = manifest => {
   const ctx = vm.createContext({ window: manifest === undefined ? {} : { NOIMPTY_PRIVACY: manifest } })
-  vm.runInContext(SEG + '\nglobalThis.__g = { normalizePath, isPublic, isLocked, sectionOf, expectedHash, publicPaths }', ctx)
+  vm.runInContext(SEG + '\nglobalThis.__g = { normalizePath, isPublic, isLocked, sectionOf, configured, publicPaths }', ctx)
   return ctx.__g
 }
 
@@ -56,7 +53,7 @@ const REAL = {
   ],
   publicPaths: ['/'],
   lockAllExceptPublic: true,
-  passHash: 'a'.repeat(64)
+  unlock: null
 }
 
 console.log('\n暗号门 · 默认拒绝')
@@ -88,7 +85,7 @@ check('★★ 锁清单整个拿不到时要更严，不是放行', () => {
   assert.equal(g.isPublic('/'), true, '连首页都进不去就太过了')
   assert.equal(g.isLocked('/in-class/'), true, '清单拿不到时放行了 —— 这时候全站都是公开的')
   assert.equal(g.isLocked('/2026/09/14/x/'), true)
-  assert.equal(g.expectedHash.length, 64, '没有兜底哈希，门会永远打不开')
+  assert.equal(g.configured, false, '清单缺失时不能提供兜底解锁身份')
 })
 
 console.log('\n暗号门 · 路径归一化')
@@ -145,29 +142,8 @@ check('清单里写了的用清单，没写的按路径猜', () => {
   assert.equal(g.sectionOf('/quantum/'), '内部', '猜不出来时该给个中性的词')
 })
 
-console.log('\n暗号门 · 跨文件的常量不许各改各的')
-
-check('★★ 兜底哈希：privacy-gate 和 lockdown 必须是同一个', () => {
-  /* 暗号有两个用途：开门，和解密 search.xml。两处兜底值走散了，
-   * 症状是「门能开、但搜索永远解不开」，而且指不到原因。 */
-  const a = (GATE.match(/'([0-9a-f]{64})'/) || [])[1]
-  const b = (LOCKDOWN.match(/FALLBACK_HASH = '([0-9a-f]{64})'/) || [])[1]
-  assert.ok(a, 'privacy-gate.js 里找不到兜底哈希')
-  assert.ok(b, 'noimpty-lockdown.js 里找不到 FALLBACK_HASH')
-  assert.equal(a, b, '两处兜底哈希已经不一样了 —— 换暗号时只改了一边')
-})
-
-check('★★ PBKDF2 的参数：lockdown（加密侧）和 noimpty-search（解密侧）必须一字不差', () => {
-  /* 这两处是一对密钥派生参数。改了一边，线上的 search.xml 和行动日志
-   * 就再也解不开了，而构建和测试全绿 —— 只有打开网站搜一下才会发现。 */
-  const pick = (src, name) => (src.match(new RegExp(`const ${name} = ([^\\n]+)`)) || [])[1]
-  ;['SALT', 'ITER'].forEach(k => {
-    const a = pick(CRYPTO, k)
-    const b = pick(SEARCH, k)
-    assert.ok(a && b, `找不到 ${k}`)
-    assert.equal(a.trim(), b.trim(), `${k} 两边对不上：加密用 ${a}，解密用 ${b}`)
-  })
-})
+// Build/browser interoperability and authenticated password verification are
+// exercised with real WebCrypto in site-crypto-security.test.mjs.
 
 console.log('\n暗号门 · 对外只暴露该暴露的')
 

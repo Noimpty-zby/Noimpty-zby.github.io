@@ -13,7 +13,7 @@ known=${NANALY_DEPLOY_KNOWN_HOSTS:-$HOME/.ssh/known_hosts_nanaly}
 api=${NANALY_DEPLOY_API:-https://api.noimpty-zby.cn}
 full=''
 [ "${1:-}" = '--full' ] && full=full
-paths=(server tools/tests/server tools/deploy/backend-remote.sh source/js/learning-lab.js)
+paths=(server tools/tests/server tools/deploy/backend-remote.sh source/js/learning-lab.js tools/schedule-data.cjs tools/migrate-private-content.mjs)
 
 if ! git diff --quiet HEAD -- "${paths[@]}" || [ -n "$(git ls-files --others --exclude-standard -- "${paths[@]}")" ]; then
   echo '后端相关文件有没提交的改动。先提交再部署，这样服务器上跑的正好是某一个提交。' >&2

@@ -1,3 +1,5 @@
+import { initializePrivateContent } from '../private-content-client.mjs'
+import { commitJournal } from '../nanaly/journal.mjs'
 // 入口：采数据 → 跑检查 → 让娜娜莉写人话 → 生成邮件 → 发出去。
 //
 // 设计原则：任何一个环节挂了，报告照发，把失败原因写进报告里。
@@ -27,6 +29,7 @@ const step = async (name, fn, fallback) => {
 const main = async () => {
   const unknown = process.argv.slice(2).filter(arg => arg !== '--dry')
   if (unknown.length) throw new Error(`不支持的参数：${unknown.join(' ')}（演练参数是 --dry）`)
+  await initializePrivateContent()
   console.log(`站点 ${CFG.site}｜窗口 ${WINDOW_LABEL}`)
 
   const [traffic, comments, newPosts, health, beat] = await Promise.all([
@@ -48,21 +51,23 @@ const main = async () => {
     dry: DRY
   }).catch(error => { process.exitCode = 1; throw error }), { changed: 0, done: [] })
 
+  let autoSaved = true
   if (auto.changed) {
-    auto.done.forEach(d => console.log(`    ${DRY ? '[演练] 会勾上' : '自动勾上'}「${d.text}」 —— ${d.why}`))
+    console.log(`    ${DRY ? '[演练] 可完成' : '自动完成'} ${auto.changed} 项日程`)
     if (!DRY) {
       const ok = await commitSchedule(auto.done)
       if (!ok) {
+        autoSaved = false
         // 勾了但没提交上去 = 这几个勾只活在这台马上就要销毁的 runner 上，
         // 而当天的信号窗口已经过去，明天再跑也判不出来。必须变红。
-        console.error('    ⚠️ 自动勾的结果没能提交到仓库，这几项会丢失')
+        console.error('    ⚠️ 自动完成未同步到私密后端，请检查冲突或连接')
         process.exitCode = 1
       }
     } else console.log('    演练模式：不改数据、不提交')
   }
 
   const schedule = await step('日程', getSchedule, { ok: false, why: '读取异常' })
-  if (schedule.ok) schedule.autoDone = auto.done
+  if (schedule.ok) schedule.autoDone = autoSaved ? auto.done : []
 
   // 好久没来 → 改发一封短的想念邮件，别拿数据表格砸他
   const after = Number(process.env.MISS_YOU_AFTER_DAYS ?? 4)
@@ -204,7 +209,13 @@ const sendMissYou = async ({ days, traffic, comments, newPosts }) => {
 /* 账要记，哪怕这一轮后面炸了 —— token 已经烧掉了，不记就永远查不出来。
  * 两条出口（正常日报和「想念」）都会走到这里，不用在每个分支各插一遍。 */
 const bookkeep = async () => {
-  try { if (recordRun('daily-report', MODEL_STATE.byTask)) await commitUsage() } catch (_) {}
+  try { recordRun('daily-report', MODEL_STATE.byTask) }
+  catch { process.exitCode = 1; console.error('私密用量暂存失败。') }
+  // Attempt both saves even when one document's backend write fails.
+  const results = await Promise.allSettled([commitUsage(), commitJournal()])
+  if (results.some(result => result.status === 'rejected')) {
+    process.exitCode = 1; console.error('私密记账同步失败，请检查后端连接。')
+  }
 }
 main().then(bookkeep, async error => {
   await bookkeep()

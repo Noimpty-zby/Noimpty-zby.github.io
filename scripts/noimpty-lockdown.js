@@ -30,8 +30,6 @@
  */
 
 const crypto = require('crypto')
-const fs = require('fs')
-const path = require('path')
 const { encryptEnvelope } = require('../tools/site-crypto.cjs')
 
 // ---------------- 小工具 ----------------
@@ -140,35 +138,12 @@ hexo.extend.generator.register('noimpty-privacy-manifest', locals => {
     add(`archives/${p.date.format('YYYY/MM')}/`)
   })
 
-  /* 暗号的校验哈希从这里发出去，而不是写死在 privacy-gate.js 里。
-   *
-   * 写死会有一个很隐蔽的坑：暗号有**两个**用途 ——
-   * 一是开门（前端比对哈希），二是解密 search.xml（构建时用它派生密钥）。
-   * 两处各存一份的话，你改了 SITE_PASSPHRASE 而忘了改 privacy-gate.js 里的哈希，
-   * 结果就是：门用旧暗号能开，但索引是新暗号加密的，搜索永远解不开，
-   * 而且报错信息完全指不到这个原因上。
-   *
-   * 所以统一从 NOIMPTY_PASSPHRASE 派生。没配环境变量时回退到原来那个写死的哈希，
-   * 保证本地随手 `npm run build` 一下站点仍然能正常上锁。 */
+  // Never publish a fast password digest: it would bypass the encryption KDF.
+  // Each build gets a new session id and a small authenticated verification envelope.
   const pass = process.env.NOIMPTY_PASSPHRASE || ''
-  const FALLBACK_HASH = '5a1eee3bcf723aea5c87c85ee62696443505c86e9f0add455c85252d3412d591'
-  const passHash = pass
-    ? crypto.createHash('sha256').update(pass, 'utf8').digest('hex')
-    : FALLBACK_HASH
-
-  /* 防呆：暗号填错会把你自己锁在门外，而且**看不出来** ——
-   * 站点照常构建、照常部署，只是你原来那个暗号突然不认了。
-   * 所以这里对一下：环境变量派生出来的哈希和代码里的兜底值不一致时喊一声。
-   *
-   * 不做成报错，因为「换暗号」是完全合理的操作。
-   * 换的时候把下面 FALLBACK_HASH 也同步改掉，这条提示就消失了。 */
-  if (pass && passHash !== FALLBACK_HASH) {
-    hexo.log.warn('⚠️ NOIMPTY_PASSPHRASE 派生出的哈希和代码里的兜底值对不上。')
-    hexo.log.warn('   如果你**不是**有意在换暗号，那就是这个环境变量填错了 ——')
-    hexo.log.warn('   照这样部署上去，你原来那个暗号会打不开自己的站。')
-    hexo.log.warn(`   期望 ${FALLBACK_HASH.slice(0, 16)}…  实际 ${passHash.slice(0, 16)}…`)
-    hexo.log.warn('   确实要换暗号的话，把 scripts/noimpty-lockdown.js 里的 FALLBACK_HASH 也改成新值。')
-  }
+  const id = pass ? crypto.randomBytes(16).toString('hex') : ''
+  const unlock = pass ? { id, envelope: JSON.parse(encryptEnvelope('noimpty-private-unlock-v2:' + id, pass)) } : null
+  if (!pass) hexo.log.warn('没有 NOIMPTY_PASSPHRASE，私密页面无法解锁；搜索索引将清空。')
 
   const payload = {
     entries: Array.from(entries, ([path, section]) => ({ path, section })),
@@ -176,7 +151,7 @@ hexo.extend.generator.register('noimpty-privacy-manifest', locals => {
     // 少一条漏一条，这种事不能靠「记得加」。
     publicPaths: Array.from(PUBLIC_PATHS),
     lockAllExceptPublic: true,
-    passHash,
+    unlock,
     // 前端据此提示：索引到底是加密了还是被清空了
     searchEncrypted: !!pass
   }
@@ -250,40 +225,10 @@ hexo.extend.filter.register('after_generate', async () => {
   hexo.log.info(`search.xml 已加密（原文 ${(xml.length / 1024).toFixed(0)} KB）`)
 })
 
-/* 娜娜莉的行动日志，同样加密之后才发出去。
- *
- * 这是她那几个分身共用的记事本（tools/nanaly/journal.mjs），里面写的是
- * 「9-17 巡逻：在《XXX》留言说有两个链接坏了」这类句子 —— 一整串文章标题。
- * 右下角对话窗口里的她要读它，才知道自己今天干了什么；
- * 可**直接摊成一个明文的 nanaly-journal.json 就是一个新的口子**：
- * 不用打开任何页面，一个 GET 就能知道这个站上有哪些文章、主人最近在写什么。
- * 这正是当初把 /about/ 从白名单里收回去的那条理由。
- *
- * 所以走和 search.xml 一模一样的一套：同一个暗号、同一份派生参数、同一个信封。
- * 浏览器侧的解密也复用 noimpty-search.js 里那一份，不另写。
- *
- * 没有暗号就**根本不发这个文件**（而不是发一份明文）。对话窗口拿到 404
- * 就当她没有日志，照常说话 —— 少一段上下文，不至于泄漏。 */
+// Private journals are served only by the authenticated backend. Remove any
+// stale route, including one supplied by an older plugin during a watch build.
 hexo.extend.filter.register('after_generate', () => {
   hexo.route.remove('nanaly-journal.json')
-  const src = path.join(hexo.source_dir, '_data', 'nanaly-journal.json')
-  let raw
-  try { raw = fs.readFileSync(src, 'utf8') } catch (_) { return }
-
-  // 先解析一次：坏掉的 JSON 不值得发出去，那只会让浏览器侧抛一个看不懂的错
-  try { JSON.parse(raw) } catch (_) {
-    hexo.log.warn('nanaly-journal.json 不是合法 JSON，这次不发布')
-    return
-  }
-
-  const pass = process.env.NOIMPTY_PASSPHRASE || ''
-  if (!pass) {
-    hexo.log.warn('没有 NOIMPTY_PASSPHRASE，娜娜莉的行动日志不发布（对话窗口里她会不知道自己干过什么）')
-    return
-  }
-
-  hexo.route.set('nanaly-journal.json', encryptEnvelope(raw, pass))
-  hexo.log.info('娜娜莉的行动日志已加密发布')
 })
 
 // ---------------- 4. feed / sitemap 兜底 ----------------

@@ -66,6 +66,7 @@ const boot = ({ study = STUDY, sched = SCHED, mounted = true, storageFails = fal
   const root = node()
   const win = {
     NOIMPTY_STUDY: study,
+    NANALY_AGENT: { identity: () => 'https://fixture.test/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', configured: () => true, subscribe() {}, privateContent: async () => ({ revision: 1, data: sched }) },
     addEventListener (name, fn) { handlers.set(name, fn) }, setTimeout, clearTimeout,
     location: { origin: 'https://x.test', pathname: '/schedule/' },
     localStorage: { getItem: () => null, setItem () { if (storageFails) throw new Error('quota') }, removeItem () {} },

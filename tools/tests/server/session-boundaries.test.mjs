@@ -257,3 +257,27 @@ test('cancelling a shared-shell run during preparation never executes its script
   assert.equal(api.calls.some(args => args.includes('bash')), false, 'cancelled script must never reach docker exec');
   assert.deepEqual(await fs.readdir(directory), []);
 });
+
+
+test('shell shutdown waits for an admitted atomic file save and cancels queued saves before snapshotting', async t => {
+  const entered = deferred(), release = deferred(); let writes = 0, completed = false;
+  const api = await fixture(t, { hook: async args => {
+    if (args.some(value => value.startsWith('import os, stat, sys, tempfile'))) {
+      writes++; entered.resolve(); await release.promise; completed = true;
+    }
+    if (args.includes('-czf')) assert.equal(completed, true, 'snapshot follows the admitted file save');
+  } });
+  const terminals = new TerminalManager(api.sessions);
+  const session = await api.sessions.shell({ language: 'linux' });
+  const saving = terminals.write(session.host, { id: 1, path: '/work/readme', content: 'admitted' });
+  await entered.promise;
+  const queued = terminals.write(session.host, { id: 2, path: '/work/readme', content: 'must not start' });
+  const closing = session.hangup('shutdown');
+  await tick(); await tick();
+  assert.equal(api.calls.some(args => args.includes('-czf')), false);
+  assert.ok((await queued).error);
+  release.resolve();
+  assert.equal((await saving).error, undefined);
+  assert.equal((await closing).committed, true);
+  assert.equal(writes, 1);
+});

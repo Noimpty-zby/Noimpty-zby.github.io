@@ -5,13 +5,13 @@
  * （见 scripts/noimpty-lockdown.js 里的第 3 节）。
  *
  * 密钥由暗号派生。派生参数必须和 Node 侧**逐字一致**，改一边就解不开：
- *   PBKDF2-SHA256，salt = 'noimpty-search-v1'，120000 轮，256 位
+ *   v2：PBKDF2-SHA256，随机 16 字节 salt，600000 轮，256 位
+ *   v1 仅兼容读取；新构建一律使用 v2，不输出快速口令摘要。
  *   AES-256-GCM，前 12 字节是 IV，最后 16 字节是认证标签
  *
  * 对外暴露两个：
  *   loadCorpus()   解密后的文章数组。娜娜莉的全站搜索用它，站点地图也用它数篇数。
- *   loadJournal()  她那几个分身共用的行动日志（谁在什么时候干了什么）。
- *                  同一把暗号、同一套派生参数，只是另一个文件。
+ *   loadJournal()  已连接的私有后端提供的行动日志；不读取静态日志文件。
  * 都是失败就抛，由调用方决定怎么跟主人解释。
  */
 (() => {
@@ -19,8 +19,9 @@
 
   if (window.NOIMPTY_SEARCH) return
 
-  const SALT = 'noimpty-search-v1'
-  const ITER = 120000
+  const LEGACY_SALT = 'noimpty-search-v1'
+  const LEGACY_ITER = 120000
+  const ITER = 600000
 
   const ROOT = () => ((window.GLOBAL_CONFIG_SITE && window.GLOBAL_CONFIG_SITE.root) || '/')
 
@@ -29,28 +30,35 @@
     catch (_) { return '' }
   }
 
-  const deriveKey = async pass => {
+  const decode64 = value => {
+    if (typeof value !== 'string' || !value || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) throw new Error('SEARCH_BAD_FORMAT')
+    try { return Uint8Array.from(atob(value), c => c.charCodeAt(0)) }
+    catch (_) { throw new Error('SEARCH_BAD_FORMAT') }
+  }
+  const envelopeParameters = envelope => {
+    if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope) || envelope.alg !== 'AES-GCM') throw new Error('SEARCH_BAD_FORMAT')
+    const enc = new TextEncoder()
+    let salt, iterations, additionalData
+    if (envelope.v === 2 && envelope.kdf === 'PBKDF2-SHA256' && envelope.iterations === ITER) {
+      salt = decode64(envelope.salt)
+      if (salt.length !== 16) throw new Error('SEARCH_BAD_FORMAT')
+      iterations = ITER
+      additionalData = enc.encode('noimpty-site-envelope-v2')
+    } else if (envelope.v === 1 && envelope.kdf === 'PBKDF2-SHA256/120000') {
+      salt = enc.encode(LEGACY_SALT); iterations = LEGACY_ITER
+    } else throw new Error('SEARCH_BAD_FORMAT')
+    const raw = decode64(envelope.data)
+    if (raw.length < 28) throw new Error('SEARCH_BAD_FORMAT')
+    return { salt, iterations, raw, additionalData }
+  }
+  const decrypt = async ({ salt, iterations, raw, additionalData }, pass) => {
     const enc = new TextEncoder()
     const base = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey'])
-    return crypto.subtle.deriveKey(
-      { name: 'PBKDF2', salt: enc.encode(SALT), iterations: ITER, hash: 'SHA-256' },
-      base,
-      { name: 'AES-GCM', length: 256 },
-      false,
-      ['decrypt']
-    )
-  }
-
-  const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0))
-
-  const decrypt = async (payload, pass) => {
-    const raw = b64(payload)
-    const key = await deriveKey(pass)
+    const key = await crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
+      base, { name: 'AES-GCM', length: 256 }, false, ['decrypt'])
     const plain = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: raw.slice(0, 12) },
-      key,
-      raw.slice(12)
-    )
+      { name: 'AES-GCM', iv: raw.slice(0, 12), ...(additionalData ? { additionalData } : {}) }, key, raw.slice(12))
     return new TextDecoder().decode(plain)
   }
 
@@ -145,12 +153,10 @@
 
 
   const decryptPayload = async envelope => {
-    if (!envelope || typeof envelope !== 'object' || typeof envelope.data !== 'string' ||
-        !envelope.data || (envelope.v != null && envelope.v !== 1) ||
-        (envelope.alg != null && envelope.alg !== 'AES-GCM')) throw new Error('SEARCH_BAD_FORMAT')
+    const parameters = envelopeParameters(envelope)
     const pass = passphrase()
     if (!pass) throw new Error('SEARCH_LOCKED')
-    try { return await decrypt(envelope.data, pass) }
+    try { return await decrypt(parameters, pass) }
     catch (_) { throw new Error('SEARCH_BAD_KEY') }
   }
 
@@ -271,43 +277,64 @@
   }
   if (!installThemeRetry()) window.addEventListener?.('load', installThemeRetry, { once: true })
 
-  /* 行动日志。
-   *
-   * 和 search.xml 唯一的区别是：**取不到不算错**。
-   * 没配暗号构建出来的站上压根没有这个文件（见 lockdown 第 3 节末尾），
-   * 那时候 404 的正确含义是「她还没有日志」，不是「出故障了」——
-   * 所以这里返回空数组，让对话窗口照常说话，而不是抛给主人一句看不懂的错。 */
-  let journal = null
-  let journalAt = 0
-  let journalPending = null
+  // Journal data belongs to the authenticated backend, not to the static index.
+  // Bind lazily: this head script loads before NANALY_AGENT in the page footer.
+  let journal = null, journalAt = 0, journalPending = null, journalGeneration = 0
+  let journalAgent = null, journalUnsubscribe = null, journalController = null
+  const clearJournal = () => {
+    journalGeneration++; journal = null; journalAt = 0; journalPending = null
+    journalController?.abort(new Error('SEARCH_RESET')); journalController = null
+  }
+  const watchJournalAgent = () => {
+    const agent = window.NANALY_AGENT
+    if (agent !== journalAgent) {
+      journalUnsubscribe?.(); clearJournal(); journalAgent = agent
+      journalUnsubscribe = agent?.subscribe?.(state => {
+        if (!state.connected || state.revision === null || state.connection !== 'connected') clearJournal()
+      }) || null
+    }
+    return agent
+  }
+  const journalAllowed = agent => !window.NANALY_BACKUP_PENDING && window.NOIMPTY_GATE?.unlocked() === true &&
+    agent === window.NANALY_AGENT && agent?.configured?.() === true
   const loadJournal = async () => {
+    const agent = watchJournalAgent()
+    if (!journalAllowed(agent)) {
+      clearJournal()
+      throw new Error(window.NOIMPTY_GATE?.unlocked() === true ? 'JOURNAL_UNAVAILABLE' : 'SEARCH_LOCKED')
+    }
+    if (typeof agent.privateContent !== 'function') throw new Error('JOURNAL_UNAVAILABLE')
     if (journal && Date.now() >= journalAt && Date.now() - journalAt < 60000) return journal
     if (journalPending) return journalPending
-    const revision = generation
-    const pending = (async () => {
-      const res = await fetchResource(`${ROOT()}nanaly-journal.json`.replace(/\/{2,}/g, '/'), 'no-cache')
-      if (res.status === 404) return []
-      if (!res.ok) throw new Error(`SEARCH_HTTP_${res.status}`)
-      let envelope
-      try { envelope = JSON.parse(res.body.trim()) } catch (_) { throw new Error('SEARCH_BAD_FORMAT') }
-      if (Array.isArray(envelope)) return envelope
-      if (envelope && Array.isArray(envelope.entries)) return envelope.entries
-      const plain = await decryptPayload(envelope)
-      let decoded
-      try { decoded = JSON.parse(plain) } catch (_) { throw new Error('SEARCH_BAD_FORMAT') }
-      if (!decoded || !Array.isArray(decoded.entries)) throw new Error('SEARCH_BAD_FORMAT')
-      return decoded.entries
-    })().then(entries => {
-      if (revision !== generation) throw new Error('SEARCH_RESET')
+    const revision = journalGeneration
+    const controller = new AbortController()
+    journalController = controller
+    let timer, onAbort
+    const deadline = new Promise((_, reject) => {
+      onAbort = () => reject(controller.signal.reason || new Error('SEARCH_RESET'))
+      controller.signal.addEventListener('abort', onAbort, { once: true })
+      timer = setTimeout(() => controller.abort(new Error('SEARCH_TIMEOUT')), 20000)
+    })
+    const pending = Promise.race([Promise.resolve().then(() => agent.privateContent('journal', { signal: controller.signal })), deadline]).then(value => {
+      if (revision !== journalGeneration || agent !== window.NANALY_AGENT) throw new Error('SEARCH_RESET')
+      if (!journalAllowed(agent)) { clearJournal(); throw new Error('SEARCH_LOCKED') }
+      const decoded = value?.data
+      const entries = Array.isArray(decoded) ? decoded : decoded?.entries
+      if (!Array.isArray(entries)) throw new Error('SEARCH_BAD_FORMAT')
       journalAt = Date.now()
       return (journal = entries.filter(e => e && typeof e === 'object'
         && typeof e.at === 'string' && typeof e.who === 'string' && typeof e.what === 'string'))
+    }).finally(() => {
+      clearTimeout(timer); controller.signal.removeEventListener('abort', onAbort)
+      if (journalController === controller) journalController = null
+      if (journalPending === pending) journalPending = null
     })
     journalPending = pending
-    try { return await pending } finally { if (journalPending === pending) journalPending = null }
+    return pending
   }
 
   const MESSAGES = {
+    JOURNAL_UNAVAILABLE: '请先在娜娜莉工作室连接私有后端，再读取行动日志。',
     SEARCH_LOCKED: '还没解锁 —— 站内搜索要用暗号解密索引，先在任意一个板块页输一次暗号。',
     SEARCH_BAD_KEY: '索引解不开。多半是暗号改过、但站点还没重新构建（改暗号后必须重新部署一次）。',
     SEARCH_EMPTY: '索引是空的。构建时没有提供 NOIMPTY_PASSPHRASE，所以 search.xml 被清空了。',
@@ -323,7 +350,7 @@
     isIndexUrl,
     explain: code => MESSAGES[code] || '站内索引读不出来。',
     reset: () => {
-      generation++; cache = null; xml = null; journal = null; journalAt = 0; xmlPending = null; journalPending = null
+      generation++; cache = null; xml = null; xmlPending = null; clearJournal()
       window.dispatchEvent?.(new Event('noimpty:search-reset'))
     }
   })

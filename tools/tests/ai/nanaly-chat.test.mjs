@@ -380,11 +380,12 @@ const journalHarness = () => {
   vm.runInContext(cut('  const JOURNAL_WHO', '  /* 怎么读时间') + '\nglobalThis.selfLog = selfLog', context)
   return { selfLog: context.selfLog, reads: () => reads, advance: ms => { clock += ms }, fail: value => { fails = value } }
 }
-await checkAsync('行动日志只缓存一分钟，过期重读并明确它是已发布快照', async () => {
+await checkAsync('每次生成日志摘要都经过后端日志权限检查，不直接返回旧摘要', async () => {
   const h = journalHarness(), initial = await h.selfLog()
-  assert.match(initial, /已发布的日志快照，不是实时运行状态/)
-  h.advance(59999); assert.equal(await h.selfLog(), initial); assert.equal(h.reads(), 1)
-  h.advance(2); assert.notEqual(await h.selfLog(), initial); assert.equal(h.reads(), 2)
+  assert.match(initial, /私有后端的日志快照，不是实时运行状态/)
+  h.advance(1000); assert.notEqual(await h.selfLog(), initial); assert.equal(h.reads(), 2)
+  h.fail(true); assert.match(await h.selfLog(), /现在读不出来/)
+  assert.equal(h.reads(), 3)
 })
 await checkAsync('锁定时读不到的日志不缓存，解锁后下一次读取会恢复', async () => {
   const h = journalHarness(); h.fail(true)

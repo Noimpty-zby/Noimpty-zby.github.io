@@ -3,6 +3,7 @@ import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { ApiError, invariant } from './lib/errors.mjs';
 import { validateRun, languages } from './lib/validation.mjs';
 import { refuse, upgrade } from './lib/websocket.mjs';
+import { privateContentName } from './lib/private-content.mjs';
 
 const digest = text => createHash('sha256').update(text).digest();
 export function createApp({ store, runner, sessions = null, terminals = null, token, automationToken = null, origins = [], now = Date.now, build = null }) {
@@ -15,19 +16,19 @@ export function createApp({ store, runner, sessions = null, terminals = null, to
     return origin;
   }));
   const expected = digest('Bearer ' + token), rates = new Map();
-  // The background token (GitHub Actions) may only read public memories and append action events.
+  // Background jobs have explicit routes; they cannot use owner-only APIs.
   const automation = automationToken && digest('Bearer ' + automationToken);
   const json = (res, status, value) => {
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(value));
   };
   // A reverse proxy shares one socket address across clients. Keep public probes,
-  // failed authentication, and authenticated operations in separate budgets so
-  // an unauthenticated caller cannot lock the owner out. Forwarded IPs are untrusted.
+  // failed authentication, owner operations and automation in separate budgets
+  // so a lower-privilege caller cannot lock the owner out. Forwarded IPs are untrusted.
   const budget = req => {
     const key = req.socket.remoteAddress || 'local', stamp = now();
     let rate = rates.get(key);
-    if (!rate || stamp - rate.since > 60000) { rate = { since: stamp, failed: 0, authenticated: 0, health: 0 }; rates.set(key, rate); }
+    if (!rate || stamp - rate.since > 60000) { rate = { since: stamp, failed: 0, owner: 0, automation: 0, health: 0 }; rates.set(key, rate); }
     if (rates.size > 1000) for (const [ip, record] of rates) if (stamp - record.since > 60000) rates.delete(ip);
     return rate;
   };
@@ -78,7 +79,20 @@ export function createApp({ store, runner, sessions = null, terminals = null, to
         invariant(++rate.failed <= 12, 429, 'RATE_LIMIT', '请求过于频繁，请稍后重试。');
         throw new ApiError(401, 'UNAUTHORIZED', '访问令牌无效。');
       }
-      invariant(++rate.authenticated <= 180, 429, 'RATE_LIMIT', '请求过于频繁，请稍后重试。');
+      invariant(++rate[owner ? 'owner' : 'automation'] <= 180, 429, 'RATE_LIMIT', '请求过于频繁，请稍后重试。');
+      const privateMatch = url.pathname.match(/^\/api\/(automation\/)?private-content\/([^/]+)$/);
+      if (privateMatch) {
+        invariant(owner || privateMatch[1], 403, 'SCOPE_DENIED', '后台令牌不能访问主人资料接口。');
+        const name = privateContentName(privateMatch[2]);
+        if (req.method === 'GET') { json(res, 200, { ...store.getPrivateContent(name), identity: store.identity }); return; }
+        if (req.method === 'PUT') {
+          invariant(owner || name !== 'profile', 403, 'SCOPE_DENIED', '后台令牌只能读取背景资料。');
+          const request = await body(req);
+          invariant(request?.identity === undefined || request.identity === store.identity, 409, 'PRIVATE_CONTENT_IDENTITY_CHANGED', '后端身份已改变，请重新连接。');
+          json(res, 200, { ...await store.putPrivateContent(name, request?.revision, request?.data), identity: store.identity }); return;
+        }
+        throw new ApiError(405, 'METHOD_NOT_ALLOWED', '私密资料接口只支持 GET 和 PUT。');
+      }
       if (url.pathname === '/api/automation/context' && req.method === 'GET') { json(res, 200, store.publicContext()); return; }
       if (url.pathname === '/api/automation/events' && req.method === 'POST') {
         const request = await body(req);
@@ -87,8 +101,8 @@ export function createApp({ store, runner, sessions = null, terminals = null, to
         invariant(event.kind && /^[a-z_-]+$/.test(event.status), 400, 'INVALID_EVENT', '行动记录需要 kind 和小写英文的 status。');
         json(res, 200, { event: await store.appendEvent(event) }); return;
       }
-      invariant(owner, 403, 'SCOPE_DENIED', '后台令牌只能读取公开记忆和写入行动记录。');
-      if (url.pathname === '/api/state' && req.method === 'GET') { json(res, 200, store.getState()); return; }
+      invariant(owner, 403, 'SCOPE_DENIED', '后台令牌只能访问明确授权的自动化接口。');
+      if (url.pathname === '/api/state' && req.method === 'GET') { json(res, 200, { ...store.getState(), identity: store.identity }); return; }
       if (url.pathname === '/api/state' && req.method === 'PUT') {
         const request = await body(req); json(res, 200, await store.putState(request?.revision, request?.data)); return;
       }
@@ -149,7 +163,7 @@ export function createApp({ store, runner, sessions = null, terminals = null, to
     if (origin && !allowed.has(origin)) { refuse(socket, 403, 'Forbidden'); return; }
     const claim = terminals.claim(url.searchParams.get('ticket'));
     if (!claim) { refuse(socket, ++rate.failed > 12 ? 429 : 401, 'Unauthorized'); return; }
-    if (++rate.authenticated > 180) { refuse(socket, 429, 'Too Many Requests'); return; }
+    if (++rate.owner > 180) { refuse(socket, 429, 'Too Many Requests'); return; }
     // Room for a 1 MB file saved from the editor (`code FILE`) plus its JSON envelope.
     const ws = upgrade(req, socket, head, { maxMessage: 2 * 1024 * 1024 });
     if (ws) terminals.attach(ws, claim);

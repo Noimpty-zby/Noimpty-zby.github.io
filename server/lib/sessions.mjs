@@ -34,8 +34,8 @@ class Container {
     this.manager = manager; this.runner = manager.runner; this.id = randomUUID(); this.name = prefix + this.id;
     this.directory = path.join(this.runner.store.directory, 'jobs', this.id);
   }
-  exec(args, { input = null, timeout = 5000, limit = 131072, cwd = null } = {}) {
-    return this.runner.cli(['exec', '-i', ...(cwd ? ['-w', cwd] : []), this.name, ...args], { input, timeout, limit });
+  exec(args, { input = null, timeout = 5000, limit = 131072, cwd = null, signal, control = false } = {}) {
+    return this.runner.cli(['exec', '-i', ...(cwd ? ['-w', cwd] : []), this.name, ...args], { input, timeout, limit, signal, control });
   }
   async create(seconds) {
     await fs.mkdir(this.directory, { mode: 0o755 }); await fs.chmod(this.directory, 0o755);
@@ -78,7 +78,7 @@ class ShellHost extends Container {
   // Runs after the shell has exited, however it ended: stop leftovers, capture, snapshot, commit.
   async finish() {
     const outcome = { committed: false, workspaceId: this.workspace.workspaceId, workspaceRevision: this.workspace.revision, warnings: [] };
-    try { Object.assign(outcome, await this.save()); }
+    try { await this.fileQueue?.close(); Object.assign(outcome, await this.save()); }
     catch (error) { outcome.warnings.push(error instanceof ApiError ? error.message : '终端的改动没能保存。'); }
     finally {
       try { await this.remove(); }
@@ -92,16 +92,16 @@ class ShellHost extends Container {
     return { ...outcome, message: MESSAGES[this.pty.exited.reason] ?? '' };
   }
   async save() {
-    const cleaned = await this.exec(['python3', '/opt/nanaly/cleanup.py']);
-    const metadata = await this.exec(['cat', '/tmp/nanaly-shell-result.json'], { timeout: 2000, limit: 16384 });
+    const cleaned = await this.exec(['python3', '/opt/nanaly/cleanup.py'], { control: true });
+    const metadata = await this.exec(['cat', '/tmp/nanaly-shell-result.json'], { timeout: 2000, limit: 16384, control: true });
     let session;
     try { if (metadata.code === 0 && !metadata.reason) session = JSON.parse(metadata.stdout.toString('utf8')); } catch {}
     const warnings = Array.isArray(session?.warnings) ? session.warnings.filter(value => typeof value === 'string').slice(0, 5).map(value => value.slice(0, 2000)) : [];
     const cwd = typeof session?.cwd === 'string' && session.cwd.startsWith('/') && session.cwd.length <= 4096 && !session.cwd.includes('\0') ? session.cwd : '/work';
     if (cleaned.code !== 0 || cleaned.reason || session?.shellStateSaved !== true) return { committed: false, warnings };
-    const persisted = await this.exec(['python3', HELPER, 'persist']);
+    const persisted = await this.exec(['python3', HELPER, 'persist'], { control: true });
     if (persisted.code !== 0 || persisted.reason) return { committed: false, warnings };
-    const archive = await this.exec(['tar', '-czf', '-', '-C', '/work', '.'], { timeout: 10000, limit: SNAPSHOT_LIMIT });
+    const archive = await this.exec(['tar', '-czf', '-', '-C', '/work', '.'], { timeout: 10000, limit: SNAPSHOT_LIMIT, control: true });
     if (archive.code !== 0 || archive.reason) return { committed: false, warnings: [...warnings, '工作区文件超过 32 MB 或无法打包，没有保存。'] };
     const committed = await this.runner.store.commitWorkspace(this.workspace, archive.stdout);
     return { committed: true, workspaceRevision: committed.revision, cwd, warnings };
@@ -198,7 +198,7 @@ export class SessionManager {
     const notCancelled = () => invariant(!signal?.aborted, 499, 'RUN_CANCELLED', '本次执行已取消。');
     notCancelled();
     const id = randomUUID(), script = path.join(host.directory, `run-${id}.sh`);
-    const stop = () => { void host.exec(['pkill', '-KILL', '-f', `/input/run-${id}.sh`]).catch(() => {}); };
+    const stop = () => { void host.exec(['pkill', '-KILL', '-f', `/input/run-${id}.sh`], { control: true }).catch(() => {}); };
     signal?.addEventListener('abort', stop, { once: true });
     try {
       await readable(script, () => fs.writeFile(script, request.code));
@@ -207,7 +207,7 @@ export class SessionManager {
       // Cancellation while the source or cwd was being prepared must not start code.
       notCancelled();
       const executed = await this.runner.cli(['exec', '-i', '-w', cwd, host.name, 'timeout', '-k', '5', '30', 'bash', `/input/run-${id}.sh`],
-        { input: request.stdin, timeout: 40000, limit: 131072, onLimit: stop });
+        { input: request.stdin, timeout: 40000, limit: 131072, onLimit: stop, signal });
       notCancelled();
       const stderr = executed.stderr.toString('utf8').replaceAll(`/input/run-${id}.sh`, 'main.sh');
       const status = executed.reason || (executed.code === 124 ? 'timeout' : executed.code === 0 ? 'accepted' : 'runtime_error');

@@ -9,7 +9,7 @@
 | 目录 | 用途 |
 |---|---|
 | source/_posts、source/news、source/in-class、source/extra、source/life | 博文、资讯与栏目源码 |
-| source/_data | 日程、助手旁注、行动日志、用量和背景资料 |
+| source/_data | 可以随仓库公开的助手旁注等构建资料；私密日程、日志、用量和背景资料不放这里 |
 | source/js、source/css | 自有前端脚本与样式；保持现有 URL 以兼容浏览器缓存和页面引用 |
 | source/img、source/music、source/live2d | 图片、音乐和 Live2D 模型素材 |
 | source/lib | 已随站点分发的第三方运行库；保留许可证 |
@@ -33,7 +33,7 @@
 | 栏目与学习进度 | scripts/noimpty-sections.js、noimpty-study.js、source/js/section-hub.js |
 | 系列上下篇、相关文章、旧链接 | scripts/noimpty-pagination.js、noimpty-related-posts.js、noimpty-redirects.js |
 | 暗号门、加密搜索与日志 | scripts/noimpty-lockdown.js、source/js/privacy-gate.js、noimpty-search.js |
-| 日程与三方合并 | source/js/schedule.js、scripts/noimpty-schedule.js、tools/daily-report/schedule-auto.mjs |
+| 日程与三方合并 | source/js/schedule.js、server/lib/private-content.mjs、tools/daily-report/schedule-auto.mjs |
 | 娜娜莉主对话与密钥保险箱 | source/js/noimpty-ai.js |
 | 多话题、草稿、记忆与撤销 | source/js/nanaly-workspace.js |
 | 检索、来源与检查任务 | source/js/nanaly-research.js、nanaly-tasks.js |
@@ -50,11 +50,12 @@
 ## 数据边界
 
 - 本人文章与后台生成内容分别维护。模型生成的文章关闭 Nunjucks 执行，避免把模型输出当构建指令。
-- 搜索、日程和行动日志使用 AES-GCM 信封；没有构建暗号时不发布私有 JSON。
+- 日程、行动日志、模型用量和背景资料保存在仓库之外，由私密 API 鉴权读取。静态构建不再生成日程或日志数据路由；搜索信封继续独立处理。
 - 现有页面暗号门仍属于前端软锁：HTML 正文仍在静态产物中。其用途和全文加密、服务器鉴权不同。
 - API 密钥存入当前浏览器的加密保险箱；解锁后同源脚本仍有能力读取使用中的密钥。
 - 聊天附件在浏览器本机解析、存储，发送后才进入模型请求；图片、文本、音频均有读取或传输上限。
-- 浏览器日程只在主动保存时写仓库；自动日程根据可查证信号更新，手动撤销标记会保留。
+- 浏览器日程只在主动保存时通过私密 API 更新。自动日程使用版本比较保存，冲突时保留服务器更改并报告失败；手动撤销标记会保留。
+- 自动化启动前加载已迁移的四份私密资料，缺配置或读取失败就停止。日志和用量按条目合并后 CAS 保存，不提交 Git；公开提示词只使用明确允许公开的行动记录，背景正文只在本地筛出预定义技术兴趣。
 - 自动化提交明确限定文件路径，不应夹带其他已暂存文件。
 - 测试不应读取真实密钥、调用付费模型、发送邮件、评论或部署。
 

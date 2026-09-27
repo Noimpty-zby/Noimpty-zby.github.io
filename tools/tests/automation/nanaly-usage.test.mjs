@@ -1,3 +1,4 @@
+import { privateFixture } from '../private-fixture.mjs'
 /* 模型用量记账。
  *
  * 为什么需要它：narrate.mjs 早就把每次响应里的 usage 接住了，但只在跑完
@@ -29,8 +30,9 @@ const task = (calls, hit, miss, out) => ({ calls, hit, miss, out })
 const sandbox = async fn => {
   const cwd = process.cwd(), dir = mkdtempSync(join(tmpdir(), 'nanaly-usage-'))
   mkdirSync(join(dir, 'source/_data'), { recursive: true })
+  const fixture = await privateFixture()
   // 必须 await 再切回去：否则 finally 会赶在异步用例跑完之前把 cwd 换掉。
-  try { process.chdir(dir); return await fn(dir) } finally { process.chdir(cwd); rmSync(dir, { recursive: true, force: true }) }
+  try { process.chdir(dir); return await fn(dir, fixture) } finally { fixture.close(); process.chdir(cwd); rmSync(dir, { recursive: true, force: true }) }
 }
 
 console.log('\n模型用量 · 记账')
@@ -56,12 +58,14 @@ await test('★★ 一轮记一条，保留到任务这一层', async () => {
   })
 })
 
-await test('★★ 坏掉的记账文件不会被当成空的悄悄覆盖', async () => {
-  await sandbox(() => {
+await test('★★ 坏掉的私密记账响应不会被当成空数据覆盖', async () => {
+  await sandbox(async (_dir, fixture) => {
+    const file = join(fixture.directory, 'usage.json')
     for (const bad of ['broken', 'null', '7', '{"runs":{}}']) {
-      writeFileSync(U.FILE, bad)
-      assert.throws(() => U.readRuns(), /读取失败/)
-      assert.equal(readFileSync(U.FILE, 'utf8'), bad, '原文件必须原封不动')
+      writeFileSync(file, bad)
+      await assert.rejects(fixture.reload())
+      assert.throws(() => U.readRuns(), /尚未加载/)
+      assert.equal(readFileSync(file, 'utf8'), bad)
     }
   })
 })
@@ -150,24 +154,13 @@ await test('★★ 卡片列出每项任务，并给出七天日均做对照', a
 
 console.log('\n模型用量 · 和行动日志同车')
 
-await test('★★ 只有用量变了的那种运行照样提交，但不叫部署（这份数据不发布）', async () => {
-  const { commitJournal, FILE: JOURNAL } = await import('../../nanaly/journal.mjs')
-  await sandbox(async () => {
-  writeFileSync(JOURNAL, JSON.stringify({ v: 1, entries: [] }))
-  writeFileSync(U.FILE, JSON.stringify({ v: 1, runs: [] }))
-  const calls = []
-  // status 只对用量文件报变化，日志那边是干净的
-  const run = (...args) => {
-    calls.push(args)
-    if (args[0] === 'status') return args.includes(U.FILE) ? ' M ' + U.FILE : ''
-    return ''
-  }
-  const deployNeeded = await commitJournal({ run, extra: [U.FILE] })
-  const committed = calls.find(a => a[0] === 'commit')
-  assert.ok(committed, '账还是要提交的，不然 runner 一拆就没了')
-  assert.match(committed[2], /用量记账/, '提交信息不该谎称更新了行动日志')
-  assert.equal(deployNeeded, false, '用量不发布，为它跑一次部署是白跑')
-  assert.ok(!calls.some(a => a[0] === 'add' && a.includes(JOURNAL)), '没变的文件不该被 add 进去')
+await test('★★ 用量通过私密API保存，不调用Git或部署', async () => {
+  await sandbox(async (_dir, fixture) => {
+    U.recordRun('synthetic', { test: task(1, 0, 1, 1) }, { now: NOW })
+    assert.equal(await U.commitUsage(), true)
+    assert.equal(fixture.read('usage').data.runs.length, 1)
+    assert.equal(fixture.read('journal').data.entries.length, 0)
+    assert.equal(existsSync('source/_data/nanaly-usage.json'), false)
   })
 })
 

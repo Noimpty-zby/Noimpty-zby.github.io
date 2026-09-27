@@ -228,13 +228,15 @@ await check('journal TTL revalidates only journal, coalesces refresh, and expire
   let requests = 0
   let mode = 'ok'
   let pending
-  const window = { location: { origin }, NOIMPTY_GATE: { passphrase: () => 'pass' }, fetch: async (url, init) => {
-    requests++
-    assert.equal(init.cache, 'no-cache')
-    if (mode === 'wait') await pending.promise
-    if (mode === 'error') throw new Error('network down')
-    return { ok: true, status: 200, text: async () => JSON.stringify({ entries: [{ at: '9-19 10:00', who: 'reply', what: 'entry' + requests }] }) }
-  } }
+  const window = { location: { origin }, NOIMPTY_GATE: { unlocked: () => true },
+    fetch: () => { throw new Error('journal must not fetch static data') },
+    NANALY_AGENT: { configured: () => true, subscribe() {}, privateContent: async name => {
+      assert.equal(name, 'journal'); requests++
+      if (mode === 'wait') await pending.promise
+      if (mode === 'error') throw new Error('network down')
+      return { revision: requests, data: { entries: [{ at: '9-19 10:00', who: 'reply', what: 'entry' + requests }] } }
+    } }
+  }
   vm.runInNewContext(SEARCH, { window, URL, Response, AbortController, setTimeout, clearTimeout, Date: { now: () => now } })
   const search = window.NOIMPTY_SEARCH
   assert.equal((await search.loadJournal())[0].what, 'entry1')
@@ -244,6 +246,7 @@ await check('journal TTL revalidates only journal, coalesces refresh, and expire
   now++
   pending = deferred(); mode = 'wait'
   const one = search.loadJournal(); const two = search.loadJournal()
+  await Promise.resolve()
   assert.equal(requests, 2)
   pending.resolve(); await Promise.all([one, two])
   now += 60000; mode = 'error'

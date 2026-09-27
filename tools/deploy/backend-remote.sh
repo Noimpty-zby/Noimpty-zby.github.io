@@ -43,7 +43,7 @@ fi
 # 镜像存在不代表验收过。只复用当前线上成功版本的验收，且镜像实体和测试输入都必须相同。
 # BUILD 只标记提交；无关页面更新不应让相同后端重复跑慢测试。
 image_id=$(as_nanaly docker image inspect --format '{{.Id}}' "$image")
-inputs=$(cd "$next" && find server tools/tests/server source/js/learning-lab.js tools/deploy/backend-remote.sh \
+inputs=$(cd "$next" && find server tools/tests/server source/js/learning-lab.js tools/deploy/backend-remote.sh tools/schedule-data.cjs tools/migrate-private-content.mjs \
   -type f ! -path server/BUILD -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -d ' ' -f 1)
 check_key=$(printf '%s\n%s\n' "$image_id" "$inputs" | sha256sum | cut -d ' ' -f 1)
 verified=$(cat "$live/.backend-tested" 2>/dev/null || true)

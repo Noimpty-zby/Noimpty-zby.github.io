@@ -56,22 +56,31 @@ const DAY = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' }).form
 const task = (id, text = id, extra = {}) => ({ id, text, done: false, ...extra })
 const schedule = (tasks, updatedAt = '') => ({ updatedAt, days: { [DAY]: tasks } })
 const KEY = 'noimpty-schedule-cache-v1'
+const IDENTITY = 'https://fixture.test/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const bootSchedule = ({ remote = schedule([]), cached, siteFetch, githubFetch, gate, study, noStorage = false, decrypt } = {}) => {
   const node = new Element()
   node.nodes.set('[data-role="status"]', new Element())
-  const store = storage(cached ? { [KEY]: JSON.stringify(cached) } : {})
+  const store = storage(cached ? { [KEY]: JSON.stringify({ version: 2, accounts: { [IDENTITY]: cached } }) } : {})
   if (noStorage) store.setItem = () => { throw new Error('quota') }
   const calls = []
-  const fetch = async (url, init) => {
+  let reads = 0
+  const privateContent = async (name, opts = {}) => {
+    assert.equal(name, 'schedule')
+    const url = '/api/private-content/schedule'
+    const init = { ...opts, ...(opts.body ? { body: JSON.stringify(opts.body) } : {}) }
     calls.push({ url, init })
-    if (String(url).startsWith('/schedule/')) return siteFetch ? siteFetch(url, init) : jsonResponse(remote)
-    return githubFetch ? githubFetch(url, init) : jsonResponse({})
+    if (!opts.method && (++reads === 1 || !githubFetch)) {
+      const response = siteFetch ? await siteFetch(url, init) : jsonResponse(remote)
+      return { revision: 1, data: await response.json() }
+    }
+    const response = githubFetch ? await githubFetch(url, init) : jsonResponse({ revision: 2, data: opts.body?.data })
+    return response.json()
   }
+  const fetch = async () => { throw new Error('schedule must not fetch static or GitHub data') }
   const win = {
     addEventListener: noop, setTimeout: () => 0, clearTimeout: noop,
     localStorage: store, NOIMPTY_GATE: gate, NOIMPTY_STUDY: study,
-    NOIMPTY_SEARCH: { decryptPayload: decrypt },
-    NANALY: { githubToken: () => 'test-token' }
+    NANALY_AGENT: { configured: () => true, identity: () => IDENTITY, privateContent, subscribe: noop }
   }
   const ctx = vm.createContext({
     window: win, document: { getElementById: () => node, createElement: tag => new Element(tag) },
@@ -111,10 +120,10 @@ await check('提交等待期间的新任务保留为未保存草稿，下一次�
   const b = bootSchedule({
     remote: persisted,
     githubFetch: async (url, init) => {
-      if (!init?.method) return jsonResponse({ encoding: 'base64', content: btoa(JSON.stringify(persisted)), sha: 'test' })
-      persisted = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(JSON.parse(init.body).content), c => c.charCodeAt(0))))
+      if (!init?.method) return jsonResponse({ revision: writes + 1, data: persisted })
+      persisted = JSON.parse(init.body).data
       if (++writes === 1) await pending.promise
-      return jsonResponse({})
+      return jsonResponse({ revision: writes + 1, data: persisted })
     }
   })
   await flush()
@@ -186,15 +195,11 @@ await check('真实闰日可载入，坏日期且无缓存时明确载入失败'
   assert.equal(Object.keys(invalid.api.data().days).length, 0)
 })
 
-await check('加密日程通过共享解密器读取', async () => {
-  let decryptions = 0
-  const b = bootSchedule({
-    remote: { v: 1, alg: 'AES-GCM', data: 'ciphertext' },
-    decrypt: async envelope => { decryptions++; assert.equal(envelope.data, 'ciphertext'); return JSON.stringify(schedule([task('secret')])) }
-  })
+await check('日程通过鉴权私有API读取，不请求静态文件或GitHub', async () => {
+  const b = bootSchedule({ remote: schedule([task('secret')]) })
   await flush()
-  assert.equal(decryptions, 1)
   assert.equal(b.api.data().days[DAY][0].id, 'secret')
+  assert.ok(b.calls.every(call => call.url === '/api/private-content/schedule'))
 })
 
 await check('暗号门锁定时不请求日程，也不展示缓存中的私有任务', async () => {
@@ -210,7 +215,7 @@ await check('损坏远端数据不成为可保存基准，离线有效缓存仍�
     const b = bootSchedule({ remote })
     await flush()
     assert.equal(b.api.baseline(), null)
-    assert.ok(b.node.querySelector('[data-role="status"]').textContent.includes('读不到仓库'))
+    assert.ok(b.node.querySelector('[data-role="status"]').textContent.includes('私有后端'))
   }
   const cached = { ...schedule([task('draft')]), _dirty: true, _base: schedule([]).days }
   const b = bootSchedule({ cached, siteFetch: async () => { throw new Error('offline') } })
@@ -219,15 +224,15 @@ await check('损坏远端数据不成为可保存基准，离线有效缓存仍�
   assert.equal(b.api.dirty(), true)
 })
 
-await check('GitHub 内容形状损坏时不发送 PUT，草稿保留', async () => {
-  const b = bootSchedule({ remote: schedule([]), githubFetch: async () => jsonResponse({ encoding: 'base64', content: btoa('{"days":[]}'), sha: 'bad' }) })
+await check('后端日程形状损坏时不发送 PUT，草稿保留', async () => {
+  const b = bootSchedule({ remote: schedule([]), githubFetch: async () => jsonResponse({ revision: 1, data: { days: [] } }) })
   await flush()
   b.add('draft')
   b.click('save')
   await flush()
   assert.equal(b.calls.filter(c => c.init?.method === 'PUT').length, 0)
   assert.equal(b.api.dirty(), true)
-  assert.ok(b.node.querySelector('[data-role="status"]').textContent.includes('读不出仓库'))
+  assert.ok(b.node.querySelector('[data-role="status"]').textContent.includes('格式不正确'))
 })
 
 await check('课程数据部分缺失不再令整页白屏', async () => {
@@ -339,7 +344,7 @@ const bootGate = (session = {}) => {
   doc.readyState = 'loading'
   doc.documentElement = new Element()
   const win = {
-    NOIMPTY_PRIVACY: { entries: [], publicPaths: ['/'], passHash: 'hash-now' },
+    NOIMPTY_PRIVACY: { entries: [], publicPaths: ['/'], unlock: { id: 'a'.repeat(32), envelope: { v: 2, alg: 'AES-GCM', kdf: 'PBKDF2-SHA256', iterations: 600000, salt: 'A'.repeat(22) + '==', data: 'A'.repeat(64) } } },
     sessionStorage: storage(session), location: { origin: 'https://site.test', pathname: '/', search: '' },
     addEventListener: noop
   }
@@ -366,7 +371,7 @@ await check('外链、新标签、下载、锚点和取消的点击不锁住当�
 })
 
 await check('暗号配置轮换后旧会话失效，残留暗号不再交给搜索', async () => {
-  const b = bootGate({ 'noimpty-private-unlocked': 'true', 'noimpty-private-pass': 'old', 'noimpty-private-hash': 'hash-old' })
+  const b = bootGate({ 'noimpty-private-unlocked': 'true', 'noimpty-private-pass': 'old', 'noimpty-private-version': 'b'.repeat(32) })
   assert.equal(b.api.unlocked(), false)
   assert.equal(b.api.passphrase(), '')
 })
@@ -439,15 +444,21 @@ await check('搜索脚本重复执行保持原 API 和 fetch，避免重复补�
   assert.equal(b.win.fetch, fetch)
 })
 
-await check('行动日志 null 数据产生明确格式错误，并发调用共享读取', async () => {
-  const b = bootSearch(async () => ({ ok: true, text: async () => 'null' }))
+await check('行动日志从私有API读取，null数据报错且并发请求共享', async () => {
+  const b = bootSearch()
+  b.win.NOIMPTY_GATE.unlocked = () => true
+  b.win.NANALY_AGENT = { configured: () => true, subscribe: noop, privateContent: async () => ({ revision: 0, data: null }) }
   await assert.rejects(b.win.NOIMPTY_SEARCH.loadJournal(), /SEARCH_BAD_FORMAT/)
-  const c = bootSearch(async () => ({ ok: true, text: async () => '{"entries":[{"id":"log","at":"9-19 10:00","who":"reply","what":"done"}]}' }))
+  const c = bootSearch(); let requests = 0
+  c.win.NOIMPTY_GATE.unlocked = () => true
+  c.win.NANALY_AGENT = { configured: () => true, subscribe: noop, privateContent: async name => {
+    requests++; assert.equal(name, 'journal')
+    return { revision: 1, data: { entries: [{ id: 'log', at: '9-19 10:00', who: 'reply', what: 'done' }] } }
+  } }
   const rows = await Promise.all([c.win.NOIMPTY_SEARCH.loadJournal(), c.win.NOIMPTY_SEARCH.loadJournal()])
-  assert.equal(c.calls.length, 1)
+  assert.equal(requests, 1); assert.equal(c.calls.length, 0)
   assert.equal(rows[0][0].id, 'log')
 })
-
 
 await check('无基准的离线草稿在恢复联网后只增加任务，不删除远端原有任务', async () => {
   const cached = { ...schedule([task('draft')]), _dirty: true, _base: null }

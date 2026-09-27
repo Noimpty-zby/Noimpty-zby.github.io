@@ -38,7 +38,7 @@ console.log('\n提示词 · 可缓存前缀')
 check('★★ 资讯：四个主题共用一份系统提示，profile 不许被主题名踩脏', () => {
   const profile = '（这里是主人的情况，实际约 1,800 字）'.repeat(20)
   const sys = newsSystem(profile)
-  assert.ok(sys.includes(profile), 'profile 不在系统提示里了')
+  assert.ok(!sys.includes(profile), '私密profile正文不应进入公开成稿提示词')
   TOPICS.forEach(t => assert.ok(!sys.includes(t.title),
     `系统提示里出现了主题名「${t.title}」—— 它排在 profile 前面就会把整份 profile 踩脏`))
   // 两个不同主题的完整请求，公共前缀必须整个覆盖系统提示

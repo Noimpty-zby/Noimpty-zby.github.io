@@ -51,7 +51,7 @@ sudo runuser -u nanaly -- env XDG_RUNTIME_DIR="/run/user/${nanaly_uid}" DBUS_SES
 
 如果 `user@UID.service` 在增加委派配置前已经运行，必须在没有其他用户任务时重新启动它，再启动用户级 Docker 服务，使委派生效。通过同一 socket 检查 `docker info` 的 cgroup v2、systemd driver、CPU/memory/pids 支持及 rootless security option；不能只看到 Docker 进程就判定可执行。
 
-部署包应包含 `server/`、`tools/tests/server/` 与课程参考文件 `source/js/learning-lab.js`。Node.js 生产版本为 24.19.0，入口 `/usr/local/bin/node`；安装其他路径时同步调整 service。执行镜像必须在 API 所连接的同一个 rootless daemon 中构建：
+部署包应包含 `server/`、`tools/tests/server/`、`tools/schedule-data.cjs`、`tools/migrate-private-content.mjs` 与课程参考文件 `source/js/learning-lab.js`。Node.js 生产版本为 24.19.0，入口 `/usr/local/bin/node`；安装其他路径时同步调整 service。执行镜像必须在 API 所连接的同一个 rootless daemon 中构建：
 
 ```sh
 cd /opt/blog
@@ -108,7 +108,7 @@ npm run deploy:backend -- --full  # 另外强制跑一遍真实 Docker 集成测
 
 ## API 契约
 
-除 `GET /api/health` 和 CORS 预检之外，所有接口均要求 `Authorization: Bearer <token>`。后台令牌只能访问 `/api/automation/` 下的两个接口，其余一律返回 403 `SCOPE_DENIED`；主令牌可以访问全部接口。JSON 写请求要求 `Content-Type: application/json`，请求体上限约 1.2 MB。所有响应使用 `Cache-Control: no-store`；异常响应不包含宿主路径、令牌或错误堆栈。没有登录 cookie，不信任传入的 X-Forwarded-For。正确认证、失败认证和健康探针分别限流，避免反向代理共享 loopback 地址时错误令牌阻断合法操作。
+除 `GET /api/health` 和 CORS 预检之外，所有接口均要求 `Authorization: Bearer <token>`。后台令牌只能访问 `/api/automation/` 下的公开上下文、事件与有限私密资料接口，其余一律返回 403 `SCOPE_DENIED`；主令牌可以访问全部接口。JSON 写请求要求 `Content-Type: application/json`，请求体上限约 1.2 MB。所有响应使用 `Cache-Control: no-store`；异常响应不包含宿主路径、令牌或错误堆栈。没有登录 cookie，不信任传入的 X-Forwarded-For。主人认证、后台认证、失败认证和健康探针分别限流，避免反向代理共享 loopback 地址时错误令牌阻断合法操作。
 
 | 接口 | 请求与结果 |
 | --- | --- |
@@ -129,6 +129,14 @@ npm run deploy:backend -- --full  # 另外强制跑一遍真实 Docker 集成测
 
 错误格式为 `{error:{code,message},...extra}`。state 版本冲突返回 HTTP 409 和服务器最新 `revision,data`，客户端应合并或让用户决定，不得直接覆盖。工作区冲突返回 `workspaceRevision`。工作区上限 12；重置替换旧编号，旧设备使用旧编号会得到 404，避免 reset 后 revision 归零造成 ABA 覆盖。
 
+### 私密资料
+
+`GET/PUT /api/private-content/{schedule|journal|profile|usage}` 仅接受主令牌。读取返回 `{revision,data}`，写入传 `{revision,data}`；冲突返回 409 和最新版本，不能以读失败的空数据覆盖。四类资料独立版本、原子写入并保留前一版备份。记录未迁移时 revision=0；自动化拒绝将其当成正常空数据。
+
+后台令牌可通过 `/api/automation/private-content/{name}` 读取四类资料、写入 schedule/journal/usage，不能写 profile；仍不能读取主人记忆、笔记、目标或执行代码。公开上下文接口的筛选规则没有改变。私密资料 API 不提供匿名或静态文件访问。
+
+首次升级和历史清理见[安全迁移步骤](../maintenance/2026-09-27-security-migration.md)。
+
 ### 交互式终端
 
 浏览器的 WebSocket 无法带 `Authorization` 头，所以先用令牌 `POST /api/terminal/ticket` 取票据，再连 `wss://…/api/terminal?ticket=…`。票据只能用一次，30 秒过期；长期令牌不进任何 URL。WebSocket 由 `server/lib/websocket.mjs` 自己实现（部署不带 node_modules），只支持单连接所需的部分：掩码帧、分片、ping/pong、关闭握手，服务端每 25 秒 ping 一次，对端两次不回应即断开；单条消息上限 2 MB（给编辑器保存文件留的）。
@@ -138,6 +146,8 @@ npm run deploy:backend -- --full  # 另外强制跑一遍真实 Docker 集成测
 - `{kind:'task', language:'c'|'cpp'|'go'|'python', code, cols?, rows?}`：在一个一次性容器里编译并运行 `code`，同一语言再次运行会结束上一次。
 
 浏览器 → 服务（文本帧 JSON）：`{type:'input',data}`（≤ 64 KiB）、`{type:'resize',cols,rows}`、`{type:'terminate'}`（结束 Shell 或程序）、`{type:'read',id,path}` 与 `{type:'write',id,path,content}`（`code 文件名`，只对 Shell，≤ 1 MB 的 UTF-8 文本）。
+
+文件操作每个 Shell 串行，最多等待 8 项；宿主普通 Docker CLI 最多 4 并发、16 项等待，清理另有 2 并发、16 项等待，排队最长 10 秒。队列满载明确失败，断连取消未执行请求；已经开始的原子保存会完成后再生成快照。所有消息均限制发送缓冲。
 
 文件保存先完整接收，再以同目录临时文件原子替换，保留原文件权限并跟随符号链接；传输不完整不会提前截断原文件。替换会更换 inode，因此不保留硬链接关系；多页面同时编辑没有版本冲突提示，以最后一次成功保存为准。PTY 待写入队列超过 1 MiB 时以 `input_limit` 挂断，避免输入持续积压。
 

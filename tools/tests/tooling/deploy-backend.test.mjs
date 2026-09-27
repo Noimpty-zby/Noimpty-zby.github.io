@@ -52,6 +52,8 @@ const setup = ({ images = ['nanaly-runner:old', 'nanaly-runner:older'] } = {}) =
   writeFileSync(path.join(src, 'source/js/learning-lab.js'), 'reference code')
   writeFileSync(path.join(src, 'tools/deploy/backend-remote.sh'), readFileSync(script))
   writeFileSync(path.join(src, 'tools/tests/server/docker.integration.test.mjs'), 'integration tests')
+  writeFileSync(path.join(src, 'tools/schedule-data.cjs'), 'synthetic schedule schema')
+  writeFileSync(path.join(src, 'tools/migrate-private-content.mjs'), 'synthetic migration tool')
   const archive = path.join(dir, 'a.tgz')
   const repack = (files = {}) => {
     for (const [rel, contents] of Object.entries(files)) writeFileSync(path.join(src, rel), contents)
@@ -148,7 +150,7 @@ test('retrying a failed integration test retests the cached image and leaves pro
 })
 
 test('changed backend, test, reference or deploy inputs require testing even with the same image', t => {
-  for (const file of ['server/app.mjs', 'tools/tests/server/docker.integration.test.mjs', 'source/js/learning-lab.js', 'tools/deploy/backend-remote.sh']) {
+  for (const file of ['server/app.mjs', 'tools/tests/server/docker.integration.test.mjs', 'source/js/learning-lab.js', 'tools/deploy/backend-remote.sh', 'tools/schedule-data.cjs', 'tools/migrate-private-content.mjs']) {
     const s = setup({ images: ['nanaly-runner:old'] }); t.after(s.cleanup)
     const first = s.run(['abc123def456', 'old'])
     assert.equal(first.status, 0, first.stdout + first.stderr)

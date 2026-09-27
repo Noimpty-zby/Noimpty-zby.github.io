@@ -105,25 +105,20 @@ console.log('\n行动日志 · 公开仓库的边界')
 
 check('★★ 对话窗口只读不写：前端不许存在任何往日志里写的路径', () => {
   const src = readFileSync(join(process.cwd(), 'source/js/noimpty-ai.js'), 'utf8')
-  // 这个仓库是公开的（见 source/_data/noimpty-profile.md 开头）。
-  // 主人和她的私聊一旦写进日志就是公开的，所以这条是定死的。
+  // 浏览器只读取后台行动记录，不能把本机私聊自动回写为行动日志。
   assert.ok(!/nanaly-journal[^)]*\b(PUT|POST|contents\/)/i.test(src),
     '对话窗口里出现了往日志写东西的路径 —— 仓库是公开的，聊天内容不许进去')
   assert.ok(!/loadJournal[\s\S]{0,200}githubToken/.test(src),
     '读日志的地方附近出现了 GitHub token，像是要往回写')
 })
 
-console.log('\n行动日志 · 记完要让对话窗口看得见')
+console.log('\n行动日志 · 私有后端边界')
 
-check('★★ 提交之后必须自己叫一次部署，否则她后台干的活要等三天才上线', () => {
-  const run = readFileSync(join(process.cwd(), 'tools/nanaly/run.mjs'), 'utf8')
-  // 用 GITHUB_TOKEN 推的提交不触发 on:push（防递归），而巡逻和回评
-  // 都只发评论、不碰仓库 —— 没人叫部署的话日志就一直躺在仓库里。
-  // 允许带参数：用量记账现在跟日志同车提交，commitJournal 接了个 extra。
-  assert.match(run, /if \(await commitJournal\([^)]*\)\)[\s\S]{0,600}triggerDeploy\(\)/,
-    'commitJournal 之后没有跟着 triggerDeploy —— 对话窗口里的她会一直读到旧日志')
-  assert.match(run, /catch[\s\S]{0,200}没叫动部署/,
-    '叫不动部署时应该只记一笔，不该把整个工作流染红（日志本身没丢）')
+check('浏览器通过鉴权私有API读日志，不依赖静态文件或重新部署', () => {
+  const src = readFileSync(join(process.cwd(), 'source/js/noimpty-search.js'), 'utf8')
+  const loader = src.slice(src.indexOf('  const loadJournal = '), src.indexOf('  const MESSAGES = '))
+  assert.match(loader, /privateContent\('journal'/)
+  assert.doesNotMatch(loader, /fetchResource|nanaly-journal\.json|decryptPayload/)
 })
 
 console.log(`\n${pass} 项通过`)

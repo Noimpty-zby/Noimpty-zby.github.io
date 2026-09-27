@@ -1,3 +1,4 @@
+import { readPrivateContent } from '../private-content-client.mjs'
 // 数据采集：访问统计、评论、新文章。
 // 每一项都自带兜底 —— 取不到就返回 { ok:false, why }，不让整份报告因为一个接口挂掉而失败。
 
@@ -294,16 +295,11 @@ export const getOwnerHeartbeat = async (lookbackDays = 90) => {
 
 // ---------------- 今天的日程 ----------------
 //
-// 读的是仓库里那份 source/_data/schedule.json —— 和网页上编辑的是同一份文件。
-// 网页通过 GitHub API 直接改它，所以这里读到的一定是最新提交的版本。
+// 读取鉴权后端预加载镜像；缺失或失败不当作空日程。
 
 export const getSchedule = async () => {
   try {
-    const { readFileSync, existsSync } = await import('node:fs')
-    const F = 'source/_data/schedule.json'
-    if (!existsSync(F)) return { ok: true, today: [], tomorrow: [], overdue: [], empty: true }
-
-    const data = JSON.parse(readFileSync(F, 'utf8'))
+    const data = readPrivateContent('schedule')
     const { default: { validateScheduleData } } = await import('../schedule-data.cjs')
     validateScheduleData(data)
     const days = data.days

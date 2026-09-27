@@ -111,6 +111,8 @@ const boot = ({ saved = null, innerWidth = 1440, innerHeight = 900, failAt = nul
 
   const window_ = {
     innerWidth, innerHeight, devicePixelRatio: dpr, localStorage,
+    NOIMPTY_GATE: { unlocked: () => true },
+    NANALY_AGENT: { configured: () => true, subscribe() {}, privateContent: async () => { throw new Error('private schedule unavailable') } },
     matchMedia: () => motionQuery, navigator: { connection },
     MAO_CONTROLS: { create: options => {
       controlOptions = options
@@ -960,17 +962,15 @@ await test('★ 出声开关记在本地，下次进来还是那个设置', asyn
 
 console.log('\n她知道什么')
 
-/* 给沙箱装一个 fetch + 解密 + 暗号闸门，模拟站点解锁与否。 */
+/* Provide only the authenticated backend API; static schedule fetching is forbidden. */
 const withSite = (env, { unlocked = true, days = null } = {}) => {
   env.win.NOIMPTY_GATE = { unlocked: () => unlocked }
-  env.win.NOIMPTY_SEARCH = { decryptPayload: async p => p.cipher }
-  const f = async () => ({
-    ok: days !== null,
-    json: async () => ({ alg: 'AES-GCM', cipher: JSON.stringify({ days }) })
-  })
-  // 代码里写的是裸 fetch()，在 vm 里解析到 sandbox 而不是 sandbox.window
-  env.win.fetch = f
-  env.sandbox.fetch = f
+  env.win.NANALY_AGENT = { configured: () => true, subscribe() {}, privateContent: async name => {
+    assert.equal(name, 'schedule')
+    if (days === null) throw new Error('private schedule unavailable')
+    return { revision: 1, data: { days } }
+  } }
+  env.win.fetch = env.sandbox.fetch = () => { throw new Error('must not fetch static schedule') }
 }
 const todayKey = env => {
   const d = new Date(env.clockNow())
@@ -982,7 +982,7 @@ await test('★★ 没解锁就不许播报日程 —— 那是锁在暗号后�
   withSite(env, { unlocked: false, days: { x: [{ text: 'a', done: false }] } })
   let fetched = 0
   const boom = async () => { fetched++; throw new Error('不该来这儿') }
-  env.win.fetch = boom; env.sandbox.fetch = boom
+  env.win.NANALY_AGENT.privateContent = boom
   const { created } = await turnOn(env)
   await new Promise(r => setImmediate(r))
   assert.equal(fetched, 0, '锁着还去取日程了')
@@ -1058,9 +1058,10 @@ await test('★★ 标签页开着跨过午夜，日程摘要要重算', async (
     '跨过午夜还顶着昨天的脸')
 })
 
-await test('★★ 解密要走 NOIMPTY_SEARCH，不许自己再写一份 AES', () => {
-  assert.ok(petSource.includes('NOIMPTY_SEARCH'), '没走站里那份解密')
-  assert.ok(!/crypto\.subtle/.test(petSource), 'Mao 自己写解密了 —— 该和 schedule.js 走同一条路')
+await test('私人日程只经已鉴权后端读取，不请求静态密文或另写解密', () => {
+  assert.match(petSource, /NANALY_AGENT\.privateContent\('schedule'/)
+  const loader = petSource.slice(petSource.indexOf('  const loadState ='), petSource.indexOf('  const moodFace ='))
+  assert.doesNotMatch(loader, /crypto\.subtle|schedule\/data\.json|decryptPayload|fetch\(/)
   assert.ok(petSource.includes('NOIMPTY_GATE'), '没检查暗号闸门就去取数据')
 })
 
@@ -1336,10 +1337,10 @@ await test('a closed site gate clears cached schedule state before later mood re
   env.win.MAO_PET.say('旧缓存不能回来')
   assert.equal(model.face, cfg.faces[cfg.restFace])
 })
-await test('a schedule response decrypted after the site gate closes is discarded', async () => {
+await test('a backend schedule response arriving after the site gate closes is discarded', async () => {
   const env = boot(); let release
   withSite(env, { days: { [todayKey(env)]: [{ done: true, autoWhy: '你发了文章' }] } })
-  env.win.NOIMPTY_SEARCH.decryptPayload = payload => new Promise(resolve => { release = () => resolve(payload.cipher) })
+  env.win.NANALY_AGENT.privateContent = () => new Promise(resolve => { release = () => resolve({ revision: 1, data: { days: { [todayKey(env)]: [{ done: true, autoWhy: '你发了文章' }] } } }) })
   await turnOn(env)
   env.win.NOIMPTY_GATE = { unlocked: () => false }
   release(); await tick()
@@ -1587,7 +1588,7 @@ await test('读日程当前快照免网络请求，编辑完成触发一次庆�
   const env = boot(), tasks = [{ id: 'one', done: false }, { id: 'two', done: false }]
   let requests = 0
   env.win.NOIMPTY_SCHEDULE = { snapshot: () => ({ days: { [todayKey(env)]: tasks } }) }
-  env.sandbox.fetch = () => { requests++; throw new Error('snapshot should avoid fetch') }
+  env.win.NANALY_AGENT.privateContent = () => { requests++; throw new Error('snapshot should avoid backend read') }
   await turnOn(env); assert.equal(requests, 0)
   const completed = tasks.map(task => ({ ...task, done: true }))
   emitSchedule(env, completed); flushTyping(env)
@@ -1805,7 +1806,7 @@ await test('小游戏期间单击归互动、双击仍可打开 Nana 并停止�
 
 const fakeActivity = env => {
   let value = { id: '', phase: 'idle', text: '', busy: false, current: null }
-  env.win.NANALY_AGENT = { activity: () => value }
+  env.win.NANALY_AGENT = { ...env.win.NANALY_AGENT, activity: () => value }
   return next => {
     value = { current: null, busy: next.phase === 'thinking', ...next }
     if (value.busy && !value.current && value.phase === 'thinking') value.current = { id: value.id, phase: value.phase, text: value.text }
@@ -1897,9 +1898,9 @@ await test('辅助日程正文悬挂会超时释放共享请求，重试成功�
   const env = boot()
   withSite(env, { days: {} })
   let releaseBody, signal
-  env.sandbox.fetch = async (_, options) => {
-    signal = options.signal
-    return { ok: true, json: () => new Promise(resolve => { releaseBody = resolve }) }
+  env.win.NANALY_AGENT.privateContent = async (name, options) => {
+    assert.equal(name, 'schedule'); signal = options.signal
+    return new Promise(resolve => { releaseBody = data => resolve({ revision: 1, data }) })
   }
   const pending = env.win.MAO_PET.testLoadState()
   await tick()

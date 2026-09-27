@@ -7,3 +7,9 @@ db.json
 report.html
 report-subject.txt
 report-skip.txt
+
+# Private documents are stored by the authenticated backend. Never re-add originals.
+/source/_data/schedule.json
+/source/_data/nanaly-journal.json
+/source/_data/noimpty-profile.md
+/source/_data/nanaly-usage.json

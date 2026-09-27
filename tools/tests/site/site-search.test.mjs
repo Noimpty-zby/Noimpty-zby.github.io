@@ -14,6 +14,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import crypto from 'node:crypto'
+import { encryptEnvelope } from '../../site-crypto.cjs'
 import vm from 'node:vm'
 
 let pass = 0
@@ -24,10 +25,7 @@ const check = async (name, fn) => {
 
 const SRC = readFileSync(join(process.cwd(), 'source/js/noimpty-search.js'), 'utf8')
 
-// 和 scripts/noimpty-lockdown.js 完全一致的加密（那边改了这里会红，
-// privacy-gate.test.mjs 另有一条专门盯这两个常量）
-const SALT = 'noimpty-search-v1'
-const ITER = 120000
+// Use the actual build encryption; browser decryption must interoperate.
 const PASSPHRASE = '开门喵'
 const REAL_XML = `<?xml version="1.0" encoding="utf-8"?>
 <search>
@@ -35,14 +33,7 @@ const REAL_XML = `<?xml version="1.0" encoding="utf-8"?>
   <entry><title>Linux 命令行第三章</title><url>/2026/09/05/linux3/</url><content>一棵树、两个符号</content></entry>
 </search>`
 
-const seal = (text, pw) => {
-  const key = crypto.pbkdf2Sync(pw, SALT, ITER, 32, 'sha256')
-  const iv = crypto.randomBytes(12)
-  const c = crypto.createCipheriv('aes-256-gcm', key, iv)
-  const body = Buffer.concat([c.update(text, 'utf8'), c.final()])
-  return Buffer.concat([iv, body, c.getAuthTag()]).toString('base64')
-}
-const envelope = JSON.stringify({ v: 1, alg: 'AES-GCM', kdf: `PBKDF2-SHA256/${ITER}`, data: seal(REAL_XML, PASSPHRASE) })
+const envelope = encryptEnvelope(REAL_XML, PASSPHRASE)
 
 /* 把整个 noimpty-search.js 跑起来。
  * DOMParser 在 node 里没有，给个够用的替身（只认 entry/title/url/content）。 */

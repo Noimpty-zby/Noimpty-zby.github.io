@@ -216,7 +216,7 @@ export const writeOpening = async ({ traffic, comments, newPosts, health, schedu
   /* 她自己今天干了什么。以前这份开场白只有「站上发生了什么」——
    * 于是主人晚上收到的信里，她像个从没出过门的观察员，
    * 而实际上早上九点巡逻的、下午回评论的都是她。 */
-  const mine = digest({ limit: 10, sinceDays: 2 })
+  const mine = digest({ limit: 10, sinceDays: 2, private: true })
   if (traffic.ok) {
     facts.push(traffic.visitors != null
       ? `访问：${traffic.visitors} 个访客、${traffic.pageviews} 次浏览`

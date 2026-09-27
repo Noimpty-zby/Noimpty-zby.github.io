@@ -1,37 +1,12 @@
-/* 日程表：月视图日历 + 点某天写安排 + 保存回仓库
- *
- * 存储策略（这是这个页面唯一需要理解的地方）：
- *
- *   真身    source/_data/schedule.json     ← 仓库里的唯一真相，每晚的日报也读它
- *   浏览器读 /schedule/data.json            ← 构建时从真身生成的副本
- *   浏览器写 GitHub Contents API            ← 直接往真身提交，随后自动部署
- *
- * 写操作需要一个能改仓库的 token。它复用娜娜莉那套 AES-GCM 保险箱
- * （PBKDF2 派生密钥、要密码解锁、只存密文），不硬编码、不进代码仓库。
- *
- * 三个必须理解的坑（都踩过了，别再简化掉）：
- *
- * 1. 保存不是覆盖，是三方合并。
- *    每晚的定时任务会自动勾任务并提交，手机上也可能改过。如果这里直接
- *    「读最新 sha → 整个文件覆盖」，那个 sha 永远是最新的、永远不冲突，
- *    结果就是把别人的改动无声抹掉。所以记下打开页面时的基准版本，
- *    保存时和远端做三方合并：同一字段冲突以我为准，互不冲突的改动都保留。
- *
- * 2. 读不到远端就绝不允许保存。
- *    以前 fetch 失败会静默变成空日程，你加一条再保存 = 整个仓库的日程被清空。
- *
- * 3. pjax 不会重新执行本脚本。
- *    从首页点「日程」进来时，DOM 换了但脚本不再跑，页面会是空白的。
- *    所以入口必须是 mount()，并挂在 pjax:complete 上。
- */
+/* 日程从鉴权后端读取并以版本号保存。本地草稿保留三方合并基线，
+ * 不再读取静态 JSON，也不再向公开 GitHub 仓库提交任务内容。
+ * 保存期间继续输入的改动仍保留为草稿。 */
 (() => {
   'use strict'
   if (window.NANALY_BACKUP_PENDING) return
 
   if (window.NOIMPTY_SCHEDULE) return
 
-  const REPO = (window.NOIMPTY_SCHEDULE_REPO || 'Noimpty-zby/Noimpty-zby.github.io')
-  const DATA_PATH = 'source/_data/schedule.json'
   const LS_CACHE = 'noimpty-schedule-cache-v1'
 
   const esc = s => String(s == null ? '' : s)
@@ -79,7 +54,7 @@
   let root = null
   let today = beijingParts()
   let data = { updatedAt: '', days: {} }
-  let baseline = null        // 打开页面时仓库里的样子，合并的基准。null = 没读到，不许保存
+  let baseline = null        // 打开页面时后端中的样子，合并的基准。null = 没读到，不许保存
   let dirty = false
   let saving = false
   let viewY = today.y
@@ -95,6 +70,10 @@
   let loaded = false
   let loadPending = null
   let cacheError = false
+  let dataEpoch = 0
+  let dataIdentity = null
+  const memoryCaches = new Map(), pendingCacheWrites = new Set()
+  const connectionIdentity = () => window.NANALY_AGENT?.identity?.() || null
 
   const cloneDays = d => JSON.parse(JSON.stringify(d || {}))
 
@@ -125,7 +104,7 @@
     } catch (_) { return false }
   }
   const scheduleSnapshot = () => {
-    if (!loaded || !scheduleUnlocked()) return null
+    if (!loaded || !scheduleUnlocked() || !dataIdentity || dataIdentity !== connectionIdentity()) return null
     const days = {}
     for (const day of Object.keys(data.days || {}).sort()) {
       if (!validCalendarDay(day) || !Array.isArray(data.days[day])) continue
@@ -151,19 +130,30 @@
       window.dispatchEvent(new EventType('noimpty:schedule-updated', { detail: { ...snapshot, source } }))
     } catch (_) {}
   }
-  const readCache = () => {
+  const readCacheStore = () => {
     try {
       const value = JSON.parse(localStorage.getItem(LS_CACHE) || 'null')
-      return validData(value) ? value : null
-    } catch (_) { return null }
+      if (value?.version === 2 && value.accounts && typeof value.accounts === 'object' && !Array.isArray(value.accounts)) return value
+      // Old drafts have no trustworthy account binding. Keep them for explicit recovery,
+      // but never infer their owner from the next connection.
+      return { version: 2, accounts: {}, ...(validData(value) ? { legacy: value } : {}) }
+    } catch (_) { return { version: 2, accounts: {} } }
   }
-  // dirty 必须跟着缓存一起存。否则「加了几条 → 刷新」之后，
-  // 内容还在但按钮显示「已同步」且点不动，那几条永远推不上去。
+  const readCache = identity => {
+    const value = pendingCacheWrites.has(identity) ? memoryCaches.get(identity) : readCacheStore().accounts[identity]
+    return validData(value) ? value : null
+  }
+  // Persist each draft with its own server namespace and merge baseline. Keep other
+  // accounts and unbound legacy drafts intact, including during connection switches.
   const writeCache = () => {
+    if (!dataIdentity) return
+    const value = { updatedAt: data.updatedAt, days: cloneDays(data.days), _dirty: dirty, _base: baseline && cloneDays(baseline) }
+    memoryCaches.set(dataIdentity, value); pendingCacheWrites.add(dataIdentity)
     try {
-      localStorage.setItem(LS_CACHE, JSON.stringify({
-        updatedAt: data.updatedAt, days: data.days, _dirty: dirty, _base: baseline
-      }))
+      const cache = readCacheStore()
+      for (const identity of pendingCacheWrites) cache.accounts[identity] = memoryCaches.get(identity)
+      localStorage.setItem(LS_CACHE, JSON.stringify(cache))
+      pendingCacheWrites.clear()
       cacheError = false
     } catch (_) { cacheError = true }
   }
@@ -171,27 +161,22 @@
   const loadData = () => {
     if (loadPending) return loadPending
     // The gate reloads the page after unlocking. Never expose cached private plans before that.
-    if (window.NOIMPTY_GATE && !window.NOIMPTY_GATE.unlocked()) return Promise.resolve('locked')
+    if (window.NOIMPTY_GATE && !scheduleUnlocked()) return Promise.resolve('locked')
     const pending = (async () => {
+      const generation = dataEpoch, requestedIdentity = connectionIdentity()
       let remote = null
       try {
-        const res = await fetch('/schedule/data.json?t=' + Date.now(), {
-          cache: 'no-store',
-          ...(typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
-            ? { signal: AbortSignal.timeout(30000) } : {})
-        })
-        if (res.ok) {
-          const payload = await res.json()
-          remote = payload && payload.alg === 'AES-GCM'
-            ? JSON.parse(await window.NOIMPTY_SEARCH.decryptPayload(payload))
-            : payload
-        }
+        remote = (await window.NANALY_AGENT.privateContent('schedule')).data
       } catch (_) {}
+      const identity = connectionIdentity()
+      if (generation !== dataEpoch || requestedIdentity && identity !== requestedIdentity || window.NOIMPTY_GATE && !scheduleUnlocked()) return 'locked'
+      if (!identity) return 'failed'
       if (!validData(remote)) remote = null
 
-      const cached = dirty
+      const cached = dataIdentity === identity && dirty
         ? { updatedAt: data.updatedAt, days: data.days, _dirty: true, _base: baseline }
-        : readCache()
+        : readCache(identity)
+      dataIdentity = identity
       loaded = true
       // A dirty draft owns its original baseline. Wall-clock timestamps cannot decide
       // whether edits can be discarded, and rebasing without that baseline invents deletions.
@@ -210,14 +195,15 @@
         writeCache()
         return remote ? 'cache-draft' : 'cache-offline'
       }
-      if (cached && (!remote || String(cached.updatedAt || '') > String(remote.updatedAt || ''))) {
+      if (cached && !remote) {
         data = { updatedAt: cached.updatedAt || '', days: cloneDays(cached.days) }
-        // A successfully saved cache may be ahead of the deployed JSON.
+        // An offline cache is a draft aid; online state always comes from the backend.
         baseline = validDays(cached._base) ? cloneDays(cached._base) : (remote ? cloneDays(remote.days) : null)
         dirty = false
         return remote ? 'cache-newer' : 'cache-offline'
       }
       if (!remote) {
+        loaded = false
         baseline = null
         data = { updatedAt: '', days: {} }
         dirty = false
@@ -338,7 +324,7 @@
     return { day, task: result }
   }
 
-  /* base = 我打开页面时仓库的样子；mine = 我现在手上的；theirs = 此刻仓库里的。
+  /* base = 我打开页面时后端的样子；mine = 我现在手上的；theirs = 此刻后端中的。
    * 同一字段冲突时本地优先，独立改动都保留。删除遇到修改时保留修改。 */
   const mergeDays = (base, mine, theirs) => {
     const B = indexTasks(base), M = indexTasks(mine), T = indexTasks(theirs)
@@ -376,59 +362,17 @@
     return out
   }
 
-  // ---------------- 保存到仓库 ----------------
-
-  const token = () => {
-    try { return (window.NANALY && window.NANALY.githubToken && window.NANALY.githubToken()) || null }
-    catch (_) { return null }
-  }
-  // 三种「拿不到 token」是三件不同的事，提示必须分清楚，
-  // 否则「保险箱明明开着却一直叫你去解锁」，你会陷在死循环里。
-  const hasVault = () => {
-    try { return !!localStorage.getItem('nanaly-vault-v1') } catch (_) { return false }
-  }
-  const vaultLocked = () => {
-    try { return !!(window.NANALY && window.NANALY.isLocked && window.NANALY.isLocked()) }
-    catch (_) { return false }
-  }
-
-  const gh = async (path, init = {}) => {
-    const t = token()
-    if (!t) throw new Error(!hasVault() ? 'NO_VAULT' : (vaultLocked() ? 'LOCKED' : 'NO_TOKEN'))
-    const res = await fetch(`https://api.github.com/repos/${REPO}/${path}`, {
-      ...init,
-      headers: {
-        Authorization: `Bearer ${t}`,
-        Accept: 'application/vnd.github+json',
-        'Content-Type': 'application/json',
-        ...(init.headers || {})
-      },
-      signal: AbortSignal.timeout(30000)
-    })
-    const body = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(`${res.status} ${body.message || ''}`.trim())
-    return body
-  }
-
-  // btoa 只吃 latin1，中文要先转 UTF-8 字节
-  const toBase64 = str => {
-    const bytes = new TextEncoder().encode(str)
-    let bin = ''
-    bytes.forEach(b => { bin += String.fromCharCode(b) })
-    return btoa(bin)
-  }
-  const fromBase64 = b64 => {
-    const bin = atob(String(b64 || '').replace(/\s+/g, ''))
-    const bytes = Uint8Array.from(bin, c => c.charCodeAt(0))
-    return new TextDecoder().decode(bytes)
-  }
+  // ---------------- 保存日程 ----------------
 
   const save = async () => {
     if (saving || !dirty) return
     if (!baseline) {
-      status('刚才没能读到仓库里的日程，现在保存会把别的日子覆盖掉。先刷新页面，读到了再保存。', 'bad')
+      status('刚才没能读到后端中的日程，现在保存会把别的日子覆盖掉。先刷新页面，读到了再保存。', 'bad')
       return
     }
+    const generation = dataEpoch, identity = dataIdentity, agent = window.NANALY_AGENT
+    const current = () => generation === dataEpoch && identity && identity === dataIdentity && identity === connectionIdentity() && agent === window.NANALY_AGENT && (!window.NOIMPTY_GATE || scheduleUnlocked())
+    if (!current()) return
     const saveDays = cloneDays(data.days)
     const saveBaseline = cloneDays(baseline)
     const saveChanges = changeCount
@@ -436,67 +380,44 @@
     render()
     try {
       status('正在读取远端版本…')
-      const cur = await gh(`contents/${DATA_PATH}`)
-
-      // 远端内容必须真的解得出来。解不出来就停手 ——
-      // 把「读失败」当成「远端是空的」去合并，等于删光别人的东西。
-      if (cur.encoding !== 'base64' || !cur.content) throw new Error('REMOTE_UNREADABLE')
-      let theirs
-      try {
-        const obj = JSON.parse(fromBase64(cur.content))
-        if (!validData(obj)) {
-          throw new Error('shape')
-        }
-        theirs = obj.days
-      } catch (_) { throw new Error('REMOTE_UNREADABLE') }
-
+      const cur = await agent.privateContent('schedule')
+      if (!current()) return
+      if (!validData(cur.data)) throw new Error('REMOTE_UNREADABLE')
+      const theirs = cur.data.days
       const theyMoved = normDays(theirs) !== normDays(saveBaseline)
       const merged = mergeDays(saveBaseline, saveDays, theirs)
-
-      status('正在提交…')
-      const payload = JSON.stringify({ updatedAt: new Date().toISOString(), days: merged }, null, 2) + '\n'
-      await gh(`contents/${DATA_PATH}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          message: `日程更新 ${beijingParts().key}`,
-          content: toBase64(payload),
-          sha: cur.sha
-        })
+      status('正在保存…')
+      const payload = { ...cur.data, updatedAt: new Date().toISOString(), days: merged }
+      const saved = await agent.privateContent('schedule', {
+        method: 'PUT', body: { revision: cur.revision, data: payload }
       })
+      if (!current()) return
+      if (!validData(saved.data)) throw new Error('REMOTE_UNREADABLE')
 
       // Edits made while the PUT was in flight must remain a draft, not be
       // replaced by the older submitted snapshot.
       const remaining = mergeDays(saveDays, data.days, merged)
       baseline = cloneDays(merged)
       dirty = normDays(remaining) !== normDays(merged)
-      data = dirty ? { updatedAt: new Date().toISOString(), days: remaining } : JSON.parse(payload)
+      data = dirty ? { updatedAt: new Date().toISOString(), days: remaining } : saved.data
       changeCount = dirty ? Math.max(1, changeCount - saveChanges) : 0
       writeCache()
       publishSchedule('save')
       status(dirty ? '刚才的改动已保存。保存期间又有新改动，请再保存一次。' : theyMoved
-        ? '已保存。你打开这页之后仓库里也有改动（多半是娜娜莉自动勾的），我把两边合起来了，都在。'
-        : '已保存。站点大约 1–2 分钟后更新，晚上的邮件就会带上这些安排了。', 'ok')
+        ? '已保存。你打开这页之后后端中也有改动（多半是娜娜莉自动勾的），我把两边合起来了，都在。'
+        : '已保存。后端已更新，其他设备和晚上的邮件会读取这份安排。', 'ok')
     } catch (e) {
+      if (!current()) return
       const msg = String(e.message || e)
-      if (msg === 'NO_VAULT') {
-        status('这台浏览器还没配过娜娜莉的保险箱。点左下角猫爪 → 齿轮，设好密码并填上 GitHub Token，才能从网页保存日程。', 'warn')
-      } else if (msg === 'LOCKED') {
-        status('还没解锁。点左下角猫爪，输解锁密码打开娜娜莉的保险箱（GitHub token 存在里面）。', 'warn')
-        try { if (window.NANALY && window.NANALY.requestUnlock) window.NANALY.requestUnlock() } catch (_) {}
-      } else if (msg === 'NO_TOKEN') {
-        status('保险箱开着，但里面没有 GitHub Token。点猫爪 → 齿轮，把 token 填进去再保存。', 'warn')
-      } else if (msg === 'REMOTE_UNREADABLE') {
-        status('读不出仓库里那份日程的内容，为安全起见没有提交。刷新页面再试一次。', 'bad')
-      } else if (/^409/.test(msg)) {
-        status('远端刚好也在写，撞上了。再点一次「保存到仓库」就行。', 'warn')
-      } else if (/^40[13]/.test(msg)) {
-        status(`GitHub 拒绝了：${msg}。多半是 token 权限不够 —— 需要这个仓库的 Contents 读写。`, 'bad')
+      if (msg === 'REMOTE_UNREADABLE') {
+        status('后端日程格式不正确，没有覆盖现有草稿。请刷新后重试。', 'bad')
+      } else if (e.status === 409) {
+        status('另一设备刚刚保存了日程。请再点一次保存，会重新读取并合并。', 'warn')
       } else {
         status('保存失败：' + msg + '（你写的东西还在，没有丢）', 'bad')
       }
     } finally {
-      saving = false
-      render()
+      if (generation === dataEpoch) { saving = false; render() }
     }
   }
 
@@ -751,7 +672,7 @@
       .reduce((n, l) => n + (Array.isArray(l) ? l.filter(t => !t.done).length : 0), 0)
     const overdue = overdueList()
 
-    const saveText = saving ? '保存中…' : (dirty ? '保存到仓库' : '已同步')
+    const saveText = saving ? '保存中…' : (dirty ? '保存日程' : '已同步')
 
     root.innerHTML = `
       <div class="sch-wrap">
@@ -863,16 +784,16 @@
         </details>
 
         <div class="sch-status" data-role="status"></div>
-        ${dirty && cacheError ? '<p class="sch-status is-warn" role="status">浏览器未能保存本地草稿（存储不可用或空间不足）。改动目前只在此页面内存中，请先保存到仓库，再刷新或关闭网页。</p>' : ''}
+        ${dirty && cacheError ? '<p class="sch-status is-warn" role="status">浏览器未能保存本地草稿（存储不可用或空间不足）。改动目前只在此页面内存中，请先保存日程，再刷新或关闭网页。</p>' : ''}
 
         ${dirty || saving ? `
           <div class="sch-savebar">
-            <span>有 ${changeCount} 处改动还没保存到仓库</span>
-            <button data-act="save" ${saving ? 'disabled' : ''}>${saving ? '保存中…' : '保存到仓库'}</button>
+            <span>有 ${changeCount} 处改动还没保存日程</span>
+            <button data-act="save" ${saving ? 'disabled' : ''}>${saving ? '保存中…' : '保存日程'}</button>
           </div>` : ''}
 
         <div class="sch-tip">
-          安排改完要点「保存到仓库」才会生效。保存后站点约 1–2 分钟更新，
+          安排改完要点「保存日程」才会生效。保存后后端立即更新，
           当晚娜娜莉的邮件里就会带上当天的任务提醒。
         </div>
       </div>`
@@ -1143,7 +1064,7 @@
   // pjax 换页不触发 beforeunload，这里只提示一句，不拦（拦不干净）
   window.addEventListener('pjax:send', () => {
     if (dirty && root) {
-      try { console.info(cacheError ? '[日程] 本地缓存失败，改动只在当前页面内存中。请回到 /schedule/ 保存到仓库后再关闭网页。' : '[日程] 有还没保存到仓库的改动，已存在本地，回到 /schedule/ 还能看到。') } catch (_) {}
+      try { console.info(cacheError ? '[日程] 本地缓存失败，改动只在当前页面内存中。请回到 /schedule/ 保存日程后再关闭网页。' : '[日程] 有还没保存日程的改动，已存在本地，回到 /schedule/ 还能看到。') } catch (_) {}
     }
   })
 
@@ -1160,20 +1081,33 @@
       loadData().then(src => {
         render()
         if (src === 'cache-draft') {
-          status('已恢复本地未保存改动，并与站点版本合并。请保存到仓库。', 'warn')
+          status('已恢复本地未保存改动，并与站点版本合并。请保存日程。', 'warn')
         } else if (src === 'cache-newer' || src === 'cache-only') {
-          status('显示的是你本地还没部署完的版本，站点更新后会一致。', 'warn')
+          status('显示的是本地缓存，连接后会读取后端最新版本。', 'warn')
         } else if (src === 'cache-offline') {
-          status('没连上站点，显示的是本地缓存。保存前会先和仓库合并，不会覆盖别的日子。', 'warn')
+          status('未连接私有后端，显示本地缓存。连接后再保存，会先合并远端改动。', 'warn')
         } else if (src === 'locked') {
           status('请先输入站点暗号，再读取日程。', 'warn')
         } else if (src === 'failed') {
-          status('读不到仓库里的日程（网络或部署问题），现在不能保存 —— 否则会把已有安排冲掉。刷新试试。', 'bad')
+          status('请在娜娜莉工作室连接私有后端，再读取或保存日程。已有本地草稿会保留。', 'bad')
         }
       })
     }
   }
 
+  let backendIdentity = connectionIdentity()
+  window.NANALY_AGENT?.subscribe(state => {
+    const identity = state.connected && state.revision !== null ? connectionIdentity() : null
+    if (identity === backendIdentity) return
+    backendIdentity = identity
+    dataEpoch++
+    if (loaded) writeCache()
+    loaded = false; loadPending = null; data = { updatedAt: '', days: {} }; baseline = null; dirty = false
+    dataIdentity = null; saving = false; changeCount = 0; pendingStatus = null
+    editFor = null; condFor = null
+    publishSchedule('disconnect'); render()
+    if (identity && root) loadData().then(() => render())
+  })
   mount()
   window.addEventListener('pjax:complete', () => setTimeout(mount, 60))
 
@@ -1184,6 +1118,6 @@
     dirty: () => dirty,
     reload: () => loadData().then(r => { render(); return r }),
     mergeDays,
-    clearCache: () => { try { localStorage.removeItem(LS_CACHE) } catch (_) {} return '本地缓存已清' }
+    clearCache: () => { memoryCaches.clear(); pendingCacheWrites.clear(); try { localStorage.removeItem(LS_CACHE) } catch (_) {} return '本地缓存已清' }
   })
 })()

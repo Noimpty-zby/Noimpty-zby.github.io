@@ -1,35 +1,13 @@
-// 娜娜莉的行动日志 —— 她那几个分身靠这一本认出彼此。
-//
-// 在这之前，这个站上有八个她，而且彼此完全不认识：
-// 早上巡逻的那个不知道昨晚回评的那个说了什么；周日写随笔的那个不知道
-// 自己这周给谁写过批注（只能从 git log 里猜）；而浏览器里陪主人聊天的那个
-// 对前面七个一无所知 —— 主人问「你今天干嘛了」，她只能说不知道，或者编。
-//
-// 现在每个分身干完活往这里写一条，开工前读一遍。
-//
-// 四条规矩：
-//
-//   1. **只记「她做了什么」。** 这个仓库是公开的（source/_data/noimpty-profile.md
-//      开头那句提醒就是为这个写的），主人和她的私聊一个字都不许进来。
-//      对话窗口那个分身**只读不写**，这是定死的。
-//   2. 一条一句话，人能读懂。它会原样拼进提示词，不是给机器解析的结构体。
-//   3. 没做成的事也记 —— 被限流所以没敢说话、格式不对所以这周没发，
-//      那同样是「她今天干了什么」，而且往往比成功的那条更值得她自己知道。
-//   4. 写进来的东西最终会出现在她公开发的评论和文章里。所以别往 what 里
-//      塞读者原话、外链、或者任何没过滤的外部输入。
+import { randomUUID } from 'node:crypto'
+import { readPrivateContent, appendPrivateContent, flushPrivateContent } from '../private-content-client.mjs'
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
-import { pushWithRetry, useNanalyIdentity } from './git.mjs'
-
-export const FILE = 'source/_data/nanaly-journal.json'
+export const FILE = 'journal' // Logical backend record; never a repository path.
 
 // 存多少：够周日那篇随笔回看一整周，又不至于让文件无限长
 export const KEEP = 150
 export const KEEP_DAYS = 45
 
 const DRY = process.argv.includes('--dry')
-let pendingWriteError = null
 
 export const WHO = {
   reply: '回评',
@@ -67,20 +45,8 @@ export const pruneEntries = (entries, now = Date.now()) => {
 }
 
 export const readJournal = () => {
-  try {
-    const raw = JSON.parse(readFileSync(FILE, 'utf8'))
-    const list = Array.isArray(raw) ? raw : raw?.entries
-    if (!Array.isArray(list)) throw new Error('日志缺少 entries 数组')
-    return pruneEntries(list)
-  } catch (error) {
-    if (error.code === 'ENOENT') return []
-    throw new Error('行动日志读取失败，保留原文件：' + String(error.message).slice(0, 100))
-  }
-}
-
-const writeJournal = entries => {
-  if (!existsSync('source/_data')) mkdirSync('source/_data', { recursive: true })
-  writeFileSync(FILE, JSON.stringify({ v: 1, entries }, null, 2) + '\n')
+  const raw = readPrivateContent('journal')
+  return pruneEntries(Array.isArray(raw) ? raw : raw.entries)
 }
 
 /* 记一笔。
@@ -93,17 +59,10 @@ const writeJournal = entries => {
 export const note = (who, what) => {
   const text = String(what || '').replace(/\s+/g, ' ').trim().slice(0, 160)
   if (!text) return null
-  const entry = { ts: Date.now(), at: bjStamp(), who, what: text }
-  if (DRY) { console.log(`  [演练] 会记一笔：${WHO[who] || who} — ${text}`); return entry }
-  try {
-    writeJournal(pruneEntries([...readJournal(), entry]))
-    console.log(`  记了一笔：${WHO[who] || who} — ${text}`)
-  } catch (e) {
-    // The comment may already be sent; let the remaining work continue, but
-    // surface this failure when the entry point flushes the journal.
-    pendingWriteError = e
-    console.log(`  日志写不进去（${String(e.message || e).slice(0, 80)}），不影响刚才那件事`)
-  }
+  const entry = { id: randomUUID(), ts: Date.now(), at: bjStamp(), who, what: text }
+  if (DRY) { console.log('  [演练] 会增加一条私密行动记录'); return entry }
+  appendPrivateContent('journal', entry, pruneEntries)
+  console.log('  已暂存一条私密行动记录')
   return entry
 }
 
@@ -125,43 +84,11 @@ export const journalDigest = (entries, { limit = 12, sinceDays = 0, now = Date.n
 }
 
 /** 直接读文件拼摘要。绝大多数调用方要的都是这个。 */
-export const digest = opts => journalDigest(readJournal(), opts)
+export const digest = (opts = {}) => journalDigest(readJournal().filter(entry => opts.private === true || entry.publicAllowed === true), opts)
 
-/* 提交。
- *
- * 由 run.mjs 在一次运行的最后统一调一次，而不是每个分身各提交一次 ——
- * 回评每三小时一班，一天最多八次，各自提交就是一天八个提交八次部署。
- * 那几个本来就要提交东西的分身（批注、资讯、随笔）只 add 自己那个路径，
- * 所以日志不会被它们顺手带走，留到这里一起走。 */
-/* extra 里是跟这一轮一起产生、该同车提交的数据文件（现在是用量记账）。
- * 单独为它再开一次提交推送不划算 —— 每次推送都可能撞上别处的提交要重试。 */
-export const commitJournal = async ({ run = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: 'pipe' }), extra = [] } = {}) => {
-  if (DRY) { console.log('  [演练] 不提交行动日志'); return false }
-  if (pendingWriteError) throw new Error('行动日志未能保存：' + String(pendingWriteError.message).slice(0, 140))
-  try {
-    const files = [...new Set([FILE, ...extra].filter(f => typeof f === 'string' && existsSync(f)))]
-    /* 先看有没有变化，**再**动 git 身份。
-     *
-     * useNanalyIdentity 会往仓库的 .git/config 里写 user.name / user.email。
-     * 在 runner 上无所谓，在主人自己的机器上就是把他的提交身份改掉了 ——
-     * 而这个函数现在每次运行都会被调到（不像批注、随笔那样偶尔才跑一次）。
-     * 顺序反过来的话，一次「什么都没发生」的空跑也会留下这个副作用。 */
-    const changed = files.filter(f => run('status', '--porcelain', '--', f).trim())
-    if (!changed.length) return false
-    useNanalyIdentity(run)
-    run('add', ...changed)
-    // 提交信息按实际改了什么写，别让一次纯记账的提交谎称更新了日志。
-    const what = changed.includes(FILE) ? (changed.length > 1 ? '行动日志和用量记账' : '行动日志') : '用量记账'
-    run('commit', '-m', '娜娜莉：更新' + what, '--only', '--', ...changed)
-    pushWithRetry(run, what)
-    console.log(`  ${what}已提交并推送`)
-    /* 返回值的含义是「有没有东西需要部署」，不是「有没有提交过」。
-     * 用量记账不发布，只有它变了的那种运行不该白叫一次部署。 */
-    if (!changed.includes(FILE)) return false
-    return true
-  } catch (e) {
-    // An ephemeral runner cannot promise to recreate these records next time:
-    // completed comments are de-duplicated. Surface the failure to the workflow.
-    throw new Error('行动日志提交失败：' + String(e.message || e).slice(0, 160))
-  }
+// Flush pending additions against the latest backend revision; private records
+// never enter git or trigger a static-site deployment.
+export const commitJournal = async () => {
+  if (DRY) return false
+  return flushPrivateContent('journal')
 }

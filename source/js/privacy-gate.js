@@ -19,16 +19,19 @@
 
   const privacy = window.NOIMPTY_PRIVACY || { entries: [], publicPaths: ['/'], lockAllExceptPublic: true }
 
-  /* 校验哈希由构建侧发出（scripts/noimpty-lockdown.js），不写死在这里。
-   *
-   * 因为暗号有两个用途：开门，和解密 search.xml。两处各存一份的话，
-   * 改了其中一个就会出现「门能开、但搜索永远解不开」这种指不到原因的故障。
-   * 下面那个常量只是兜底 —— 构建时没设 NOIMPTY_PASSPHRASE 时用它。 */
-  const expectedHash = privacy.passHash
-    || '5a1eee3bcf723aea5c87c85ee62696443505c86e9f0add455c85252d3412d591'
+  // This script runs before noimpty-search.js. Verify the small build envelope
+  // directly with WebCrypto, so unlocking never depends on the search loader.
+  const verification = privacy.unlock
+  const envelope = verification?.envelope
+  const unlockId = typeof verification?.id === 'string' && /^[a-f0-9]{32}$/.test(verification.id) ? verification.id : ''
+  const configured = !!unlockId && !!envelope && envelope.v === 2 && envelope.alg === 'AES-GCM' &&
+    envelope.kdf === 'PBKDF2-SHA256' && envelope.iterations === 600000 &&
+    typeof envelope.salt === 'string' && /^[A-Za-z0-9+/]{22}==$/.test(envelope.salt) &&
+    typeof envelope.data === 'string' && envelope.data.length >= 40 && envelope.data.length <= 1024 &&
+    envelope.data.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(envelope.data)
   const SESSION_FLAG = 'noimpty-private-unlocked'
   const SESSION_PASS = 'noimpty-private-pass'
-  const SESSION_HASH = 'noimpty-private-hash'
+  const SESSION_VERSION = 'noimpty-private-version'
 
   const normalizePath = value => {
     let path = String(value || '/')
@@ -58,8 +61,8 @@
 
   const unlocked = () => {
     try {
-      return window.sessionStorage.getItem(SESSION_FLAG) === 'true' &&
-        window.sessionStorage.getItem(SESSION_HASH) === expectedHash &&
+      return configured && window.sessionStorage.getItem(SESSION_FLAG) === 'true' &&
+        window.sessionStorage.getItem(SESSION_VERSION) === unlockId &&
         !!window.sessionStorage.getItem(SESSION_PASS)
     } catch (_) { return false }
   }
@@ -67,7 +70,7 @@
   const remember = pass => {
     try {
       window.sessionStorage.setItem(SESSION_PASS, pass)
-      window.sessionStorage.setItem(SESSION_HASH, expectedHash)
+      window.sessionStorage.setItem(SESSION_VERSION, unlockId)
       window.sessionStorage.setItem(SESSION_FLAG, 'true')
       return unlocked()
     } catch (_) { return false }
@@ -94,10 +97,23 @@
     })
   }
 
-  const digest = async value => {
-    const bytes = new TextEncoder().encode(value)
-    const result = await window.crypto.subtle.digest('SHA-256', bytes)
-    return Array.from(new Uint8Array(result), byte => byte.toString(16).padStart(2, '0')).join('')
+  const verify = async pass => {
+    if (!configured || !pass) return false
+    const enc = new TextEncoder()
+    const raw = Uint8Array.from(atob(envelope.data), c => c.charCodeAt(0))
+    const salt = Uint8Array.from(atob(envelope.salt), c => c.charCodeAt(0))
+    const material = await window.crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey'])
+    const key = await window.crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: 600000, hash: 'SHA-256' },
+      material, { name: 'AES-GCM', length: 256 }, false, ['decrypt'])
+    try {
+      const plain = await window.crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: raw.slice(0, 12), additionalData: enc.encode('noimpty-site-envelope-v2') }, key, raw.slice(12))
+      return new TextDecoder().decode(plain) === 'noimpty-private-unlock-v2:' + unlockId
+    } catch (error) {
+      if (error.name === 'OperationError') return false
+      throw error
+    }
   }
 
   const mountGate = () => {
@@ -137,16 +153,21 @@
     const input = gate.querySelector('.noimpty-gate__input')
     const button = gate.querySelector('.noimpty-gate__button')
     const error = gate.querySelector('.noimpty-gate__error')
-    input.focus()
+    if (!configured) {
+      input.disabled = true
+      button.disabled = true
+      error.textContent = '本站未配置有效暗号，暂时无法解锁。请配置构建暗号后重新发布。'
+    } else input.focus()
 
     form.addEventListener('submit', async event => {
       event.preventDefault()
+      if (!configured) return
       button.disabled = true
       error.textContent = ''
 
       try {
-        const pass = input.value.trim()
-        if (await digest(pass) === expectedHash) {
+        const pass = input.value
+        if (await verify(pass)) {
           if (!remember(pass)) {
             error.textContent = '浏览器未允许保存本次解锁状态，请允许此站点使用会话存储后重试。'
             return
@@ -167,7 +188,7 @@
       } catch (_) {
         error.textContent = '暂时无法校验，请刷新页面后重试。'
       } finally {
-        button.disabled = false
+        button.disabled = !configured
       }
     })
   }

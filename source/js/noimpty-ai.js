@@ -812,13 +812,12 @@
    *
    * 站上有好几个「她」：每三小时回评论的、每天早上巡逻的、写批注的、
    * 写资讯的、周日写随笔的、每晚发日报的。她们共用一本行动日志
-   * （tools/nanaly/journal.mjs 写，source/_data/nanaly-journal.json 存）。
+   * （自动任务写入私有后端，浏览器凭后端令牌读取）。
    *
    * 在这之前，对话窗口这个她对那六个一无所知 —— 主人问「你今天干嘛了」，
    * 她只能说不知道，或者顺着话编一个。而那六件事**真的是她做的**。
    *
-   * 日志是加密发布的（和 search.xml 同一把暗号，见 lockdown 第 3 节末尾）：
-   * 里面全是文章标题，摊成明文就是一个不用打开页面就能拿到的新口子。
+   * 日志不进入公开仓库或静态构建；读取受后端鉴权与连接状态约束。
    *
    * 这份标签表要和 journal.mjs 里的 WHO 对上。这是浏览器脚本，没法 import，
    * 所以只能抄一份 —— 那边加了新的分身，这里记得同步。
@@ -831,7 +830,7 @@
   let selfLogCache = null
   let selfLogReadAt = 0
   const selfLog = async () => {
-    if (selfLogCache != null && Date.now() - selfLogReadAt < 60000) return selfLogCache
+    // loadJournal owns the cache and validates the current backend session on every call.
     const revision = searchRevision
     let list
     try {
@@ -855,7 +854,7 @@
     }
     const lines = list.slice(-12).map(e =>
       `- ${e.at} ${JOURNAL_WHO[e.who] || e.who}：${e.what}`)
-    selfLogCache = '【我在别的地方干的活 —— 已发布的日志快照，不是实时运行状态】\n'
+    selfLogCache = '【我在别的地方干的活 —— 私有后端的日志快照，不是实时运行状态】\n'
       + '本次读取：' + new Date(selfLogReadAt).toISOString() + '；最新记录：' + list[list.length - 1].at + '\n'
       + lines.join('\n')
       + '\n这些不是别人干的，也不是「后台程序」干的，是你在博客的其它地方干的活。'

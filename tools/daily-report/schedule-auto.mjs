@@ -17,15 +17,13 @@
 // 同时新增 section 条件（某一栏多了一篇），它不需要你猜标题里会出现哪个词 ——
 // 猜错了永远不命中而且界面上一声不吭，是这个功能最主要的失效方式。
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { pushWithRetry, useNanalyIdentity } from '../nanaly/git.mjs'
 import { postPath } from '../nanaly/permalink.mjs'
-import { note, FILE as JOURNAL } from '../nanaly/journal.mjs'
+import { note, commitJournal } from '../nanaly/journal.mjs'
+import { readPrivateContent, replacePrivateContent, flushPrivateContent } from '../private-content-client.mjs'
 import { listPosts, POSTS_DIR } from '../nanaly/posts.mjs'
 import { validateScheduleData } from '../schedule-data.cjs'
-
-const FILE = 'source/_data/schedule.json'
 
 const norm = t => String(t || '').toLowerCase().replace(/\s+/g, '')
 
@@ -142,15 +140,8 @@ const lookupTitle = (map, on) => map.get(String(on || '').replace(/^\/+|\/+$/g, 
  * （下一次日报会补）。其余几类只看仓库里的文章，任何一班都能判。
  */
 export const autoComplete = async ({ comments = { ok: false }, ownerLogin, dry = false } = {}) => {
-  if (!existsSync(FILE)) return { changed: 0, done: [] }
-
-  let data
-  try {
-    data = JSON.parse(readFileSync(FILE, 'utf8'))
-    validateScheduleData(data)
-  } catch (error) {
-    throw new Error('日程数据无效，停止自动完成并保留原文件：' + error.message)
-  }
+  const data = readPrivateContent('schedule')
+  validateScheduleData(data)
   const days = data.days
   const todayKey = bjKey()
 
@@ -218,42 +209,24 @@ export const autoComplete = async ({ comments = { ok: false }, ownerLogin, dry =
   if (dry) return { changed: done.length, done, dry: true }
 
   data.updatedAt = new Date().toISOString()
-  writeFileSync(FILE, JSON.stringify(data, null, 2) + '\n')
+  replacePrivateContent('schedule', data)
   return { changed: done.length, done }
 }
 
-export const commitSchedule = async (done) => {
-  const run = (...a) => execFileSync('git', a, { encoding: 'utf8', stdio: 'pipe' })
+export const commitSchedule = async done => {
   try {
-    // 她替主人勾掉了任务，这也是「她今天干了什么」的一部分 ——
-    // 周日那篇随笔和右下角对话窗口的她都读得到
-    note('schedule', `替主人自动勾掉了 ${done.length} 项日程：${done.slice(0, 3).map(d => `「${d.text}」`).join('、')}`)
-    useNanalyIdentity(run)
-    run('add', FILE, JOURNAL)
-    if (!run('status', '--porcelain', '--', FILE, JOURNAL).trim()) return false
-    run('commit', '-m', `娜娜莉：自动完成 ${done.length} 项日程`, '--only', '--', FILE, JOURNAL)
-
-    // 你可能正好在网页上按了保存 —— 那边直接往 main 提交，这边就会被拒。
-    // 拒了要 rebase 之后重试，不能默默算了，不然这几个勾就永远消失了
-    // （那天的信号已经过去，下次跑也不会再判出来）。
-    pushWithRetry(run, '日程')
-  } catch (e) {
-    console.log('  日程提交失败：' + String(e.message || e).slice(0, 200))
+    if (!await flushPrivateContent('schedule')) return false
+  } catch {
+    console.error('  日程同步失败，服务器上的更改已保留；请重新读取并检查。')
     return false
   }
-
-  /* 推上去了，这几个勾已经安全落地。
-   *
-   * 下面这步失败**不等于**提交失败，所以不能混进上面那个 catch ——
-   * 那样日报会报「自动勾的结果没能提交到仓库，这几项会丢失」，而事实是
-   * 提交好好的，只是线上的日程页还没更新。报错报得不对比不报更麻烦。
-   * 但也不能默默算了：不触发部署，你在页面上会看到「明明勾了却没变」。 */
+  // A later journal failure must not misreport a successfully saved schedule.
   try {
-    const { triggerDeploy } = await import('../nanaly/github.mjs')
-    await triggerDeploy()
-  } catch (e) {
-    console.error('  ⚠️ 日程已提交，但' + String(e.message || e).slice(0, 200))
+    note('schedule', `替主人自动完成了 ${done.length} 项日程`)
+    await commitJournal()
+  } catch {
     process.exitCode = 1
+    console.error('  日程已同步，但私密行动记录保存失败。')
   }
   return true
 }

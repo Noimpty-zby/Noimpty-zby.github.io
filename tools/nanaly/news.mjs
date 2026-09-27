@@ -1,3 +1,4 @@
+import { readPrivateContent } from '../private-content-client.mjs'
 // 三天一期的资讯。娜娜莉自己去搜、自己筛、自己写。
 //
 // 两条硬规矩，决定了这个板块是有用还是垃圾：
@@ -20,21 +21,8 @@ const DIR = 'source/news'
 const DRY = process.argv.includes('--dry')
 const TAVILY_KEY = process.env.TAVILY_API_KEY || ''
 
-/* 四个主题。
- *
- * 前两个是主人明确说「最想知道」的，而且他是**真的会拿去做决定**的 ——
- * 所以这两块走深度思考（pro 模型），每条要写得足够长、必须落到
- * 「这对一个想进 AI Infra / 后端岗的学生意味着什么」。
- * 后两个是学习和动手性质的，flash 够用，短一点也没关系。
- *
- * ⚠️ 这张表是**搜索词的源头**，它决定了 Tavily 会捞回什么。
- * 光改 source/_data/noimpty-profile.md 是不够的 —— profile 只能让她
- * 「把捞回来的东西筛掉」，捞的动作还是照这里搜。
- * 2026-08-26 主人从游戏客户端转到 AI Infra，profile 当天就改了，
- * 但这张表一直留着「游戏客户端 面试 真题 UE C++ 八股 面经」这种查询，
- * 于是接下来每一期都在搜游戏、筛游戏、写游戏 —— 2026-09-04 那期三条全是
- * 米哈游 C++ 面经和多益的游戏客户端岗。搜索费和两次 pro 模型的钱全白花。
- * **以后再换方向，profile 和这张表必须一起改。** */
+// Public topic definitions describe the newsletter, not a person's private history.
+// Private profile text is reduced to fixed anonymous interests before selection.
 export const TOPICS = [
   {
     key: 'jobs',
@@ -42,12 +30,11 @@ export const TOPICS = [
     want: 3,
     deep: true,
     minWords: 120,
-    angle: `他的目标是 **AI Infra / 后端开发**的实习和校招。
-所以「和他有关」的判据是：这条消息能不能改变他投哪家、准备什么、或者对这条路的判断。
-一条大模型融资、发布会、榜单的新闻对他没有意义；
-「某家在扩招推理平台 / 基础设施」、「这类岗位现在到底要求会什么」才值得写 ——
-而且要写清楚是哪条线。
-**游戏行业的岗位一条都别写。方向 2026-08 已经转了，那一类现在是噪音。**`,
+    angle: `面向 **AI Infra / 后端开发**的实习、校招和行业岗位信息。
+优先选择能说明招聘方向、能力要求、工程团队工作内容的材料。
+大模型融资、发布会、榜单没有具体岗位或工程信息时不选。
+写清楚涉及哪类技术岗位，引用素材能够证明的事实；不猜测读者身份或个人求职情况。
+游戏行业岗位不在本栏目范围内。`,
     queries: [
       'AI Infra 基础设施 后端 招聘 实习 校招 岗位',
       '推理平台 训练平台 工程师 招聘 要求 技能栈',
@@ -61,17 +48,11 @@ export const TOPICS = [
     want: 3,
     deep: true,
     minWords: 140,
-    angle: `他要面的是 **AI Infra / 后端岗**，在补的基础是
-Linux → Git → Go → MySQL → Docker → 推理机制，课内还有数据结构和 CSAPP。
-**但他现在的水平很低，别高估**：Linux 命令行学到第三章，Git 到基本循环，
-Go 一行没写过，数据结构刚开篇。
-所以对他有用的是**入门到中段的真题和考点**，以及「项目怎么讲、简历怎么写」——
-他简历上工程侧目前是空的。分布式共识、内核调优这种深水区的八股，
-现在写给他等于白写。
-如果素材里有具体的题目或考点，**必须把题目本身摘出来**，
-并且用一两句说清楚考的是什么、以他现在的水平大概能不能答上。
-「保持自信、好好准备」这种正确的废话一个字都别写。
-**游戏客户端 / UE / 图形学的面经一条都别选。**`,
+    angle: `覆盖 **AI Infra / 后端岗**常见的 Linux、Git、Go、MySQL、Docker 和推理工程基础。
+选择入门到中段的真题、考点以及可验证的项目讲解；复杂内容必须说明前置知识。
+若素材包含具体题目，摘出题目并用一两句解释考查点和难度。
+避免泛泛的求职鼓励；不假定读者的履历、当前学习进度或面试表现。
+游戏客户端、UE、图形学面经不在本栏目范围内。`,
     queries: [
       '后端 面试 真题 面经 Go 并发 Linux 校招',
       'MySQL 索引 事务 慢查询 面试题 后端',
@@ -84,10 +65,10 @@ Go 一行没写过，数据结构刚开篇。
     title: '工程实践与踩坑',
     want: 2,
     minWords: 60,
-    angle: `Linux、Git、Go、MySQL、Docker 这几门课里**能直接跟着做**的东西，
-以及别人真实踩过的坑（权限、容器网络、慢查询、goroutine 泄漏这类）。
-按他现在的水平挑：**一篇能跟着做完的入门实操，胜过一篇看不懂的先进阶资料。**
-纯概念综述、营销通稿、"2026 年十大趋势"这种跳过。`,
+    angle: `选择 Linux、Git、Go、MySQL、Docker 中能够跟着操作的教程和真实工程问题。
+优先关注权限、容器网络、慢查询、goroutine 泄漏等可复现案例。
+说明环境条件、步骤和适用范围，优先清晰的入门实践；不推断任何个人学习经历。
+纯概念综述、营销通稿和缺乏实操信息的趋势文章跳过。`,
     queries: [
       'Linux 命令行 权限 管道 实践 踩坑 入门',
       'Go 并发 goroutine channel 实践 踩坑 内存',
@@ -100,11 +81,10 @@ Go 一行没写过，数据结构刚开篇。
     title: '能上手的小项目',
     want: 2,
     minWords: 50,
-    angle: `他现在最缺的是**工程侧的东西** —— 没写过服务、没碰过容器与编排、
-没做过分布式，简历上这一块是空的。
-所以这一栏只收「**一个人能做完、能写进简历**」的后端 / Infra 小项目：
-步骤清晰、有仓库或教程、规模不大。
-动辄几万字的系统设计大部头别选，他现在做不完，收藏了也是吃灰。`,
+    angle: `选择一个人可以完成、范围明确的后端或 Infra 小项目。
+材料必须包含仓库或教程、清晰步骤、可验证结果以及必要的前置知识。
+优先规模适中的工程练习，说明项目实际能展示什么能力；不假设读者简历或工作经历。
+只有宏大系统设计而缺少可执行步骤的内容不选。`,
     queries: [
       '后端 小项目 练手 从零实现 教程 开源',
       'build your own database web server 从零实现',
@@ -114,7 +94,6 @@ Go 一行没写过，数据结构刚开篇。
 ]
 
 // 主人自己维护的方向说明。她搜之前先读一遍，按上面写的标准筛。
-const PROFILE_FILE = 'source/_data/noimpty-profile.md'
 /* 每一栏实际写了几篇 —— 现数，不看 profile 里怎么写。
  *
  * profile 是手写的，里面「Git 写了头两篇」「Go 一行没写过」这类话会过期，
@@ -139,7 +118,7 @@ export const postSummary = (counts = postCounts()) => {
 }
 
 export const readProfile = () => {
-  try { return readFileSync(PROFILE_FILE, 'utf8').slice(0, 6000) + postSummary() } catch (_) { return '' }
+  return readPrivateContent('profile')
 }
 
 const searchWeb = async (query, maxResults = 8) => {
@@ -370,13 +349,15 @@ export const issueFailure = (modelFailed, searchFailed) =>
  * profile 前面，把下面整份 profile 全踩脏了 —— 实测四次调用的公共前缀只有
  * 54 token，可缓存比例 1%，那份 865 token 的 profile 每期按四次未命中计费。
  * 规矩见 narrate.mjs 里 reviewPrompt 上面那段：固定的排前面，变量排后面。 */
+// Only fixed, anonymous technology labels may leave the private profile.
+// No free text, names, contact details or personal circumstances enter a public draft.
+export const profileInterests = profile => ['Linux', 'Git', 'Go', 'MySQL', 'Docker', 'AI Infra', '后端']
+  .filter(topic => new RegExp(topic === 'Go' ? '\\bGo\\b' : topic, 'i').test(String(profile || '')))
 export const newsSystem = profile => `你是娜娜莉，住在 Noimpty 个人博客里的猫娘。
 毒舌但清醒，极简，讨厌废话。自称「我」，偶尔带「喵」和颜文字 (=^w^=) (ovo)，别每句都塞。
 禁止使用 • 和 ω 这类会破坏颜文字的符号。
-你在给主人整理资讯简报。
-
-【主人的情况】
-${profile || '（他是在补 Linux / Git / Go / MySQL、准备找 AI Infra 或后端实习的学生，水平还很低。）'}`
+你在整理可公开发布的技术资讯简报。只根据公开素材写作，不猜测或披露个人背景。
+读者关注的技术主题：${profileInterests(profile).join('、') || '软件工程'}。`
 
 // 这一栏是哪一栏、角度是什么、素材有哪些 —— 全是随栏目变的，所以都在这边
 export const newsPrompt = (t, listed, recent = '') => `【这一栏：${t.title}】
@@ -393,7 +374,7 @@ ${t.angle || ''}
 **每一条的正文要包含这三层，缺一层都算不合格：**
 1. **发生了什么** —— 具体的事实：谁、什么时候、多少人、什么版本、什么数字。
    只写素材里有的，素材没写的就说「没说」，不许补你自己知道的背景，不许推测后续
-2. **对他意味着什么** —— 这是最重要的一层。结合上面【主人的情况】，
+2. **对他意味着什么** —— 这是最重要的一层。结合上面列出的技术主题，
    说清楚这条消息改变了什么：该投哪家、该准备什么、该怎么调整判断。
    如果诚实地说「这条对他其实没什么直接影响」，那就别选这一条
 3. **我的看法** —— 一句你自己的判断，要说得具体，并且**明确标出这是你的看法**
@@ -435,7 +416,6 @@ export const buildNews = async () => {
   }
 
   const profile = readProfile()
-  if (!profile) console.log('  （没找到 source/_data/noimpty-profile.md，这次只能按默认方向筛）')
   // 四个主题共用这一份系统提示，一个字都不带变量 —— 它就是那块能被缓存的前缀
   const SYSTEM = newsSystem(profile)
   // 重写这一期时，要把这一期自己从去重里排除掉，

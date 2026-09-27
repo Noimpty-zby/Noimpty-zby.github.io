@@ -59,6 +59,18 @@
     if(s.draftAttachments)refs(s.draftAttachments,'images');if(s.draftFiles)refs(s.draftFiles,'files')
     if(s.pending){check(record(s.pending)&&id(s.pending.id)&&string(s.pending.text,32000));if(s.pending.baseMessages)messages(s.pending.baseMessages);if(s.pending.attachments)refs(s.pending.attachments,'images');if(s.pending.files)refs(s.pending.files,'files')}
   }
+  const scheduleRecord = value => {
+    check(record(value)&&record(value.days));if(value._dirty!==undefined)check(typeof value._dirty==='boolean')
+    const days=days=>{check(record(days));const ids=new Set();for(const [date,tasks]of Object.entries(days)){check(/^\d{4}-\d{2}-\d{2}$/.test(date)&&Number.isFinite(Date.parse(date))&&new Date(date).toISOString().slice(0,10)===date&&list(tasks,1000));for(const t of tasks){check(record(t)&&string(t.id,160)&&t.id&&!ids.has(t.id)&&string(t.text,16000)&&typeof t.done==='boolean');ids.add(t.id)}}}
+    days(value.days);if(value._base!==undefined&&value._base!==null)days(value._base)
+  }
+  const scheduleIdentity = value => {
+    check(string(value,2100));let url;try{url=new URL(value)}catch(_){fail('日程缓存的后端标识无效。')}
+    check(!url.username&&!url.password&&!url.search&&!url.hash&&
+      (url.protocol==='https:'||url.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(url.hostname))&&
+      /^\/[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(url.pathname)&&value===url.origin+url.pathname,'日程缓存的后端标识无效。')
+  }
+  const emptyScheduleRecord = value => !value._dirty&&!Object.keys(value.days).length&&!Object.keys(value._base||{}).length
   const validateLocal = (key,raw) => {
     check(KEYS.includes(key)&&string(raw,8*1024*1024),'备份包含不支持的本机记录。')
     if(key==='nanaly-agent-url'){safeURL(raw,true);return raw}
@@ -80,9 +92,13 @@
       check(record(value)&&list(value.asks,40)&&record(value.posts));for(const a of value.asks)check(record(a)&&string(a.t,80)&&string(a.on,1000)&&Number.isFinite(a.at))
       for(const p of Object.values(value.posts))check(record(p)&&Number.isFinite(p.n)&&p.n>=0&&Number.isFinite(p.at))
     }else if(key==='noimpty-schedule-cache-v1'){
-      check(record(value)&&record(value.days));if(value._dirty!==undefined)check(typeof value._dirty==='boolean')
-      const days=days=>{check(record(days));const ids=new Set();for(const [date,tasks]of Object.entries(days)){check(/^\d{4}-\d{2}-\d{2}$/.test(date)&&Number.isFinite(Date.parse(date))&&new Date(date).toISOString().slice(0,10)===date&&list(tasks,1000));for(const t of tasks){check(record(t)&&string(t.id,160)&&t.id&&!ids.has(t.id)&&string(t.text,16000)&&typeof t.done==='boolean');ids.add(t.id)}}}
-      days(value.days);if(value._base!==undefined&&value._base!==null)days(value._base)
+      if(value?.version===2){
+        check(exact(value,['version','accounts','legacy'])&&record(value.accounts))
+        for(const[identity,cached]of Object.entries(value.accounts)){scheduleIdentity(identity);scheduleRecord(cached)}
+        if(value.legacy!==undefined)scheduleRecord(value.legacy)
+      }else{
+        check(value?.version===undefined||value.version===1);scheduleRecord(value)
+      }
     }else if(key==='nanaly.article-tasks.v1'){
       check(exact(value,['v','tasks'])&&value.v===1&&list(value.tasks,10))
       check(new Set(value.tasks.map(t=>t?.id)).size===value.tasks.length)
@@ -129,7 +145,7 @@
       if(key==='nanaly-workspace-v1')return !value.memories.length&&!value.undo&&value.sessions.every(s=>!s.messages.length&&!s.pending&&!s.draft?.trim()&&!s.draftAttachments?.length&&!s.draftFiles?.length&&['新的话题','随便聊聊','未命名话题'].includes(s.title)&&s.titleSource!=='manual')
       if(key==='nanaly-history-v1')return !value.length
       if(key==='nanaly-memory-v1')return !value.asks.length&&!Object.keys(value.posts).length
-      if(key==='noimpty-schedule-cache-v1')return !value._dirty&&!Object.keys(value.days).length&&!Object.keys(value._base||{}).length
+      if(key==='noimpty-schedule-cache-v1')return value.version===2?value.legacy===undefined&&Object.values(value.accounts).every(emptyScheduleRecord):emptyScheduleRecord(value)
       if(key==='noimpty-learning-v1')return !Object.keys(value.drafts||{}).length&&!(value.history||[]).length&&!(value.backups||[]).length
       if(key==='nanaly.article-tasks.v1')return !value.tasks.length
       if(key==='mao-play-v1')return !value.notes.length&&!value.feeds&&!value.feedAt

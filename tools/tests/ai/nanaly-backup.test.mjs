@@ -56,6 +56,51 @@ await test('encrypted round trip includes ciphertext vault, chat/drafts/memory, 
   assert.deepEqual(Object.fromEntries(target.stored),clone(collected.local));assert.deepEqual(target.data.files,payload.files);assert.equal(target.api.pending(),false)
   assert.ok(target.ops.every(([,key])=>key!=='nanaly-session-v1'&&!key.includes('private-pass')))
 })
+await test('backend-bound schedule caches and isolated legacy drafts survive encrypted backup without reassignment',async()=>{
+  const key='noimpty-schedule-cache-v1',first='https://one.example/11111111-1111-4111-8111-111111111111',second='http://127.0.0.1:8999/22222222-2222-4222-8222-222222222222'
+  const legacy=JSON.parse(fixture().local[key]),other={days:{'2026-09-26':[{id:'task-two',text:'Other backend draft',done:true,extension:'preserved'}]},_dirty:true,_base:{},updatedAt:'2026-09-27T00:00:00Z'}
+  const cached={version:2,accounts:{[first]:legacy,[second]:other},legacy:clone(legacy)}
+  const original=JSON.stringify(cached),old=environment({[key]:original}),collected=await old.api.collect()
+  const encrypted=await old.api.seal(collected,pass),target=environment()
+  assert.ok(!encrypted.includes('Unsent plan')&&!encrypted.includes('one.example'))
+  const decoded=await target.api.inspect(encrypted,pass);await target.api.restore(decoded)
+  assert.equal(target.stored.get(key),original)
+  assert.deepEqual(JSON.parse(target.stored.get(key)),cached)
+  // An old backup is retained byte-for-byte; only the schedule reader can isolate it.
+  const oldTarget=environment(),oldPayload=fixture()
+  await oldTarget.api.restore(oldPayload)
+  assert.equal(oldTarget.stored.get(key),oldPayload.local[key])
+  assert.equal(Object.hasOwn(JSON.parse(oldTarget.stored.get(key)),'accounts'),false)
+})
+await test('every backend account and even an empty isolated legacy cache prevent destructive restore',async()=>{
+  const key='noimpty-schedule-cache-v1',identity='https://private.example/11111111-1111-4111-8111-111111111111'
+  const task={id:'one',text:'Keep this draft',done:false}
+  const caches=[
+    {version:2,accounts:{[identity]:{days:{},_dirty:true}}},
+    {version:2,accounts:{[identity]:{days:{'2026-09-27':[task]}}}},
+    {version:2,accounts:{[identity]:{days:{},_base:{'2026-09-27':[task]}}}},
+    {version:2,accounts:{},legacy:{days:{}}},
+    {version:2,accounts:{},legacy:JSON.parse(fixture().local[key])}
+  ]
+  for(const cache of caches){
+    const original=JSON.stringify(cache),target=environment({[key]:original})
+    await assert.rejects(target.api.restore(fixture()),/已有/)
+    assert.equal(target.stored.get(key),original);assert.equal(target.ops.length,0)
+  }
+  const empty=JSON.stringify({version:2,accounts:{[identity]:{days:{},_dirty:false,_base:{}}}}),target=environment({[key]:empty})
+  target.faults.insert='files'
+  await assert.rejects(target.api.restore(fixture()),/已回滚/)
+  assert.deepEqual(Object.fromEntries(target.stored),{[key]:empty})
+})
+await test('invalid schedule cache namespaces or nested records are rejected before persistent writes',async()=>{
+  const key='noimpty-schedule-cache-v1',uuid='11111111-1111-4111-8111-111111111111',good='https://private.example/'+uuid
+  const badKeys=['__proto__','constructor','prototype','http://remote.example/'+uuid,'https://user:pass@private.example/'+uuid,good+'?token=secret',good+'#fragment','https://private.example/not-a-uuid','https://private.example/a/'+uuid]
+  const caches=badKeys.map(identity=>({version:2,accounts:Object.fromEntries([[identity,{days:{}}]])}))
+  caches.push({version:2,accounts:[]},{version:3,days:{}},{version:2,accounts:{},legacy:{days:null}},{version:2,accounts:{},unknown:true},
+    {version:2,accounts:{[good]:{days:{'2026-02-31':[]}}}},
+    {version:2,accounts:{[good]:{days:{'2026-09-27':[{id:'one',text:'invalid done',done:'yes'}]}}}})
+  for(const cache of caches){const payload=fixture(),target=environment();payload.local[key]=JSON.stringify(cache);await assert.rejects(target.api.restore(payload));assert.equal(target.ops.length,0)}
+})
 await test('Python drafts, history and restore points survive encrypted backup and restore',async()=>{
   const payload=fixture(),learning={version:1,persist:true,lessonId:'python',autoCheck:true,
     drafts:{python:{code:'print(42)\n',stdin:'',tests:[],exercise:null}},

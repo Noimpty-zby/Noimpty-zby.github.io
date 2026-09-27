@@ -413,8 +413,8 @@ const searchHarness = fetchImpl => {
   return { window, context, timers }
 }
 
-await test('Shared corpus/journal body timeout rejects and permits a fresh retry', async () => {
-  for (const kind of ['loadCorpus', 'loadJournal']) {
+await test('Shared corpus body timeout rejects and permits a fresh retry', async () => {
+  for (const kind of ['loadCorpus']) {
     let requests = 0, signal
     const pending = deferred()
     const h = searchHarness(async (_, init) => {
@@ -435,7 +435,9 @@ await test('Shared corpus/journal body timeout rejects and permits a fresh retry
 })
 
 await test('Journal loader drops malformed rows before caching', async () => {
-  const h = searchHarness(async () => new Response(JSON.stringify({ entries: [null, 3, {}, { at: 'today', who: 'reply', what: 'valid' }] })))
+  const h = searchHarness(() => { throw new Error('must not fetch static journal') })
+  h.window.NOIMPTY_GATE = { unlocked: () => true }
+  h.window.NANALY_AGENT = { configured: () => true, subscribe() {}, privateContent: async () => ({ revision: 1, data: { entries: [null, 3, {}, { at: 'today', who: 'reply', what: 'valid' }] } }) }
   const rows = await h.window.NOIMPTY_SEARCH.loadJournal()
   assert.equal(rows.length, 1)
   assert.equal(rows[0].what, 'valid')

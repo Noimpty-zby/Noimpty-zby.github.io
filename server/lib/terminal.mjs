@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { ApiError, invariant } from './errors.mjs';
 import { TASKS } from './sessions.mjs';
+import { BoundedQueue } from './process.mjs';
 
 // Browser side of the terminals. A page asks for a one-time ticket with its token, then opens
 // a WebSocket with it: browsers cannot put the token on a socket, and the long-lived token
@@ -8,6 +9,10 @@ import { TASKS } from './sessions.mjs';
 // pages, replaying what a reconnecting page missed); `task` runs the editor's program.
 const size = (value, fallback, min, max) => Number.isInteger(value) ? Math.max(min, Math.min(max, value)) : fallback;
 const FILE_LIMIT = 1024 * 1024;
+// JSON can expand a 1 MiB UTF-8 file to six times its size (escaped controls).
+// Permit one complete file reply, but never retain an unbounded socket backlog.
+const SEND_LIMIT = 8 * 1024 * 1024;
+const validId = value => (Number.isSafeInteger(value) && value >= 0) || (typeof value === 'string' && value.length > 0 && value.length <= 128 && !value.includes('\0'));
 // Receive the complete UTF-8 file before replacing it. A failed/disconnected Docker
 // exec must not truncate the learner's original file. Follow symlinks like an editor
 // save, and preserve executable bits on existing regular files.
@@ -41,7 +46,8 @@ const utf8 = new TextDecoder('utf-8', { fatal: true });
 const validPath = value => typeof value === 'string' && value.startsWith('/') && value.length <= 4096 && !value.includes('\0');
 
 export class TerminalManager {
-  constructor(sessions, { now = Date.now, ttl = 30000 } = {}) {
+  constructor(sessions, { now = Date.now, ttl = 30000, fileQueueLimit = 8, fileQueueWait = 10000 } = {}) {
+    this.fileQueueLimit = fileQueueLimit; this.fileQueueWait = fileQueueWait;
     this.sessions = sessions; this.now = now; this.ttl = ttl; this.tickets = new Map(); this.sockets = new Set();
   }
   issue(body) {
@@ -71,24 +77,44 @@ export class TerminalManager {
   }
   attach(ws, claim) {
     this.sockets.add(ws);
-    const send = value => { if (!ws.closed) ws.send(JSON.stringify(value)); };
-    let session = null, gone = false;
-    const client = { output: chunk => { ws.send(chunk); if (ws.buffered > 1024 * 1024) session?.pause(client); } };
+    let session = null, gone = false, detached = false;
+    const controller = new AbortController();
+    const detach = () => { if (session && !detached) { detached = true; session.detach(client); } };
+    const close = (code, reason) => {
+      if (gone) return;
+      gone = true; controller.abort(); this.sockets.delete(ws); detach();
+      ws.close(code, reason);
+    };
+    const transmit = data => {
+      if (gone || ws.closed || ws.closeSent) return false;
+      if (ws.buffered + Buffer.byteLength(data) > SEND_LIMIT) { close(1013, 'terminal output backlog'); return false; }
+      try { ws.send(data); return true; }
+      catch { close(1011, 'terminal response failed'); return false; }
+    };
+    const send = value => {
+      try { return transmit(JSON.stringify(value)); }
+      catch { close(1011, 'terminal response failed'); return false; }
+    };
+    const client = { output: chunk => {
+      if (transmit(chunk) && ws.buffered > 1024 * 1024) session?.pause(client);
+    } };
     ws.on('message', (data, binary) => {
+      if (gone || ws.closed || ws.closeSent) return;
       let message;
       try { message = binary ? null : JSON.parse(data); } catch {}
-      if (!message || typeof message !== 'object') return;
+      if (!message || typeof message !== 'object' || Array.isArray(message)) return;
       if (!session) {
         if (message.type === 'resize') { claim.cols = size(message.cols, claim.cols, 2, 500); claim.rows = size(message.rows, claim.rows, 2, 300); }
         return;
       }
       if (message.type === 'input' && typeof message.data === 'string' && message.data.length <= 65536) session.write(message.data);
       else if (message.type === 'resize') session.resize(message.cols, message.rows);
-      else if (message.type === 'terminate') void session.hangup(session.kind === 'task' ? 'stopped' : 'closed');
-      else if (message.type === 'read' && session.kind === 'shell') void this.read(session.host, message).then(send);
-      else if (message.type === 'write' && session.kind === 'shell') void this.write(session.host, message).then(send);
+      else if (message.type === 'terminate') void session.hangup(session.kind === 'task' ? 'stopped' : 'closed').catch(() => close(1011, 'terminal close failed'));
+      else if (['read', 'write'].includes(message.type) && session.kind === 'shell') {
+        void this[message.type](session.host, message, { signal: controller.signal }).then(send).catch(() => close(1011, 'terminal file failed'));
+      }
     });
-    ws.on('close', () => { gone = true; this.sockets.delete(ws); session?.detach(client); });
+    ws.on('close', () => { gone = true; controller.abort(); this.sockets.delete(ws); detach(); });
     send({ type: 'status', phase: 'starting' });
     return (async () => {
       try {
@@ -98,38 +124,51 @@ export class TerminalManager {
         ws.close(1000); return;
       }
       // Attach and detach so an abandoned new shell still times out like any other.
-      if (gone) { session.attach(client); session.detach(client); return; }
+      if (gone) { session.attach(client); detach(); return; }
       const replay = session.replay(claim.sessionId === session.id ? claim.since : undefined);
       const workspace = session.host.workspace;
       // `replay` bytes follow at once; the page re-draws them but must not act on them again.
       send({ type: 'ready', kind: session.kind, sessionId: session.id, reset: replay.reset, offset: replay.offset, replay: replay.bytes.length,
         ...(workspace ? { language: workspace.language, workspaceId: workspace.workspaceId, workspaceRevision: workspace.revision } : { language: claim.language }) });
-      if (replay.bytes.length) ws.send(replay.bytes);
+      if (replay.bytes.length) transmit(replay.bytes);
+      if (gone) return;
       session.attach(client);
       session.resize(claim.cols, claim.rows);
       ws.on('drain', () => session.resume(client));
-      session.done.then(exit => { send({ type: 'exit', ...exit }); ws.close(1000); });
-    })();
+      session.done.then(exit => { send({ type: 'exit', ...exit }); close(1000); }).catch(() => close(1011, 'terminal close failed'));
+    })().catch(() => close(1011, 'terminal attach failed'));
   }
   // `code FILE` in the terminal opens the file in the page's editor; these read and save it
   // inside the shell's own sandbox, as the learner.
-  async read(host, { id, path }) {
-    if (!validPath(path)) return { type: 'file', id, path, error: '文件路径无效。' };
-    let result;
-    try { result = await host.exec(['sh', '-c', 'test -f "$1" || { echo "不是普通文件" >&2; exit 2; }; head -c 1048577 -- "$1"', 'sh', path], { limit: FILE_LIMIT + 4096 }); }
-    catch { return { type: 'file', id, path, error: '读取失败；终端可能已经关闭。' }; }
-    if (result.code !== 0 || result.reason) return { type: 'file', id, path, error: result.stderr.toString('utf8').trim().slice(0, 300) || '读取失败。' };
-    if (result.stdout.length > FILE_LIMIT) return { type: 'file', id, path, error: '文件超过 1 MB，请用 nano 或 vim 编辑。' };
-    if (result.stdout.includes(0)) return { type: 'file', id, path, error: '这是二进制文件，不能在编辑器里打开。' };
-    try { return { type: 'file', id, path, content: utf8.decode(result.stdout) }; }
-    catch { return { type: 'file', id, path, error: '文件不是 UTF-8 文本，不能在编辑器里打开。' }; }
-  }
-  async write(host, { id, path, content }) {
-    if (!validPath(path) || typeof content !== 'string' || Buffer.byteLength(content) > FILE_LIMIT) return { type: 'written', id, path, error: '文件路径或内容无效。' };
-    let result;
-    try { result = await host.exec(['python3', '-c', WRITE_FILE, path, String(Buffer.byteLength(content))], { input: content }); }
-    catch { return { type: 'written', id, path, error: '保存失败；终端可能已经关闭。' }; }
-    return result.code === 0 && !result.reason ? { type: 'written', id, path } : { type: 'written', id, path, error: result.stderr.toString('utf8').trim().slice(0, 300) || '保存失败。' };
+  read(host, message, options) { return this.file(host, 'read', message, options); }
+  write(host, message, options) { return this.file(host, 'write', message, options); }
+  async file(host, kind, message, { signal } = {}) {
+    const { id, path, content } = message || {};
+    // Error responses contain only validated scalar fields, never arbitrary input
+    // objects that could fail serialization or retain an entire incoming message.
+    const reply = { type: kind === 'read' ? 'file' : 'written', id: validId(id) ? id : null, path: validPath(path) ? path : '' };
+    if (!validId(id) || !validPath(path) || (kind === 'write' && (typeof content !== 'string' || Buffer.byteLength(content) > FILE_LIMIT))) {
+      return { ...reply, error: '文件请求编号、路径或内容无效。' };
+    }
+    if (host.pty?.exited) return { ...reply, error: '终端已经关闭。' };
+    // Shared by every page attached to this shell, not just one WebSocket.
+    host.fileQueue ||= new BoundedQueue({ concurrency: 1, maxQueued: this.fileQueueLimit, wait: this.fileQueueWait });
+    try {
+      return await host.fileQueue.run(async () => {
+        if (host.pty?.exited) return { ...reply, error: '终端已经关闭。' };
+        const result = kind === 'read'
+          ? await host.exec(['sh', '-c', 'test -f "$1" || { echo "不是普通文件" >&2; exit 2; }; head -c 1048577 -- "$1"', 'sh', path], { limit: FILE_LIMIT + 4096, signal })
+          : await host.exec(['python3', '-c', WRITE_FILE, path, String(Buffer.byteLength(content))], { input: content, signal });
+        if (result.code !== 0 || result.reason) return { ...reply, error: result.stderr.toString('utf8').trim().slice(0, 300) || '文件操作失败。' };
+        if (kind === 'write') return reply;
+        if (result.stdout.length > FILE_LIMIT) return { ...reply, error: '文件超过 1 MB，请用 nano 或 vim 编辑。' };
+        if (result.stdout.includes(0)) return { ...reply, error: '这是二进制文件，不能在编辑器里打开。' };
+        try { return { ...reply, content: utf8.decode(result.stdout) }; }
+        catch { return { ...reply, error: '文件不是 UTF-8 文本，不能在编辑器里打开。' }; }
+      }, { signal });
+    } catch (error) {
+      return { ...reply, error: error?.code === 'EXEC_BUSY' ? '文件操作繁忙，请稍后重试。' : '文件操作未完成；请求已取消或终端已关闭。' };
+    }
   }
   close() {
     for (const ws of this.sockets) {

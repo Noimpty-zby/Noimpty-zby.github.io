@@ -1,20 +1,8 @@
-/* 这些自动任务一天要跑十几次，钱花在没人看得见的地方。
- *
- * narrate.mjs 早就把每次响应里的 usage 接住了，但只在跑完 console.log 一行，
- * 跟着 Actions 日志一起过期 —— 于是「这个月贵了」除了看账单没有第二个来源，
- * 更没法回答「是谁贵的」。这里把每轮的账按任务落盘，日报再摊出来。
- *
- * 只记 token 数，不算钱：单价会变，各家计费口径也不一样，编一个金额出来
- * 比不给更糟。要换算的时候拿这份数乘当时的单价，别把猜的价格写进文件。
- *
- * 这个文件不发布。source/_data 下只有 lockdown.js 显式路由的才出得去，
- * 用量是自己看的东西，没有理由送进浏览器。 */
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { bjStamp } from './journal.mjs'
-import { pushWithRetry, useNanalyIdentity } from './git.mjs'
+import { readPrivateContent, appendPrivateContent, flushPrivateContent } from '../private-content-client.mjs'
 
-export const FILE = 'source/_data/nanaly-usage.json'
+export const FILE = 'usage' // Logical backend record.
 export const KEEP_DAYS = 90
 export const KEEP = 600
 
@@ -38,21 +26,8 @@ export const pruneRuns = (runs, now = Date.now()) => {
 }
 
 export const readRuns = () => {
-  try {
-    const raw = JSON.parse(readFileSync(FILE, 'utf8'))
-    const list = Array.isArray(raw) ? raw : raw?.runs
-    if (!Array.isArray(list)) throw new Error('用量记录缺少 runs 数组')
-    return pruneRuns(list)
-  } catch (error) {
-    if (error.code === 'ENOENT') return []
-    // 读不出来不是拦住整轮任务的理由，但也不能把坏文件覆盖掉。
-    throw new Error('用量记录读取失败，保留原文件：' + String(error.message).slice(0, 100))
-  }
-}
-
-const write = runs => {
-  if (!existsSync('source/_data')) mkdirSync('source/_data', { recursive: true })
-  writeFileSync(FILE, JSON.stringify({ v: 1, runs }, null, 2) + '\n')
+  const raw = readPrivateContent('usage')
+  return pruneRuns(Array.isArray(raw) ? raw : raw.runs)
 }
 
 /* 把 MODEL_STATE.byTask 归一化。调用方直接把那个对象递进来即可。 */
@@ -71,16 +46,10 @@ export const shapeTasks = byTask => {
 export const recordRun = (job, byTask, { now = Date.now() } = {}) => {
   const tasks = shapeTasks(byTask)
   if (!Object.keys(tasks).length) return null
-  const entry = { ts: now, at: bjStamp(now), job: String(job).slice(0, 40), tasks }
-  if (DRY) { console.log(`  [演练] 会记一轮用量：${entry.job}`); return entry }
-  try {
-    write(pruneRuns([...readRuns(), entry], now))
-    console.log(`  用量已记账：${entry.job}`)
-  } catch (error) {
-    // 记账失败不该把已经干完的活儿一起拖垮，但要说出来。
-    console.log(`  用量写不进去（${String(error.message || error).slice(0, 80)}），不影响刚才那件事`)
-    return null
-  }
+  const entry = { id: randomUUID(), ts: now, at: bjStamp(now), job: String(job).slice(0, 40), tasks }
+  if (DRY) { console.log('  [演练] 会增加一条私密用量记录'); return entry }
+  appendPrivateContent('usage', entry, runs => pruneRuns(runs, now))
+  console.log('  已暂存一条私密用量记录')
   return entry
 }
 
@@ -107,23 +76,7 @@ export const rollup = (runs, { days = 1, now = Date.now() } = {}) => {
 
 export const kilo = n => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(int(n))
 
-/* 日报跑在自己的 job 里，不提交就等于白记 —— runner 一拆，写进去的文件就没了。
- * 娜娜莉那班有行动日志同车，不需要这个；这里是给日报用的。
- *
- * 失败只说一声，绝不往外抛：邮件比记账重要得多，不能因为账没记上就让日报红掉。 */
-export const commitUsage = async ({ run = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: 'pipe' }) } = {}) => {
-  if (DRY) { console.log('  [演练] 不提交用量记账'); return false }
-  try {
-    if (!existsSync(FILE)) return false
-    if (!run('status', '--porcelain', '--', FILE).trim()) return false
-    useNanalyIdentity(run)
-    run('add', FILE)
-    run('commit', '-m', '娜娜莉：更新用量记账', '--only', '--', FILE)
-    pushWithRetry(run, '用量记账')
-    console.log('  用量记账已提交并推送')
-    return true
-  } catch (error) {
-    console.log('  用量记账没提交上（' + String(error.message || error).slice(0, 140) + '），这一轮的账会缺一笔')
-    return false
-  }
+export const commitUsage = async () => {
+  if (DRY) return false
+  return flushPrivateContent('usage')
 }

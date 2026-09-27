@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { webcrypto } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
-import { SALT, ITER, encryptEnvelope } from '../../site-crypto.cjs'
+import { ITER, AAD, encryptEnvelope } from '../../site-crypto.cjs'
 
 const repo = process.cwd()
 const runScript = (name, hexo) => new Function('hexo', 'require', readFileSync(name, 'utf8'))(
@@ -19,32 +19,32 @@ await test('private envelopes decrypt in WebCrypto and reject tampering / absent
   const wrapped = JSON.parse(encryptEnvelope(plain, pass))
   assert.ok(!JSON.stringify(wrapped).includes('私人任务'))
   const material = await webcrypto.subtle.importKey('raw', Buffer.from(pass), 'PBKDF2', false, ['deriveKey'])
-  const key = await webcrypto.subtle.deriveKey({ name: 'PBKDF2', salt: Buffer.from(SALT), iterations: ITER, hash: 'SHA-256' },
+  const key = await webcrypto.subtle.deriveKey({ name: 'PBKDF2', salt: Buffer.from(wrapped.salt, 'base64'), iterations: ITER, hash: 'SHA-256' },
     material, { name: 'AES-GCM', length: 256 }, false, ['decrypt'])
   const data = Buffer.from(wrapped.data, 'base64')
-  const decrypt = () => webcrypto.subtle.decrypt({ name: 'AES-GCM', iv: data.subarray(0, 12) }, key, data.subarray(12))
+  const decrypt = () => webcrypto.subtle.decrypt({ name: 'AES-GCM', iv: data.subarray(0, 12), additionalData: Buffer.from(AAD) }, key, data.subarray(12))
   assert.equal(Buffer.from(await decrypt()).toString(), plain)
   data[data.length - 1] ^= 1
   await assert.rejects(decrypt)
   assert.throws(() => encryptEnvelope(plain, ''), /暗号/)
 })
 
-await test('schedule generator never falls back to publishing plaintext or a destructive empty table', () => {
+await test('schedule builds remove stale static routes even when a source file and passphrase exist', async () => {
   const dir = box(), old = process.env.NOIMPTY_PASSPHRASE
   try {
     mkdirSync(join(dir, '_data'))
-    let generate
-    const hexo = { source_dir: dir, log: { warn() {} }, extend: { generator: { register: (_, fn) => { generate = fn } } } }
-    runScript('scripts/noimpty-schedule.js', hexo)
     writeFileSync(join(dir, '_data/schedule.json'), '{"days":{"2026-09-19":[]}}')
-    delete process.env.NOIMPTY_PASSPHRASE
-    assert.deepEqual(generate(), [])
-    process.env.NOIMPTY_PASSPHRASE = 'test-only'
-    assert.equal(JSON.parse(generate().data).alg, 'AES-GCM')
-    for (const raw of ['null', '[]', '{"days":[]}', '{"days":{"2026-09-19":null}}', '{invalid']) {
-      writeFileSync(join(dir, '_data/schedule.json'), raw)
-      assert.deepEqual(generate(), [], raw)
-    }
+    const filters = [], removed = []
+    const routes = new Map([['schedule/data.json', 'old data']])
+    const hexo = { source_dir: dir, log: { warn() {} },
+      extend: { filter: { register: (name, fn) => { if (name === 'after_generate') filters.push(fn) } } },
+      route: { remove: key => { removed.push(key); routes.delete(key) }, set: () => assert.fail('private schedules must not be published') } }
+    runScript('scripts/noimpty-schedule.js', hexo)
+    process.env.NOIMPTY_PASSPHRASE = 'offline-test-only'
+    for (const fn of filters) await fn()
+    assert.ok(removed.includes('schedule/data.json'))
+    assert.equal(routes.has('schedule/data.json'), false)
+    assert.equal(readFileSync(join(dir, '_data/schedule.json'), 'utf8'), '{"days":{"2026-09-19":[]}}')
   } finally {
     old === undefined ? delete process.env.NOIMPTY_PASSPHRASE : process.env.NOIMPTY_PASSPHRASE = old
     rmSync(dir, { recursive: true, force: true })

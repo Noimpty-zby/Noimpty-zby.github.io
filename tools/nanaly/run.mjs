@@ -1,3 +1,4 @@
+import { initializePrivateContent } from '../private-content-client.mjs'
 import { recordAction } from './agent-client.mjs'
 // 娜娜莉的自主行动入口。
 //
@@ -20,9 +21,8 @@ import { writeColumn, commitAndPush } from './column.mjs'
 import { getComments } from '../daily-report/sources.mjs'
 import { tokenSummary, MODEL_STATE } from '../daily-report/narrate.mjs'
 import { commitJournal } from './journal.mjs'
-import { recordRun, FILE as USAGE_FILE } from './usage.mjs'
+import { recordRun, commitUsage } from './usage.mjs'
 import { autoComplete, commitSchedule } from '../daily-report/schedule-auto.mjs'
-import { triggerDeploy } from './github.mjs'
 
 const args = process.argv.slice(2)
 const DRY = args.includes('--dry')
@@ -79,6 +79,7 @@ const main = async () => {
   if (actions.length > 1) throw new Error('一次只能指定一个动作；执行全部请使用 all')
   console.log(DRY ? '【演练模式，不会真的发评论或提交】\n' : '')
   if (what !== 'all' && !Object.hasOwn(tasks, what)) throw new Error(`不认识的动作：${what}`)
+  await initializePrivateContent()
   const list = what === 'all' ? ['reply', 'patrol', 'notes', 'news', 'react', 'column'] : [what]
   for (const t of list) {
     if (!tasks[t]) { console.log(`不认识的动作：${t}`); continue }
@@ -107,7 +108,7 @@ const main = async () => {
   try {
     const auto = await autoComplete({ dry: DRY })
     if (auto.changed) {
-      auto.done.forEach(d => console.log(`  ${DRY ? '[演练] 会勾上' : '自动勾上'}「${d.text}」 —— ${d.why}`))
+      console.log(`  ${DRY ? '[演练] 可完成' : '自动完成'} ${auto.changed} 项日程`)
       if (!DRY && !await commitSchedule(auto.done)) throw new Error('日程更改未能提交')
     }
   } catch (e) {
@@ -115,31 +116,10 @@ const main = async () => {
     console.log('  日程自动完成没跑成：' + String(e.message || e).slice(0, 160))
   }
 
-  /* 行动日志统一在这里提交一次，不是每个分身各提交一次。
-   *
-   * 回评每三小时一班，一天最多八次；各自提交就是一天八个提交、八次部署。
-   * 那几个本来就要提交东西的分身（批注、资讯、随笔）只 add 自己那个路径，
-   * 所以日志不会被它们顺手带走，留到这里一起走。
-   *
-   * 提交完自己叫一次部署。用 GITHUB_TOKEN 推的提交不触发 on:push（防递归），
-   * 而这一班里常常没有别人提交东西 —— 巡逻和回评都只发评论、不碰仓库。
-   * 不叫的话日志就一直躺在仓库里：她后台干的活，右下角对话窗口里的她要等到
-   * 下一期资讯（三天）甚至下一篇随笔（一周）才知道，那这本日志就废了一半。 */
-  /* 记账要赶在提交之前 —— 这一轮的账和这一轮的日志同车走，
-   * 免得为一个几百字节的 JSON 单独再推一次。 */
-  recordRun('nanaly', MODEL_STATE.byTask)
-
-  if (await commitJournal({ extra: [USAGE_FILE] })) {
-    /* 叫不动部署只记一笔，不染红工作流。
-     *
-     * 和批注 / 资讯 / 随笔那几处不一样：它们不部署等于文章进了仓库但线上看不见，
-     * 那是真要红的。日志这边没丢任何东西 —— 它已经安全地在仓库里了，
-     * 下一次部署自然会把它带上线，代价只是她晚几个小时才知道自己干过什么。 */
-    try { await triggerDeploy() } catch (e) {
-      console.log('  日志提交了，但没叫动部署：' + String(e.message || e).slice(0, 160))
-      console.log('  记录本身没事，下一次部署会把它带上线')
-    }
-  }
+  try { recordRun('nanaly', MODEL_STATE.byTask) }
+  catch { process.exitCode = 1; console.error('私密用量暂存失败。') }
+  const saved = await Promise.allSettled([commitJournal(), commitUsage()])
+  if (saved.some(result => result.status === 'rejected')) throw new Error('私密行动日志或用量同步失败，请检查后端连接。')
 
   // 每次跑完报一次账。命中率低的时候，这一行是最先能看出问题的地方
   const cost = tokenSummary()

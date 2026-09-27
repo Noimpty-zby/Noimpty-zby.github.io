@@ -1,3 +1,4 @@
+import { privateFixture } from '../private-fixture.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -91,20 +92,17 @@ await check('failed patrol notifications cannot claim every issue was already re
   const failed = patrolSummary({ checked: 1, broken: 1, reported: 0, alreadyReported: 0, failed: 1 })
   assert.ok(!failed.includes('此前已提醒'))
 })
-await check('journal push failure rejects and malformed journal is never silently treated as empty', async () => {
-  await assert.rejects(commitJournal({ run: (...args) => {
-    if (args[0] === 'status') return ' M source/_data/nanaly-journal.json'
-    if (args[0] === 'push' || args[0] === 'pull') throw new Error('fixture push failed')
-    return ''
-  } }), /行动日志提交失败/)
-  const cwd = process.cwd(), dir = mkdtempSync(join(tmpdir(), 'nanaly-journal-'))
+await check('private journal read failures stop instead of silently replacing records', async () => {
+  const fixture = await privateFixture()
   try {
-    mkdirSync(join(dir, 'source/_data'), { recursive: true }); process.chdir(dir)
+    const file = join(fixture.directory, 'journal.json')
     for (const value of ['broken', 'null', '3', '{"entries":{}}']) {
-      writeFileSync('source/_data/nanaly-journal.json', value)
-      assert.throws(() => readJournal(), /读取失败/)
-      assert.equal(readFileSync('source/_data/nanaly-journal.json', 'utf8'), value)
+      writeFileSync(file, value)
+      await assert.rejects(fixture.reload())
+      assert.throws(() => readJournal(), /尚未加载/)
+      await assert.rejects(commitJournal(), /尚未加载/)
+      assert.equal(readFileSync(file, 'utf8'), value)
     }
-  } finally { process.chdir(cwd); rmSync(dir, { recursive: true, force: true }) }
+  } finally { fixture.close() }
 })
 console.log(`\n${passed} backend task cases passed`)

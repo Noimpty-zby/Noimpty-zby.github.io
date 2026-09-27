@@ -146,7 +146,7 @@
     ],
 
     /* ── 今天的日程 ──
-     * 数据来自 /schedule/data.json（加密的），没解锁就拿不到，这时候她不播报。
+     * 数据来自已鉴权的私有后端；未解锁或未连接时不播报私人安排。
      * busyLeft：剩这么多件没做就开始摆「为难」那张脸。 */
     busyLeft: 3,
     scheduleLines: {
@@ -630,19 +630,13 @@
     return Math.max(1, Math.round(awayFor)) + ' 个小时'
   }
 
-  /* ── 今天的日程 ──
-   *
-   * 数据只有一处真相：source/_data/schedule.json，发布时整份加密成
-   * /schedule/data.json。**没解锁就拿不到** —— 这时候 loadState() 返回 null，
-   * 她不播报、也没有「心情」，只闲聊。那是对的，不是坏了。
-   *
-   * 解密走 NOIMPTY_SEARCH.decryptPayload，和 schedule.js 同一条路 ——
-   * 自己再写一份 AES-GCM 解密早晚会和它对不上。 */
+  // 日程仅从已连接的鉴权后端读取；未连接时不播报私人安排。
   let siteState = null, statePending = null, stateRaw = null, stateDay = '', stateVersion = 0
   const stateAllowed = () => {
-    try { return !window.NOIMPTY_GATE || window.NOIMPTY_GATE.unlocked() } catch (_) { return false }
+    try { return window.NOIMPTY_GATE?.unlocked() === true && window.NANALY_AGENT?.configured() === true } catch (_) { return false }
   }
   const clearState = () => { stateVersion++; siteState = stateRaw = statePending = null; stateDay = '' }
+  window.NANALY_AGENT?.subscribe(state => { if (!state.connected || state.revision === null) clearState() })
 
   const summarize = data => {
     const days = data && data.days
@@ -690,12 +684,7 @@
     })
     const request = Promise.resolve().then(async () => {
       try {
-        const res = await fetch('/schedule/data.json?t=' + Date.now(), { cache: 'no-store', signal: controller.signal })
-        if (!res.ok) return null
-        const payload = await res.json()
-        const raw = payload && payload.alg === 'AES-GCM'
-          ? JSON.parse(await window.NOIMPTY_SEARCH.decryptPayload(payload))
-          : payload
+        const raw = (await window.NANALY_AGENT.privateContent('schedule', { signal: controller.signal })).data
         if (controller.signal.aborted || version !== stateVersion || !stateAllowed()) { if (!stateAllowed()) clearState(); return null }
         stateRaw = raw
         stateDay = ymd(rightNow())

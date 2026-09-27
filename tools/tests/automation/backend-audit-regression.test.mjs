@@ -1,3 +1,4 @@
+import { privateFixture } from '../private-fixture.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
@@ -11,7 +12,8 @@ const yaml = require('js-yaml')
 const repo = process.cwd()
 const sandbox = async fn => {
   const dir = mkdtempSync(join(tmpdir(), 'backend-audit-'))
-  try { return await fn(dir) } finally { process.chdir(repo); rmSync(dir, { recursive: true, force: true }) }
+  const fixture = await privateFixture()
+  try { return await fn(dir, fixture) } finally { fixture.close(); process.chdir(repo); rmSync(dir, { recursive: true, force: true }) }
 }
 const gitAt = dir => (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8', stdio: 'pipe' })
 const identity = git => { git('config', 'user.name', 'Fixture'); git('config', 'user.email', 'fixture@example.invalid'); git('config', 'commit.gpgsign', 'false') }
@@ -19,32 +21,23 @@ process.env.GITHUB_TOKEN = 'offline-fixture'
 process.env.SITE_URL = 'https://example.invalid'
 globalThis.fetch = async () => { throw new Error('Unexpected network call') }
 const { autoComplete } = await import('../../daily-report/schedule-auto.mjs')
-const { commitJournal, FILE: JOURNAL } = await import('../../nanaly/journal.mjs')
+const { commitJournal, note, FILE: JOURNAL } = await import('../../nanaly/journal.mjs')
 const { pushWithRetry } = await import('../../nanaly/git.mjs')
 const { getComments } = await import('../../daily-report/sources.mjs')
 const { crawlSite } = await import('../../daily-report/health.mjs')
 
-await test('automation commits only its own files, including usage before the first journal exists', async () => sandbox(async dir => {
-  mkdirSync(join(dir, 'source/_data'), { recursive: true })
-  const git = gitAt(dir)
-  git('init', '-q'); identity(git)
-  writeFileSync(join(dir, 'owner.txt'), 'original')
-  git('add', '.'); git('commit', '-qm', 'baseline')
-  writeFileSync(join(dir, 'owner.txt'), 'private staged work')
-  git('add', 'owner.txt')
-  const usage = 'source/_data/nanaly-usage.json'
-  writeFileSync(join(dir, usage), '{"runs":[]}\n')
+await test('private journal flush leaves staged owner work untouched', async () => sandbox(async (dir, fixture) => {
+  const git = gitAt(dir); git('init', '-q'); identity(git)
+  writeFileSync(join(dir, 'owner.txt'), 'original'); git('add', '.'); git('commit', '-qm', 'baseline')
+  const head = git('rev-parse', 'HEAD')
+  writeFileSync(join(dir, 'owner.txt'), 'private staged work'); git('add', 'owner.txt')
   process.chdir(dir)
-  const run = (...args) => args[0] === 'push' ? '' : git(...args)
-  assert.equal(existsSync(JOURNAL), false)
-  assert.equal(await commitJournal({ run, extra: [usage] }), false)
-  assert.deepEqual(git('diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD').trim().split('\n'), [usage])
+  note('patrol', 'Synthetic private event')
+  assert.equal(await commitJournal(), true)
+  assert.equal(fixture.read('journal').data.entries.length, 1)
+  assert.equal(git('rev-parse', 'HEAD'), head)
   assert.equal(git('diff', '--cached', '--name-only').trim(), 'owner.txt')
   assert.equal(git('show', 'HEAD:owner.txt'), 'original')
-  writeFileSync(JOURNAL, '{"entries":[]}\n')
-  assert.equal(await commitJournal({ run }), true)
-  assert.deepEqual(git('diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD').trim().split('\n'), [JOURNAL])
-  assert.equal(git('diff', '--cached', '--name-only').trim(), 'owner.txt')
 }))
 
 await test('a concurrent conflicting push retains the local commit and staged owner work, and aborts the rebase', async () => sandbox(async dir => {
@@ -70,19 +63,20 @@ await test('a concurrent conflicting push retains the local commit and staged ow
   assert.match(git('status', '--porcelain'), /owner\.txt/)
 }))
 
-await test('invalid schedule JSON, impossible dates and duplicate ids fail without modifying data', async () => sandbox(async dir => {
-  mkdirSync(join(dir, 'source/_data'), { recursive: true }); process.chdir(dir)
-  const file = 'source/_data/schedule.json'
+await test('invalid schedule JSON, impossible dates and duplicate ids fail without modifying data', async () => sandbox(async (dir, fixture) => {
+  process.chdir(dir)
+  const file = join(fixture.directory, 'schedule.json')
   const task = { id: 'a', text: 'task', done: false, when: { type: 'post', match: 'x' } }
   for (const raw of ['broken', 'null', JSON.stringify({ days: { '2026-02-30': [task] } }),
     JSON.stringify({ days: { '2026-01-01': [task, task] } }), JSON.stringify({ days: { '2026-01-01': [{ ...task, done: 'false' }] } })]) {
     writeFileSync(file, raw)
-    await assert.rejects(autoComplete(), /日程数据无效/)
+    await assert.rejects(fixture.reload())
+    await assert.rejects(autoComplete(), /尚未加载/)
     assert.equal(readFileSync(file, 'utf8'), raw)
   }
 }))
 
-await test('reply completion can recover from a missed daily report without exposing old bodies in the report', async () => sandbox(async dir => {
+await test('reply completion can recover from a missed daily report without exposing old bodies in the report', async () => sandbox(async (dir, fixture) => {
   mkdirSync(join(dir, 'source/_data'), { recursive: true }); mkdirSync(join(dir, 'source/_posts'), { recursive: true })
   const at = new Date(Date.now() - 2 * 86400000).toISOString()
   const day = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' }).format(new Date(Date.now() - 3 * 86400000))
@@ -103,7 +97,7 @@ await test('reply completion can recover from a missed daily report without expo
   assert.doesNotMatch(JSON.stringify(comments.completionSignals), /private body/)
   const git = gitAt(dir); git('init', '-q'); identity(git); git('commit', '--allow-empty', '-qm', 'baseline')
   process.chdir(dir)
-  writeFileSync('source/_data/schedule.json', JSON.stringify({ days: { [day]: [{ id: 'reply', text: 'reply', done: false, when: { type: 'reply' } }] } }))
+  await fixture.set('schedule', { days: { [day]: [{ id: 'reply', text: 'reply', done: false, when: { type: 'reply' } }] } })
   assert.equal((await autoComplete({ ownerLogin: 'owner', comments })).changed, 1)
 }))
 
@@ -145,6 +139,7 @@ await test('both model-generated page writers disable executable Hexo tags in th
   const newsEntry = new URL('../../nanaly/news.mjs', import.meta.url).href
   const source = `
     process.argv.push('--dry');
+    await (await import(${JSON.stringify(new URL('../../private-content-client.mjs', import.meta.url).href)})).initializePrivateContent();
     let logs=[]; console.log=(...args)=>logs.push(args.join(' '));
     globalThis.fetch=async(url,init)=> {
       if (init.redirect !== 'error') throw new Error('API redirects must be refused');

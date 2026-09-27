@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { ApiError, invariant } from './errors.mjs';
-import { processResult } from './process.mjs';
+import { BoundedQueue, processResult } from './process.mjs';
 import { diagnostics, normalizeOutput, pythonTraceback } from './validation.mjs';
 
 const LIMIT = 131072, SNAPSHOT_LIMIT = 32 * 1024 * 1024;
@@ -12,17 +12,34 @@ const stringResult = result => ({ ...result, stdout: result.stdout.toString('utf
 const status = result => result.reason || (result.code === 0 ? 'accepted' : 'runtime_error');
 const dockerEnv = () => Object.fromEntries(['PATH', 'HOME', 'DOCKER_HOST', 'DOCKER_CONTEXT', 'DOCKER_CONFIG', 'XDG_RUNTIME_DIR'].filter(key => process.env[key]).map(key => [key, process.env[key]]));
 export class DockerRunner {
-  constructor(store, { image = 'nanaly-runner:1', docker = 'docker', concurrency = 2, execute = processResult, spawnProcess = spawn } = {}) {
+  constructor(store, { image = 'nanaly-runner:1', docker = 'docker', concurrency = 2, execute = processResult, spawnProcess = spawn, cliConcurrency = 4, cliQueueLimit = 16, cliWait = 10000 } = {}) {
     this.instanceId = createHash('sha256').update(store.directory).digest('hex').slice(0, 24);
     this.store = store; this.image = image; this.docker = docker; this.concurrency = concurrency; this.execute = execute;
     this.spawnProcess = spawnProcess;
+    // PTYs have their own bounded session count. All short-lived Docker CLIs,
+    // including work in a live shell, share this host-side admission limit.
+    this.cliQueue = new BoundedQueue({ concurrency: cliConcurrency, maxQueued: cliQueueLimit, wait: cliWait });
+    // Killing/removing containers must remain possible while regular execs are full.
+    this.controlQueue = new BoundedQueue({ concurrency: 2, maxQueued: 16, wait: cliWait });
+    this.pendingControls = new Map();
     this.active = new Map(); this.containers = new Set(); this.busy = new Set(); this.store.busy = this.busy;
     this.cache = null; this.lastHealth = 0;
     invariant(!store.directory.includes(','), 500, 'INVALID_PATH', '数据目录不能包含逗号。');
   }
-  cli(args, options = {}) {
-    invariant(!this.closing || args[0] !== 'create', 503, 'SERVER_CLOSING', '后端正在停止，请稍后重试。');
-    return this.execute(this.docker, args, { ...options, env: dockerEnv() }); }
+  cli(args, { control = false, signal, ...options } = {}) {
+    const cleanup = ['kill', 'rm'].includes(args[0]);
+    const key = cleanup ? JSON.stringify(args) : null;
+    if (key && this.pendingControls.has(key)) return this.pendingControls.get(key);
+    const queue = cleanup || control ? this.controlQueue : this.cliQueue;
+    const pending = queue.run(() => {
+      invariant(!this.closing || args[0] !== 'create', 503, 'SERVER_CLOSING', '后端正在停止，请稍后重试。');
+      return this.execute(this.docker, args, { ...options, env: dockerEnv() });
+    }, { signal });
+    if (!key) return pending;
+    const tracked = pending.finally(() => this.pendingControls.delete(key));
+    this.pendingControls.set(key, tracked);
+    return tracked;
+  }
   environment() { return dockerEnv(); }
   async removeContainer(name) {
     const result = await this.cli(['rm', '-f', name], { timeout: 10000 });
@@ -100,7 +117,7 @@ export class DockerRunner {
     invariant((await this.health()).ready, 503, 'RUNNER_UNAVAILABLE', '隔离执行环境尚未就绪，请完成后端 Docker 配置。');
     const { runId, name } = await this.slot(notCancelled);
     const abort = () => {
-      for (const container of this.containers) if (container === name || container.startsWith(name + '-case-')) void this.cli(['kill', container], { timeout: 5000 });
+      for (const container of this.containers) if (container === name || container.startsWith(name + '-case-')) void this.cli(['kill', container], { timeout: 5000 }).catch(() => {});
     };
     let workspace, directory, containerCreated = false, ownsWorkspace = false;
     try {
@@ -134,8 +151,8 @@ export class DockerRunner {
       invariant((await this.cli(['start', name], { timeout: 10000 })).code === 0, 503, 'RUNNER_START_FAILED', '隔离容器启动失败。');
       const exec = async (args, input, timeout = 5000, limit = LIMIT) => {
         notCancelled();
-        return this.cli(['exec', '-i', name, ...args], { input, timeout, limit,
-          onLimit: () => { void this.cli(['kill', name], { timeout: 5000 }); } });
+        return this.cli(['exec', '-i', name, ...args], { input, timeout, limit, signal,
+          onLimit: () => { void this.cli(['kill', name], { timeout: 5000 }).catch(() => {}); } });
       };
       // Refuse execution if Docker accepted flags but cgroups do not actually enforce limits.
       const guard = await exec(['python3', '/opt/nanaly/check-limits.py']);
@@ -222,8 +239,8 @@ export class DockerRunner {
               invariant(caseGuard.code === 0, 503, 'LIMITS_UNAVAILABLE', '测试容器资源限制未生效。');
               // `import torch` alone takes a few seconds on one CPU, so Python gets a longer per-case limit.
               executed = stringResult(await this.cli(['exec', '-i', caseName, ...(python ? ['python3', '/input/main.py'] : ['/input/program'])], {
-                input: test.input, timeout: python ? 15000 : 3000, limit: LIMIT,
-                onLimit: () => { void this.cli(['kill', caseName], { timeout: 5000 }); }
+                input: test.input, timeout: python ? 15000 : 3000, limit: LIMIT, signal,
+                onLimit: () => { void this.cli(['kill', caseName], { timeout: 5000 }).catch(() => {}); }
               }));
             } finally { await this.removeContainer(caseName); }
             let verdict = status(executed);
@@ -301,6 +318,8 @@ export class DockerRunner {
   }
   async close() {
     this.closing = true;
-    await Promise.all([...this.containers].map(name => this.removeContainer(name)));
+    const drained = this.cliQueue.close();
+    try { await Promise.all([...this.containers].map(name => this.removeContainer(name))); }
+    finally { await drained; await this.controlQueue.idle(); }
   }
 }

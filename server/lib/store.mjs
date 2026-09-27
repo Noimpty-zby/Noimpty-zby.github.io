@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { createHash, randomUUID } from 'node:crypto';
 import { ApiError, invariant } from './errors.mjs';
+import { PRIVATE_CONTENT_NAMES, emptyPrivateContent, privateContentName, validatePrivateContent } from './private-content.mjs';
 
 const checksum = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export const emptyState = () => ({ memories: [], goals: [], notes: [], experiences: [], events: [] });
@@ -66,10 +67,22 @@ export class PrivateStore {
     }
     await fs.mkdir(path.join(this.directory, 'workspaces'), { recursive: true, mode: 0o700 });
     await fs.mkdir(path.join(this.directory, 'jobs'), { recursive: true, mode: 0o700 });
+    // A random namespace for browser drafts; unrelated to credentials and stable across token rotation.
+    const identity = await this.readRecord('identity', null);
+    invariant(identity === null || typeof identity === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(identity), 500, 'STORE_CORRUPT', '私有存储身份无效，后端已停止。');
+    this.identity = identity || randomUUID();
+    if (!identity) await this.writeRecord('identity', this.identity);
     this.state = await this.readRecord('state', { revision: 0, data: emptyState() });
     validateData(this.state.data);
     this.history = await this.readRecord('history', { runs: [] });
     this.workspaces = await this.readRecord('workspaces', { items: {} });
+    this.privateContent = {};
+    for (const name of PRIVATE_CONTENT_NAMES) {
+      const value = await this.readRecord('private-' + name, { revision: 0, data: emptyPrivateContent(name) });
+      invariant(value && Number.isSafeInteger(value.revision) && value.revision >= 0, 500, 'STORE_CORRUPT', '私密资料版本无效，后端已停止。');
+      validatePrivateContent(name, value.data);
+      this.privateContent[name] = value;
+    }
     return this;
   }
   async readRecord(name, fallback) {
@@ -101,6 +114,27 @@ export class PrivateStore {
     return result;
   }
   getState() { return structuredClone(this.state); }
+  getPrivateContent(name) {
+    privateContentName(name);
+    return structuredClone(this.privateContent[name]);
+  }
+  putPrivateContent(name, revision, data) {
+    privateContentName(name);
+    validatePrivateContent(name, data);
+    // Capture only the validated value; an in-process caller must not mutate it
+    // while another disk write is ahead in the serial queue.
+    const captured = structuredClone(data);
+    return this.serial(async () => {
+      invariant(Number.isSafeInteger(revision) && revision >= 0, 400, 'INVALID_REVISION', '缺少有效的数据版本。');
+      const current = this.privateContent[name];
+      invariant(revision === current.revision, 409, 'PRIVATE_CONTENT_CONFLICT', '私密资料已被另一设备或任务更新，请合并后重试。', this.getPrivateContent(name));
+      invariant(revision < Number.MAX_SAFE_INTEGER, 409, 'PRIVATE_CONTENT_REVISION_LIMIT', '资料版本已达上限，请联系管理员。');
+      const next = { revision: revision + 1, data: captured };
+      await this.writeRecord('private-' + name, next);
+      this.privateContent[name] = next;
+      return this.getPrivateContent(name);
+    });
+  }
   putState(revision, data) {
     validateData(data);
     return this.serial(async () => {

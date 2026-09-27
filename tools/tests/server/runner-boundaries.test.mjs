@@ -137,7 +137,7 @@ test('syntax-only workspace check never commits or creates a replacement workspa
   const docker=mockDocker(),runner=new DockerRunner(store,{execute:docker.execute})
   const result=await runner.run(validateRun({language:'linux',code:'touch should-not-exist',mode:'check',workspaceId:workspace.workspaceId,workspaceRevision:0}))
   assert.equal(result.status,'checked');assert.equal(result.workspaceId,undefined)
-  assert.equal(result.workspaceCommitted,undefined)
+  assert.equal(result.workspaceCommitted,false)
   assert.equal(store.getWorkspace(workspace.workspaceId).revision,0)
   const commands=docker.calls.filter(call=>call.args.includes('/input/main.sh'))
   assert.equal(commands.length,1);assert.ok(commands[0].args.includes('-n'))
@@ -154,6 +154,7 @@ for(const language of ['git','linux'])test(`${language} syntax checks ignore a l
   const result=await runner.run(validateRun({language,code:'touch must-not-run',mode:'check',workspaceId:workspace.workspaceId,workspaceRevision:0}))
   assert.equal(result.status,'checked')
   assert.equal(result.workspaceId,undefined,'a check must not report or replace workspace state')
+  assert.equal(result.workspaceCommitted,false,'older clients still receive the explicit no-commit flag')
   assert.equal(runner.busy.has(workspace.workspaceId),true,'the live shell still owns its lock')
   assert.equal(store.getWorkspace(workspace.workspaceId).revision,1)
   assert.deepEqual(await fs.readFile(store.snapshotPath(workspace)),snapshot)
@@ -164,6 +165,7 @@ for(const language of ['git','linux'])test(`${language} syntax checks ignore a l
   // A deleted workspace ID from an older page must not prevent standalone syntax checking either.
   const stale=await runner.run(validateRun({language,code:'true',mode:'check',workspaceId:'11111111-1111-4111-8111-111111111111',workspaceRevision:5}))
   assert.equal(stale.status,'checked')
+  assert.equal(stale.workspaceCommitted,false)
 })
 
 test('cancelling a running shell kills its container and cannot commit the changed workspace',{timeout:5000},async t=>{

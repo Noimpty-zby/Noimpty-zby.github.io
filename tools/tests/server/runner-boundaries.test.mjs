@@ -371,3 +371,23 @@ test('go builds seed the writable cache from the warmed image copy first',async 
   const build=docker.calls.findIndex(c=>c.args.includes('go')&&c.args.includes('build'))
   assert.ok(copy>=0&&build>copy,'cache copied before go build')
 })
+
+for(const failure of ['listing','timeout','removal'])test(`startup ${failure} failure preserves job inputs and refuses a false clean state`,async t=>{
+  const store=await fixture(t),job='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  const directory=path.join(store.directory,'jobs',job)
+  await fs.mkdir(directory);await fs.writeFile(path.join(directory,'main.sh'),'synthetic input')
+  let fail=true
+  const docker=mockDocker(args=>{
+    if(args[0]==='ps')return fail&&failure==='listing'?output('',1):fail&&failure==='timeout'?output('aaaaaaaaaaaa',0,'timeout'):output('aaaaaaaaaaaa')
+    if(args[0]==='rm'&&fail&&failure==='removal')return output('',1)
+  })
+  const runner=new DockerRunner(store,{execute:docker.execute})
+  await assert.rejects(runner.cleanAbandoned(),{code:'RUNNER_CLEANUP_FAILED'})
+  assert.equal(await fs.readFile(path.join(directory,'main.sh'),'utf8'),'synthetic input')
+  if(failure==='removal')assert.equal(runner.containers.has('aaaaaaaaaaaa'),true,'shutdown can retry the failed removal')
+  else assert.equal(docker.calls.some(x=>x.args[0]==='rm'),false)
+  fail=false;await runner.cleanAbandoned()
+  assert.equal(runner.containers.size,0)
+  assert.deepEqual(await fs.readdir(path.join(store.directory,'jobs')),[])
+  await runner.close()
+})

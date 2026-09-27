@@ -83,9 +83,10 @@ export class DockerRunner {
   }
   async cleanAbandoned() {
     const result = await this.cli(['ps', '-aq', '--filter', 'label=nanaly.runner=1', '--filter', 'label=nanaly.owner=' + this.instanceId], { timeout: 5000 });
-    if (result.code !== 0) return;
+    invariant(result.code === 0 && !result.reason, 503, 'RUNNER_CLEANUP_FAILED', '无法检查遗留执行容器，后端尚未启动，请检查 Docker。');
     const ids = result.stdout.toString('utf8').trim().split(/\s+/).filter(id => /^[a-f0-9]{12,64}$/.test(id));
-    for (const id of ids) await this.cli(['rm', '-f', id], { timeout: 10000 });
+    for (const id of ids) this.containers.add(id);
+    for (const id of ids) await this.removeContainer(id);
     // Jobs contain input only, never user-controlled path names.
     for (const name of await fs.readdir(path.join(this.store.directory, 'jobs'))) {
       if (/^[a-f0-9-]{36}$/.test(name)) await fs.rm(path.join(this.store.directory, 'jobs', name), { recursive: true, force: true });

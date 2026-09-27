@@ -1918,4 +1918,35 @@ await test('辅助日程正文悬挂会超时释放共享请求，重试成功�
   assert.ok(env.timers.timeout.every(timer => !timer || timer.ms !== 20000), '完成的请求不能遗留截止定时器')
 })
 
+await test('未连接私有后端仍可联动已解锁聊天、语音和文章，日程仍拒绝读取', async () => {
+  for (const missingAgent of [false, true]) {
+    const env = boot(), voice = fakeVoice(env)
+    let reads = 0
+    env.win.NANALY_AGENT.configured = () => false
+    env.win.NANALY_AGENT.privateContent = async () => { reads++; throw new Error('must not read private schedule') }
+    if (missingAgent) delete env.win.NANALY_AGENT
+    const hour = new Date(env.clockNow()).getHours()
+    env.advance((12 - hour) * 3600000)
+    env.document.querySelector = selector => selector === 'h1.post-title' ? { textContent: '矩阵转置' } : null
+    await turnOn(env)
+    assert.equal(await env.win.MAO_PET.testLoadState(), null)
+    assert.equal(reads, 0)
+    assert.ok(env.win.MAO_PET.lines().some(([line]) => line.includes('矩阵转置')))
+    emitChat(env, 'thinking', 'without-backend')
+    assert.equal(env.bubble().textContent, '在想了喵…')
+    emitChat(env, 'complete', 'without-backend', '这段回答来自当前聊天')
+    assert.equal(env.bubble().textContent, '这段回答来自当前聊天')
+    voice.emit({ id: 'chat-without-backend', priority: 'chat', phase: 'playing', text: '正在朗读当前聊天' })
+    assert.equal(env.bubble().textContent, '正在朗读当前聊天')
+    emitSchedule(env, [{ done: true }])
+    assert.equal(await env.win.MAO_PET.testLoadState(), null)
+    assert.equal(reads, 0)
+    env.win.NOIMPTY_GATE = { unlocked: () => false }
+    emitChat(env, 'complete', 'without-backend', 'locked chat must stay hidden')
+    voice.emit({ id: 'chat-without-backend', priority: 'chat', phase: 'playing', text: 'locked voice must stay hidden' })
+    assert.equal(env.bubble().dataset.on, undefined)
+    assert.equal(env.win.MAO_PET.lines().some(([line]) => line.includes('矩阵转置')), false)
+  }
+})
+
 console.log(`\n${passed} 项通过`)

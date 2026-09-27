@@ -28,18 +28,28 @@ async function main() {
   console.log('娜娜莉私有后端已启动，端口 ' + port + '。访问令牌及私有数据不会写入日志。');
 }
 let closing = false;
-async function close() {
+async function close(exitCode = 0) {
   if (closing) return; closing = true;
-  const timer = setTimeout(() => process.exit(1), 15000); timer.unref();
-  // Stop accepting requests, abort containers, then let handlers release locks before
-  // releasing the storage lock. Never permit a second process to race an active save.
+  // A starting shell plus its bounded file-save/snapshot cleanup can legitimately
+  // exceed 15 seconds. Keep a final deadline, without truncating normal saves.
+  const timer = setTimeout(() => process.exit(1), 90000);
+  let failed = exitCode !== 0;
+  const cleanup = async (name, operation) => {
+    try { await operation(); }
+    catch { failed = true; console.error('后端停止时' + name + '未完成；下次启动将检查遗留资源。'); }
+  };
+  // Stop accepting requests before terminal cleanup. Retain the storage lock until
+  // every admitted HTTP handler and atomic save has finished.
   const requestsDone = server ? new Promise(resolve => server.close(resolve)) : Promise.resolve();
-  // Pages are told to reconnect; open shells then save their workspaces before containers go.
-  terminals?.close(); await sessions?.close(); await runner?.close(); await requestsDone; await store?.close();
-  clearTimeout(timer); process.exit(0);
+  await cleanup('通知终端', () => terminals?.close());
+  await cleanup('保存终端', () => sessions?.close());
+  await cleanup('清理执行容器', () => runner?.close());
+  await requestsDone;
+  await cleanup('关闭私有存储', () => store?.close());
+  clearTimeout(timer); process.exit(failed ? 1 : 0);
 }
-process.on('SIGINT', close); process.on('SIGTERM', close);
+process.on('SIGINT', () => { void close(); }); process.on('SIGTERM', () => { void close(); });
 main().catch(async error => {
   console.error(error?.code ? '后端启动失败：' + error.code : '后端启动失败，请检查令牌、数据目录及端口配置。');
-  await store?.close(); process.exitCode = 1;
+  await close(1);
 });

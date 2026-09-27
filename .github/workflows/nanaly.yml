@@ -41,7 +41,7 @@ on:
         options: [reply, patrol, notes, news, react, column, all]
         default: patrol
       dry:
-        description: '只演练不动真格'
+        description: '只预览不发布（仍调用模型/搜索，可能计费）'
         type: boolean
         default: true
       force:

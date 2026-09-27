@@ -16,6 +16,8 @@ ExecStartPre=/usr/bin/docker info --format {{.ID}}
 ExecStart=/usr/local/bin/node /opt/blog/server/index.mjs
 Restart=on-failure
 RestartSec=5
+# Let the API finish bounded terminal saves before systemd force-kills it.
+TimeoutStopSec=105s
 UMask=0077
 NoNewPrivileges=yes
 PrivateTmp=yes

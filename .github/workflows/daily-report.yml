@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       dry:
-        description: '只生成不发送（私有仓库可下载报告产物）'
+        description: '只生成不发送（仍调用模型，可能计费；仅私有仓库保留产物）'
         type: boolean
         default: false
 

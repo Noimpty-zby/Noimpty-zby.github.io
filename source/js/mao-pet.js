@@ -475,7 +475,7 @@
     if (!voiceHandler) voiceHandler = state => {
       play?.refresh()
       if (!model || document.hidden) return
-      if (!stateAllowed()) {
+      if (!pageAllowed()) {
         speech = null; stopVoiceMouth()
         if (bubble) delete bubble.dataset.on
         return
@@ -632,8 +632,13 @@
 
   // 日程仅从已连接的鉴权后端读取；未连接时不播报私人安排。
   let siteState = null, statePending = null, stateRaw = null, stateDay = '', stateVersion = 0
+  // Page/chat context only needs the site gate. Private schedules additionally
+  // need a backend connection; ordinary chat and speech work without one.
+  const pageAllowed = () => {
+    try { return window.NOIMPTY_GATE?.unlocked() === true } catch (_) { return false }
+  }
   const stateAllowed = () => {
-    try { return window.NOIMPTY_GATE?.unlocked() === true && window.NANALY_AGENT?.configured() === true } catch (_) { return false }
+    try { return pageAllowed() && window.NANALY_AGENT?.configured() === true } catch (_) { return false }
   }
   const clearState = () => { stateVersion++; siteState = stateRaw = statePending = null; stateDay = '' }
   window.NANALY_AGENT?.subscribe(state => { if (!state.connected || state.revision === null) clearState() })
@@ -751,7 +756,7 @@
     const part = dayPartNow()
     if (part.name === '深夜') return withFace(part.lines, part.face)
 
-    const title = stateAllowed() ? postTitle() : null
+    const title = pageAllowed() ? postTitle() : null
     if (title) return CONFIG.postLines.map(([t, mood]) => [t.replace('{题}', title), mood])
 
     const here = whereAmI()
@@ -771,7 +776,7 @@
 
   // 读取构建时生成的真实课程卡片与文章列表，不把篇数当作已学章节数。
   const progressLines = () => {
-    if (!stateAllowed()) return []
+    if (!pageAllowed()) return []
     try {
       const cards = Array.from(document.querySelectorAll('.noimpty-track-card'))
       const lines = cards.map(card => {
@@ -869,7 +874,7 @@
       chat = { phase: next.phase, turnId: String(next.turnId || ''), text: '' }
       return
     }
-    if (!stateAllowed()) {
+    if (!pageAllowed()) {
       chat = { phase: 'idle', turnId: '', text: '' }; stopTalking()
       if (bubble) delete bubble.dataset.on
       return

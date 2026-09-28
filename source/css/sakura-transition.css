@@ -1,0 +1,247 @@
+/* Scene-change artwork. Motion is scheduled by sakura-transition.js only. */
+.sakura-transition {
+  --scene-pink: #f9e3eb;
+  --scene-blue: #e3edf6;
+  --scene-lilac: #ede6f4;
+  --scene-line: rgba(233, 89, 120, 0.18);
+  --scene-sheen: rgba(255, 255, 255, 0.62);
+  --scene-ink: #a35c7c;
+  --scene-star: #e95978;
+  --scene-ring: rgba(163, 92, 124, 0.35);
+  --scene-glow: rgba(255, 255, 255, 0.75);
+  position: fixed;
+  z-index: 8500;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  contain: layout paint style;
+  isolation: isolate;
+}
+
+.sakura-transition[hidden] {
+  display: none !important;
+}
+
+.sakura-transition__band {
+  position: absolute;
+  left: -15%;
+  width: 130%;
+  height: 36%;
+  box-sizing: border-box;
+  overflow: hidden;
+  transform: translate3d(-125%, 0, 0) skewX(-12deg);
+  transform-origin: center;
+  border-block: 1px solid var(--scene-line);
+  background-color: var(--band-color);
+  background-image: linear-gradient(110deg, transparent 34%, var(--scene-sheen) 62%, transparent 84%);
+}
+
+.sakura-transition__band--1 {
+  --band-color: var(--scene-pink);
+  top: -4%;
+}
+
+.sakura-transition__band--2 {
+  --band-color: var(--scene-blue);
+  top: 32%;
+}
+
+.sakura-transition__band--3 {
+  --band-color: var(--scene-lilac);
+  top: 68%;
+}
+
+/* Hairline trails give each moving panel a little illustrated momentum. */
+.sakura-transition__band::before,
+.sakura-transition__band::after {
+  position: absolute;
+  content: "";
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--scene-line), transparent);
+}
+
+.sakura-transition__band::before {
+  top: 28%;
+  left: 9%;
+  width: 49%;
+  box-shadow: 12vw 11px 0 var(--scene-line);
+}
+
+.sakura-transition__band::after {
+  right: 8%;
+  bottom: 21%;
+  width: 34%;
+  box-shadow: -8vw -9px 0 var(--scene-line);
+}
+
+.sakura-transition__band--2::before {
+  left: 37%;
+  width: 39%;
+  top: 15%;
+}
+
+.sakura-transition__band--3::after {
+  right: 32%;
+  width: 49%;
+  bottom: 40%;
+}
+
+.sakura-transition__sigil {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 160px;
+  height: 160px;
+  opacity: 0;
+  color: var(--scene-ink);
+  text-align: center;
+  translate: -50% -50%;
+  background: radial-gradient(circle, var(--scene-glow) 0, transparent 68%);
+}
+
+.sakura-transition__sigil::before,
+.sakura-transition__sigil::after {
+  position: absolute;
+  content: "";
+  width: 5px;
+  height: 5px;
+  top: 77px;
+  background: var(--scene-star);
+  transform: rotate(45deg);
+  opacity: 0.6;
+}
+
+.sakura-transition__sigil::before {
+  left: 7px;
+}
+
+.sakura-transition__sigil::after {
+  right: 7px;
+}
+
+.sakura-transition__ring {
+  position: absolute;
+  inset: 23px;
+  border: 1px solid var(--scene-ring);
+  border-radius: 50%;
+}
+
+.sakura-transition__ring::before {
+  position: absolute;
+  content: "";
+  inset: 10px;
+  border: 1px solid var(--scene-ring);
+  border-radius: 50%;
+  opacity: 0.55;
+}
+
+.sakura-transition__ring::after {
+  position: absolute;
+  content: "";
+  left: calc(50% - 3px);
+  top: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--scene-star);
+  box-shadow: 0 112px 0 var(--scene-star);
+  opacity: 0.65;
+}
+
+.sakura-transition__star {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--scene-star);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 42px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.sakura-transition__caption {
+  position: absolute;
+  left: 50%;
+  bottom: -13px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.8;
+  letter-spacing: 0.2em;
+}
+
+.sakura-transition__petal {
+  position: absolute;
+  left: var(--petal-x, 50%);
+  top: var(--petal-y, 50%);
+  width: 13px;
+  height: 8px;
+  border-radius: 2px 75% 2px 75%;
+  opacity: 0;
+  background: linear-gradient(135deg, var(--scene-sheen), var(--scene-star));
+  transform: translate3d(0, 0, 0) rotate(-24deg);
+}
+
+.sakura-transition__petal:nth-of-type(even) {
+  width: 9px;
+  height: 6px;
+  border-radius: 75% 2px 75% 2px;
+}
+
+html[data-theme="dark"] .sakura-transition {
+  --scene-pink: #3c2d3c;
+  --scene-blue: #2c3849;
+  --scene-lilac: #352f43;
+  --scene-line: rgba(204, 159, 190, 0.15);
+  --scene-sheen: rgba(197, 174, 207, 0.07);
+  --scene-ink: #d5b7cd;
+  --scene-star: #d8a5be;
+  --scene-ring: rgba(216, 165, 190, 0.3);
+  --scene-glow: rgba(163, 122, 167, 0.13);
+}
+
+@media (max-width: 600px) {
+  .sakura-transition__sigil {
+    width: 128px;
+    height: 128px;
+  }
+
+  .sakura-transition__sigil::before,
+  .sakura-transition__sigil::after {
+    top: 61px;
+    width: 4px;
+    height: 4px;
+  }
+
+  .sakura-transition__ring {
+    inset: 20px;
+  }
+
+  .sakura-transition__ring::after {
+    box-shadow: 0 86px 0 var(--scene-star);
+  }
+
+  .sakura-transition__star {
+    font-size: 34px;
+  }
+
+  .sakura-transition__caption {
+    bottom: -14px;
+    font-size: 10px;
+    letter-spacing: 0.13em;
+  }
+
+  .sakura-transition__band::after,
+  .sakura-transition__petal:nth-child(n + 8) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .sakura-transition {
+    display: none !important;
+  }
+}

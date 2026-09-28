@@ -1135,6 +1135,7 @@ inject:
     - <link rel="stylesheet" href="/css/schedule.css">
     - <link rel="stylesheet" href="/css/sakura.css">
     - <link rel="stylesheet" href="/css/sakura-components.css">
+    - <link rel="stylesheet" href="/css/sakura-transition.css">
     # 内页（板块、课程、资讯、日程、归档……）的页头和卡片。排在上面几个后面，同权重时以它为准。
     - <link rel="stylesheet" href="/css/interior.css">
     - <link rel="stylesheet" href="/css/nanaly-workspace.css">
@@ -1189,6 +1190,7 @@ inject:
     - <script src="/js/mao-play.js"></script>
     - <script src="/js/mao-pet.js"></script>
     - <script src="/js/sakura-motion.js"></script>
+    - <script src="/js/sakura-transition.js"></script>
 
 # CDN Settings
 # Don't modify the following settings unless you know how they work

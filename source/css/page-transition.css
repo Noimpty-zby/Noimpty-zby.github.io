@@ -1,0 +1,199 @@
+/* 切页转场「贴纸泡泡」，脚本在 source/js/page-transition.js。
+ * 泡泡的形状由脚本用 clip-path 动画给出；这里只管颜色、圆点底纹和中间的小角色。
+ * 泡泡是三层叠出来的贴纸：最底下描边（比底色大 11px）、白边（大 8px）、最上面带圆点的底色。
+ * 层级在页面、导航和右侧按钮（8900）之上，在音乐、Mao、对话窗口（9000+）和暗号门之下 ——
+ * 那几个跨页常驻，切页时不该跟着被盖一下。 */
+
+.noimpty-pt {
+  --pt-line: #5b3a48;
+  --pt-rim: #fff;
+  --pt-fill:
+    radial-gradient(circle at 50% calc(50% - 24px), rgba(255, 255, 255, .9) 0, rgba(255, 255, 255, 0) 36%),
+    radial-gradient(circle, rgba(255, 143, 171, .26) 0 2.6px, transparent 3.3px) 0 0 / 30px 30px,
+    radial-gradient(circle, rgba(184, 156, 255, .22) 0 2px, transparent 2.7px) 15px 15px / 30px 30px,
+    linear-gradient(160deg, #ffeef4 0%, #ffe3ed 52%, #eee6ff 100%);
+  --pt-halo: radial-gradient(circle, rgba(255, 255, 255, .95) 0 52%, rgba(255, 255, 255, 0) 71%);
+  --pt-label-bg: #fff;
+  --pt-label-ink: #5b3a48;
+  --pt-label-line: #5b3a48;
+  --pt-dot: #ff8fab;
+  position: fixed;
+  z-index: 8950;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+
+.noimpty-pt[hidden] {
+  display: none;
+}
+
+html[data-theme="dark"] .noimpty-pt {
+  --pt-line: #ffadc6;
+  --pt-rim: #fff2f7;
+  --pt-fill:
+    radial-gradient(circle at 50% calc(50% - 24px), rgba(255, 143, 180, .26) 0, rgba(255, 143, 180, 0) 40%),
+    radial-gradient(circle, rgba(255, 143, 171, .15) 0 2.6px, transparent 3.3px) 0 0 / 30px 30px,
+    radial-gradient(circle, rgba(184, 156, 255, .13) 0 2px, transparent 2.7px) 15px 15px / 30px 30px,
+    linear-gradient(160deg, #3d2644 0%, #342341 50%, #29223f 100%);
+  --pt-halo: radial-gradient(circle, rgba(255, 214, 229, .16) 0 50%, rgba(255, 214, 229, 0) 71%);
+  --pt-label-bg: #3a2939;
+  --pt-label-ink: #ffe3ec;
+  --pt-label-line: #ffadc6;
+  --pt-dot: #ffadc6;
+}
+
+.noimpty-pt__wave {
+  position: absolute;
+  inset: 0;
+  /* 脚本接管之前先是一个看不见的点，放开 hidden 的那一帧不会闪出整屏 */
+  clip-path: circle(0 at 50% 50%);
+  -webkit-clip-path: circle(0 at 50% 50%);
+}
+
+.noimpty-pt__wave--line {
+  background: var(--pt-line);
+}
+
+.noimpty-pt__wave--rim {
+  background: var(--pt-rim);
+}
+
+.noimpty-pt__wave--fill {
+  background: var(--pt-fill);
+}
+
+/* 小角色压在正中略偏上：脚本收拢泡泡时对准的就是它的中心（视口中心往上 24px） */
+.noimpty-pt__card {
+  position: absolute;
+  top: calc(50% - 98px);
+  left: calc(50% - 140px);
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  opacity: 0;
+  transform-origin: 50% 74px;
+}
+
+.noimpty-pt__halo {
+  position: absolute;
+  top: -28px;
+  left: 38px;
+  width: 204px;
+  height: 204px;
+  border-radius: 50%;
+  background: var(--pt-halo);
+}
+
+.noimpty-pt__mascot {
+  position: relative;
+  display: block;
+  width: 148px;
+  height: 148px;
+}
+
+.noimpty-pt[data-state="cover"] .noimpty-pt__mascot {
+  animation: noimpty-pt-bob 1.1s ease-in-out .45s infinite;
+}
+
+.noimpty-pt__label {
+  position: relative;
+  max-width: 260px;
+  margin-top: 12px;
+  padding: 5px 16px 6px;
+  overflow: hidden;
+  border: 2.5px solid var(--pt-label-line);
+  border-radius: 999px;
+  background: var(--pt-label-bg);
+  box-shadow: 0 3px 0 rgba(91, 58, 72, .16);
+  color: var(--pt-label-ink);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 页面来得慢才出现的三个小点 */
+.noimpty-pt__dots {
+  display: flex;
+  gap: 7px;
+  height: 8px;
+  margin-top: 12px;
+  opacity: 0;
+}
+
+.noimpty-pt__dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pt-dot);
+}
+
+.noimpty-pt[data-state="cover"] .noimpty-pt__dots {
+  animation: noimpty-pt-show .25s ease-out .8s both;
+}
+
+.noimpty-pt[data-state="cover"] .noimpty-pt__dots i {
+  animation: noimpty-pt-hop .9s ease-in-out .8s infinite;
+}
+
+.noimpty-pt[data-state="cover"] .noimpty-pt__dots i:nth-child(2) { animation-delay: .95s; }
+.noimpty-pt[data-state="cover"] .noimpty-pt__dots i:nth-child(3) { animation-delay: 1.1s; }
+
+.noimpty-pt__sparkle {
+  position: absolute;
+  display: block;
+}
+
+.noimpty-pt__sparkle svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+.noimpty-pt__sparkle--a { top: -8px; left: 54px; width: 22px; height: 22px; color: #ffd35c; }
+.noimpty-pt__sparkle--b { top: 12px; right: 52px; width: 15px; height: 15px; color: #ff9fb8; }
+.noimpty-pt__sparkle--c { top: 110px; right: 44px; width: 12px; height: 12px; color: #b89cff; }
+
+.noimpty-pt[data-state="cover"] .noimpty-pt__sparkle {
+  animation: noimpty-pt-twinkle 1.3s ease-in-out .35s infinite;
+}
+
+.noimpty-pt[data-state="cover"] .noimpty-pt__sparkle--b { animation-delay: .6s; }
+.noimpty-pt[data-state="cover"] .noimpty-pt__sparkle--c { animation-delay: .85s; }
+
+@keyframes noimpty-pt-bob {
+  50% { transform: translateY(-5px); }
+}
+
+@keyframes noimpty-pt-twinkle {
+  0%, 100% { transform: scale(.55) rotate(0deg); opacity: .55; }
+  50% { transform: scale(1.05) rotate(20deg); opacity: 1; }
+}
+
+@keyframes noimpty-pt-show {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes noimpty-pt-hop {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-6px); }
+}
+
+@media (max-width: 600px) {
+  .noimpty-pt__card { top: calc(50% - 84px); transform-origin: 50% 60px; }
+  .noimpty-pt__halo { top: -24px; left: 56px; width: 168px; height: 168px; }
+  .noimpty-pt__mascot { width: 120px; height: 120px; }
+  .noimpty-pt__sparkle--c { top: 88px; }
+  .noimpty-pt__label { font-size: 14px; }
+}
+
+@media (prefers-reduced-motion: reduce), (forced-colors: active), print {
+  .noimpty-pt { display: none !important; }
+}

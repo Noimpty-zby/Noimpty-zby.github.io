@@ -26,6 +26,7 @@ export const TASKS = {
 };
 const MESSAGES = {
   closed: '终端已保存并关闭。', input_limit: '输入积压过多，终端已关闭；请重新打开。', idle: '网页离开超过 30 分钟，终端已保存并关闭。', lifetime: '终端已连续开了 3 小时，已保存；会自动重新打开。',
+  run_failed: '脚本监督异常，终端已关闭；请重新打开。',
   shutdown: '后端正在更新，终端已保存；稍后会自动重新连接。', reset: '运行环境已重置。', exit: '', disconnected: '连接断开，终端已保存。'
 };
 
@@ -197,8 +198,15 @@ export class SessionManager {
   async runInShell(host, request, { signal } = {}) {
     const notCancelled = () => invariant(!signal?.aborted, 499, 'RUN_CANCELLED', '本次执行已取消。');
     notCancelled();
+    invariant(!host.pty?.exited && !host.pty?.reason, 409, 'WORKSPACE_BUSY', '终端正在关闭，请稍后重试。');
+    invariant(host.workspace.language === request.language, 400, 'WORKSPACE_LANGUAGE', '工作区语言不匹配。');
+    invariant(!request.workspaceId || request.workspaceId === host.workspace.workspaceId, 400, 'INVALID_WORKSPACE', '工作区编号无效。');
+    invariant(!request.workspaceId || request.workspaceRevision === host.workspace.revision, 409, 'WORKSPACE_CONFLICT', '工作区已被另一设备修改，请刷新。', { workspaceRevision: host.workspace.revision });
     const id = randomUUID(), script = path.join(host.directory, `run-${id}.sh`);
-    const stop = () => { void host.exec(['pkill', '-KILL', '-f', `/input/run-${id}.sh`], { control: true }).catch(() => {}); };
+    // The helper watches this read-only mounted source. Removing it also cancels a
+    // Docker exec that has not started yet, without a pkill/startup race.
+    let stopping;
+    const stop = () => { stopping ||= fs.rm(script, { force: true }).catch(() => {}); };
     signal?.addEventListener('abort', stop, { once: true });
     try {
       await readable(script, () => fs.writeFile(script, request.code));
@@ -206,18 +214,27 @@ export class SessionManager {
       const cwd = await host.cwd();
       // Cancellation while the source or cwd was being prepared must not start code.
       notCancelled();
-      const executed = await this.runner.cli(['exec', '-i', '-w', cwd, host.name, 'timeout', '-k', '5', '30', 'bash', `/input/run-${id}.sh`],
+      const executed = await this.runner.cli(['exec', '-i', '-w', cwd, host.name, 'python3', '/opt/nanaly/run-in-shell.py', `/input/run-${id}.sh`],
         { input: request.stdin, timeout: 40000, limit: 131072, onLimit: stop, signal });
+      // Learner code shares the supervisor's uid and can kill it. A signal exit
+      // (including an explicit exit >= 128), supervisor failure, or lost Docker
+      // exec makes cleanup uncertain: finish the whole shell before replying.
+      // Normal cancellation uses helper code 126; timeout 124 cleans up itself.
+      const closed = executed.reason || executed.code === 125 || executed.code >= 128
+        ? await host.pty.hangup('run_failed') : null;
       notCancelled();
       const stderr = executed.stderr.toString('utf8').replaceAll(`/input/run-${id}.sh`, 'main.sh');
       const status = executed.reason || (executed.code === 124 ? 'timeout' : executed.code === 0 ? 'accepted' : 'runtime_error');
-      const summary = await host.exec(request.language === 'git' ? ['git', '-C', cwd, '-c', 'core.fsmonitor=false', 'status', '--short', '--branch'] : ['find', cwd, '-maxdepth', '2', '-not', '-path', '*/.git/*'], { timeout: 2000, limit: 8192 });
+      const summary = closed ? null : await host.exec(request.language === 'git' ? ['git', '-C', cwd, '-c', 'core.fsmonitor=false', 'status', '--short', '--branch'] : ['find', cwd, '-maxdepth', '2', '-not', '-path', '*/.git/*'], { timeout: 2000, limit: 8192 });
       notCancelled();
       return { runId: id, revision: request.revision, status, stdout: executed.stdout.toString('utf8'), stderr, diagnostics: diagnostics(stderr), tests: [],
-        exitCode: executed.code, cwd, workspaceSummary: summary.stdout.toString('utf8'), workspaceId: host.workspace.workspaceId, workspaceRevision: host.workspace.revision,
-        workspaceCommitted: false, warnings: ['终端开着：这次的改动在终端的环境里，终端关闭时一起保存。'] };
-    } finally {
+        exitCode: executed.code, cwd: closed?.cwd || cwd, workspaceSummary: summary?.stdout.toString('utf8') || '', workspaceId: host.workspace.workspaceId,
+        workspaceRevision: closed?.workspaceRevision ?? host.workspace.revision, workspaceCommitted: closed?.committed === true,
+        warnings: closed ? [...(closed.warnings || []), MESSAGES.run_failed] : ['终端开着：这次的改动在终端的环境里，终端关闭时一起保存。'] };
+    } catch (error) { notCancelled(); throw error; }
+    finally {
       signal?.removeEventListener('abort', stop);
+      await stopping;
       await fs.rm(script, { force: true });
     }
   }

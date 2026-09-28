@@ -244,4 +244,27 @@ await check('PDF extraction stops consuming page text when the character budget 
   assert.equal(destroyed, 1)
 })
 
+await check('corrupt stored files fail safely before previews or model input and preserve their bytes', async () => {
+  const doc = { id: 'file-corrupt-001', name: 'scan.pdf', type: 'pdf', text: 'readable', summary: '扫描图 1 页', images: [] }
+  for (const patch of [
+    { images: {} }, { images: [null] }, { images: [{ page: 1, dataURL: 'https://outside.invalid/image.jpg' }] },
+    { images: [{ page: 1, dataURL: 'data:image/jpeg;base64,' + 'A'.repeat(2000001) }] },
+    { images: Array.from({ length: 3 }, () => ({ page: 1, dataURL: 'data:image/jpeg;base64,AA==' })) },
+    { text: 'x'.repeat(100001) }, { summary: {} }, { type: 'unknown' }
+  ]) {
+    const item = { ...doc, ...patch }, h = boot([item]), m = h.mount()
+    await assert.rejects(h.api.content('read', [doc]), /重新附加/)
+    assert.match(await h.api.content('read', [doc], { strict: false }), /本轮未读取/)
+    await m.ui.restore([doc])
+    assert.equal(m.ui.refs().length, 0)
+    assert.equal(h.data.has(doc.id), true)
+  }
+})
+await check('cancelled restores never report an obsolete missing file in the next topic', async () => {
+  const h = boot(), m = h.mount()
+  const pending = m.ui.restore([{ id: 'file-missing-01', type: 'text', name: 'missing.txt' }])
+  m.ui.clear({ silent: true }); await pending
+  assert.equal(m.notices.length, 0)
+})
+
 console.log(`\n${passed} document attachment regression cases passed`)

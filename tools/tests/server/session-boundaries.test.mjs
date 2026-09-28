@@ -246,7 +246,7 @@ test('cancelling a shared-shell run during preparation never executes its script
   const api = await fixture(t), controller = new AbortController(), entered = deferred(), release = deferred();
   const directory = await fs.mkdtemp(path.join(api.store.directory, 'jobs', 'preparing-'));
   const host = {
-    name: 'existing-shell', directory, workspace: { workspaceId: 'workspace', revision: 0 },
+    name: 'existing-shell', directory, workspace: { workspaceId: 'workspace', language: 'linux', revision: 0 },
     cwd: async () => { entered.resolve(); await release.promise; return '/work'; },
     exec: async () => output()
   };
@@ -280,4 +280,70 @@ test('shell shutdown waits for an admitted atomic file save and cancels queued s
   assert.equal((await saving).error, undefined);
   assert.equal((await closing).committed, true);
   assert.equal(writes, 1);
+});
+
+test('shared-shell runs reject a mismatched language or stale revision before writing or executing', async t => {
+  const api = await fixture(t), session = await api.sessions.shell({ language: 'linux' });
+  const workspaceId = session.host.workspace.workspaceId;
+  const before = api.calls.length;
+  for (const [request, code] of [
+    [{ language: 'git', workspaceId, workspaceRevision: 0 }, 'WORKSPACE_LANGUAGE'],
+    [{ language: 'linux', workspaceId, workspaceRevision: 1 }, 'WORKSPACE_CONFLICT']
+  ]) await assert.rejects(api.sessions.runInShell(session.host, { ...request, code: 'touch must-not-run', stdin: '', revision: 0 }), { code });
+  assert.equal(api.calls.length, before);
+  assert.deepEqual(await fs.readdir(session.host.directory), []);
+});
+
+test('cancelling while the shared source is made readable reports cancellation and removes the source', async t => {
+  const api = await fixture(t), controller = new AbortController();
+  const directory = await fs.mkdtemp(path.join(api.store.directory, 'jobs', 'source-race-'));
+  const host = { directory, workspace: { workspaceId: 'workspace', language: 'linux', revision: 0 }, cwd: async () => '/work' };
+  const chmod = fs.chmod;
+  t.mock.method(fs, 'chmod', async (file, mode) => {
+    if (path.basename(file).startsWith('run-')) { controller.abort(); await tick(); }
+    return chmod(file, mode);
+  });
+  await assert.rejects(api.sessions.runInShell(host, { language: 'linux', code: 'touch must-not-run', stdin: '', revision: 0 }, { signal: controller.signal }), { code: 'RUN_CANCELLED' });
+  assert.equal(api.calls.length, 0);
+  assert.deepEqual(await fs.readdir(directory), []);
+});
+
+for (const [code, reason] of [[125], [137], [0, 'timeout'], [0, 'output_limit']]) test(`shared supervisor failure ${reason || code} closes the container and reports the committed revision`, async t => {
+  const api = await fixture(t, { hook: args => args.includes('/opt/nanaly/run-in-shell.py') ? { ...output(), code, reason } : undefined });
+  const session = await api.sessions.shell({ language: 'linux' });
+  const result = await api.sessions.runInShell(session.host, { language: 'linux', code: 'true', stdin: '', revision: 0 });
+  assert.equal(result.exitCode, code);
+  assert.equal(result.status, reason || 'runtime_error');
+  assert.equal(result.workspaceCommitted, true);
+  assert.equal(result.workspaceRevision, 1);
+  assert.equal(api.store.getWorkspace(result.workspaceId).revision, 1);
+  assert.equal(api.runner.containers.size, 0);
+  assert.equal(session.exited.reason, 'run_failed');
+  assert.ok(result.warnings.some(warning => warning.includes('终端已关闭')));
+  assert.equal(api.calls.some(args => args.includes('find')), false, 'closed containers are not queried for a summary');
+});
+
+test('a failed save after supervisor death reports the retained revision and warnings', async t => {
+  const api = await fixture(t, { hook: args => args.includes('/opt/nanaly/run-in-shell.py') ? { ...output(), code: 137 }
+    : args.includes('persist') ? { ...output(), code: 1 } : undefined });
+  const session = await api.sessions.shell({ language: 'linux' });
+  const result = await api.sessions.runInShell(session.host, { language: 'linux', code: 'true', stdin: '', revision: 0 });
+  assert.equal(result.exitCode, 137);
+  assert.equal(result.workspaceCommitted, false);
+  assert.equal(result.workspaceRevision, 0);
+  assert.equal(api.store.getWorkspace(result.workspaceId).revision, 0);
+  assert.equal(api.runner.containers.size, 0);
+  assert.ok(result.warnings.some(warning => warning.includes('没有保存')));
+  assert.equal(result.warnings.some(warning => warning.includes('已保存并关闭')), false);
+});
+
+for (const code of [126, 137]) test(`cancellation with supervisor code ${code} ${code === 137 ? 'finishes unsafe cleanup' : 'retains the shell'}`, async t => {
+  const controller = new AbortController();
+  const api = await fixture(t, { hook: args => {
+    if (args.includes('/opt/nanaly/run-in-shell.py')) { controller.abort(); return { ...output(), code }; }
+  } });
+  const session = await api.sessions.shell({ language: 'linux' });
+  await assert.rejects(api.sessions.runInShell(session.host, { language: 'linux', code: 'true', stdin: '', revision: 0 }, { signal: controller.signal }), { code: 'RUN_CANCELLED' });
+  assert.equal(api.runner.containers.size, code === 137 ? 0 : 1);
+  assert.equal(session.exited === null, code === 126);
 });

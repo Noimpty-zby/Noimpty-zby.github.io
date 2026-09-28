@@ -196,6 +196,7 @@ status 可为 accepted、wrong_answer、compile_error、runtime_error、timeout�
 - 镜像去掉了 Ubuntu 最小化镜像对手册的排除，重装常用软件包，`man` / `man -k` 可用；另装 `nano vim tmux htop psmisc lsof strace make tzdata`。`/usr/local/bin/code` 用 OSC 7337 请页面打开文件；`/usr/local/bin/sudo` 只说明没有 root 权限，不是真的 sudo。
 - MySQL 每次建立禁用 TCP 的独立实例，仅开放容器内 Unix socket；learner 账户只有 practice 数据库权限，禁止 FILE、SUPER、LOCAL INFILE 和服务端文件导出。mysql 客户端使用 binary-mode，禁用非交互输入中的 shell 客户端命令。表/行通过私有 SQL 快照跨次恢复。
 - 工作区采用“执行 → 有界快照 → 原子提交 metadata”的顺序。执行被终止、快照超限或保存失败时保留上个已保存版本，并返回 workspaceCommitted:false。SQL/命令产生了输出不代表其变化已持久化；以此字段及 workspaceRevision 为准。
+- 共享终端脚本由轻量监督器清理子孙进程；正常取消和脚本超时（124）保留终端。监督器异常（125）、信号退出或显式退出码 ≥128、宿主执行超时或输出超限时，后端保守关闭整个终端并尝试保存，以清理监督器被杀后留下的进程；执行退出码保持原值，保存是否成功及版本以 `workspaceCommitted` / `workspaceRevision` 和警告为准，失败时不会声称已保存。
 - 客户端断开会触发取消并杀死本次容器，后端在下一执行/快照阶段停止，取消后不再启动新测试；若断开发生在提交完成之后，提交仍可能已生效。前端通过 `GET /api/workspaces` 恢复当前列表；已知工作区在取消或网络异常后再读取 revision、busy 与 broken。空闲且完好即可继续使用，无需强制重置；忙碌时等待，损坏时要求重置。不会自动重跑有副作用的命令。
 - 服务正常停止时先让所有终端保存并告知页面（reason `shutdown`），再删除其余容器。服务重启仅清理同时带 nanaly.runner 与本私有目录哈希 nanaly.owner 标签的遗留容器和临时输入，不会清理其他后端实例。持久文件有校验和、前一版备份与单实例锁；主文件损坏时恢复合法备份并在 health 中标记 recovered。两份均损坏时拒绝覆盖，需管理员从备份恢复。
 - 常规状态和元数据备份保留前一版；删除重要私有内容后，如果要求物理清除所有旧副本，应同时遵循托管商快照/备份保留策略。清空运行历史会同步清空本地历史备份文件。

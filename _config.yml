@@ -140,33 +140,9 @@ include:
 exclude:
 ignore:
 
-# 站点地图（hexo-generator-sitemap）
-#
-# 全站上锁之后这个东西没有存在意义了 —— 它的唯一用途是帮搜索引擎发现页面，
-# 而现在我们恰恰不想被发现。所有文章都带 sitemap: false，
-# 但 tags/categories 那两项仍会把分类页列出来，所以一并关掉。
-#
-# 想重新开放某个板块时：把下面三行的注释去掉，
-# 并把对应文章 front-matter 里的 sitemap: false 删掉。
-# sitemap:
-#   path: sitemap.xml
-#   rel: false
-#   tags: false
-#   categories: false
-
-# RSS / Atom 订阅（hexo-generator-feed）
-#
-# 同样关掉。feed 是「把内容主动推出去」，和上锁是相反的方向；
-# 就算按 privacy 过滤，只要有一篇漏标就是全文外泄。
-# scripts/noimpty-lockdown.js 里还有一道兜底：即使有人把这里打开，
-# 只要 lockdown 开着，构建出来的 feed 也会被清空。
-# feed:
-#   type: atom
-#   path: atom.xml
-#   limit: 20
-#   content: false
-#   order_by: -date
-  icon: /img/favicon.svg
+# 私密站点不生成 RSS / Atom 或 sitemap，相关生成器依赖已移除。
+# scripts/noimpty-lockdown.js 仍会清除意外生成的订阅源、站点地图及订阅链接。
+# 日报与巡逻读取 protected-manifest.js；站内搜索继续使用加密的 search.xml。
 
 # Markdown 渲染器（本地适配器 + markdown-it）
 # 换掉 hexo-renderer-marked 是为了支持 KaTeX 数学公式。

@@ -100,6 +100,57 @@ test('real Docker terminal: interactive Bash with editors, manuals and completio
     assert.equal(mode.code, 0); assert.equal(mode.stdout.toString('utf8').trim(), '750');
     assert.equal(symlink.code, 0); assert.equal(symlink.stdout.toString('utf8').trim(), 'editor-target.sh');
   });
+  await t.test('shared scripts cancel their descendants without ending the interactive shell', async () => {
+    const run = (code, signal) => sessions.runInShell(first.host, validateRun({ language: 'linux', code, workspaceId, workspaceRevision: 0 }), { signal });
+    const background = `python3 -c 'import os,sys,time; from pathlib import Path; pid=os.fork(); sys.exit(0) if pid else None; os.setsid(); Path("/tmp/shared-descendant.pid").write_text(str(os.getpid())); time.sleep(90)' &
+while [ ! -s /tmp/shared-descendant.pid ]; do sleep 0.01; done
+`;
+    for (const outcome of ['cancel', 'exit', 'timeout']) {
+      await first.host.exec(['rm', '-f', '/tmp/shared-descendant.pid']);
+      const controller = new AbortController();
+      const running = run(background + (outcome === 'exit' ? 'exit 7' : 'sleep 90'), controller.signal);
+      // Attach the rejection handler before aborting, including on an assertion failure.
+      const settled = running.then(value => ({ value }), error => ({ error }));
+      let descendant;
+      const deadline = Date.now() + 10000;
+      while (!descendant && Date.now() < deadline) {
+        const read = await first.host.exec(['cat', '/tmp/shared-descendant.pid']);
+        if (read.code === 0) descendant = read.stdout.toString('utf8').trim();
+        if (!descendant) await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      assert.match(descendant || '', /^\d+$/);
+      if (outcome === 'cancel') controller.abort();
+      const { value, error } = await settled;
+      if (outcome === 'cancel') assert.equal(error?.code, 'RUN_CANCELLED');
+      else {
+        assert.equal(error, undefined);
+        assert.equal(value.exitCode, outcome === 'exit' ? 7 : 124);
+        assert.equal(value.status, outcome === 'exit' ? 'runtime_error' : 'timeout');
+      }
+      const stopped = await first.host.exec(['test', '!', '-e', `/proc/${descendant}`]);
+      assert.equal(stopped.code, 0, `${outcome} left its detached descendant running`);
+      assert.equal(first.exited, null);
+    }
+    // Abort after CLI admission but before the Docker process starts. The source
+    // stays absent, so a late container exec cannot resurrect the cancelled code.
+    const execute = runner.execute, controller = new AbortController();
+    let delayed = false;
+    runner.execute = async (command, args, options) => {
+      if (!delayed && args.includes('/opt/nanaly/run-in-shell.py')) {
+        delayed = true; controller.abort();
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return execute(command, args, options);
+    };
+    try { await assert.rejects(run('touch /tmp/shared-must-not-run', controller.signal), { code: 'RUN_CANCELLED' }); }
+    finally { runner.execute = execute; }
+    assert.equal(delayed, true);
+    assert.equal((await first.host.exec(['test', '!', '-e', '/tmp/shared-must-not-run'])).code, 0);
+    const mark = shell.mark();
+    shell.type('echo interactive-$((6*7))\r');
+    await shell.until(/interactive-42\n/, mark);
+    await shell.until(/learner@nanaly:~\/lesson\$ $/, mark);
+  });
   const saved = await first.hangup('closed');
   assert.equal(saved.committed, true, JSON.stringify(saved));
   assert.equal(saved.cwd, '/work/lesson');
@@ -151,5 +202,22 @@ test('real Docker terminal: interactive Bash with editors, manuals and completio
     const exit = await task.done;
     assert.equal(exit.code, 0, `${language}: ${run.text}`);
   }
+  await t.test('killing the shared script supervisor closes its container and restores saved files', async () => {
+    const doomed = await sessions.shell({ language: 'linux', workspaceId });
+    const live = drive(doomed);
+    await live.until(/learner@nanaly:~\/lesson\$ $/);
+    const result = await sessions.runInShell(doomed.host, validateRun({ language: 'linux', workspaceId, workspaceRevision: doomed.host.workspace.revision,
+      code: 'printf recovered-after-supervisor-death > supervisor-before.txt; sleep 90 >/dev/null 2>&1 & kill -KILL "$PPID"; exit 0' }));
+    assert.equal(result.exitCode, 137, JSON.stringify(result));
+    assert.equal(result.status, 'runtime_error');
+    assert.equal(result.workspaceCommitted, true, JSON.stringify(result));
+    assert.equal(doomed.exited.reason, 'run_failed');
+    assert.equal(sessions.shells.has(workspaceId), false);
+    assert.equal(runner.containers.has(doomed.host.name), false);
+    assert.equal((await runner.cli(['inspect', doomed.host.name])).code, 1, 'the entire sandbox, including any adopted descendants, is gone');
+    const restored = await runner.run(validateRun({ language: 'linux', workspaceId, workspaceRevision: result.workspaceRevision, code: 'cat supervisor-before.txt' }));
+    assert.equal(restored.status, 'accepted', JSON.stringify(restored));
+    assert.equal(restored.stdout, 'recovered-after-supervisor-death');
+  });
   assert.equal(sessions.tasks.size, 0); assert.equal(runner.containers.size, 0);
 });

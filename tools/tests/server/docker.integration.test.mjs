@@ -20,6 +20,8 @@ test('real Docker execution, diagnostics, boundaries and persisted workspaces', 
   assert.equal(cpp.status, 'accepted'); assert.equal(cpp.tests.length, 2);
   const c = await run({ language: 'c', code: '#include <stdio.h>\nint main(){puts("C");}' });
   assert.equal(c.stdout.trim(), 'C');
+  const math = await run({ language: 'c', code: '#include <math.h>\n#include <stdio.h>\nint main(void){double x;if(scanf("%lf",&x)!=1)return 1;printf("%.0f\\n",sqrt(x));}', tests: [{ input: '81', expectedOutput: '9' }] });
+  assert.equal(math.status, 'accepted', JSON.stringify(math));
   const go = await run({ language: 'go', code: 'package main\nimport "fmt"\nfunc main(){fmt.Println("Go")}' });
   assert.equal(go.stdout.trim(), 'Go');
   const broken = await run({ language: 'cpp', code: 'int main(){unknown;}' });

@@ -12,7 +12,8 @@
   const BUBBLES = 6
   const BURST = ['♥', '✦', '♡', '✧', '♪']
   const COLORS = ['#ff8fab', '#ffd35c', '#8fd3ff', '#b89cff', '#8fe0c0']
-  let teardown = null
+  let teardown = null, refreshTimer = null, refreshVersion = 0
+  const motion = window.matchMedia?.('(prefers-reduced-motion: reduce)')
 
   const particles = head => {
     const layer = document.createElement('div')
@@ -65,7 +66,8 @@
         scene.prepend(bubble)
       }
       say(bubble, state.list[state.at])
-      if (!still) bubble.animate?.([{ opacity: 0, transform: 'scale(.6) translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 450, easing: 'cubic-bezier(.34,1.56,.64,1)' })
+      scene.noimptyBubbleAnimation?.cancel()
+      if (!still) scene.noimptyBubbleAnimation = bubble.animate?.([{ opacity: 0, transform: 'scale(.6) translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 450, easing: 'cubic-bezier(.34,1.56,.64,1)' })
       // A course mascot only speaks when tapped, then goes quiet again.
       if (scene.classList.contains('noimpty-scene--one')) {
         clearTimeout(scene.noimptyQuiet)
@@ -105,7 +107,7 @@
   const mount = () => {
     teardown?.()
     teardown = null
-    const still = !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    const still = !!motion?.matches || document.hidden
     const cleanups = []
 
     const scenes = [...document.querySelectorAll('.noimpty-scene')]
@@ -126,7 +128,14 @@
       // Native Enter/Space clicks bubble here too; one listener handles all input.
       const onTap = () => talk(scene, still)
       scene.addEventListener('click', onTap)
-      cleanups.push(() => scene.removeEventListener('click', onTap))
+      cleanups.push(() => {
+        scene.removeEventListener('click', onTap)
+        clearTimeout(scene.noimptyQuiet); clearTimeout(scene.noimptyHop)
+        scene.noimptyBubbleAnimation?.cancel()
+        scene.classList.remove('is-hop')
+        scene.querySelectorAll('.kw-burst').forEach(spark => spark.remove())
+        if (scene.classList.contains('noimpty-scene--one')) scene.querySelector('.noimpty-scene__bubble')?.remove()
+      })
     }
 
     const head = document.querySelector('.noimpty-hero') || [...document.querySelectorAll(TITLES)].find(title => title.getClientRects().length)
@@ -137,10 +146,12 @@
       }
       // Every mascot on the page looks toward the pointer; the header also leans a little.
       const faces = [...document.querySelectorAll('svg.kw')]
-      let frame = 0
+      let frame = 0, disposed = false
       const move = event => {
         cancelAnimationFrame(frame)
         frame = requestAnimationFrame(() => {
+          frame = 0
+          if (disposed) return
           for (const svg of faces) {
             const box = svg.getBoundingClientRect()
             if (box.bottom < 0 || box.top > innerHeight) continue
@@ -152,13 +163,14 @@
           }
           if (head) {
             const box = head.getBoundingClientRect()
-            const inside = event.clientY >= box.top && event.clientY <= box.bottom
+            const inside = box.width > 0 && box.height > 0 && event.clientY >= box.top && event.clientY <= box.bottom
             head.style.setProperty('--mx', inside ? ((event.clientX - box.left) / box.width - 0.5).toFixed(3) : '0')
             head.style.setProperty('--my', inside ? ((event.clientY - box.top) / box.height - 0.5).toFixed(3) : '0')
           }
         })
       }
       const rest = () => {
+        cancelAnimationFrame(frame); frame = 0
         for (const svg of faces) { svg.style.setProperty('--ex', '0'); svg.style.setProperty('--ey', '0') }
         head?.style.setProperty('--mx', '0')
         head?.style.setProperty('--my', '0')
@@ -166,7 +178,8 @@
       window.addEventListener('pointermove', move, { passive: true })
       document.documentElement.addEventListener('pointerleave', rest)
       cleanups.push(() => {
-        cancelAnimationFrame(frame)
+        disposed = true
+        rest()
         window.removeEventListener('pointermove', move)
         document.documentElement.removeEventListener('pointerleave', rest)
       })
@@ -174,8 +187,30 @@
     teardown = () => cleanups.forEach(fn => fn())
   }
 
-  document.addEventListener('pjax:send', () => { teardown?.(); teardown = null })
-  window.addEventListener('pjax:complete', mount)
+  const cancelRefresh = () => {
+    refreshVersion++
+    clearTimeout(refreshTimer); refreshTimer = null
+  }
+  const refresh = () => {
+    cancelRefresh()
+    const version = refreshVersion
+    refreshTimer = setTimeout(() => {
+      if (version !== refreshVersion) return
+      refreshTimer = null; mount()
+    }, 0)
+  }
+  document.addEventListener('pjax:send', () => {
+    teardown?.(); teardown = null
+    // A canceled navigation may never emit complete. Re-arm the current page;
+    // a successful replacement mounts its new nodes at complete as usual.
+    refresh()
+  })
+  ;['pjax:complete', 'pjax:error', 'pjax:abort', 'pjax:cancel'].forEach(type => window.addEventListener(type, refresh))
+  window.addEventListener('pagehide', () => { cancelRefresh(); teardown?.(); teardown = null })
+  window.addEventListener('pageshow', refresh)
+  document.addEventListener('visibilitychange', refresh)
+  if (motion?.addEventListener) motion.addEventListener('change', refresh)
+  else motion?.addListener?.(refresh)
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true })
   else mount()
 })()

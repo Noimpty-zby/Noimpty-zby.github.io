@@ -8,6 +8,8 @@ import { DockerRunner } from '../../../server/lib/runner.mjs'
 import { validateRun } from '../../../server/lib/validation.mjs'
 import { createApp } from '../../../server/app.mjs'
 import { once } from 'node:events'
+import { spawnSync } from 'node:child_process'
+import { localDocker } from './local-docker.mjs'
 
 const output=(stdout='',code=0,reason)=>({code,stdout:Buffer.from(stdout),stderr:Buffer.alloc(0),reason})
 const info=JSON.stringify({OSType:'linux',CgroupVersion:'2',MemoryLimit:true,PidsLimit:true,CpuCfsQuota:true})
@@ -391,3 +393,14 @@ for(const failure of ['listing','timeout','removal'])test(`startup ${failure} fa
   assert.deepEqual(await fs.readdir(path.join(store.directory,'jobs')),[])
   await runner.close()
 })
+
+test('C math functions compile and run with stdin in the regular runner', { skip: process.platform !== 'linux' || spawnSync('gcc', ['--version']).status !== 0 }, async t => {
+  const store = await fixture(t);
+  const sandbox = await fs.mkdtemp(path.join(os.tmpdir(), 'nanaly-math-'));
+  const docker = localDocker(sandbox);
+  const runner = new DockerRunner(store, { execute: docker.execute });
+  t.after(async () => { await runner.close(); await fs.rm(sandbox, { recursive: true, force: true }); });
+  const result = await runner.run(validateRun({ language: 'c', code: '#include <math.h>\n#include <stdio.h>\nint main(void){double x;if(scanf("%lf",&x)!=1)return 1;printf("%.0f\\n",sqrt(x));}', tests: [{ input: '81', expectedOutput: '9' }] }));
+  assert.equal(result.status, 'accepted', JSON.stringify(result));
+  assert.equal(result.stdout, '9\n');
+});

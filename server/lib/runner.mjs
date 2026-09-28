@@ -172,7 +172,7 @@ export class DockerRunner {
       // the workspace identified by an older page.
       if (request.mode === 'check' && request.workspaceId && ['git', 'linux'].includes(request.language)) result.workspaceCommitted = false;
       let compiled = { code: 0, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
-      if (request.language === 'c') compiled = await exec(['gcc', '-std=c17', '-Wall', '-Wextra', '-O0', '/input/main.c', '-o', '/work/program'], null, 30000);
+      if (request.language === 'c') compiled = await exec(['gcc', '-std=c17', '-Wall', '-Wextra', '-O0', '/input/main.c', '-o', '/work/program', '-lm'], null, 30000);
       if (request.language === 'cpp') compiled = await exec(['g++', '-std=c++20', '-Wall', '-Wextra', '-O0', '/input/main.cpp', '-o', '/work/program'], null, 30000);
       if (request.language === 'go') {
         // Seed the writable cache from the image's warmed copy; a failed copy only means a slow, cold build.

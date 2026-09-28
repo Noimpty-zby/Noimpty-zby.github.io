@@ -240,3 +240,50 @@ test('a concurrent deploy is refused before staging or live files are changed', 
   assert.equal(existsSync(path.join(s.root, 'opt/blog.next')), false)
   assert.equal(s.calls(), '')
 })
+
+
+test('an older environment without a runner setting receives the tested image and retains the default for rollback', t => {
+  const s = setup({ images: ['nanaly-runner:1', 'nanaly-runner:older'] }); t.after(s.cleanup)
+  const envFile = path.join(s.root, 'etc/nanaly.env')
+  // The missing final newline must not join PORT and the new setting.
+  const original = 'NANALY_DATA_DIR=/srv/nanaly-private\nPORT=4318'
+  writeFileSync(envFile, original)
+  const result = s.run(['abc123def456', 'feed00000001'])
+  assert.equal(result.status, 0, result.stdout + result.stderr)
+  assert.match(s.read('etc/nanaly.env'), /^PORT=4318$/m)
+  assert.match(s.read('etc/nanaly.env'), /^NANALY_RUNNER_IMAGE=nanaly-runner:feed00000001$/m)
+  assert.equal(s.read('etc/nanaly.env.prev'), original)
+  assert.deepEqual(s.imageList(), ['nanaly-runner:1', 'nanaly-runner:feed00000001'])
+})
+
+test('a failed upgrade restores an older environment without introducing a runner setting', t => {
+  const s = setup({ images: ['nanaly-runner:1'] }); t.after(s.cleanup)
+  const original = 'NANALY_DATA_DIR=/srv/nanaly-private\nPORT=4318\n'
+  writeFileSync(path.join(s.root, 'etc/nanaly.env'), original)
+  const result = s.run(['abc123def456', 'feed00000001'], { HEALTH_FAIL_BUILD: 'abc123def456' })
+  assert.notEqual(result.status, 0)
+  assert.equal(s.read('etc/nanaly.env'), original)
+  assert.match(result.stderr, /旧版健康检查通过/)
+})
+
+
+test('deploy help and invalid arguments cannot start tests, access Git or connect to the server', t => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'deploy-cli-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  const calls = path.join(dir, 'calls')
+  for (const name of ['dirname', 'git', 'node', 'ssh', 'curl']) {
+    const stub = path.join(dir, name)
+    writeFileSync(stub, '#!/bin/sh\necho unexpected >> "$DEPLOY_CLI_CALLS"\nexit 99\n')
+    chmodSync(stub, 0o755)
+  }
+  for (const args of [['--help'], ['-h'], ['--ful'], ['--full', '--help'], ['--help', '--full'], ['--full', '--full'], ['']]) {
+    const help = args.length === 1 && ['--help', '-h'].includes(args[0])
+    const result = spawnSync('bash', [path.resolve('tools/deploy/backend.sh'), ...args], {
+      cwd: dir, encoding: 'utf8', timeout: 3000,
+      env: { ...process.env, PATH: dir + ':' + process.env.PATH, DEPLOY_CLI_CALLS: calls }
+    })
+    assert.equal(result.status, help ? 0 : 2, JSON.stringify(args) + ': ' + result.stdout + result.stderr)
+    assert.match(help ? result.stdout : result.stderr, /用法：npm run deploy:backend/)
+    assert.equal(existsSync(calls), false, JSON.stringify(args) + ' ran a deployment command')
+  }
+})

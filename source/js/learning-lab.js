@@ -479,6 +479,7 @@
   const button = (text, click, className = '') => { const el = node('button', `learning-button ${className}`, text); el.type = 'button'; el.addEventListener('click', click); return el }
   let mounted = null
   let launch = null
+  let mountedPage = null
 
   const LANGUAGE_NAMES = { c: 'C', cpp: 'C++', go: 'Go', python: 'Python', git: 'Git', linux: 'Linux', mysql: 'MySQL' }
   const FILE_NAMES = { c: 'main.c', cpp: 'main.cpp', go: 'main.go', python: 'main.py', git: 'commands.sh', linux: 'script.sh', mysql: 'query.sql' }
@@ -1101,15 +1102,20 @@
     }
     return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
   }
-  const cleanup = () => { mounted?.dispose(); mounted = null; launch?.remove(); launch = null; document.documentElement.classList.remove('learning-is-open', 'learning-page'); delete document.documentElement.dataset.learningPane }
+  const cleanup = () => { mountedPage = null; mounted?.dispose(); mounted = null; launch?.remove(); launch = null; document.documentElement.classList.remove('learning-is-open', 'learning-page'); delete document.documentElement.dataset.learningPane }
   const mount = () => {
+    const host = document.getElementById('learning-lab')
+    const article = host ? null : document.querySelector('#post #article-container')
+    const page = host || article
+    // Failed/canceled PJAX may emit complete without replacing the DOM. Keep the
+    // current editor, unsaved draft and sockets until the page actually changes.
+    if (page && page === mountedPage && unlocked()) return
     cleanup()
     if (!unlocked()) return
-    const host = document.getElementById('learning-lab')
-    if (host) { document.documentElement.classList.add('learning-page'); mounted = mountLab(host); return }
-    const article = document.querySelector('#post #article-container')
+    if (host) { mountedPage = host; document.documentElement.classList.add('learning-page'); mounted = mountLab(host); return }
     const post = document.getElementById('post'); const layout = post?.parentElement
     if (!article || !layout) return
+    mountedPage = article
     launch = button('边学边练 ↗', () => {
       if (!unlocked()) return
       if (mounted) { mounted.dispose(); mounted = null; launch.focus(); return }
@@ -1153,8 +1159,8 @@
       finally { signal?.removeEventListener('abort', cancel) }
     }
   })
-  document.addEventListener('pjax:send', cleanup)
-  window.addEventListener('pjax:complete', mount)
+  // Sending a request does not mean navigation succeeded; complete runs after DOM replacement.
+  ;['pjax:complete', 'pjax:error', 'pjax:abort', 'pjax:cancel'].forEach(type => window.addEventListener(type, mount))
   window.addEventListener('pagehide', cleanup)
   window.addEventListener('pageshow', event => { if (event.persisted) mount() })
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, { once: true })

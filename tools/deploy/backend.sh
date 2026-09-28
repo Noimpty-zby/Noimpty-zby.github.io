@@ -5,14 +5,28 @@
 # 执行镜像按 server/runner/ 的内容命名，没变就不重建；新镜像先跑真实集成测试，过了才切换。
 # 服务器上的步骤（切换、重启、失败自动退回上一版）见 backend-remote.sh。
 set -euo pipefail
+usage() {
+  printf '%s\n' '用法：npm run deploy:backend -- [--full]' \
+    '  --full       强制重新运行真实 Docker 集成测试后部署' \
+    '  --help, -h   只显示帮助，不测试、上传或部署'
+}
+# Reject misspelled/extra arguments before any test, Git access or connection.
+case "$#" in
+  0) full='' ;;
+  1)
+    case "$1" in
+      --full) full=full ;;
+      --help|-h) usage; exit 0 ;;
+      *) usage >&2; exit 2 ;;
+    esac ;;
+  *) usage >&2; exit 2 ;;
+esac
 cd "$(dirname "$0")/../.."
 
 host=${NANALY_DEPLOY_HOST:-ubuntu@43.156.15.56}
 key=${NANALY_DEPLOY_KEY:-$HOME/.ssh/nanaly_deploy_ed25519}
 known=${NANALY_DEPLOY_KNOWN_HOSTS:-$HOME/.ssh/known_hosts_nanaly}
 api=${NANALY_DEPLOY_API:-https://api.noimpty-zby.cn}
-full=''
-[ "${1:-}" = '--full' ] && full=full
 paths=(server tools/tests/server tools/deploy/backend-remote.sh source/js/learning-lab.js tools/schedule-data.cjs tools/migrate-private-content.mjs)
 
 if ! git diff --quiet HEAD -- "${paths[@]}" || [ -n "$(git ls-files --others --exclude-standard -- "${paths[@]}")" ]; then

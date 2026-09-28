@@ -19,7 +19,7 @@
 | tools/daily-report | 数据采集、健康检查、自动日程与邮件报告 |
 | tools/checks | 链接、公开页面、SVG、语音和情绪检查入口 |
 | tools/assets | Live2D 资源导入与运行库整理 |
-| tools/tests | 按 ai、media、automation、schedule、site、tooling 分类的离线回归 |
+| tools/tests | 按 ai、media、automation、schedule、site、tooling、learning、server 分类的回归 |
 | docs/features | 功能使用说明 |
 | docs/maintenance | 按日期保存的审查和维护记录 |
 | .github/workflows | 发布、助手自动任务、日报与只读文章检查 |
@@ -32,7 +32,7 @@
 | 文章渲染、数学公式、任务清单 | scripts/noimpty-markdown.js、tools/markdown-renderer.cjs |
 | 栏目与学习进度 | scripts/noimpty-sections.js、noimpty-study.js、source/js/section-hub.js |
 | 系列上下篇、相关文章、旧链接 | scripts/noimpty-pagination.js、noimpty-related-posts.js、noimpty-redirects.js |
-| 暗号门、加密搜索与日志 | scripts/noimpty-lockdown.js、source/js/privacy-gate.js、noimpty-search.js |
+| 暗号门与加密搜索 | scripts/noimpty-lockdown.js、source/js/privacy-gate.js、noimpty-search.js |
 | 日程与三方合并 | source/js/schedule.js、server/lib/private-content.mjs、tools/daily-report/schedule-auto.mjs |
 | 娜娜莉主对话与密钥保险箱 | source/js/noimpty-ai.js |
 | 多话题、草稿、记忆与撤销 | source/js/nanaly-workspace.js |

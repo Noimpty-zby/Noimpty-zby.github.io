@@ -41,14 +41,15 @@ class Element {
   get textContent() { return (this.text || '') + this.children.map(child => child.textContent).join('') }
 }
 
-const boot = () => {
+const boot = ({ page = false } = {}) => {
+  let pageHost = page ? new Element('main') : null
   const scripts = [], timers = new Map(), storage = new Map(), adapters = []
   let sequence = 0
   const document = new Element('document')
   Object.assign(document, {
     readyState: 'loading', documentElement: new Element('html'),
     createElement: tag => new Element(tag), createTextNode: text => { const node = new Element('text'); node.textContent = text; return node },
-    getElementById: id => ({ getAttribute: () => '/js/' + id.replace('-src', '.js') + '?v=fixture' }),
+    getElementById: id => id === 'learning-lab' ? pageHost : id.endsWith('-src') ? ({ getAttribute: () => '/js/' + id.replace('-src', '.js') + '?v=fixture' }) : null,
     head: { append: script => scripts.push(script) }
   })
   const window = new Element('window')
@@ -78,7 +79,10 @@ const boot = () => {
     } }
     scripts.find(script => script.src.includes('learning-editor.js')).onload()
   }
-  return { scripts, timers, adapters, document, mount, resolveEditor }
+  return { scripts, timers, adapters, window, document, mount, resolveEditor,
+    mountPage: () => { window.NOIMPTY_LEARNING.mount(); return pageHost },
+    setPage: value => { pageHost = value }
+  }
 }
 
 test('late CodeMirror upgrade preserves typed draft, backwards selection and focus', async () => {
@@ -135,4 +139,41 @@ test('failed editor loading retains editable textarea and can retry after reopen
   assert.equal(app.scripts.filter(script => script.src.includes('learning-editor.js')).length, 2)
   assert.equal(reopened.textarea.value, 'draft after failed download')
   reopened.dispose()
+})
+
+
+test('failed or canceled PJAX preserves the current practice draft and loaded editor', async () => {
+  for (const ending of [null, 'pjax:complete', 'pjax:error', 'pjax:abort', 'pjax:cancel']) {
+    const app = boot({ page: true }), page = app.mountPage()
+    const textarea = page.querySelector('.learning-editor'), root = page.children[0]
+    textarea.value = 'int main() { return 73; }'; textarea.fire('input')
+    app.resolveEditor(); await flush()
+    const adapter = app.adapters[0]
+    app.document.fire('pjax:send')
+    if (ending) app.window.fire(ending)
+    assert.equal(page.children[0], root, String(ending))
+    assert.equal(adapter.destroyed, false)
+    assert.equal(app.window.NOIMPTY_LEARNING.context().code, textarea.value)
+    assert.equal(page.querySelectorAll('.learning-editor').length, 1)
+  }
+})
+
+test('successful PJAX replacement disposes the old editor once and initializes the new page', async () => {
+  const app = boot({ page: true }), oldPage = app.mountPage()
+  app.resolveEditor(); await flush()
+  const oldAdapter = app.adapters[0]
+  const nextPage = new Element('main')
+  app.document.fire('pjax:send'); app.setPage(nextPage); app.window.fire('pjax:complete')
+  assert.equal(oldAdapter.destroyed, true)
+  assert.equal(oldPage.children.length, 0)
+  assert.equal(app.adapters.length, 2)
+  const nextAdapter = app.adapters[1], root = nextPage.children[0]
+  nextAdapter.value = 'a new unsaved draft'; nextAdapter.options.onChange(nextAdapter.value)
+  app.window.fire('pjax:complete')
+  assert.equal(nextPage.children[0], root)
+  assert.equal(nextAdapter.destroyed, false)
+  assert.equal(app.window.NOIMPTY_LEARNING.context().code, 'a new unsaved draft')
+  app.setPage(null); app.window.fire('pjax:complete')
+  assert.equal(nextAdapter.destroyed, true)
+  assert.equal(app.window.NOIMPTY_LEARNING.context(), null)
 })

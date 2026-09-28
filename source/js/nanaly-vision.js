@@ -19,14 +19,27 @@
   let memoryBytes = 0
   let database
   const openDB = () => {
-    if (!database) database = new Promise((resolve, reject) => {
-      if (!window.indexedDB) return reject(new Error('浏览器不支持图片存储'))
-      const request = indexedDB.open('nanaly-images-v1', 1)
-      request.onupgradeneeded = () => request.result.createObjectStore('images', { keyPath: 'id' })
-      request.onsuccess = () => resolve(request.result)
-      request.onerror = () => reject(request.error)
-      request.onblocked = () => reject(new Error('图片存储被另一个标签页占用'))
-    }).catch(error => { database = null; throw error })
+    if (!database) {
+      let failed = false
+      const job = new Promise((resolve, reject) => {
+        if (!window.indexedDB) return reject(new Error('浏览器不支持图片存储'))
+        const request = indexedDB.open('nanaly-images-v1', 1)
+        const fail = error => { failed = true; reject(error) }
+        request.onupgradeneeded = () => request.result.createObjectStore('images', { keyPath: 'id' })
+        request.onsuccess = () => {
+          const db = request.result
+          // A blocked open may succeed after its caller has already retried.
+          if (failed) { db.close(); return }
+          const invalidate = () => { if (database === job) database = null }
+          db.onversionchange = () => { invalidate(); db.close() }
+          db.onclose = invalidate
+          resolve(db)
+        }
+        request.onerror = () => fail(request.error)
+        request.onblocked = () => fail(new Error('图片存储被其他标签页占用'))
+      }).catch(error => { if (database === job) database = null; throw error })
+      database = job
+    }
     return database
   }
   const transact = async (mode, work) => {
@@ -209,7 +222,7 @@
           attachments.push(item); onChange(refs(attachments))
           if (item.temporary) notify('浏览器未能持久保存图片；刷新前可以发送，刷新后需重新附加。')
         }
-      } catch (error) { notify(error.message) }
+      } catch (error) { if (current === revision) notify(error.message) }
       finally { if (current === revision) loading = false; render() }
     }
     button.onclick = () => picker.click()
@@ -243,7 +256,7 @@
             attachments = recovered
             if (!silent) onChange(refs(attachments))
           }
-        } catch (error) { notify(error.message) }
+        } catch (error) { if (current === revision) notify(error.message) }
         finally { if (current === revision) loading = false; render() }
       },
       refresh: render,

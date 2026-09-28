@@ -33,6 +33,7 @@ const harness = ({ saved = storage({ 'nanaly-deep-v1': 'off' }), imageEntries = 
   const requests = [], bubbles = [], usage = [], jobs = []
   const document = { activeElement: null, createElement: tag => new UIElement(tag, document) }
   const images = new Map(imageEntries.map(([id, item]) => [id, { id, type: 'image/jpeg', ...item }])), documents = new Map(fileEntries)
+  for (const [id, item] of documents) assert.equal(item.id, id, 'file fixture must respect the real IndexedDB id keyPath')
   const indexedDB = { open(name) {
     const entries = name === 'nanaly-files-v1' ? documents : images
     const request = { result: { transaction() {
@@ -447,7 +448,7 @@ await test('short current documents leave a measured remainder for historical fi
 
 await test('text budgeting preserves short documents, Unicode boundaries and the exact scan image payload', async () => {
   const unicodeFile = { ...scanFile, id: 'budget-unicode-001', name: '字符边界.pdf' }
-  const h = harness({ fileEntries: [[unicodeFile.id, { ...scanRecord, text: 'A😀B😀C', images: [scanImages[0]] }]] })
+  const h = harness({ fileEntries: [[unicodeFile.id, { ...scanRecord, ...unicodeFile, text: 'A😀B😀C', images: [scanImages[0]] }]] })
   const budget = { remaining: 5 }
   const parts = await h.attachmentContent('查看文件', [], [unicodeFile], { fileBudget: budget })
   assert.ok(Array.isArray(parts))
@@ -471,7 +472,7 @@ await test('current and historical images plus PDF scans share one two-image req
   const old = { ...picture, id: 'history-picture-001' }
   const scan = { id: 'history-document-001', name: '旧扫描.pdf', type: 'pdf' }
   const h = harness({ imageEntries: [[current.id, { dataURL: imageURL }], [old.id, { dataURL: imageURL }]],
-    fileEntries: [[scan.id, { text: '', summary: '两页扫描', images: [{ page: 1, dataURL: imageURL }, { page: 2, dataURL: imageURL }] }]] })
+    fileEntries: [[scan.id, { ...scan, text: '', summary: '两页扫描', images: [{ page: 1, dataURL: imageURL }, { page: 2, dataURL: imageURL }] }]] })
   const history = [{ role: 'user', content: '旧图片', at: 1, attachments: [old] }, { role: 'user', content: '旧扫描', at: 2, files: [scan] }]
   const messages = await h.buildMessages('你好', 'article', new AbortController().signal, history, [current])
   const parts = messages.flatMap(m => Array.isArray(m.content) ? m.content : [{ type: 'text', text: m.content }])

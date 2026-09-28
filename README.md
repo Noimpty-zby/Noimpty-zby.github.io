@@ -77,7 +77,7 @@ npm run check
 | `npm run voicecheck` | 真实语音服务检查，需要凭据且可能计费 |
 | `npm run svgcheck -- <文件…>` | 配图文字边界估算，仍需检查实际渲染 |
 
-最新检查结果和未验范围见 [2026-09-28 收尾验收](docs/maintenance/2026-09-28-release-check.md)。
+最新审查、回归结果与未验范围见 [2026-09-28 日常维护审查](docs/maintenance/2026-09-28-maintenance-audit.md)；此前发布记录见 [收尾验收](docs/maintenance/2026-09-28-release-check.md)。
 
 ## 前后端部署
 
@@ -113,3 +113,18 @@ npm run deploy:backend -- --full
 自动任务必须配置 `NANALY_AGENT_URL` 和 `NANALY_AGENT_TOKEN`；使用后端的**受限后台令牌**，不要填主令牌。模型、邮件和搜索等其他配置见 [日报说明](tools/daily-report/README.md) 及各工作流的环境变量。自动任务的 `dry` / `dry-run` 不代表免费离线测试，仍可能调用模型或搜索服务。
 
 日常维护以 Actions 的执行结果为准；后端健康状态可查看 `/api/health` 的 `build` 和 `runner.ready`。更新依赖或功能时重新执行相应验收，避免只凭构建成功判断可用。原始素材、模型与第三方库的来源和许可见 [素材维护与署名](docs/content-authoring.md#素材维护与署名)。
+
+
+## 清理与故障定位
+
+停止本地预览后运行 `npm run clean`，删除可重建的 `public/` 与 `db.json`。Python 检查产生的 `server/runner/__pycache__/` 也可删除；下次运行会自动重建。`node_modules/` 是本地运行依赖，需要重装时使用 `npm ci`。音乐、模型、字体和第三方许可证属于站点资源，不能当缓存清理。
+
+| 现象 | 先检查什么 |
+| --- | --- |
+| 本地页面无法解锁或搜索为空 | 构建前是否设置 `NOIMPTY_PASSPHRASE`；设置后重新构建 |
+| 推送后线上没有更新 | Pages 工作流的 `build`、`deploy` 是否均已成功，再确认线上资源版本 |
+| 文章正常，但日程或后台任务失败 | 检查 `private-backend` 作业、后端地址和令牌；不要用空数据覆盖旧数据 |
+| 代码或终端执行失败 | 查看真实错误输出和 `/api/health` 的 `runner.ready`；后端修改还需独立部署 |
+| 页面切换后交互异常 | 复查 PJAX 成功、取消和失败路径，以及浏览器的“减少动态效果”设置 |
+
+`npm test` 和 `npm run check` 用于本地验收；`npm run deploy:backend -- --full` 会更新真实服务并在切换前执行完整 Docker 验收，两者用途不同。

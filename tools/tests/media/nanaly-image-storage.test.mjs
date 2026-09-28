@@ -239,4 +239,11 @@ await check('full temporary image storage rejects new uploads without evicting e
   assert.equal(content[1].image_url.url, encoded)
 })
 
+await check('cancelled image restore never reports a missing attachment in the next topic', async () => {
+  const h = boot([]), mounted = h.mount()
+  const pending = mounted.ui.restore([{ id: 'image-missing-01', type: 'image/jpeg', name: 'missing.jpg' }])
+  mounted.ui.clear({ silent: true }); await pending
+  assert.equal(mounted.notices.length, 0)
+})
+
 console.log(`\n${passed} image storage regression cases passed`)

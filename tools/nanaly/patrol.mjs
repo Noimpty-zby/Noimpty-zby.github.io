@@ -162,7 +162,7 @@ export const patrol = async () => {
   // 页面清单来自锁清单，不是 sitemap —— 全站上锁之后 sitemap 已经不存在了，
   // 详见 probe.mjs 里 sitePages 上面那段。
   const all = await sitePages(SITE)
-  if (!all) { console.log('  取不到锁清单，巡逻取消'); return { checked: 0, reported: 0 } }
+  if (!all) throw new Error('取不到锁清单，巡逻未完成')
 
   const pages = all
     .filter(u => PAGE_RE.test(u.slice(SITE.length)))   // 只巡逻文章页
@@ -183,13 +183,17 @@ export const patrol = async () => {
   }
 
   console.log(`  发现有问题的：${broken.length} 篇`)
+  if (!broken.length) {
+    note('patrol', patrolSummary({ checked: pages.length, reported: 0, alreadyReported: 0, failed: 0, broken: 0 }))
+    return { checked: pages.length, reported: 0, alreadyReported: 0, failed: 0 }
+  }
 
   const discussions = await listDiscussions().catch(e => {
     console.log('  拉不到 Discussions：' + e.message)
     // 演练时没有 token 也应该能看到「她会说什么」，所以这里不直接退出
-    return DRY ? [] : null
+    if (DRY) return []
+    throw new Error('巡逻发现问题，但无法读取讨论以发送提醒', { cause: e })
   })
-  if (!discussions) return { checked: pages.length, reported: 0 }
 
   let reported = 0
   let alreadyReported = 0
@@ -276,17 +280,17 @@ export const reactTargets = (discussions, limit = 3, login = process.env.NANALY_
 }
 
 export const react = async (limit = 3) => {
-  const discussions = await listDiscussions().catch(() => null)
-  if (!discussions) return 0
+  const discussions = await listDiscussions()
   const targets = reactTargets(discussions, limit)
-  let n = 0
+  let n = 0, failed = 0
   for (const d of targets) {
     // 用标题算出固定的表情，避免每次跑结果都不一样
     const idx = [...d.title].reduce((a, c) => (a + c.charCodeAt(0)) % 997, 0) % MOODS.length
     if (DRY) { console.log(`  [演练] 会给 ${d.title} 贴 ${MOODS[idx]}`); n++; continue }
     try { if (await addReaction(d.id, MOODS[idx])) { n++; console.log(`  给 ${d.title} 贴了 ${MOODS[idx]}`) } }
-    catch (e) { console.log(`  贴表情失败：${e.message}`) }
+    catch (e) { failed++; console.log(`  贴表情失败：${e.message}`) }
   }
   if (n) note('react', `顺手给 ${n} 篇文章贴了表情`)
+  if (failed) throw new Error(`${failed} 篇文章贴表情失败；已成功 ${n} 篇，下次会跳过已完成的文章`)
   return n
 }

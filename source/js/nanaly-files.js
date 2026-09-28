@@ -13,6 +13,15 @@
     readPages: pages(x.readPages), imagePages: pages(x.imagePages).slice(0, LIMITS.pdfImages), truncated: !!x.truncated,
     summary: String(x.summary || '').slice(0, 600)
   }))
+  // IndexedDB survives code upgrades and can contain incomplete or corrupt records.
+  // Reject the whole file rather than silently claiming its missing scan was read.
+  const validFile = (item, id) => item && item.id === id && ['pdf', 'docx', 'text'].includes(item.type)
+    && typeof item.text === 'string' && item.text.length <= 100000
+    && (item.summary === undefined || typeof item.summary === 'string' && item.summary.length <= 2000)
+    && (item.images == null || Array.isArray(item.images) && item.images.length <= LIMITS.pdfImages
+      && item.images.every(image => image && Number.isInteger(image.page) && image.page > 0 && image.page <= 100000
+        && typeof image.dataURL === 'string' && image.dataURL.length <= 2000000
+        && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(image.dataURL)))
   const abort = signal => { if (signal?.aborted) throw new DOMException('文件处理已取消', 'AbortError') }
   const range = list => list.length ? list.join('、') : '无'
   const memory = new Map(), pending = new Map()
@@ -24,14 +33,27 @@
   let memoryBytes = 0
   let database, mammothPromise, pdfPromise
   const openDB = () => {
-    if (!database) database = new Promise((resolve, reject) => {
-      if (!window.indexedDB) return reject(new Error('浏览器不支持文件存储'))
-      const req = indexedDB.open('nanaly-files-v1', 1)
-      req.onupgradeneeded = () => req.result.createObjectStore('files', { keyPath: 'id' })
-      req.onsuccess = () => resolve(req.result)
-      req.onerror = () => reject(req.error)
-      req.onblocked = () => reject(new Error('文件存储被其他标签页占用'))
-    }).catch(error => { database = null; throw error })
+    if (!database) {
+      let failed = false
+      const job = new Promise((resolve, reject) => {
+        if (!window.indexedDB) return reject(new Error('浏览器不支持文件存储'))
+        const request = indexedDB.open('nanaly-files-v1', 1)
+        const fail = error => { failed = true; reject(error) }
+        request.onupgradeneeded = () => request.result.createObjectStore('files', { keyPath: 'id' })
+        request.onsuccess = () => {
+          const db = request.result
+          // A blocked open may succeed after its caller has already retried.
+          if (failed) { db.close(); return }
+          const invalidate = () => { if (database === job) database = null }
+          db.onversionchange = () => { invalidate(); db.close() }
+          db.onclose = invalidate
+          resolve(db)
+        }
+        request.onerror = () => fail(request.error)
+        request.onblocked = () => fail(new Error('文件存储被其他标签页占用'))
+      }).catch(error => { if (database === job) database = null; throw error })
+      database = job
+    }
     return database
   }
   const transact = async (mode, work) => {
@@ -72,8 +94,8 @@
       let item = null
       try { item = await transact('readonly', store => store.get(id)) } catch (_) { item = null }
       // 读取途中可能被 remove() 删掉。那就不该再把它放回内存，否则删过的又活了。
-      if (pending.get(id) !== job) return null
-      return item ? touch(item) : null
+      if (pending.get(id) !== job || !validFile(item, id)) return null
+      return touch(item)
     })()
     pending.set(id, job)
     try { return await job } finally { if (pending.get(id) === job) pending.delete(id) }
@@ -414,7 +436,7 @@
           if (item.truncated) notify(item.name + '：' + item.summary)
           if (item.imagePages.length + imageCount() > 2) notify('扫描页和普通图片每轮合计最多 2 张，超出的扫描页会明确标记为未读取。')
         }
-      } catch (error) { if (error.name !== 'AbortError') notify(error.message || '文件读取失败，请重试。') }
+      } catch (error) { if (current === revision && error.name !== 'AbortError') notify(error.message || '文件读取失败，请重试。') }
       finally { if (current === revision) { loading = false; controller = null }; render() }
     }
     button.onclick = () => picker.click()
@@ -433,7 +455,7 @@
           const recovered = []
           for (const ref of refs(list)) { const item = await load(ref.id); if (!item) throw new Error('原文件已不可用，请重新附加：' + ref.name); recovered.push(item) }
           if (current === revision) { files = recovered; if (!silent) onChange(refs(files)) }
-        } catch (error) { notify(error.message) }
+        } catch (error) { if (current === revision) notify(error.message) }
         finally { if (current === revision) loading = false; render() }
       },
       refresh: render, decorate, content, add

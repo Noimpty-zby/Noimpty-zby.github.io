@@ -56,6 +56,10 @@ const boot = (kind, entries = [], { writable = true, gate = false, sessions = fa
 const image = id => ({ id, name: id + '.jpg', type: 'image/jpeg', at: Date.now(), dataURL: 'data:image/jpeg;base64,' + 'A'.repeat(64) + '==' })
 const doc = id => ({ id, name: id + '.txt', type: 'text', size: 1024, at: Date.now(), text: '内容 ' + id,
   pageCount: null, readPages: [], imagePages: [], truncated: false, summary: '' })
+// Real parser output is bounded to 60k text and two JPEG scans <= 2 MB each.
+// Six such records fit under 24 MiB; a seventh exercises the byte cap before count 48.
+const largeDoc = id => ({ ...doc(id), type: 'pdf', name: id + '.pdf', text: '文'.repeat(60000),
+  images: [1, 2].map(page => ({ page, dataURL: 'data:image/jpeg;base64,' + 'A'.repeat(1900000) })) })
 const ref = item => ({ id: item.id, name: item.name, type: item.type, size: item.size })
 
 let passed = 0
@@ -111,18 +115,17 @@ await test('★★ 读不到的条目不会被记成命中，下次还会再去�
 })
 
 await test('★★ 淘汰按最近使用排序：一直在用的那份不会被新来的挤掉', async () => {
-  // 字节预算 24 MB 才是真正起作用的那道闸；记录按正文长度算账，拿 6 份 4 M 字的正好填满。
-  const big = id => ({ ...doc(id), text: '文'.repeat(4 * 1024 * 1024) })
-  const many = Array.from({ length: 6 }, (_, i) => big('keep-' + String(i).padStart(4, '0')))
+  // Use valid parsed PDFs to approach the 24 MiB budget; text alone never exceeds 60k.
+  const many = Array.from({ length: 6 }, (_, i) => largeDoc('keep-' + String(i).padStart(4, '0')))
   const hot = many[0]
   const h = boot('files', many)
-  const take = async item => h.api.content('x', [{ id: item.id, name: item.name, type: 'text', size: 1024 }])
+  const take = async item => h.api.content('x', [{ id: item.id, name: item.name, type: item.type, size: 1024 }])
   for (const item of many) await take(item)
-  assert.equal(h.reads.length, 6, '六份各读一次，预算正好装满')
+  assert.equal(h.reads.length, 6, '六份各读一次，接近字节预算')
   await take(hot)
   assert.equal(h.countOf(hot.id), 1, '还在缓存里')
   // 再塞两份新的，把总字节顶过预算
-  for (const id of ['new-00000001', 'new-00000002']) { h.data.set(id, big(id)); await take(big(id)) }
+  for (const id of ['new-00000001', 'new-00000002']) { h.data.set(id, largeDoc(id)); await take(largeDoc(id)) }
   await take(hot)
   assert.equal(h.countOf(hot.id), 1, '刚用过的那份被挤掉了 —— 淘汰没有按最近使用排序')
   await take(many[1])
@@ -137,8 +140,9 @@ await test('★★ 没能落盘的条目永远不淘汰 —— 它只存在于�
   // 之后再走 9 份别的文件，足够把上限顶穿好几轮
   for (let i = 0; i < 9; i++) {
     const id = 'push-' + String(i).padStart(4, '0')
-    h.data.set(id, { ...doc(id), text: '文'.repeat(4 * 1024 * 1024) })
-    await h.api.content('x', [{ id, name: id + '.txt', type: 'text', size: 1024 }])
+    const item = largeDoc(id)
+    h.data.set(id, item)
+    await h.api.content('x', [ref(item)])
   }
   const [entry] = await h.api.content('x', [ref(stuck)])
     .then(() => [true]).catch(() => [false])
@@ -186,12 +190,13 @@ await test('temporary document storage has a hard cap without discarding earlier
   assert.match(await h.api.content('read', [ref(saved[0])]), /temporary-0/)
 })
 
-await test('an oversized stored document can be read without retaining it beyond the cache budget', async () => {
+await test('impossible oversized stored text is rejected, never cached, and left intact for recovery', async () => {
   const item = { ...doc('oversize-document'), text: 'x'.repeat(25 * 1024 * 1024) }
   const h = boot('files', [item])
-  await h.api.content('read', [ref(item)])
-  await h.api.content('read again', [ref(item)])
-  assert.equal(h.countOf(item.id), 2, 'the oversized item must not remain in the bounded cache')
+  await assert.rejects(h.api.content('read', [ref(item)]), /重新附加/)
+  await assert.rejects(h.api.content('read again', [ref(item)]), /重新附加/)
+  assert.equal(h.countOf(item.id), 2, 'rejected records must not enter the bounded cache')
+  assert.equal(h.data.get(item.id).text.length, 25 * 1024 * 1024, 'validation must not erase the original record')
 })
 
 console.log(`\n${passed} 项通过`)

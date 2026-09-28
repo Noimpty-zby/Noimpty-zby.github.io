@@ -40,7 +40,7 @@ RUN rm -f /etc/dpkg/dpkg.cfg.d/excludes \
     && mandb -q
 COPY code sudo /usr/local/bin/
 ENV TZ=Asia/Shanghai
-COPY check-limits.py cleanup.py start-mysql.py restore-mysql.py shell-session.py py-check.py /opt/nanaly/
+COPY check-limits.py cleanup.py start-mysql.py restore-mysql.py shell-session.py run-in-shell.py py-check.py /opt/nanaly/
 USER 10001:10001
 WORKDIR /work
 CMD ["sleep", "150"]

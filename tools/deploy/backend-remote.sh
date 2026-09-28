@@ -21,6 +21,8 @@ as_nanaly() { runuser -u nanaly -- env DOCKER_HOST="unix:///run/user/$uid/docker
 image=nanaly-runner:$tag
 old_build=$(cat "$live/server/BUILD" 2>/dev/null || true)
 old_image=$(sed -n 's/^NANALY_RUNNER_IMAGE=//p' "$env_file")
+# Older installations use the server default when this setting is absent/empty.
+old_image=${old_image:-nanaly-runner:1}
 
 echo "▸ 解包到 $next"
 rm -rf "$next"
@@ -106,7 +108,13 @@ rollback() {
 trap rollback EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-sed -i "s|^NANALY_RUNNER_IMAGE=.*|NANALY_RUNNER_IMAGE=$image|" "$env_file"
+if grep -q '^NANALY_RUNNER_IMAGE=' "$env_file"; then
+  sed -i "s|^NANALY_RUNNER_IMAGE=.*|NANALY_RUNNER_IMAGE=$image|" "$env_file"
+else
+  # sed alone succeeds without changing anything when upgrading an old env file.
+  # Include a newline even if the previous last setting had none.
+  printf '\nNANALY_RUNNER_IMAGE=%s\n' "$image" >> "$env_file"
+fi
 mv "$live" "$prev"
 mv "$next" "$live"
 systemctl restart nanaly

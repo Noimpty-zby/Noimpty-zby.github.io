@@ -131,6 +131,14 @@ while [ ! -s /tmp/shared-descendant.pid ]; do sleep 0.01; done
       assert.equal(stopped.code, 0, `${outcome} left its detached descendant running`);
       assert.equal(first.exited, null);
     }
+    // A crash or a high exit code is the learner's result, not a failed supervision.
+    for (const [code, expected] of [['printf boom >&2; kill -SEGV $$', 139], ['exit 200', 200]]) {
+      const crashed = await run(code);
+      assert.equal(crashed.exitCode, expected, JSON.stringify(crashed));
+      assert.equal(crashed.status, 'runtime_error');
+      assert.equal(crashed.stderr.includes('NANALY_RUN'), false, 'the outcome line stays internal');
+      assert.equal(first.exited, null, `${code} closed the interactive shell`);
+    }
     // Abort after CLI admission but before the Docker process starts. The source
     // stays absent, so a late container exec cannot resurrect the cancelled code.
     const execute = runner.execute, controller = new AbortController();

@@ -15,6 +15,8 @@ import { createApp } from '../../../server/app.mjs';
 import { processResult } from '../../../server/lib/process.mjs';
 
 const output = (stdout = '') => ({ code: 0, stdout: Buffer.from(stdout), stderr: Buffer.alloc(0) });
+// What run-in-shell.py prints last after a supervision it fully cleaned up.
+const supervised = (outcome = 'exit 0', stderr = '') => ({ ...output(), stderr: Buffer.from(stderr + '\x1eNANALY_RUN ' + outcome + '\n') });
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function childProcess({ blocked = false } = {}) {
@@ -39,6 +41,7 @@ async function fixture(t, { hook, spawnProcess = childProcess, ...options } = {}
     if (args[0] === 'rm') live.delete(args.at(-1));
     if (args[0] === 'info') return output(JSON.stringify({ OSType: 'linux', CgroupVersion: '2', MemoryLimit: true, PidsLimit: true, CpuCfsQuota: true }));
     if (args.includes('/tmp/nanaly-shell-result.json')) return output(JSON.stringify({ cwd: '/work', shellStateSaved: true }));
+    if (args.includes('/opt/nanaly/run-in-shell.py')) return supervised();
     return output();
   } });
   const sessions = new SessionManager(runner, options);
@@ -308,8 +311,10 @@ test('cancelling while the shared source is made readable reports cancellation a
   assert.deepEqual(await fs.readdir(directory), []);
 });
 
-for (const [code, reason] of [[125], [137], [0, 'timeout'], [0, 'output_limit']]) test(`shared supervisor failure ${reason || code} closes the container and reports the committed revision`, async t => {
-  const api = await fixture(t, { hook: args => args.includes('/opt/nanaly/run-in-shell.py') ? { ...output(), code, reason } : undefined });
+for (const [code, reason, spoof] of [[125], [137], [137, undefined, true], [0, 'timeout'], [0, 'output_limit']]) test(`shared supervisor failure ${reason || code}${spoof ? ' with a learner-printed outcome line' : ''} closes the container and reports the committed revision`, async t => {
+  // A learner program can print the outcome line and then kill the supervisor;
+  // the non-zero Docker exit code must still count as a failed supervision.
+  const api = await fixture(t, { hook: args => args.includes('/opt/nanaly/run-in-shell.py') ? { ...(spoof ? supervised() : output()), code, reason } : undefined });
   const session = await api.sessions.shell({ language: 'linux' });
   const result = await api.sessions.runInShell(session.host, { language: 'linux', code: 'true', stdin: '', revision: 0 });
   assert.equal(result.exitCode, code);
@@ -321,6 +326,27 @@ for (const [code, reason] of [[125], [137], [0, 'timeout'], [0, 'output_limit']]
   assert.equal(session.exited.reason, 'run_failed');
   assert.ok(result.warnings.some(warning => warning.includes('终端已关闭')));
   assert.equal(api.calls.some(args => args.includes('find')), false, 'closed containers are not queried for a summary');
+});
+
+for (const [code, stderr] of [[137, ''], [139, 'Segmentation fault (core dumped)\n'], [200, ''], [124, 'timeout: learner used it\n']]) test(`a script exiting ${code} under a healthy supervisor keeps the terminal open`, async t => {
+  const api = await fixture(t, { hook: args => args.includes('/opt/nanaly/run-in-shell.py') ? supervised('exit ' + code, stderr) : undefined });
+  const session = await api.sessions.shell({ language: 'linux' });
+  const result = await api.sessions.runInShell(session.host, { language: 'linux', code: 'true', stdin: '', revision: 0 });
+  assert.equal(result.exitCode, code);
+  assert.equal(result.status, 'runtime_error', 'only the supervisor’s own deadline is a timeout');
+  assert.equal(result.stderr, stderr, 'the outcome line is not shown to the learner');
+  assert.equal(session.exited, null);
+  assert.equal(api.runner.containers.size, 1);
+  assert.equal(result.workspaceCommitted, false);
+  assert.equal(result.warnings.some(warning => warning.includes('终端已关闭')), false);
+});
+
+test('the supervisor’s own deadline reports a timeout and keeps the terminal', async t => {
+  const api = await fixture(t, { hook: args => args.includes('/opt/nanaly/run-in-shell.py') ? supervised('timeout', 'partial\n') : undefined });
+  const session = await api.sessions.shell({ language: 'linux' });
+  const result = await api.sessions.runInShell(session.host, { language: 'linux', code: 'sleep 60', stdin: '', revision: 0 });
+  assert.deepEqual([result.status, result.exitCode, result.stderr], ['timeout', 124, 'partial\n']);
+  assert.equal(session.exited, null);
 });
 
 test('a failed save after supervisor death reports the retained revision and warnings', async t => {
@@ -337,13 +363,13 @@ test('a failed save after supervisor death reports the retained revision and war
   assert.equal(result.warnings.some(warning => warning.includes('已保存并关闭')), false);
 });
 
-for (const code of [126, 137]) test(`cancellation with supervisor code ${code} ${code === 137 ? 'finishes unsafe cleanup' : 'retains the shell'}`, async t => {
+for (const killed of [false, true]) test(`cancellation ${killed ? 'with a killed supervisor finishes unsafe cleanup' : 'reported by the supervisor retains the shell'}`, async t => {
   const controller = new AbortController();
   const api = await fixture(t, { hook: args => {
-    if (args.includes('/opt/nanaly/run-in-shell.py')) { controller.abort(); return { ...output(), code }; }
+    if (args.includes('/opt/nanaly/run-in-shell.py')) { controller.abort(); return killed ? { ...output(), code: 137 } : supervised('cancelled'); }
   } });
   const session = await api.sessions.shell({ language: 'linux' });
   await assert.rejects(api.sessions.runInShell(session.host, { language: 'linux', code: 'true', stdin: '', revision: 0 }, { signal: controller.signal }), { code: 'RUN_CANCELLED' });
-  assert.equal(api.runner.containers.size, code === 137 ? 0 : 1);
-  assert.equal(session.exited === null, code === 126);
+  assert.equal(api.runner.containers.size, killed ? 0 : 1);
+  assert.equal(session.exited === null, !killed);
 });

@@ -18,6 +18,17 @@ const quote = value => "'" + String(value).replace(/'/g, "'\\''") + "'";
 // The service runs with umask 077; the sandbox user is another uid under rootless Docker, so
 // every file it must read gets an explicit world-readable mode.
 const readable = async (file, write) => { await write(); await fs.chmod(file, 0o444); };
+// run-in-shell.py ends a completed supervision with this line as its last stderr
+// bytes and exit code 0. Learner code may print the same text, but a supervisor it
+// killed never also exits 0, so both together mean cleanup really finished.
+const OUTCOME = /\x1eNANALY_RUN (?:exit (\d{1,3})|(timeout|cancelled))\n$/;
+function supervised(executed) {
+  if (executed.reason || executed.code !== 0) return null;
+  const stderr = executed.stderr.toString('utf8'), match = stderr.match(OUTCOME);
+  if (!match) return null;
+  const code = match[1] !== undefined ? Number(match[1]) : match[2] === 'timeout' ? 124 : 126;
+  return { code, timeout: match[2] === 'timeout', stderr: stderr.slice(0, -match[0].length) };
+}
 export const TASKS = {
   c: { file: 'main.c', command: 'gcc -std=c17 -Wall -Wextra -g main.c -o main -lm && ./main' },
   cpp: { file: 'main.cpp', command: 'g++ -std=c++20 -Wall -Wextra -g main.cpp -o main && ./main' },
@@ -216,19 +227,20 @@ export class SessionManager {
       notCancelled();
       const executed = await this.runner.cli(['exec', '-i', '-w', cwd, host.name, 'python3', '/opt/nanaly/run-in-shell.py', `/input/run-${id}.sh`],
         { input: request.stdin, timeout: 40000, limit: 131072, onLimit: stop, signal });
-      // Learner code shares the supervisor's uid and can kill it. A signal exit
-      // (including an explicit exit >= 128), supervisor failure, or lost Docker
-      // exec makes cleanup uncertain: finish the whole shell before replying.
-      // Normal cancellation uses helper code 126; timeout 124 cleans up itself.
-      const closed = executed.reason || executed.code === 125 || executed.code >= 128
-        ? await host.pty.hangup('run_failed') : null;
+      // Learner code shares the supervisor's uid and can kill it. Without the
+      // supervisor's own outcome line (killed helper, helper failure, lost Docker
+      // exec) cleanup is uncertain: finish the whole shell before replying. A script
+      // that merely exits 137 or crashes with 139 keeps its terminal.
+      const outcome = supervised(executed);
+      const closed = outcome ? null : await host.pty.hangup('run_failed');
       notCancelled();
-      const stderr = executed.stderr.toString('utf8').replaceAll(`/input/run-${id}.sh`, 'main.sh');
-      const status = executed.reason || (executed.code === 124 ? 'timeout' : executed.code === 0 ? 'accepted' : 'runtime_error');
+      const exitCode = outcome ? outcome.code : executed.code;
+      const stderr = (outcome ? outcome.stderr : executed.stderr.toString('utf8')).replaceAll(`/input/run-${id}.sh`, 'main.sh');
+      const status = executed.reason || (outcome?.timeout ? 'timeout' : outcome && exitCode === 0 ? 'accepted' : 'runtime_error');
       const summary = closed ? null : await host.exec(request.language === 'git' ? ['git', '-C', cwd, '-c', 'core.fsmonitor=false', 'status', '--short', '--branch'] : ['find', cwd, '-maxdepth', '2', '-not', '-path', '*/.git/*'], { timeout: 2000, limit: 8192 });
       notCancelled();
       return { runId: id, revision: request.revision, status, stdout: executed.stdout.toString('utf8'), stderr, diagnostics: diagnostics(stderr), tests: [],
-        exitCode: executed.code, cwd: closed?.cwd || cwd, workspaceSummary: summary?.stdout.toString('utf8') || '', workspaceId: host.workspace.workspaceId,
+        exitCode, cwd: closed?.cwd || cwd, workspaceSummary: summary?.stdout.toString('utf8') || '', workspaceId: host.workspace.workspaceId,
         workspaceRevision: closed?.workspaceRevision ?? host.workspace.revision, workspaceCommitted: closed?.committed === true,
         warnings: closed ? [...(closed.warnings || []), MESSAGES.run_failed] : ['终端开着：这次的改动在终端的环境里，终端关闭时一起保存。'] };
     } catch (error) { notCancelled(); throw error; }

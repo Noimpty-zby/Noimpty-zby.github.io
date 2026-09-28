@@ -4,6 +4,12 @@
 The API removes the read-only mounted source to cancel. This works before Docker
 exec starts as well as during execution, and cannot be undone by learner code.
 Linux subreaping also keeps double-forked/setsid children owned by this run.
+
+The script's own exit code can be anything, including 137 or 139, so it cannot
+tell the API whether this supervisor finished its cleanup. After every descendant
+is gone the supervisor writes one outcome line as the last stderr bytes and exits
+0. Learner code can print a look-alike line, but not also make a killed
+supervisor exit 0, so the API only trusts the line together with exit code 0.
 """
 import argparse
 import ctypes
@@ -45,22 +51,26 @@ def stop_children(child):
         time.sleep(0.01)
 
 
+OUTCOME = '\x1eNANALY_RUN '
+
+
 def run(script, seconds):
     libc = ctypes.CDLL(None, use_errno=True)
     if libc.prctl(36, 1, 0, 0, 0) != 0:  # PR_SET_CHILD_SUBREAPER (Linux)
         raise OSError(ctypes.get_errno(), 'cannot supervise script children')
     if not script.is_file():
-        return 126
+        return 'cancelled'
     child = subprocess.Popen(['/bin/bash', str(script)], start_new_session=True)
     deadline = time.monotonic() + seconds
     try:
         while child.poll() is None:
             if not script.exists():
-                return 126
+                return 'cancelled'
             if time.monotonic() >= deadline:
-                return 124
+                return 'timeout'
             time.sleep(0.05)
-        return child.returncode if child.returncode >= 0 else 128 - child.returncode
+        code = child.returncode if child.returncode >= 0 else 128 - child.returncode
+        return 'exit ' + str(code)
     finally:
         stop_children(child)
 
@@ -73,7 +83,10 @@ if __name__ == '__main__':
     if not 0 < args.seconds <= 30:
         parser.error('seconds must be between 0 and 30')
     try:
-        sys.exit(run(args.script, args.seconds))
+        outcome = run(args.script, args.seconds)
     except (OSError, subprocess.TimeoutExpired) as error:
         print('Script supervision failed: ' + str(error), file=sys.stderr)
         sys.exit(125)
+    sys.stderr.write(OUTCOME + outcome + '\n')
+    sys.stderr.flush()
+    sys.exit(0)

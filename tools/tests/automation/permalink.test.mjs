@@ -16,6 +16,7 @@
  * 9-13 那次跑在 15:39 UTC，差 21 分钟又要中一次。
  */
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { utcDay, postPath, wallClockMs } from '../../nanaly/permalink.mjs'
 import { pathOf } from '../../nanaly/notes.mjs'
 
@@ -94,6 +95,15 @@ check('读不出来的返回 null（不是 0 —— 0 会被当成 1970 年，�
 check('notes.mjs 的 pathOf 走的是同一套（老名字还在被测试和调用方用着）', () => {
   assert.equal(pathOf('source/_posts/nanaly-2026-w35.md', post('2026-08-31 00:05:53')),
     '/2026/08/30/nanaly-2026-w35/')
+})
+
+check('★ 本地构建和预览固定在 UTC 上跑，和 CI 生成同一套地址', () => {
+  // 上面说的「取 UTC 日期」严格说是「取构建机器的本地日期」—— 只是 CI 恰好在 UTC 上。
+  // 2026-09-29 在 UTC+8 的机器上本地构建，凌晨发的两篇随笔落在 /2026/09/28/ 和 /2026/08/31/，
+  // 线上却是 /09/27/ 和 /08/30/：本地预览和本地死链检查看到的是另一套地址，
+  // 手写一个指向凌晨文章的链接，本地全绿、上线就 404。
+  const scripts = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')).scripts
+  for (const name of ['build', 'server']) assert.match(scripts[name], /^TZ=UTC /, `npm run ${name} 必须固定 TZ=UTC`)
 })
 
 console.log(`\n${pass} 项通过`)

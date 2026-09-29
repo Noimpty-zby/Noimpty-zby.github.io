@@ -3,10 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "node node_modules/hexo/bin/hexo generate",
+    "build": "TZ=UTC node node_modules/hexo/bin/hexo generate",
     "clean": "node node_modules/hexo/bin/hexo clean",
     "deploy": "node node_modules/hexo/bin/hexo deploy",
-    "server": "node node_modules/hexo/bin/hexo server",
+    "server": "TZ=UTC node node_modules/hexo/bin/hexo server",
     "test": "node tools/tests/run-all.mjs",
     "linkcheck": "node tools/checks/linkcheck.mjs",
     "leakcheck": "node tools/checks/leakcheck.mjs",

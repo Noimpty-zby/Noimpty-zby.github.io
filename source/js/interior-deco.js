@@ -124,7 +124,9 @@
         art.replaceWith(button)
         button.append(art)
       }
-      scene.querySelector('.noimpty-scene__bubble')?.setAttribute('role', 'status')
+      // figcaption may not carry role="status"; the live-region attributes announce line changes the same way.
+      const caption = scene.querySelector('.noimpty-scene__bubble')
+      if (caption) { caption.setAttribute('aria-live', 'polite'); caption.setAttribute('aria-atomic', 'true') }
       // Native Enter/Space clicks bubble here too; one listener handles all input.
       const onTap = () => talk(scene, still)
       scene.addEventListener('click', onTap)

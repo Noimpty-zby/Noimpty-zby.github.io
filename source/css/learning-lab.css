@@ -90,6 +90,8 @@
 }
 .learning-brand { flex: none; flex-wrap: wrap; gap: 9px; font-size: 16px; font-weight: 700; letter-spacing: .035em; }
 .learning-flower, .learning-brand-icon { display: grid; place-items: center; width: 33px; height: 33px; border-radius: 12px; background: var(--lab-surface); color: var(--lab-accent); font-size: 25px; font-weight: 400; line-height: 1; box-shadow: 0 2px 6px #b6759412; }
+.learning-lab .learning-brand .learning-brand-name { margin: 0; padding: 0; border: 0; color: inherit; font: inherit; letter-spacing: inherit; line-height: inherit; }
+.learning-lab .learning-brand .learning-brand-name::before, .learning-lab .learning-brand .learning-brand-name::after { content: none; }
 .learning-brand small { margin: 2px 0 0 2px; color: var(--lab-muted); font-size: 9px; font-weight: 600; letter-spacing: .14em; }
 .learning-controls { justify-content: flex-end; flex-wrap: wrap; gap: 8px; min-width: 0; }
 .learning-actions { gap: 7px; }

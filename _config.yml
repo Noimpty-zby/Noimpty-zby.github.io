@@ -176,6 +176,8 @@ markdown:
     permalinkClass: headerlink
     permalinkSide: left
     permalinkSymbol: ''
+    # 锚点是空链接，读屏软件只会念「链接」；用「本节链接：标题」给它起名
+    permalinkLabel: '本节链接：'
     case: 0
     separator: '-'
 

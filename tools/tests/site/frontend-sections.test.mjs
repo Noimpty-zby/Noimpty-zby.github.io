@@ -60,18 +60,35 @@ check('正常的一小时心跳节流仍然生效', () => {
   assert.equal(b.reports.length, 0)
 })
 
-const sectionHtml = (cover, root = '/') => {
-  const tags = new Map()
-  const post = { title: 'Test', path: '2026/test/index.html', cover, categories: [{ name: 'Demo' }] }
+const loadSections = (posts, root = '/') => {
+  const tags = new Map(), filters = new Map()
   vm.runInNewContext(read('scripts/noimpty-sections.js'), {
     hexo: {
       config: { root },
-      locals: { get: () => [post] },
-      extend: { tag: { register: (name, fn) => tags.set(name, fn) } }
+      locals: { get: () => posts },
+      extend: { tag: { register: (name, fn) => tags.set(name, fn) }, filter: { register: (name, fn) => filters.set(name, fn) } }
     }
   })
-  return tags.get('section_posts')(['Demo'])
+  return { tags, filters }
 }
+const sectionHtml = (cover, root = '/') => {
+  const post = { title: 'Test', path: '2026/test/index.html', cover, categories: [{ name: 'Demo' }] }
+  return loadSections([post], root).tags.get('section_posts')(['Demo'])
+}
+
+check('板块页的标题层级连得上：文章列表和卡片网格前各有一个只给读屏看的 h2', () => {
+  const html = sectionHtml('/img/a.svg')
+  assert.ok(html.startsWith('<h2 class="noimpty-sr-only">文章列表</h2>'), html.slice(0, 80))
+  const { tags, filters } = loadSections([])
+  assert.ok(tags.get('section_posts')(['Empty']).startsWith('<h2 class="noimpty-sr-only">文章列表</h2><div class="noimpty-empty-state">'))
+  const filter = filters.get('after_post_render')
+  const page = { content: '<header><h1>课外</h1></header>\n<div class="noimpty-track-grid noimpty-track-grid--two"><a><h3>A</h3></a></div>' }
+  const once = filter(page).content
+  assert.match(once, /<\/header>\n<h2 class="noimpty-sr-only">栏目<\/h2><div class="noimpty-track-grid/)
+  assert.equal(filter({ content: once }).content, once, '重复渲染不能插两次')
+  const plain = { content: '<p>没有网格</p>' }
+  assert.equal(filter(plain).content, '<p>没有网格</p>')
+})
 
 check('分区卡片保留 HTTPS 和协议相对 CDN 封面地址', () => {
   assert.ok(sectionHtml('https://cdn.example.test/image.png').includes("url('https://cdn.example.test/image.png')"))

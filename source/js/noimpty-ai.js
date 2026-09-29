@@ -2907,9 +2907,11 @@
   pokeBubble.type = 'button'
   pokeBubble.tabIndex = -1
   pokeBubble.id = 'nanaly-poke'
+  // 没冒出来的时候它是个空按钮，读屏软件会念「按钮」却说不出是什么 —— 藏起来时一并对辅助技术隐藏。
+  pokeBubble.setAttribute('aria-hidden', 'true')
   document.body.appendChild(pokeBubble)
 
-  const hidePoke = () => { pokeBubble.classList.remove('is-on'); pokeBubble.tabIndex = -1 }
+  const hidePoke = () => { pokeBubble.classList.remove('is-on'); pokeBubble.tabIndex = -1; pokeBubble.setAttribute('aria-hidden', 'true') }
 
   const currentHeading = () => {
     if (!canReadPageContext()) return ''
@@ -2944,6 +2946,7 @@
     const line = POKE_LINES[path.length % POKE_LINES.length](h)
     pokeBubble.textContent = line
     pokeBubble.classList.add('is-on')
+    pokeBubble.removeAttribute('aria-hidden')
     pokeBubble.tabIndex = 0
     launcher.classList.add('has-news')
     pendingPoke = line

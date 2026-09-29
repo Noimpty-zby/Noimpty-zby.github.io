@@ -71,6 +71,8 @@ function anchors(md, options) {
         const Token = heading.constructor
         const link = new Token('link_open', 'a', 1)
         link.attrs = [['class', options.permalinkClass], ['href', '#' + slug]]
+        // An empty permalink is an unnamed link to screen readers; name it after its heading.
+        if (typeof options.permalinkLabel === 'string' && options.permalinkLabel) link.attrs.push(['aria-label', options.permalinkLabel + title])
         const label = new Token('text', '', 0)
         label.content = options.permalinkSymbol
         const permalink = [link, label, new Token('link_close', 'a', -1), new Token('text', '', 0)]

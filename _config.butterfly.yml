@@ -1161,6 +1161,7 @@ inject:
     - <script src="/js/analytics.js"></script>
   bottom:
     - <script src="/js/toc-sync.js"></script>
+    - <script src="/js/a11y-labels.js"></script>
     - <script src="/js/music-player.js"></script>
     # 娜娜莉：API Key 不写在代码里，由使用者在面板中输入并存在本机 localStorage
     - <script src="/js/nanaly-provider.js"></script>

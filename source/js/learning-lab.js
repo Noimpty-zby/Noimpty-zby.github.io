@@ -523,7 +523,8 @@
     const heading = node('header', 'learning-heading')
     const brand = node('div', 'learning-brand')
     const flower = node('span', 'learning-flower', '✿'); flower.setAttribute('aria-hidden', 'true')
-    brand.append(flower, node('span', '', '代码小屋'), node('small', '', 'CODE STUDIO'))
+    // On /learn/ the studio is the page, so its name is the page's one h1; inside an article it is not.
+    brand.append(flower, node(article ? 'span' : 'h1', 'learning-brand-name', '代码小屋'), node('small', '', 'CODE STUDIO'))
     const controls = node('div', 'learning-controls')
     const select = node('select', 'learning-select'); select.setAttribute('aria-label', '编程语言')
     Object.entries(LANGUAGE_NAMES).forEach(([id, name]) => { const option = node('option', '', name); option.value = id; select.append(option) })
@@ -607,7 +608,8 @@
     more.append(menu); actions.append(saveButton, closeFileButton, testButton, stopButton, runButton, more)
     toolbar.append(modeSwitch, filename, terminalTitle, terminalState, actions)
 
-    const editorPane = node('main', 'learning-editor-pane')
+    // The theme already provides the page's main landmark; a second, nested one confuses screen readers.
+    const editorPane = node('section', 'learning-editor-pane'); editorPane.setAttribute('aria-label', '代码编辑区')
     const editorWrap = node('div', 'learning-editor-wrap')
     const editorHost = node('div', 'learning-code-editor')
     const fallback = node('textarea', 'learning-editor'); fallback.setAttribute('aria-label', '代码编辑器'); fallback.spellcheck = false; fallback.maxLength = MAX_CODE; fallback.wrap = 'off'
@@ -619,20 +621,30 @@
     const CONSOLE_KEY = 'noimpty-code-console-height'
     const resizer = button('', () => {}, 'learning-console-resizer')
     resizer.setAttribute('role', 'separator'); resizer.setAttribute('aria-orientation', 'horizontal'); resizer.setAttribute('aria-label', '拖动调整下方面板高度，双击恢复默认')
+    // A focusable separator must expose its position; screen readers announce it as a percentage.
+    resizer.setAttribute('aria-valuemin', '0'); resizer.setAttribute('aria-valuemax', '100'); resizer.setAttribute('aria-valuenow', '50')
+    const syncResizer = () => {
+      const total = root.clientHeight
+      if (!total) return
+      const value = Math.round(Math.max(0, Math.min(100, consolePane.offsetHeight / total * 100)))
+      resizer.setAttribute('aria-valuenow', String(value)); resizer.setAttribute('aria-valuetext', `下方面板约占 ${value}%`)
+    }
     const setConsoleHeight = px => {
       const others = [...root.children].reduce((sum, el) => el === editorPane || el === consolePane ? sum : sum + el.offsetHeight, 0)
       const room = root.clientHeight - others - (parseFloat(window.getComputedStyle(editorPane).minHeight) || 180)
       const height = Math.round(Math.max(140, Math.min(Math.max(room, 140), px)))
       consolePane.style.flexBasis = height + 'px'
       writeStore(CONSOLE_KEY, String(height))
+      syncResizer()
     }
     let drag = null
     resizer.addEventListener('pointerdown', event => { resizer.setPointerCapture(event.pointerId); drag = { y: event.clientY, height: consolePane.offsetHeight }; event.preventDefault() })
     resizer.addEventListener('pointermove', event => { if (drag && resizer.hasPointerCapture(event.pointerId)) setConsoleHeight(drag.height + drag.y - event.clientY) })
     resizer.addEventListener('pointerup', event => { if (resizer.hasPointerCapture(event.pointerId)) resizer.releasePointerCapture(event.pointerId); drag = null })
     resizer.addEventListener('keydown', event => { if (['ArrowUp', 'ArrowDown'].includes(event.key)) { event.preventDefault(); setConsoleHeight(consolePane.offsetHeight + (event.key === 'ArrowUp' ? 24 : -24)) } })
-    resizer.addEventListener('dblclick', () => { consolePane.style.flexBasis = ''; try { window.localStorage.removeItem(CONSOLE_KEY) } catch (_) {} })
+    resizer.addEventListener('dblclick', () => { consolePane.style.flexBasis = ''; try { window.localStorage.removeItem(CONSOLE_KEY) } catch (_) {} window.requestAnimationFrame?.(syncResizer) })
     { const saved = Number(readStore(CONSOLE_KEY)); if (saved >= 140) consolePane.style.flexBasis = Math.min(saved, 900) + 'px' }
+    window.requestAnimationFrame?.(syncResizer)
     const tabs = node('div', 'learning-console-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', '终端与运行结果')
     const panels = {}; const tabButtons = {}; let currentPanel = 'terminal'
     const PANELS = [['terminal', '终端'], ['output', '输出'], ['history', '记录']]

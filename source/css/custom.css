@@ -443,3 +443,9 @@ a {
   background: var(--noimpty-accent-soft, #ff91a8);
   border-radius: 4px;
 }
+
+/* 只给读屏软件看的文字（例如补齐标题层级的隐藏 h2）。主题会给正文标题加边距和图标，这里一并归零。 */
+.noimpty-sr-only, #article-container .noimpty-sr-only {
+  position: absolute !important; width: 1px !important; height: 1px !important; margin: 0 !important; padding: 0 !important;
+  border: 0 !important; overflow: hidden !important; clip-path: inset(50%) !important; white-space: nowrap !important;
+}

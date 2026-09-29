@@ -141,6 +141,15 @@ const statsOf = section => {
  *   {% section_stat 入门=Linux入门|深入=Linux深入 %}  → 入门 3 篇 · 深入还没开始
  *   {% section_stat GAMES101|UE5-Looman %}         → 已写 16 篇（不带标签就是求和）
  */
+/* 板块页的卡片网格同理：页头 h1 下面直接是卡片的 h3（axe 报 heading-order）。
+ * 在页面里第一个网格前补一个隐藏的 h2，外观不变；以后新建的板块页不用记着手写。 */
+hexo.extend.filter.register('after_post_render', data => {
+  if (typeof data.content !== 'string' || !data.content.includes('<div class="noimpty-track-grid')) return data
+  if (data.content.includes('<h2 class="noimpty-sr-only">栏目</h2>')) return data
+  data.content = data.content.replace('<div class="noimpty-track-grid', '<h2 class="noimpty-sr-only">栏目</h2><div class="noimpty-track-grid')
+  return data
+})
+
 hexo.extend.tag.register('section_stat', args => {
   const parts = args.join(' ').split('|').map(x => x.trim()).filter(Boolean)
   const labeled = parts.some(p => p.includes('='))
@@ -180,9 +189,11 @@ hexo.extend.tag.register('section_posts', args => {
     .filter(post => taxonomyNames(post.categories).includes(section))
     .sort((left, right) => Number(right.date || 0) - Number(left.date || 0))
 
+  // 页头是 h1、卡片标题是 h3，中间补一个只给读屏软件看的 h2，按标题跳转时层级才连得上。
+  const listHeading = '<h2 class="noimpty-sr-only">文章列表</h2>'
   if (posts.length === 0) {
     const msg = EMPTY_STATE[section] || { title: '这里暂时是空的', body: '这个板块还没有收录文章。' }
-    return `<div class="noimpty-empty-state"><span class="noimpty-empty-state__icon" aria-hidden="true">✦</span><h3>${escapeHtml(msg.title)}</h3><p>${escapeHtml(msg.body)}</p></div>`
+    return `${listHeading}<div class="noimpty-empty-state"><span class="noimpty-empty-state__icon" aria-hidden="true">✦</span><h3>${escapeHtml(msg.title)}</h3><p>${escapeHtml(msg.body)}</p></div>`
   }
 
   /* 最新一篇单独占一整行（封面在左、摘要在右），其余排成网格。
@@ -211,6 +222,6 @@ hexo.extend.tag.register('section_posts', args => {
   const lead = posts.length === 2 ? '' : card(first, true)
   const grid = (posts.length === 2 ? posts : rest).map(post => card(post, false)).join('')
 
-  return `<div class="noimpty-post-list" data-section="${escapeHtml(section)}">${lead}${grid
+  return `${listHeading}<div class="noimpty-post-list" data-section="${escapeHtml(section)}">${lead}${grid
     ? `<div class="noimpty-post-grid noimpty-post-grid--${posts.length === 2 ? 2 : cols}">${grid}</div>` : ''}</div>`
 })

@@ -20,8 +20,8 @@ const check = (label, fn) => { fn(); passed++; console.log('  ✓ ' + label) }
 
 check('headings retain site permalink markup and collision numbering per article', () => {
   const renderer = new Renderer(hexo())
-  const expected = '<h2 id="repeat"><a class="headerlink" href="#repeat"></a>repeat</h2>\n'
-    + '<h2 id="repeat-2"><a class="headerlink" href="#repeat-2"></a>repeat</h2>\n'
+  const expected = '<h2 id="repeat"><a class="headerlink" href="#repeat" aria-label="本节链接：repeat"></a>repeat</h2>\n'
+    + '<h2 id="repeat-2"><a class="headerlink" href="#repeat-2" aria-label="本节链接：repeat"></a>repeat</h2>\n'
   assert.equal(renderer.render({ text: '## repeat\n\n## repeat' }), expected)
   assert.equal(renderer.render({ text: '## repeat' }), expected.split('\n')[0] + '\n')
   const hostile = renderer.render({ text: '## __proto__\n\n## __proto__\n\n## constructor' })
@@ -29,6 +29,14 @@ check('headings retain site permalink markup and collision numbering per article
   assert.match(hostile, /id="constructor"/)
   const collision = renderer.render({ text: '## title\n\n## title-2\n\n## title' })
   assert.deepEqual([...collision.matchAll(/id="([^"]+)"/g)].map(match => match[1]), ['title', 'title-2', 'title-3'])
+})
+
+check('heading permalinks are named for screen readers, with the title escaped', () => {
+  const renderer = new Renderer(hexo())
+  assert.match(renderer.render({ text: '## 一、三条标准流' }), /<a class="headerlink" href="#一、三条标准流" aria-label="本节链接：一、三条标准流"><\/a>/)
+  assert.match(renderer.render({ text: '## a "quote" & <b>x</b>' }), /aria-label="本节链接：a &quot;quote&quot; &amp; &lt;b&gt;x&lt;\/b&gt;"/)
+  const unnamed = new Renderer(hexo({ ...projectConfig.markdown, anchors: { ...projectConfig.markdown.anchors, permalinkLabel: undefined } }))
+  assert.doesNotMatch(unnamed.render({ text: '## x' }), /aria-label/)
 })
 
 check('anchor level, side, symbol, case, separator and suffix remain configurable', () => {

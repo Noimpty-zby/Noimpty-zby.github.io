@@ -447,7 +447,7 @@ export const buildNews = async () => {
     const listed = pool.map((h, i) =>
       `[${i}] ${h.title}\n    来源：${h.url}\n    ${h.date ? '日期：' + h.date + '\n    ' : ''}${h.excerpt}`).join('\n\n')
 
-    const out = await ask(SYSTEM, newsPrompt(t, listed), t.deep ? 5000 : 1600,
+    const out = await ask(SYSTEM, newsPrompt(t, listed), t.deep ? 8000 : 1600,
       { deep: !!t.deep, retries: 1, label: t.key })
 
     const body = out ? attachSources(out.trim(), pool) : ''

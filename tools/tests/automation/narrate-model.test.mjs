@@ -144,6 +144,22 @@ await check('★★ 读后反馈的降级文案带上真实原因，不再是一
   assert.ok(logs.some(l => l.includes('读后反馈')), '日志里看不出是哪一格挂的')
 })
 
+await check('★★ 被截断后重试要把 max_tokens 翻倍，不能原样再截一次（9-28 资讯「面试」栏就这么空的）', async () => {
+  answer(blank('length'), said('这次写完了'))
+  assert.equal(await N.ask('sys', 'user', 5000, { deep: true }), '这次写完了')
+  assert.deepEqual(sent.map(r => r.max_tokens), [5000, 10000])
+  answer(() => ({ ok: true, json: async () => ({ choices: [{ message: { content: '半截' }, finish_reason: 'length' }] }) }), said('完整'))
+  assert.equal(await N.ask('sys', 'user', 700), '完整')
+  assert.deepEqual(sent.map(r => r.max_tokens), [700, 1400])
+  // 其它失败原样重试，不改上限；翻倍封顶原值的 4 倍
+  answer(broke(502), said('好'))
+  await N.ask('sys', 'user', 900)
+  assert.deepEqual(sent.map(r => r.max_tokens), [900, 900])
+  answer(blank('length'))
+  await N.ask('sys', 'user', 3000, { retries: 3 })
+  assert.deepEqual(sent.map(r => r.max_tokens), [3000, 6000, 12000, 12000])
+})
+
 await check('正文为空（max_tokens 被推理吃光）要说得能照着改', async () => {
   answer(blank('length'))
   const text = await N.reviewPost({ title: 'x', body: 'y' })

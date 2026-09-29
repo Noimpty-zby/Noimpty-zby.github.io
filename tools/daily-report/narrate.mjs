@@ -152,9 +152,15 @@ export const ask = async (system, user, maxTokens = 700, opts = {}) => {
   const tries = 1 + (Number.isFinite(requestedRetries) ? Math.min(3, Math.max(0, Math.floor(requestedRetries))) : DEFAULT_RETRIES)
   const tag = `narrate${deep ? '/pro' : ''}${opts.label ? '/' + opts.label : ''}`
 
+  /* 被截断（finish_reason=length）时，原样再问一遍只会在同一个地方再截一次 ——
+   * 2026-09-28 那期资讯的「面试」栏就是这样：5000 个 token 两次都被深度思考吃光，
+   * 日志还写着「调大一点」，重试却没调。所以截断之后下一次把上限翻倍，
+   * 封顶原值的 4 倍。max_tokens 只是上限，实际生成多少才计多少费。 */
+  let budget = maxTokens
+  const ceiling = Math.max(maxTokens, Math.min(maxTokens * 4, 32768))
   let lastWhy = '未知原因'
   for (let attempt = 1; attempt <= tries; attempt++) {
-    let retryable = true
+    let retryable = true, truncated = false
     try {
       const res = await fetch(`${BASE}/chat/completions`, {
         method: 'POST', redirect: 'error',
@@ -167,7 +173,7 @@ export const ask = async (system, user, maxTokens = 700, opts = {}) => {
           ...(thinking === 'enabled'
             ? { reasoning_effort: opts.effort || 'high' }
             : { temperature: 0.7 }),
-          max_tokens: maxTokens
+          max_tokens: budget
         }),
         signal: AbortSignal.timeout(timeout)
       })
@@ -185,19 +191,22 @@ export const ask = async (system, user, maxTokens = 700, opts = {}) => {
         retryable = false
         throw new Error('模型输出被过滤，本次不采用不完整结果')
       }
-      if (choice.finish_reason === 'length' && out) throw new Error('模型输出被截断，本次不采用不完整结果')
+      truncated = choice.finish_reason === 'length'
+      if (truncated && out) throw new Error(`模型输出被截断（max_tokens=${budget}），本次不采用不完整结果`)
       if (out) return out
 
       // 有响应但正文是空的。这是最容易被误读成「模型没返回」的一种，
       // 实际上多半是 max_tokens 被推理过程吃光了（finish_reason=length）。
-      const why = choice.finish_reason === 'length'
-        ? `正文是空的（finish_reason=length，max_tokens=${maxTokens} 被推理过程吃光了，调大一点）`
+      const why = truncated
+        ? `正文是空的（finish_reason=length，max_tokens=${budget} 被推理过程吃光了）`
         : `正文是空的（finish_reason=${choice.finish_reason || '未知'}）`
       throw new Error(why)
     } catch (e) {
       lastWhy = String(e.message || e).slice(0, 200)
       const more = retryable && attempt < tries
-      console.error(`  [${tag}] 第 ${attempt}/${tries} 次失败：${lastWhy}${more ? '，等一下再试' : ''}`)
+      const grow = more && truncated && budget < ceiling
+      console.error(`  [${tag}] 第 ${attempt}/${tries} 次失败：${lastWhy}${more ? (grow ? `，下次把上限加到 ${Math.min(ceiling, budget * 2)} 再试` : '，等一下再试') : ''}`)
+      if (grow) budget = Math.min(ceiling, budget * 2)
       if (!more) break
       // 退避 5s / 10s / 20s —— 限流和服务端抽风都需要一点时间缓过来
       await new Promise(r => setTimeout(r, 5000 * 2 ** (attempt - 1)))

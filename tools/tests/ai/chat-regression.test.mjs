@@ -146,6 +146,32 @@ await test('Inline code preserves Markdown/math and URL placeholders stay inside
   assert.doesNotThrow(() => mdToHtml('@@NCODE9@@ @@NINLINE3@@ @@NMATH2@@'))
 })
 
+await test('No Markdown path lets model output smuggle a tag or an event handler into the page', () => {
+  const { mdToHtml } = run(cut('  const escapeHtml', '  const ROOT') + '\n' +
+    cut('  const mdToHtml', '  // 渲染完成后'), {}, ['mdToHtml'])
+  // 每一种块级/行内语法各塞一次：标题、列表、表格、引用、加粗、链接文字与地址、
+  // 行内代码的闭合、代码块语言名、三种公式写法，以及内部占位符。
+  const hostile = [
+    '<script>alert(1)</script>', '**<svg onload=alert(1)>**', '# <iframe src=javascript:alert(1)>', '## x<img src=x onerror=1>',
+    '- <a href="javascript:alert(1)">x</a>', '1. "><img src=x onerror=alert(1)>', '> <script>1</script>',
+    '| a | <b onclick=1>b</b> |\n|---|---|\n| <img src=x onerror=1> | 2 |', '**a** <details open ontoggle=alert(1)>',
+    '[x](https://a.test/"onmouseover="alert(1))', "[x](https://a.test/'onfocus='1)", '[<img src=x onerror=1>](https://a.test)',
+    '`</code><img src=x onerror=1>`', '```html\n<script>alert(1)</script>\n```', '```"><img src=x onerror=1>\nx\n```',
+    '$<img src=x onerror=1>$', '$$<img src=x onerror=1>$$', '\\(<svg onload=1>\\)',
+    '@@NINLINE0@@<img src=x onerror=1>', '[a](https://x.test/@@NINLINE0@@)'
+  ]
+  // 属性值里的内容已被转义，不算属性；只看真正的标签名和属性名。
+  const attributeNames = attrs => [...attrs.replace(/"[^"]*"|'[^']*'/g, '""').matchAll(/([a-zA-Z-]+)\s*=/g)].map(m => m[1].toLowerCase())
+  for (const input of hostile) {
+    const html = mdToHtml(input)
+    for (const [, tag, attrs] of html.matchAll(/<([a-zA-Z][a-zA-Z0-9]*)([^>]*)>/g)) {
+      assert.ok(!/^(script|img|svg|iframe|details|object|embed|style|b)$/i.test(tag), `${JSON.stringify(input)} 渲染出了 <${tag}>`)
+      assert.ok(!attributeNames(attrs).some(name => name.startsWith('on')), `${JSON.stringify(input)} 渲染出了事件属性：${attrs}`)
+      assert.ok(!/href="\s*javascript:/i.test(attrs), `${JSON.stringify(input)} 渲染出了 javascript: 链接`)
+    }
+  }
+})
+
 class Bubble {
   constructor() { this.children = []; this.innerHTML = ''; this.className = ''; this.removed = false; this.dataset = {} }
   contains(node) { return this.children.includes(node) }

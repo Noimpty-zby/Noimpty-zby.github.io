@@ -36,7 +36,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 24
 
@@ -82,7 +82,7 @@ jobs:
       # 报告含私密日程。失败也不能把它作为公开仓库产物上传。
       - name: 上传报告备份（仅私有仓库）
         if: ${{ always() && github.event.repository.private && (failure() || inputs.dry) }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: report-${{ github.run_number }}
           path: |

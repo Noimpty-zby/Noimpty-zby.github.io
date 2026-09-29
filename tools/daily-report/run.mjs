@@ -1,5 +1,5 @@
 import { initializePrivateContent } from '../private-content-client.mjs'
-import { commitJournal } from '../nanaly/journal.mjs'
+import { commitJournal, note } from '../nanaly/journal.mjs'
 // 入口：采数据 → 跑检查 → 让娜娜莉写人话 → 生成邮件 → 发出去。
 //
 // 设计原则：任何一个环节挂了，报告照发，把失败原因写进报告里。
@@ -12,7 +12,7 @@ import { writeFileSync } from 'node:fs'
 import { CFG, WINDOW, WINDOW_LABEL, getTraffic, getComments, getNewPosts, getOwnerHeartbeat, getSchedule } from './sources.mjs'
 import { runHealth, checkModel, worstOf } from './health.mjs'
 import { writeOpening, reviewPost, screenComments, writeMissYou, draftReplies, MODEL_STATE, tokenSummary } from './narrate.mjs'
-import { renderEmail, renderSubject, renderMissYou } from './render.mjs'
+import { renderEmail, renderSubject, renderMissYou, renderJournalLine } from './render.mjs'
 import { autoComplete, commitSchedule } from './schedule-auto.mjs'
 import { recordRun, commitUsage, readRuns, rollup } from '../nanaly/usage.mjs'
 import { postPath } from '../nanaly/permalink.mjs'
@@ -147,17 +147,21 @@ const main = async () => {
   if (QUIET && !noteworthy) {
     console.log('安静模式：今天没什么可报的，不发邮件。')
     writeFileSync('report-skip.txt', '1')
+    note('report', '今天没什么可报的，按安静模式没发日报')
     return
   }
   if (DRY) { console.log('演练模式：不发邮件。'); return }
-  await sendMail(subject, html)
+  const sent = await sendMail(subject, html)
+  note('report', sent
+    ? renderJournalLine({ traffic, comments, newPosts, health })
+    : '日报生成好了，但没有配置发信凭据，没发出去')
 }
 
 const sendMail = async (subject, html) => {
   const user = process.env.GMAIL_USER
   const pass = process.env.GMAIL_APP_PASSWORD
   const to = process.env.REPORT_TO || user
-  if (!user || !pass) { console.log('没有配置 Gmail 凭据，跳过发送。'); return }
+  if (!user || !pass) { console.log('没有配置 Gmail 凭据，跳过发送。'); return false }
 
   const { createTransport } = await import('nodemailer')
   const tx = createTransport({ service: 'gmail', auth: { user, pass },
@@ -167,6 +171,7 @@ const sendMail = async (subject, html) => {
     text: '这封邮件是 HTML 格式的，请用支持 HTML 的客户端查看。'
   })
   console.log('已发送：', info.messageId)
+  return true
 }
 
 const sendMissYou = async ({ days, traffic, comments, newPosts }) => {
@@ -203,7 +208,10 @@ const sendMissYou = async ({ days, traffic, comments, newPosts }) => {
   writeFileSync('report-subject.txt', subject)
   console.log('\n主题：' + subject)
   if (DRY) { console.log('演练模式：不发邮件。'); return }
-  await sendMail(subject, html)
+  const sent = await sendMail(subject, html)
+  note('report', sent
+    ? `主人 ${days} 天没来了，没发数据日报，改发了一封想念邮件`
+    : `主人 ${days} 天没来了，想念邮件写好了，但没有配置发信凭据，没发出去`)
 }
 
 /* 账要记，哪怕这一轮后面炸了 —— token 已经烧掉了，不记就永远查不出来。
@@ -218,6 +226,9 @@ const bookkeep = async () => {
   }
 }
 main().then(bookkeep, async error => {
+  // 炸了也要让对话窗口里的她知道今晚没发成，不然主人问起她会以为一切正常。
+  // 私密资料都没加载上的时候这一笔记不进去，吞掉就好 —— 下面的记账会照常报红。
+  try { note('report', '今晚的日报没发出去：' + String(error?.message || error).slice(0, 100)) } catch {}
   await bookkeep()
   console.error('致命错误：', error)
   process.exit(1)

@@ -16,7 +16,8 @@ export const WHO = {
   notes: '批注',
   news: '资讯',
   column: '随笔',
-  schedule: '日程'
+  schedule: '日程',
+  report: '日报'
 }
 
 /* 北京时间的「9-17 09:12」。

@@ -824,7 +824,7 @@
    */
   const JOURNAL_WHO = {
     reply: '回评', patrol: '巡逻', react: '贴表情',
-    notes: '批注', news: '资讯', column: '随笔', schedule: '日程'
+    notes: '批注', news: '资讯', column: '随笔', schedule: '日程', report: '日报'
   }
 
   let selfLogCache = null

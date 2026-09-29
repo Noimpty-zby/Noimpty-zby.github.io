@@ -228,6 +228,24 @@ export const renderSubject = ({ traffic, comments, newPosts, health }) => {
   return `[博客日报] ${d} · ${bits.length ? bits.join(' · ') : '一切平静'}`
 }
 
+/* 写进行动日志的那一句。对话窗口里的她只读得到日志 —— 以前日报不记，
+ * 主人在聊天里问「昨晚日报说了什么」，她只能答不知道。
+ * 只放结论，不放细节：日志一条最多 160 字，而且会进每一个分身的提示词。 */
+export const renderJournalLine = ({ traffic, comments, newPosts, health }) => {
+  const bits = []
+  if (!traffic.ok) bits.push('访问数据没取到')
+  else if (traffic.visitors) bits.push(`${traffic.visitors} 人来看`)
+  else bits.push(traffic.pageviews ? `${traffic.pageviews} 次浏览` : '没有访问')
+  if (!comments.ok) bits.push('评论没取到')
+  else if (comments.items.length) bits.push(`${comments.items.length} 条新评论`)
+  if (!newPosts.ok) bits.push('新文章没取到')
+  else if (newPosts.items.length) bits.push(`${newPosts.items.length} 篇新文章`)
+  const flagged = (health.checks || []).filter(c => c.level !== 'ok').map(c => c.name)
+  bits.push(flagged.length ? `健康检查要留意：${flagged.join('、')}` : '健康检查全绿')
+  const d = new Date().toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric' })
+  return `发了 ${d} 的日报：${bits.join('，')}`
+}
+
 // ---------------- 想念邮件 ----------------
 // 主人很久没来时发这封，短、暖、有钩子，不塞数据表格。
 

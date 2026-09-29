@@ -215,9 +215,15 @@ export const buildNotes = async () => {
     }
   }
 
-  const batch = todo.filter(item => paragraphsOf(item.raw).length >= 3).slice(0, MAX_POSTS_PER_RUN)
-  if (todo.length > batch.length) {
-    console.log(`  单次最多处理 ${MAX_POSTS_PER_RUN} 篇，剩下 ${todo.length - batch.length} 篇下次再说`)
+  // 段落不够的文章永远不会被写，别把它们算进「下次再说」——
+  // 以前这两类混在一起，日志每轮都说「剩下 2 篇下次再说」，其实那两篇下次也不会写。
+  const eligible = todo.filter(item => paragraphsOf(item.raw).length >= 3)
+  if (todo.length > eligible.length) {
+    console.log(`  其中 ${todo.length - eligible.length} 篇可批注的段落不到 3 段，不写批注`)
+  }
+  const batch = eligible.slice(0, MAX_POSTS_PER_RUN)
+  if (eligible.length > batch.length) {
+    console.log(`  单次最多处理 ${MAX_POSTS_PER_RUN} 篇，剩下 ${eligible.length - batch.length} 篇下次再说`)
   }
 
   let wrote = 0
@@ -226,7 +232,6 @@ export const buildNotes = async () => {
   for (const item of batch) {
     const title = (item.raw.match(/^title:\s*(.+)$/m) || [])[1] || item.path
     const paras = paragraphsOf(item.raw)
-    if (paras.length < 3) { console.log(`  ${title.trim()} 段落太少，跳过`); continue }
 
     const listed = paras.slice(0, 40).map((p, i) => `[${i}] ${p.slice(0, 260)}`).join('\n\n')
     const out = await ask(PERSONA, notePrompt(title.trim(), listed, digest({ limit: 8 })), 900, { label: '批注' })

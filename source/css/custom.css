@@ -449,3 +449,14 @@ a {
   position: absolute !important; width: 1px !important; height: 1px !important; margin: 0 !important; padding: 0 !important;
   border: 0 !important; overflow: hidden !important; clip-path: inset(50%) !important; white-space: nowrap !important;
 }
+
+/* 对比度（axe color-contrast，9-29 看过对比图后定的）：只调深浅，不换色相，全部 ≥ 4.5:1 */
+html[data-theme='dark'] #article-container :not(pre) > code { color: #ec7690; }
+html:not([data-theme='dark']) .sakura-greeting { color: #c2385a; }
+html:not([data-theme='dark']).noimpty-home-hub #page-header #site-subtitle { color: #75666f; }
+/* 浅色主题下首页左列底色是浅的，原来的近白日期几乎看不见 */
+html:not([data-theme='dark']) #noimpty-clock .noimpty-clock__day { color: #75666f; text-shadow: none; }
+#noimpty-clock .noimpty-clock__week { color: #5c2539; }
+#noimpty-clock .noimpty-clock__span { color: #c2385a; }
+/* 没有头图的页面顶栏固定是深底，站名、搜索、更多却沿用了浅色主题的深字 */
+#page-header:is(.nav-fixed, .not-top-img) #nav :is(.site-name, #search-button, #search-button span, #search-button i, .site-page, .site-page span, .site-page i) { color: #fbeef2; }

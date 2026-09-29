@@ -3,7 +3,7 @@
   --lab-surface: #fffdfb;
   --lab-editor: #fffdf9;
   --lab-ink: #443449;
-  --lab-muted: #7e6c82;
+  --lab-muted: #6e5d73;
   --lab-accent: #ba547d;
   --lab-accent-hover: #a73f69;
   --lab-border: #ecdce6;
@@ -210,6 +210,7 @@
 .learning-lab .learning-console-tab { align-self: stretch; position: relative; margin: 0; padding: 0 1px; border: 0; border-radius: 0; background: none; color: var(--lab-muted); font: inherit; font-size: 12px; cursor: pointer; }
 .learning-lab .learning-console-tab:hover { background: none; }
 .learning-lab .learning-console-tab[aria-selected='true'] { color: var(--lab-accent); font-weight: 600; }
+.learning-lab:not([data-editor-theme='dark']) .learning-console-tab[aria-selected='true'] { color: #a8466f; }
 .learning-console-tab[aria-selected='true']::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; border-radius: 2px; background: var(--lab-accent); content: ''; }
 .learning-result-state { min-width: 0; margin-left: auto; overflow: hidden; color: var(--lab-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .learning-result-state[data-status='accepted'] { color: var(--lab-success); }

@@ -16,6 +16,8 @@ export const CFG = {
   // GoatCounter：免费且开放 API。GC_CODE 是你注册时选的站点代号（<code>.goatcounter.com）
   gcCode: process.env.GOATCOUNTER_CODE || '',
   gcToken: process.env.GOATCOUNTER_TOKEN || '',
+  // 读数接口间歇性出错时，第几次重试之前等多久（见下面 gcFetch）
+  gcRetryMs: [5000, 15000],
   windowHours: (() => {
     const n = Number(process.env.REPORT_WINDOW_HOURS || 24)
     return Number.isFinite(n) && n > 0 && n <= 720 ? n : 24
@@ -36,7 +38,7 @@ const timeout = (ms = 20000) => AbortSignal.timeout(ms)
 
 const jget = async (url, headers = {}, ms) => {
   const res = await fetch(url, { headers, signal: timeout(ms), redirect: 'error' })
-  if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 160)}`)
+  if (!res.ok) throw Object.assign(new Error(`${res.status} ${(await res.text()).slice(0, 160)}`), { status: res.status })
   return res.json()
 }
 
@@ -68,13 +70,36 @@ const umamiGet = async path => {
 
 // ---------------- GoatCounter ----------------
 
+/* GoatCounter 的读数接口会间歇性地对合法请求回 404 {"error":"not found"}。
+ * 2026-09-28、09-29 两晚的日报都栽在这，邮件里写着「接口 404，这个得先修」——
+ * 可页面计数一直是 200，令牌也没错：令牌不对是 401、权限不够是 403，都不是 404。
+ * 同一时期别的站点也在报同样的 404，同一个令牌隔一分多钟重跑就好了。
+ *
+ * 所以 404 / 429 / 5xx / 网络错误隔一会儿再试；400 / 401 / 403 是配置问题，立刻报。
+ * 试完还是 404，就把原因说成它实际是什么，别让她催主人去修一个不归他管的东西。 */
+const GC_RETRYABLE = status => !status || status === 404 || status === 408 || status === 429 || status >= 500
+
+const gcFetch = async url => {
+  const headers = { Authorization: `Bearer ${CFG.gcToken}`, 'Content-Type': 'application/json' }
+  for (let attempt = 0; ; attempt++) {
+    try { return await jget(url, headers, 25000) }
+    catch (e) {
+      if (!GC_RETRYABLE(e.status) || attempt >= CFG.gcRetryMs.length) {
+        if (e.status === 404) {
+          throw new Error(`GoatCounter 读数接口连续 ${attempt + 1} 次返回 404。令牌或站点代号不对会是 401/403，`
+            + '不是 404，这是 GoatCounter 那边的读取故障；页面计数不走这个接口，访问照常在记，只是这次读不出来')
+        }
+        throw e
+      }
+      await new Promise(resolve => setTimeout(resolve, CFG.gcRetryMs[attempt]))
+    }
+  }
+}
+
 const gcGet = async (path, params) => {
   const url = new URL(`https://${CFG.gcCode}.goatcounter.com/api/v0${path}`)
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
-  return jget(url.href, {
-    Authorization: `Bearer ${CFG.gcToken}`,
-    'Content-Type': 'application/json'
-  }, 25000)
+  return gcFetch(url.href)
 }
 
 export const getTrafficGoatCounter = async () => {
@@ -271,9 +296,7 @@ export const getOwnerHeartbeat = async (lookbackDays = 90) => {
     // 直接按路径过滤，不再靠排名。
     url.searchParams.set('limit', '100')
     url.searchParams.set('filter', OWNER_PATH)
-    const data = await jget(url.href, {
-      Authorization: `Bearer ${CFG.gcToken}`, 'Content-Type': 'application/json'
-    }, 25000)
+    const data = await gcFetch(url.href)
 
     const row = (data.hits || []).find(h => String(h.path || '').replace(/^\//, '') === OWNER_PATH.replace(/^\//, ''))
     if (!row) return { ok: true, lastSeen: null, days: null, note: '还没有记录到心跳' }

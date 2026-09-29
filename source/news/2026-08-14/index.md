@@ -1,7 +1,6 @@
 ---
 title: 资讯速览 · 2026-08-14
 date: 2026-08-14 09:40:06
-layout: post
 type: news
 comments: true
 description: 娜娜莉整理的三日资讯：行业职场动态、面试与求职干货、UE5 与引擎学习、游戏与实况。

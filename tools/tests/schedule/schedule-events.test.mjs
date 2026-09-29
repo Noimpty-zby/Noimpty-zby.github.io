@@ -91,6 +91,21 @@ await test('locked schedules expose neither stored text nor mutation events', as
   assert.equal(h.api.snapshot().days[day][0].text, 'locked body')
 })
 
+await test('a read superseded by a reconnect is stale, not locked (no false "enter the passphrase" warning)', async () => {
+  // 打开日程页时，后端会话恢复常常晚于第一次读取。那次读取作废后曾返回 'locked'，
+  // 页面于是在已解锁、任务也正常显示的情况下挂着「请先输入站点暗号，再读取日程」。
+  const h = boot()
+  const hold = deferred()
+  h.delay(hold)
+  const first = h.api.reload()
+  h.connect(ID_A)
+  hold.resolve()
+  assert.equal(await first, 'stale')
+  assert.equal(await h.api.reload(), 'remote')
+  h.gate(false)
+  assert.equal(await h.api.reload(), 'locked', '真的没解锁时仍然报 locked')
+})
+
 await test('drafts are bound to backend identity and each account survives switching and offline reads', async () => {
   const h = boot()
   await h.api.reload()

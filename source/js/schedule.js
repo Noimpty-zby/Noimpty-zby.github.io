@@ -169,7 +169,10 @@
         remote = (await window.NANALY_AGENT.privateContent('schedule')).data
       } catch (_) {}
       const identity = connectionIdentity()
-      if (generation !== dataEpoch || requestedIdentity && identity !== requestedIdentity || window.NOIMPTY_GATE && !scheduleUnlocked()) return 'locked'
+      // 读取途中连接换了（页面刚打开时后端会话恢复就会这样），这次结果作废，
+      // 由连接变化那边重新读 —— 这不是「没解锁」，别让页面挂上「请先输入站点暗号」。
+      if (generation !== dataEpoch || requestedIdentity && identity !== requestedIdentity) return 'stale'
+      if (window.NOIMPTY_GATE && !scheduleUnlocked()) return 'locked'
       if (!identity) return 'failed'
       if (!validData(remote)) remote = null
 

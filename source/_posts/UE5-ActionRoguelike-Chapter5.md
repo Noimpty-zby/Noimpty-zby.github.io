@@ -427,7 +427,7 @@ TObjectPtr<URogueActionSystemComponent> ActionSystemComponent;
 
 **`÷`** — 当前 ÷ 最大 = 0~1 的比例。`Set Percent` 要的就是 0~1，不是 0~100。
 
-**`Progress Bar 71`** — 之所以能在图表里拿到它，是因为在设计器里勾了**"是变量"**。
+**`Progress Bar 71`** — 之所以能在图表里拿到它，是因为在设计器里勾了"**是变量**"。
 
 > UMG 里设计器摆的控件**默认不生成成员变量**，图表里搜不到。勾上之后编译器才为控件类生成一个同名成员。另外这个自动生成的名字 `ProgressBar_71` 很难看，它是要写进图表的变量名，应该改成 `HealthBar`。
 
@@ -535,7 +535,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnHealthChanged, float, NewHealth,
 | 片段 | 含义 |
 |---|---|
 | `DECLARE` | 这是个宏，展开后**定义出一个类型**（一个 struct），不是定义变量 |
-| `DYNAMIC` | 走反射系统，按**函数名（FName）**绑定，因此可被序列化、可被蓝图看见 |
+| `DYNAMIC` | 走反射系统，按**函数名**（FName）绑定，因此可被序列化、可被蓝图看见 |
 | `MULTICAST` | 可以挂 0 到 N 个监听者，`Broadcast` 一次全部调用 |
 | `_TwoParams` | 参数个数，有 `_OneParam` 到 `_NineParams` |
 
@@ -1058,7 +1058,7 @@ Construct 时把组件和最大血量提升为变量，去掉重复的 `Get Owni
 ## 血条 UI
 
 - [x] 新建 `UI/` 目录，创建 `PlayerHealth_WBP` 并放置进度条
-- [x] 勾选进度条的**"是变量"**
+- [x] 勾选进度条的"**是变量**"
 - [x] 创建 `MainHUD_WBP`，画布面板里放入 `PlayerHealth_WBP`
 - [x] 创建 `BP_HUD`（父类 `HUD`），`BeginPlay → Create Widget → Add to Viewport`
 - [x] `BP_GameMode` 的 HUD Class 指向 `BP_HUD`
@@ -1115,7 +1115,7 @@ Construct 时把组件和最大血量提升为变量，去掉重复的 `Get Owni
 | **`TakeDamage`** | `AActor` 的虚函数，引擎公认的伤害入口 |
 | **`AHUD`** | 归 `PlayerController` 所有的每玩家 UI 宿主 |
 | **`Event Construct`** | UMG 控件的初始化事件，相当于 Actor 的 `BeginPlay` |
-| **"是变量"** | UMG 设计器控件默认不生成成员变量，勾选后才能在图表里取到 |
+| "**是变量**" | UMG 设计器控件默认不生成成员变量，勾选后才能在图表里取到 |
 | **纯节点 / 非纯节点** | 无执行引脚 / 有执行引脚；前者被拉取时才求值且无缓存 |
 | **执行流 / 数据流** | 白线的先后顺序 / 被下游倒着拉取的取值链 |
 | **`DECLARE_DYNAMIC_MULTICAST_DELEGATE`** | 走反射、可挂多个监听者、蓝图可见的委托类型声明 |

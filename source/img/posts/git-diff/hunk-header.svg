@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 540" width="880" height="540" font-family="system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+<rect x="0.5" y="0.5" width="879" height="539" rx="14" fill="#ffffff" stroke="#e8e4ea" stroke-width="1"/>
+<text x="28" y="34" font-size="17" fill="#2f2a33" font-weight="700">块头里的四个数：a、b 各自从第几行起，一共几行</text>
+<text x="28" y="58" font-size="13" fill="#7b7280">每块都带上改动前后各 3 行没动过的上下文；上面插进一行，下面那块在 b 里的行号就整体往后挪一行</text>
+<text x="30" y="92" font-size="12" fill="#ee5d7b" font-weight="700">a 版 · HEAD 里的 config.txt（2559e6f）</text>
+<rect x="30" y="104" width="300" height="378" rx="8" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1"/>
+<rect x="34" y="114" width="292" height="114" rx="5" fill="#c98a2b" fill-opacity="0.07" stroke="#c98a2b" stroke-opacity="0.45" stroke-width="1"/>
+<rect x="34" y="361" width="292" height="95" rx="5" fill="#c98a2b" fill-opacity="0.07" stroke="#c98a2b" stroke-opacity="0.45" stroke-width="1"/>
+<text x="60" y="128" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">1</text>
+<text x="90" y="128" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace"># 服务配置</text>
+<text x="60" y="147" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">2</text>
+<text x="90" y="147" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">端口 = 3000</text>
+<text x="60" y="166" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">3</text>
+<text x="90" y="166" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">超时 = 30</text>
+<text x="60" y="185" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">4</text>
+<text x="90" y="185" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">日志 = info</text>
+<text x="60" y="204" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">5</text>
+<text x="60" y="223" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">6</text>
+<text x="90" y="223" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace"># 数据库</text>
+<text x="60" y="242" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">7</text>
+<text x="90" y="242" font-size="12" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace">主机 = localhost</text>
+<text x="60" y="261" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">8</text>
+<text x="90" y="261" font-size="12" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace">库名 = blog</text>
+<text x="60" y="280" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">9</text>
+<text x="90" y="280" font-size="12" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace">连接池 = 10</text>
+<text x="60" y="299" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">10</text>
+<text x="60" y="318" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">11</text>
+<text x="90" y="318" font-size="12" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace"># 缓存</text>
+<text x="60" y="337" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">12</text>
+<text x="90" y="337" font-size="12" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace">开启 = 是</text>
+<text x="60" y="356" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">13</text>
+<text x="90" y="356" font-size="12" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace">容量 = 256MB</text>
+<text x="60" y="375" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">14</text>
+<text x="90" y="375" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">过期 = 600</text>
+<text x="60" y="394" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">15</text>
+<text x="60" y="413" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">16</text>
+<text x="90" y="413" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace"># 邮件</text>
+<rect x="70" y="419" width="252" height="17" rx="3" fill="#ee5d7b" fill-opacity="0.13"/>
+<text x="76" y="432" font-size="12" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">-</text>
+<text x="60" y="432" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">17</text>
+<text x="90" y="432" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">服务器 = smtp.example.com</text>
+<text x="60" y="451" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">18</text>
+<text x="90" y="451" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">发件人 = noreply@example.com</text>
+<text x="550" y="92" font-size="12" fill="#3f9e79" font-weight="700">b 版 · 工作区的 config.txt（43a5fe0）</text>
+<rect x="550" y="104" width="300" height="378" rx="8" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1"/>
+<rect x="554" y="114" width="292" height="133" rx="5" fill="#c98a2b" fill-opacity="0.07" stroke="#c98a2b" stroke-opacity="0.45" stroke-width="1"/>
+<rect x="554" y="380" width="292" height="95" rx="5" fill="#c98a2b" fill-opacity="0.07" stroke="#c98a2b" stroke-opacity="0.45" stroke-width="1"/>
+<text x="580" y="128" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">1</text>
+<text x="610" y="128" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace"># 服务配置</text>
+<text x="580" y="147" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">2</text>
+<text x="610" y="147" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">端口 = 3000</text>
+<text x="580" y="166" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">3</text>
+<text x="610" y="166" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">超时 = 30</text>
+<rect x="590" y="172" width="252" height="17" rx="3" fill="#3f9e79" fill-opacity="0.13"/>
+<text x="596" y="185" font-size="12" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">+</text>
+<text x="580" y="185" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">4</text>
+<text x="610" y="185" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">重试 = 3</text>
+<text x="580" y="204" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">5</text>
+<text x="610" y="204" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">日志 = info</text>
+<text x="580" y="223" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">6</text>
+<text x="580" y="242" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">7</text>
+<text x="610" y="242" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace"># 数据库</text>
+<text x="580" y="261" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">8</text>
+<text x="610" y="261" font-size="12" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace">主机 = localhost</text>
+<text x="580" y="280" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">9</text>
+<text x="610" y="280" font-size="12" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace">库名 = blog</text>
+<text x="580" y="299" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">10</text>
+<text x="610" y="299" font-size="12" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace">连接池 = 10</text>
+<text x="580" y="318" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">11</text>
+<text x="580" y="337" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">12</text>
+<text x="610" y="337" font-size="12" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace"># 缓存</text>
+<text x="580" y="356" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">13</text>
+<text x="610" y="356" font-size="12" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace">开启 = 是</text>
+<text x="580" y="375" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">14</text>
+<text x="610" y="375" font-size="12" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace">容量 = 256MB</text>
+<text x="580" y="394" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">15</text>
+<text x="610" y="394" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">过期 = 600</text>
+<text x="580" y="413" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">16</text>
+<text x="580" y="432" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">17</text>
+<text x="610" y="432" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace"># 邮件</text>
+<rect x="590" y="438" width="252" height="17" rx="3" fill="#3f9e79" fill-opacity="0.13"/>
+<text x="596" y="451" font-size="12" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">+</text>
+<text x="580" y="451" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">18</text>
+<text x="610" y="451" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">服务器 = mail.example.com</text>
+<text x="580" y="470" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">19</text>
+<text x="610" y="470" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">发件人 = noreply@example.com</text>
+<line x1="330" y1="166" x2="550" y2="166" stroke="#c98a2b" stroke-opacity="0.55" stroke-width="1.2"/>
+<rect x="356" y="153" width="168" height="24" rx="12" fill="#ffffff" stroke="#c98a2b" stroke-opacity="0.7" stroke-width="1.2"/>
+<text x="440" y="170" font-size="12.5" fill="#2f2a33" font-weight="700" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace">@@ -1,6 +1,7 @@</text>
+<text x="440" y="200" font-size="11.5" fill="#ee5d7b" text-anchor="middle">a：从第 1 行起，共 6 行</text>
+<text x="440" y="218" font-size="11.5" fill="#3f9e79" text-anchor="middle">b：从第 1 行起，共 7 行</text>
+<line x1="330" y1="412" x2="550" y2="412" stroke="#c98a2b" stroke-opacity="0.55" stroke-width="1.2"/>
+<rect x="356" y="399" width="168" height="24" rx="12" fill="#ffffff" stroke="#c98a2b" stroke-opacity="0.7" stroke-width="1.2"/>
+<text x="440" y="416" font-size="12.5" fill="#2f2a33" font-weight="700" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace">@@ -14,5 +15,5 @@</text>
+<text x="440" y="446" font-size="11.5" fill="#ee5d7b" text-anchor="middle">a：从第 14 行起，共 5 行</text>
+<text x="440" y="464" font-size="11.5" fill="#3f9e79" text-anchor="middle">b：从第 15 行起，共 5 行</text>
+<text x="440" y="518" font-size="12" fill="#7b7280" text-anchor="middle">灰掉的行不在输出里：它们离两处改动都超过 3 行，diff 不打印</text>
+</svg>

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 420" width="880" height="420" font-family="system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+<rect x="0.5" y="0.5" width="879" height="419" rx="14" fill="#ffffff" stroke="#e8e4ea" stroke-width="1"/>
+<defs>
+<marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c98a2b"/></marker>
+<marker id="mb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4d7fc4"/></marker>
+<marker id="mg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3f9e79"/></marker>
+</defs>
+<text x="28" y="34" font-size="17" fill="#2f2a33" font-weight="700">同一个文件在三个地方各有一份，每条命令只挑其中两份比</text>
+<text x="28" y="58" font-size="13" fill="#7b7280">左边那份是 a（输出里的 -），右边那份是 b（输出里的 +）；index 行的两个号正好首尾相接</text>
+<rect x="30" y="84" width="240" height="124" rx="8" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="46" y="108" font-size="12.5" fill="#2f2a33" font-weight="700">HEAD（d7aecee）</text>
+<text x="254" y="108" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">2559e6f</text>
+<text x="46" y="144" font-size="12.5" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">超时 = 30</text>
+<text x="46" y="170" font-size="12.5" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">日志 = info</text>
+<text x="46" y="196" font-size="11" fill="#c0b9c8">…… 其余 16 行三份相同</text>
+<rect x="320" y="84" width="240" height="124" rx="8" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="336" y="108" font-size="12.5" fill="#2f2a33" font-weight="700">暂存区</text>
+<text x="544" y="108" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">0521d10</text>
+<rect x="330" y="130" width="150" height="20" rx="4" fill="#c98a2b" fill-opacity="0.13"/>
+<text x="336" y="144" font-size="12.5" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">超时 = 60</text>
+<text x="336" y="170" font-size="12.5" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">日志 = info</text>
+<text x="336" y="196" font-size="11" fill="#c0b9c8">…… 其余 16 行三份相同</text>
+<rect x="610" y="84" width="240" height="124" rx="8" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="626" y="108" font-size="12.5" fill="#2f2a33" font-weight="700">工作区</text>
+<text x="834" y="108" font-size="11" fill="#c0b9c8" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace">553b829</text>
+<text x="626" y="144" font-size="12.5" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">超时 = 60</text>
+<rect x="620" y="156" width="150" height="20" rx="4" fill="#c98a2b" fill-opacity="0.13"/>
+<text x="626" y="170" font-size="12.5" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">日志 = debug</text>
+<text x="626" y="196" font-size="11" fill="#c0b9c8">…… 其余 16 行三份相同</text>
+<path d="M 180 208 L 180 236 L 410 236 L 410 210" fill="none" stroke="#4d7fc4" stroke-opacity="0.75" stroke-width="1.6" marker-end="url(#mb)"/>
+<text x="295" y="258" font-size="13" fill="#4d7fc4" font-weight="700" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace">git diff --staged</text>
+<text x="295" y="276" font-size="11.5" fill="#7b7280" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace">index 2559e6f..0521d10</text>
+<path d="M 470 208 L 470 236 L 700 236 L 700 210" fill="none" stroke="#c98a2b" stroke-opacity="0.75" stroke-width="1.6" marker-end="url(#ma)"/>
+<text x="585" y="258" font-size="13" fill="#c98a2b" font-weight="700" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace">git diff</text>
+<text x="585" y="276" font-size="11.5" fill="#7b7280" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace">index 0521d10..553b829</text>
+<path d="M 110 208 L 110 312 L 770 312 L 770 210" fill="none" stroke="#3f9e79" stroke-opacity="0.75" stroke-width="1.6" marker-end="url(#mg)"/>
+<text x="440" y="334" font-size="13" fill="#3f9e79" font-weight="700" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace">git diff HEAD</text>
+<text x="440" y="352" font-size="11.5" fill="#7b7280" text-anchor="middle" font-family="ui-monospace,Menlo,Consolas,monospace">index 2559e6f..553b829</text>
+<text x="30" y="390" font-size="12" fill="#7b7280">--staged 和 --cached 是同一个选项。没 add 过的新文件三个框里都没有，所以哪一条都看不到它。</text>
+</svg>

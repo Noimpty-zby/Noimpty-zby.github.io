@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 400" width="880" height="400" font-family="system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+<rect x="0.5" y="0.5" width="879" height="399" rx="14" fill="#ffffff" stroke="#e8e4ea" stroke-width="1"/>
+<text x="28" y="34" font-size="17" fill="#2f2a33" font-weight="700">两个点和三个点：b 都是 feature，差别只在 a 取哪一个</text>
+<text x="28" y="58" font-size="13" fill="#7b7280">diff 只认两个端点。两个点拿 master 的最新提交当 a，三个点先退回共同祖先再当 a</text>
+<path d="M 96 232 C 206 232, 190 142, 300 142" fill="none" stroke="#c0b9c8" stroke-width="2.5"/>
+<path d="M 96 232 C 206 232, 190 322, 300 322" fill="none" stroke="#c0b9c8" stroke-width="2.5"/>
+<circle cx="96" cy="232" r="17" fill="none" stroke="#3f9e79" stroke-opacity="0.55" stroke-width="2.2"/>
+<circle cx="96" cy="232" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<circle cx="300" cy="142" r="17" fill="none" stroke="#ee5d7b" stroke-opacity="0.55" stroke-width="2.2"/>
+<circle cx="300" cy="142" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<circle cx="300" cy="322" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="328" y="136" font-size="12.5" fill="#2f2a33" font-weight="700">master · 0bcc629</text>
+<text x="328" y="155" font-size="11.5" fill="#7b7280">日志改成了 debug</text>
+<text x="328" y="173" font-size="11.5" fill="#ee5d7b">两个点的 a</text>
+<text x="322" y="316" font-size="12.5" fill="#2f2a33" font-weight="700">feature · 58e596c</text>
+<text x="322" y="335" font-size="11.5" fill="#7b7280">端口改成了 8080</text>
+<text x="322" y="353" font-size="11.5" fill="#7b7280">两种写法的 b 都是它</text>
+<text x="96" y="274" font-size="12.5" fill="#2f2a33" font-weight="700" text-anchor="middle">d7aecee</text>
+<text x="96" y="292" font-size="11.5" fill="#3f9e79" text-anchor="middle">共同祖先 · 三个点的 a</text>
+<rect x="470" y="84" width="380" height="144" rx="8" fill="#ee5d7b" fill-opacity="0.04" stroke="#ee5d7b" stroke-opacity="0.55" stroke-width="1.4"/>
+<text x="486" y="106" font-size="13" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">git diff master..feature</text>
+<text x="486" y="124" font-size="11.5" fill="#7b7280">和 git diff master feature 完全一样</text>
+<text x="494" y="150" font-size="12" fill="#ee5d7b" font-family="ui-monospace,Menlo,Consolas,monospace">-端口 = 3000</text>
+<text x="494" y="172" font-size="12" fill="#3f9e79" font-family="ui-monospace,Menlo,Consolas,monospace">+端口 = 8080</text>
+<text x="494" y="194" font-size="12" fill="#ee5d7b" font-family="ui-monospace,Menlo,Consolas,monospace">-日志 = debug</text>
+<text x="834" y="194" font-size="11" fill="#c98a2b" text-anchor="end">master 自己的改动，</text>
+<text x="494" y="216" font-size="12" fill="#3f9e79" font-family="ui-monospace,Menlo,Consolas,monospace">+日志 = info</text>
+<text x="834" y="216" font-size="11" fill="#c98a2b" text-anchor="end">被反着显示了一遍</text>
+<rect x="470" y="244" width="380" height="100" rx="8" fill="#3f9e79" fill-opacity="0.04" stroke="#3f9e79" stroke-opacity="0.55" stroke-width="1.4"/>
+<text x="486" y="266" font-size="13" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">git diff master...feature</text>
+<text x="486" y="284" font-size="11.5" fill="#7b7280">等于 git diff $(git merge-base master feature) feature</text>
+<text x="494" y="310" font-size="12" fill="#ee5d7b" font-family="ui-monospace,Menlo,Consolas,monospace">-端口 = 3000</text>
+<text x="494" y="332" font-size="12" fill="#3f9e79" font-family="ui-monospace,Menlo,Consolas,monospace">+端口 = 8080</text>
+<text x="834" y="332" font-size="11" fill="#c98a2b" text-anchor="end">feature 分出去以后只改了这个</text>
+</svg>

@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 400" width="880" height="400" font-family="system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+<rect x="0.5" y="0.5" width="879" height="399" rx="14" fill="#ffffff" stroke="#e8e4ea" stroke-width="1"/>
+<defs><marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c98a2b"/></marker><marker id="mb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4d7fc4"/></marker><marker id="mg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3f9e79"/></marker><marker id="mp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ee5d7b"/></marker><marker id="md" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c0b9c8"/></marker><marker id="mi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7b7280"/></marker></defs>
+<text x="28" y="34" font-size="17" fill="#2f2a33" font-weight="700">git checkout &lt;提交&gt; 只挪 HEAD：它越过分支，直接记住一个提交号</text>
+<text x="28" y="58" font-size="13" fill="#7b7280">左边是平时；右边是 git checkout HEAD~2 之后。master 那个文件一个字没变</text>
+<rect x="30" y="80" width="400" height="296" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="48" y="104" font-size="13" fill="#2f2a33" font-weight="700">平时：HEAD → 分支 → 提交</text>
+<line x1="86" y1="250" x2="374" y2="250" stroke="#c0b9c8" stroke-width="2.5"/>
+<circle cx="86" cy="250" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="86" y="282" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">d7aecee</text>
+<text x="86" y="299" font-size="11" fill="#7b7280" text-anchor="middle">初始配置</text>
+<circle cx="182" cy="250" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="182" y="282" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">1d33476</text>
+<text x="182" y="299" font-size="11" fill="#7b7280" text-anchor="middle">超时 60</text>
+<circle cx="278" cy="250" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="278" y="282" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">fa7fbb9</text>
+<text x="278" y="299" font-size="11" fill="#7b7280" text-anchor="middle">容量 512MB</text>
+<circle cx="374" cy="250" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="374" y="282" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">17322e7</text>
+<text x="374" y="299" font-size="11" fill="#7b7280" text-anchor="middle">邮件 mail</text>
+<rect x="343.4" y="189" width="61.2" height="22" rx="11" fill="#ee5d7b" fill-opacity="0.1" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="374" y="204" font-size="12" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">master</text>
+<line x1="374" y1="211" x2="374" y2="238" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mp)"/>
+<rect x="350.6" y="137" width="46.8" height="22" rx="11" fill="#3f9e79" fill-opacity="0.1" stroke="#3f9e79" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="374" y="152" font-size="12" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">HEAD</text>
+<line x1="374" y1="159" x2="374" y2="188" stroke="#3f9e79" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mg)"/>
+<text x="48" y="334" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">cat .git/HEAD</text>
+<text x="48" y="356" font-size="12" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">ref: refs/heads/master</text>
+<rect x="450" y="80" width="400" height="296" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="468" y="104" font-size="13" fill="#2f2a33" font-weight="700">分离的 HEAD：HEAD → 提交</text>
+<line x1="506" y1="250" x2="794" y2="250" stroke="#c0b9c8" stroke-width="2.5"/>
+<circle cx="506" cy="250" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="506" y="282" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">d7aecee</text>
+<text x="506" y="299" font-size="11" fill="#7b7280" text-anchor="middle">初始配置</text>
+<circle cx="602" cy="250" r="17" fill="none" stroke="#3f9e79" stroke-opacity="0.55" stroke-width="2.2"/>
+<circle cx="602" cy="250" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="602" y="282" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">1d33476</text>
+<text x="602" y="299" font-size="11" fill="#7b7280" text-anchor="middle">超时 60</text>
+<circle cx="698" cy="250" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="698" y="282" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">fa7fbb9</text>
+<text x="698" y="299" font-size="11" fill="#7b7280" text-anchor="middle">容量 512MB</text>
+<circle cx="794" cy="250" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="794" y="282" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">17322e7</text>
+<text x="794" y="299" font-size="11" fill="#7b7280" text-anchor="middle">邮件 mail</text>
+<rect x="763.4" y="189" width="61.2" height="22" rx="11" fill="#ee5d7b" fill-opacity="0.1" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="794" y="204" font-size="12" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">master</text>
+<line x1="794" y1="211" x2="794" y2="238" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mp)"/>
+<rect x="578.6" y="137" width="46.8" height="22" rx="11" fill="#3f9e79" fill-opacity="0.1" stroke="#3f9e79" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="602" y="152" font-size="12" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">HEAD</text>
+<line x1="602" y1="159" x2="602" y2="238" stroke="#3f9e79" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mg)"/>
+<text x="468" y="334" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">cat .git/HEAD</text>
+<text x="468" y="356" font-size="12" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">1d33476cc4aad627a155…</text>
+</svg>

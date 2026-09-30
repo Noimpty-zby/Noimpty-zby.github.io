@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 380" width="880" height="380" font-family="system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+<rect x="0.5" y="0.5" width="879" height="379" rx="14" fill="#ffffff" stroke="#e8e4ea" stroke-width="1"/>
+<defs><marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c98a2b"/></marker><marker id="mb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4d7fc4"/></marker><marker id="mg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3f9e79"/></marker><marker id="mp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ee5d7b"/></marker><marker id="md" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c0b9c8"/></marker><marker id="mi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7b7280"/></marker></defs>
+<text x="28" y="34" font-size="17" fill="#2f2a33" font-weight="700">只动文件的几种写法：从哪一份取，盖掉哪一份</text>
+<text x="28" y="58" font-size="13" fill="#7b7280">实心点是来源，箭头指向被覆盖的地方。这几条命令都不碰 HEAD，也不碰分支</text>
+<rect x="348" y="84" width="112" height="44" rx="8" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="404" y="104" font-size="12.5" fill="#2f2a33" font-weight="700" text-anchor="middle">某个旧提交</text>
+<text x="404" y="120" font-size="10.5" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">HEAD~2</text>
+<line x1="404" y1="134" x2="404" y2="352" stroke="#e8e4ea" stroke-width="1" stroke-dasharray="3 4"/>
+<rect x="478" y="84" width="112" height="44" rx="8" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="534" y="104" font-size="12.5" fill="#2f2a33" font-weight="700" text-anchor="middle">HEAD</text>
+<text x="534" y="120" font-size="10.5" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">17322e7</text>
+<line x1="534" y1="134" x2="534" y2="352" stroke="#e8e4ea" stroke-width="1" stroke-dasharray="3 4"/>
+<rect x="608" y="84" width="112" height="44" rx="8" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="664" y="111" font-size="12.5" fill="#2f2a33" font-weight="700" text-anchor="middle">暂存区</text>
+<line x1="664" y1="134" x2="664" y2="352" stroke="#e8e4ea" stroke-width="1" stroke-dasharray="3 4"/>
+<rect x="738" y="84" width="112" height="44" rx="8" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="794" y="111" font-size="12.5" fill="#2f2a33" font-weight="700" text-anchor="middle">工作区</text>
+<line x1="794" y1="134" x2="794" y2="352" stroke="#e8e4ea" stroke-width="1" stroke-dasharray="3 4"/>
+<text x="36" y="167" font-size="12.5" fill="#c98a2b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">git restore &lt;文件&gt;</text>
+<text x="36" y="185" font-size="11" fill="#7b7280">等于 git checkout -- &lt;文件&gt;</text>
+<circle cx="794" cy="174" r="6" fill="#ffffff" stroke="#c98a2b" stroke-width="1.8"/>
+<line x1="672" y1="174" x2="785" y2="174" stroke="#c98a2b" stroke-opacity="0.8" stroke-width="1.8" marker-end="url(#ma)"/>
+<circle cx="664" cy="174" r="6.5" fill="#c98a2b"/>
+<line x1="30" y1="197" x2="850" y2="197" stroke="#e8e4ea" stroke-width="1"/>
+<text x="36" y="221" font-size="12.5" fill="#4d7fc4" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">git restore --staged &lt;文件&gt;</text>
+<text x="36" y="239" font-size="11" fill="#7b7280">撤销 add；工作区不动</text>
+<circle cx="664" cy="228" r="6" fill="#ffffff" stroke="#4d7fc4" stroke-width="1.8"/>
+<line x1="542" y1="228" x2="655" y2="228" stroke="#4d7fc4" stroke-opacity="0.8" stroke-width="1.8" marker-end="url(#mb)"/>
+<circle cx="534" cy="228" r="6.5" fill="#4d7fc4"/>
+<line x1="30" y1="251" x2="850" y2="251" stroke="#e8e4ea" stroke-width="1"/>
+<text x="36" y="275" font-size="12.5" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">git checkout HEAD &lt;文件&gt;</text>
+<text x="36" y="293" font-size="11" fill="#7b7280">等于 git restore -s HEAD -SW &lt;文件&gt;</text>
+<circle cx="664" cy="282" r="6" fill="#ffffff" stroke="#3f9e79" stroke-width="1.8"/>
+<circle cx="794" cy="282" r="6" fill="#ffffff" stroke="#3f9e79" stroke-width="1.8"/>
+<line x1="542" y1="282" x2="785" y2="282" stroke="#3f9e79" stroke-opacity="0.8" stroke-width="1.8" marker-end="url(#mg)"/>
+<circle cx="534" cy="282" r="6.5" fill="#3f9e79"/>
+<line x1="30" y1="305" x2="850" y2="305" stroke="#e8e4ea" stroke-width="1"/>
+<text x="36" y="329" font-size="12.5" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">git restore -s HEAD~2 &lt;文件&gt;</text>
+<text x="36" y="347" font-size="11" fill="#7b7280">只放进工作区，暂存区不动</text>
+<circle cx="794" cy="336" r="6" fill="#ffffff" stroke="#ee5d7b" stroke-width="1.8"/>
+<line x1="412" y1="336" x2="785" y2="336" stroke="#ee5d7b" stroke-opacity="0.8" stroke-width="1.8" marker-end="url(#mp)"/>
+<circle cx="404" cy="336" r="6.5" fill="#ee5d7b"/>
+</svg>

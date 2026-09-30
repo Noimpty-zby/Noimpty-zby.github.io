@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 452" width="880" height="452" font-family="system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+<rect x="0.5" y="0.5" width="879" height="451" rx="14" fill="#ffffff" stroke="#e8e4ea" stroke-width="1"/>
+<defs><marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c98a2b"/></marker><marker id="mb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4d7fc4"/></marker><marker id="mg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3f9e79"/></marker><marker id="mp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ee5d7b"/></marker><marker id="md" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c0b9c8"/></marker><marker id="mi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7b7280"/></marker></defs>
+<text x="28" y="34" font-size="17" fill="#2f2a33" font-weight="700">同样写 1d33476：reset 回到它那时，revert 只抵消它那一处</text>
+<text x="28" y="58" font-size="13" fill="#7b7280">reset 把分支拨回去，后面的提交离开了分支；revert 在最后接上一个新提交，历史只增不减</text>
+<rect x="30" y="80" width="820" height="158" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="48" y="106" font-size="13" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">git reset --hard 1d33476</text>
+<line x1="70" y1="168" x2="180" y2="168" stroke="#c0b9c8" stroke-width="2.5"/>
+<line x1="180" y1="168" x2="400" y2="168" stroke="#c0b9c8" stroke-width="2" stroke-dasharray="5 5"/>
+<circle cx="70" cy="168" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="70" y="198" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">d7aecee</text>
+<text x="70" y="215" font-size="11" fill="#7b7280" text-anchor="middle">初始配置</text>
+<circle cx="180" cy="168" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="180" y="198" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">1d33476</text>
+<text x="180" y="215" font-size="11" fill="#7b7280" text-anchor="middle">超时 30→60</text>
+<circle cx="290" cy="168" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.3" stroke-width="2.2" stroke-dasharray="3 3"/>
+<text x="290" y="198" font-size="11" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">fa7fbb9</text>
+<text x="290" y="215" font-size="11" fill="#c0b9c8" text-anchor="middle">容量 512MB</text>
+<circle cx="400" cy="168" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.3" stroke-width="2.2" stroke-dasharray="3 3"/>
+<text x="400" y="198" font-size="11" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">17322e7</text>
+<text x="400" y="215" font-size="11" fill="#c0b9c8" text-anchor="middle">邮件 mail</text>
+<rect x="149.4" y="127" width="61.2" height="22" rx="11" fill="#ee5d7b" fill-opacity="0.1" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="180" y="142" font-size="12" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">master</text>
+<text x="400" y="142" font-size="11" fill="#c0b9c8" text-anchor="middle">reflog 里还在</text>
+<text x="656" y="134" font-size="11.5" fill="#7b7280">之后的 config.txt</text>
+<text x="656" y="162" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">超时 = 60</text>
+<rect x="650" y="172" width="170" height="20" rx="4" fill="#ee5d7b" fill-opacity="0.13"/>
+<text x="656" y="186" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">容量 = 256MB</text>
+<rect x="650" y="196" width="170" height="20" rx="4" fill="#ee5d7b" fill-opacity="0.13"/>
+<text x="656" y="210" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">服务器 = smtp.…</text>
+<rect x="30" y="256" width="820" height="158" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="48" y="282" font-size="13" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">git revert 1d33476</text>
+<line x1="70" y1="344" x2="400" y2="344" stroke="#c0b9c8" stroke-width="2.5"/>
+<circle cx="70" cy="344" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="70" y="374" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">d7aecee</text>
+<text x="70" y="391" font-size="11" fill="#7b7280" text-anchor="middle">初始配置</text>
+<circle cx="180" cy="344" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="180" y="374" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">1d33476</text>
+<text x="180" y="391" font-size="11" fill="#7b7280" text-anchor="middle">超时 30→60</text>
+<circle cx="290" cy="344" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="290" y="374" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">fa7fbb9</text>
+<text x="290" y="391" font-size="11" fill="#7b7280" text-anchor="middle">容量 512MB</text>
+<circle cx="400" cy="344" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="400" y="374" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">17322e7</text>
+<text x="400" y="391" font-size="11" fill="#7b7280" text-anchor="middle">邮件 mail</text>
+<line x1="400" y1="344" x2="510" y2="344" stroke="#c0b9c8" stroke-width="2.5"/>
+<circle cx="510" cy="344" r="17" fill="none" stroke="#3f9e79" stroke-opacity="0.55" stroke-width="2.2"/>
+<circle cx="510" cy="344" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="510" y="374" font-size="11" fill="#2f2a33" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">b018bcc</text>
+<text x="510" y="391" font-size="11" fill="#3f9e79" text-anchor="middle">Revert 超时</text>
+<path d="M 502 328 C 450 286, 240 286, 186 326" fill="none" stroke="#3f9e79" stroke-opacity="0.55" stroke-width="1.4" stroke-dasharray="4 4" marker-end="url(#mg)"/>
+<text x="345.0" y="294" font-size="11" fill="#3f9e79" text-anchor="middle">把这一处反着做一遍：超时 60→30</text>
+<rect x="543.4" y="333" width="61.2" height="22" rx="11" fill="#ee5d7b" fill-opacity="0.1" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="574" y="348" font-size="12" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">master</text>
+<text x="656" y="310" font-size="11.5" fill="#7b7280">之后的 config.txt</text>
+<rect x="650" y="324" width="170" height="20" rx="4" fill="#3f9e79" fill-opacity="0.13"/>
+<text x="656" y="338" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">超时 = 30</text>
+<text x="656" y="362" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">容量 = 512MB</text>
+<text x="656" y="386" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">服务器 = mail.…</text>
+<text x="30" y="440" font-size="11.5" fill="#7b7280">高亮的是和执行前（17322e7：超时 60、容量 512MB、mail）不一样的行。</text>
+</svg>

@@ -37,7 +37,7 @@
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.13",
     "@egjs/infinitegrid": "^4.13.0",
-    "@fancyapps/ui": "^6.1.14",
+    "@fancyapps/ui": "^6.1.15",
     "@fortawesome/fontawesome-free": "^7.3.1",
     "@lezer/highlight": "^1.2.4",
     "@renbaoshuo/markdown-it-katex": "^2.0.2",

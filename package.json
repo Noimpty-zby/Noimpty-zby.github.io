@@ -59,7 +59,7 @@
     "hexo-wordcount": "^6.0.1",
     "instant.page": "^5.2.0",
     "katex": "^0.18.4",
-    "mammoth": "1.12.3",
+    "mammoth": "1.13.0",
     "markdown-it": "^15.0.2",
     "markdown-it-task-lists": "^2.1.1",
     "mermaid": "^11.16.1",

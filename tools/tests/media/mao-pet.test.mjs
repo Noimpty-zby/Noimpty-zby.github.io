@@ -101,7 +101,6 @@ const boot = ({ saved = null, innerWidth = 1440, innerHeight = 900, failAt = nul
 
   const document = {
     readyState: 'complete', head, body,
-    documentElement: { classList: { values: new Set(), contains(k) { return this.values.has(k) }, add(k) { this.values.add(k) }, remove(k) { this.values.delete(k) } } },
     getElementById: id => [...attached].find(n => n.id === id) || null,
     querySelectorAll: () => [],
     createElement: make,
@@ -1951,25 +1950,3 @@ await test('未连接私有后端仍可联动已解锁聊天、语音和文章�
 })
 
 console.log(`\n${passed} 项通过`)
-
-await test('专注模式暂停渲染和主动计时，退出后恢复，隐藏页面仍不唤醒', async () => {
-  const env = boot()
-  const { created } = await turnOn(env)
-  const model = created.models[0], app = created.apps[0]
-  const focus = env.winListeners.get('noimpty:focus-mode')
-  assert.equal(typeof focus, 'function')
-  env.document.documentElement.classList.add('noimpty-focus')
-  focus({ type: 'noimpty:focus-mode' })
-  assert.equal(model.autoUpdate, false)
-  assert.ok(app.stops > 0)
-  env.document.hidden = true
-  env.document.documentElement.classList.remove('noimpty-focus')
-  focus({ type: 'noimpty:focus-mode' })
-  assert.equal(model.autoUpdate, false)
-  env.document.hidden = false
-  focus({ type: 'noimpty:focus-mode' })
-  assert.equal(model.autoUpdate, true)
-  assert.ok(app.starts > 0)
-  await env.win.MAO_PET.hide()
-  assert.equal(env.winListeners.has('noimpty:focus-mode'), false)
-})

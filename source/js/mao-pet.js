@@ -1168,7 +1168,7 @@
       // 每次到点才算这一页说什么 —— pjax 翻页不会重建她，算早了会一直念旧页面
       onVisibility = event => {
         if (!app || !model) return
-        const paused = document.hidden || event?.type === 'pagehide' || document.documentElement.classList.contains('noimpty-focus')
+        const paused = document.hidden || event?.type === 'pagehide'
         play?.suspend(paused || agentBusy())
         model.autoUpdate = !paused
         if (paused) {
@@ -1187,7 +1187,6 @@
       document.addEventListener('visibilitychange', onVisibility)
       window.addEventListener('pagehide', onVisibility)
       window.addEventListener('pageshow', onVisibility)
-      window.addEventListener('noimpty:focus-mode', onVisibility)
       onVisibility()
       requestAnimationFrame(() => stage && (stage.dataset.ready = '1'))
     } catch (error) {
@@ -1267,7 +1266,6 @@
     if (onVisibility) {
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pagehide', onVisibility); window.removeEventListener('pageshow', onVisibility)
-      window.removeEventListener('noimpty:focus-mode', onVisibility)
       onVisibility = null
     }
     retireModel(model)

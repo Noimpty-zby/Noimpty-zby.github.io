@@ -1156,14 +1156,12 @@ inject:
     - <link rel="stylesheet" href="/css/review.css">
     - <link rel="stylesheet" href="/css/study-timeline.css">
     - <link rel="stylesheet" href="/css/learning-history.css">
-    - <link rel="stylesheet" href="/css/study-room.css">
     # 顺序有讲究：protected-manifest 给出锁清单，privacy-gate 立刻据此打遮罩，
     # noimpty-search 依赖 gate 存下的暗号才能解密索引。三者不能调换。
     - <script src="/js/protected-manifest.js"></script>
     - <script src="/js/privacy-gate.js"></script>
     - <script src="/js/noimpty-search.js"></script>
     - <script src="/js/section-hub.js"></script>
-    - <script src="/js/study-room.js"></script>
     # ↓↓↓ GoatCounter 访问统计。把 '' 里填成你的站点代号（xxx.goatcounter.com 里的 xxx）
     # 留空则完全不加载统计脚本。这不是密钥，它本来就会出现在网页源码里。
     - <script>window.NOIMPTY_GC_CODE = 'noimpty'</script>

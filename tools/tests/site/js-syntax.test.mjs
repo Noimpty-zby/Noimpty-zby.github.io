@@ -85,43 +85,24 @@ check('★★ 关键字后面不许直接粘中文（const活 会被当成一个
     '关键字和中文标识符黏在一起了（中间漏了空格）：\n      ' + bad.join('\n      '))
 })
 
-console.log('\n娜娜莉的人设 · 模板字符串里的反引号')
-
-const AI = join(DIR, 'noimpty-ai.js')
-const src = readFileSync(AI, 'utf8')
-const MARK = 'const PERSONA = `'
-
-check('★★ PERSONA 还在，而且是模板字符串', () => {
-  assert.ok(src.includes(MARK), '找不到 PERSONA 的开头，这个测试要跟着改')
+console.log('\n娜娜莉的人设 · 共享模块和运行时拼接')
+const src = readFileSync(join(DIR, 'noimpty-ai.js'), 'utf8')
+const identitySource = readFileSync(join(DIR, 'nanaly-identity.js'), 'utf8')
+const from = src.indexOf('  const PERSONA =')
+const to = src.indexOf('  // ---------------- 工具', from)
+const runtime = { window: {} }
+check('共享人格能在浏览器环境运行，提示拼接无未定义插值或截断', () => {
+  assert.ok(from >= 0 && to > from, '找不到实际提示构造边界')
+  vm.runInNewContext(identitySource, runtime)
+  vm.runInNewContext(src.slice(from, to) + ';this.persona = PERSONA', runtime)
+  assert.equal(typeof runtime.persona, 'string')
+  assert.ok(runtime.persona.startsWith(runtime.window.NANALY_IDENTITY.prompt))
+  assert.match(runtime.persona, /工具未配置/)
+  assert.match(runtime.persona, /没有日志不能编造/)
 })
-
-check('★★ PERSONA 里的反引号全部转义过', () => {
-  const from = src.indexOf(MARK) + MARK.length
-  // 从开头往后扫到第一个未转义的反引号 = 这段模板字符串真正的结尾
-  let i = from
-  while (i < src.length) {
-    if (src[i] === '\\') { i += 2; continue }
-    if (src[i] === '`') break
-    i++
-  }
-  assert.ok(i < src.length, 'PERSONA 没有结尾，模板字符串没闭合')
-  const body = src.slice(from, i)
-  /* 正文里如果还想写命令名，必须写成 \` —— 裸反引号会在这之前就把字符串截断，
-   * 而截断的表现就是这里解析出来的 body 短得离谱。这一条才是真正的护栏。
-   *
-   * 这里原来还有一条 `body.includes('\\`')`，要求「至少有一个转义反引号」。
-   * 那是当年的哨兵：当时 PERSONA 里逐篇抄着文章要点，里面全是 man -k、$HOME
-   * 这种得用反引号括起来的命令名。2026-09-17 把那 2,300 字的逐篇要点整段删掉
-   * （改成「清单以系统消息为准」）之后，站里合法地一个转义反引号都没有了，
-   * 那条哨兵从此只会误报。裸反引号该拦的地方，上面的解析检查和这条长度检查
-   * 已经各拦一道。 */
-  assert.ok(body.length > 1000, `PERSONA 只解析出 ${body.length} 个字符，八成是被一个裸反引号截断了`)
+check('人格来源为共享公开规则，不把旧长模板、硬编码私人资料重新塞进来', () => {
+  assert.match(src.slice(from, to), /NANALY_IDENTITY/)
+  assert.ok(runtime.persona.length > 500 && runtime.persona.length < 5000)
+  assert.doesNotMatch(runtime.persona, /生日是|他的生日|全世界只有.*主人/)
 })
-
-check('PERSONA 里没有会被当成插值的 ${', () => {
-  const from = src.indexOf(MARK) + MARK.length
-  const body = src.slice(from, src.indexOf('\n\n', src.indexOf('演戏归演戏', from)))
-  assert.ok(!/(^|[^\\])\$\{/.test(body), '正文里出现了未转义的 ${，它会被当成插值求值')
-})
-
-console.log(`\n${pass} 项通过`)
+console.log('\n' + pass + ' 项通过')

@@ -55,6 +55,7 @@ const boot = ({ page = false } = {}) => {
   const window = new Element('window')
   Object.assign(window, {
     NOIMPTY_GATE: { unlocked: () => true },
+    location: { href: 'https://blog.test/learn/', origin: 'https://blog.test' },
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
     matchMedia: () => ({ matches: false }),
     setTimeout: (callback, ms) => { const id = ++sequence; timers.set(id, { callback, ms }); return id },
@@ -222,4 +223,121 @@ test('successful PJAX replacement disposes the old editor once and initializes t
   app.setPage(null); app.window.fire('pjax:complete')
   assert.equal(nextAdapter.destroyed, true)
   assert.equal(app.window.NOIMPTY_LEARNING.context(), null)
+})
+
+
+test('evidence actions save the executed snapshot, then append a real correction and schedule it', async () => {
+  const app = boot(), captured = [], rated = []
+  let status = 'runtime_error', counter = 0
+  app.window.NANALY_AGENT = {
+    configured: () => true, snapshot: () => ({ connection: 'connected' }),
+    request: async (path, args) => path === '/api/workspaces' ? { workspaces: [] } : path.startsWith('/api/runs') ? { runs: [] } :
+      { runId: 'run-' + ++counter, revision: args.body.revision, status, stdout: status === 'accepted' ? '0.5\n' : '', stderr: status === 'accepted' ? '' : 'ZeroDivisionError', tests: [], diagnostics: [] }
+  }
+  app.window.NOIMPTY_LEARNING_HISTORY = {
+    saveFailure: async value => { captured.push(value); return { id: 'case-one', attempts: [value] } },
+    addAttempt: async (id, value) => { assert.equal(id, 'case-one'); captured.push(value); return { id, attempts: [...captured] } },
+    rate: async (...args) => rated.push(args)
+  }
+  const lab = app.mount(), evidence = lab.root.querySelector('.learning-evidence')
+  const click = label => Promise.all([...evidence.querySelectorAll('button').find(x => x.textContent === label).listeners.get('click')].map(fn => fn()))
+  await lab.openSnippet({ language: 'python', code: 'print(1/0)', title: '分母', sourceUrl: 'https://blog.test/posts/division/' })
+  lab.session.edit({ stdin: '2\n', tests: [{ input: '2\n', expectedOutput: '0.5\n' }] })
+  await lab.session.run('run', true)
+  lab.session.edit({ code: 'edited but not run' })
+  await click('保存失败现场')
+  assert.equal(captured[0].code, 'print(1/0)', 'save the run snapshot, never newer unexecuted editor text')
+  assert.equal(captured[0].stdin, '2\n')
+  assert.equal(captured[0].source.url, 'https://blog.test/posts/division/')
+  assert.equal(captured[0].result.stderr, 'ZeroDivisionError')
+  assert.equal(evidence.querySelector('.learning-evidence-ratings').hidden, true)
+  status = 'accepted'; lab.session.edit({ code: 'print(1 / int(input()))' })
+  await lab.session.run('run', true)
+  await click('保存这次重做 / 修正')
+  assert.equal(captured.length, 2); assert.equal(captured[1].result.status, 'accepted')
+  assert.equal(evidence.querySelector('.learning-evidence-ratings').hidden, false)
+  await click('良好')
+  assert.deepEqual(rated, [['case-one', captured[1].id, 3]])
+  assert.equal(evidence.querySelector('.learning-evidence-ratings').hidden, true)
+  lab.dispose()
+})
+
+test('restoring a case starts with the failure and its tests, protects the draft and hides the correction', async () => {
+  const app = boot()
+  app.window.location.href = 'https://blog.test/learn/?case=case-one'
+  app.window.localStorage.setItem('noimpty-learning-v1', JSON.stringify({ version: 1, lessonId: 'python', drafts: { python: { code: 'personal draft', stdin: '', tests: [] } } }))
+  app.window.NOIMPTY_LEARNING_HISTORY = {
+    get: async () => ({ id: 'case-one', title: '除零', attempts: [
+      { language: 'python', code: 'print(1/0)', stdin: '2\n', tests: [{ input: '2\n', expectedOutput: '0.5\n' }], problem: '算倒数', source: { title: '文章', url: '/post/' }, result: { status: 'runtime_error', evidence: 'runner' } },
+      { language: 'python', code: 'old corrected solution', result: { status: 'accepted' } }
+    ] })
+  }
+  const lab = app.mount(); await flush()
+  assert.equal(lab.textarea.value, 'print(1/0)')
+  assert.equal(lab.session.state.stdin, '2\n')
+  assert.equal(lab.session.state.tests[0].expectedOutput, '0.5\n')
+  assert.equal(lab.session.state.backups[0].code, 'personal draft')
+  assert.doesNotMatch(lab.root.textContent, /old corrected solution/)
+  assert.equal(lab.root.querySelector('.learning-evidence-ratings').hidden, true)
+  lab.dispose()
+})
+
+test('safe snippet loading asks before replacing a draft and never runs it implicitly', async () => {
+  const app = boot(), lab = app.mount()
+  lab.session.edit({ code: 'my draft' })
+  app.window.confirm = () => false
+  assert.equal((await lab.openSnippet({ language: 'c', code: 'int main() {return 0;}' })).loaded, false)
+  assert.equal(lab.session.state.code, 'my draft')
+  app.window.confirm = () => true
+  await lab.openSnippet({ language: 'c', code: 'int main() {return 0;}' })
+  assert.equal(lab.session.state.backups[0].code, 'my draft')
+  assert.equal(lab.session.state.history.length, 0)
+  lab.dispose()
+})
+
+
+test('normal Run on a saved wrong-answer case executes its original tests instead of an unchecked terminal', async () => {
+  const app = boot(), calls = [], tests = [{ input: '4\n', expectedOutput: '0.25\n' }]
+  app.window.location.href = 'https://blog.test/learn/?case=case-one'
+  app.window.NANALY_AGENT = {
+    configured: () => true, snapshot: () => ({ connection: 'connected' }),
+    request: async (path, args) => {
+      calls.push({ path, ...args })
+      if (path === '/api/workspaces') return { workspaces: [] }
+      if (path.startsWith('/api/runs')) return { runs: [] }
+      return { runId: 'verified-run', revision: args.body.revision, status: 'wrong_answer', stdout: '4\n', stderr: '', diagnostics: [], tests: [{ input: '4\n', expectedOutput: '0.25\n', stdout: '4\n', status: 'wrong_answer' }] }
+    }
+  }
+  app.window.NOIMPTY_LEARNING_HISTORY = { get: async () => ({ id: 'case-one', title: '倒数', reviews: [], attempts: [
+    { id: 'failure', language: 'python', code: 'print(input())', stdin: '4\n', tests, problem: '倒数', result: { status: 'wrong_answer', evidence: 'runner' } }
+  ] }) }
+  const lab = app.mount(); await flush()
+  lab.session.edit({ tests: [] })
+  await Promise.all([...lab.root.querySelector('.learning-run').listeners.get('click')].map(fn => fn()))
+  const submitted = calls.find(item => item.path === '/api/run')
+  assert.ok(submitted)
+  assert.deepEqual(JSON.parse(JSON.stringify(submitted.body.tests)), tests)
+  assert.equal(lab.session.state.result.status, 'wrong_answer')
+  assert.equal(calls.some(item => item.path.includes('terminal')), false)
+  lab.dispose()
+})
+
+test('a saved redo awaiting a rating can be rated after reload while old solution stays hidden', async () => {
+  const app = boot(), rated = []
+  app.window.location.href = 'https://blog.test/learn/?case=case-one'
+  app.window.NOIMPTY_LEARNING_HISTORY = {
+    get: async () => ({ id: 'case-one', title: '倒数', reviews: [], attempts: [
+      { id: 'failure', language: 'python', code: 'failed source', stdin: '', tests: [], problem: '算倒数', result: { status: 'runtime_error', evidence: 'runner' } },
+      { id: 'saved-fix', language: 'python', code: 'hidden correction', result: { status: 'accepted' } }
+    ] }), canAdvance: () => true, rate: async (...args) => rated.push(args)
+  }
+  const lab = app.mount(); await flush()
+  assert.doesNotMatch(lab.root.textContent, /hidden correction/)
+  assert.match(lab.root.querySelector('.learning-evidence-status').textContent, /上次已保存的重做还没有评分/)
+  const ratings = lab.root.querySelector('.learning-evidence-ratings')
+  assert.equal(ratings.hidden, false)
+  await Promise.all([...ratings.children[2].listeners.get('click')].map(fn => fn()))
+  assert.deepEqual(rated, [['case-one', 'saved-fix', 3]])
+  assert.equal(ratings.hidden, true)
+  lab.dispose()
 })

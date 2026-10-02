@@ -89,7 +89,7 @@ const harness = ({ saved = storage({ 'nanaly-deep-v1': 'off' }), imageEntries = 
       return box
     }
   })
-  for (const name of ['nanaly-files', 'nanaly-workspace', 'nanaly-provider', 'nanaly-vision', 'nanaly-research']) vm.runInContext(read(name), context)
+  for (const name of ['nanaly-identity', 'nanaly-knowledge', 'nanaly-files', 'nanaly-workspace', 'nanaly-provider', 'nanaly-vision', 'nanaly-research']) vm.runInContext(read(name), context)
   Object.assign(context, { history: [], historyAnchor: 0, LS_DEEP: 'nanaly-deep-v1' })
   const pieces = [
     cut('  const LS_CFG =', '  /* ⚠️'),
@@ -501,6 +501,47 @@ await test('workspace restoration never replays completion and switching clears 
   assert.equal(restored.chatBridge.snapshot().phase, 'idle')
   assert.equal(restored.chatBridge.snapshot().text, '')
   assert.equal(restored.requests.length, 0)
+})
+
+
+
+await test('casual chat does not load the full catalogue or private work log', async () => {
+  const h = harness()
+  h.context.window.NOIMPTY_SEARCH.loadCorpus = async () => { throw new Error('catalogue should not load for hello') }
+  h.context.window.NOIMPTY_SEARCH.loadJournal = async () => { throw new Error('private journal should not load for hello') }
+  await h.send('你好', 'article')
+  assert.equal(h.planningRequests().length, 0)
+  const all = flattenText(h.finalRequests()[0].payload.messages)
+  assert.doesNotMatch(all, /博客里现有的全部文章|我在别的地方干的活|行动记录读不到/)
+  assert.match(all, /不要固定称呼/)
+})
+
+await test('technical follow-ups use configured reasoning for retrieval and final answer', async () => {
+  const h = harness({ saved: storage({ 'nanaly-deep-v1': 'auto' }), credentials: { apiKey: keys.apiKey } })
+  h.workspace.writeLog([{ role: 'user', content: '矩阵A有2行3列，转置后有几行？', at: 1 }, { role: 'assistant', content: '有3行。', at: 2 }])
+  h.context.history = h.workspace.readLog()
+  await h.send('那列数呢？', 'article')
+  for (const request of [...h.planningRequests(), ...h.finalRequests()]) {
+    assert.equal(request.payload.model, cfg.reasonModel)
+    assert.equal(request.payload.thinking.type, 'enabled')
+  }
+  assert.equal(h.planningRequests()[0].payload.max_tokens, 6144)
+  assert.match(flattenText(h.planningRequests()[0].payload.messages), /矩阵A有2行3列/)
+})
+
+await test('coach context and actual source material reach the model; completion only proposes a save', async () => {
+  const h = harness(), outcomes = []
+  h.context.window.NANALY_COACH = {
+    context: () => ({ id: 'fixture', topic: '矩阵转置', article: corpus[0] }),
+    prompt: () => '讲解练习：指出边界并只追问一个问题，候选必须用户确认后保存。',
+    complete: value => outcomes.push(value)
+  }
+  await h.send('我认为矩阵转置就是把行变成列。', 'article')
+  assert.match(flattenText(h.finalRequests()[0].payload.messages), /讲解练习/)
+  assert.match(flattenText(h.finalRequests()[0].payload.messages), /非方阵转置时/)
+  assert.equal(outcomes.length, 1)
+  assert.equal(outcomes[0].context.id, 'fixture')
+  assert.ok(outcomes[0].sources.length)
 })
 
 console.log(`\n${passed} core upgrade integration cases passed`)

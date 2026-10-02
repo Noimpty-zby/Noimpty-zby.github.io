@@ -19,6 +19,8 @@ private_section: 课外
 
 <!-- more -->
 
+{% learning_experiment barycentric %}
+
 上一篇文章：{% post_link Transformation-MVP-note %}
 
 ## 一、视口变换

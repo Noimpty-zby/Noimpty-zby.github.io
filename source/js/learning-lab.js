@@ -76,7 +76,7 @@
 
   // Controller deliberately separates current-code diagnostics from immutable submissions.
   // A late run may enter history, but can never overwrite a newer editor revision.
-  const createSession = ({ request, available = () => true, permitted = () => true, storage, changed = () => {} }) => {
+  const createSession = ({ request, available = () => true, permitted = () => true, storage, source = () => null, changed = () => {} }) => {
     const cached = permitted() ? safeRead(storage) : null
     const state = { lessonId: lessonFor(cached?.lessonId).id, revision: 0, code: '', stdin: '', tests: [], exercise: null, result: null, lastOutput: null, checked: null, history: [], backups: [], drafts: {}, workspaces: {}, restoring: false, busy: false, checking: false, error: '', notice: '', storageError: '', persist: cached?.persist !== false, autoCheck: cached?.autoCheck !== false }
     let activeRun = null
@@ -95,7 +95,7 @@
         if (plain(draft) && typeof draft.code === 'string') state.drafts[lesson.id] = { code: clip(draft.code, MAX_CODE), stdin: clip(draft.stdin, 8192), tests: cleanTests(draft.tests), exercise: optionalPractice(draft.exercise) }
       }
       if (Array.isArray(cached.history)) state.history = cached.history.slice(0, MAX_HISTORY).filter(record => plain(record) && LESSONS.some(l => l.id === record.lessonId) && typeof record.code === 'string').flatMap(record => {
-        try { return [{ id: clip(record.id, 128), at: clip(record.at, 64), lessonId: record.lessonId, revision: Number(record.revision) || 0, code: clip(record.code, MAX_CODE), stdin: clip(record.stdin, 8192), tests: cleanTests(record.tests), exercise: optionalPractice(record.exercise), referenceValidation: record.referenceValidation === true && record.code === record.exercise?.referenceCode && record.result?.status === 'accepted' && record.exercise?.verification?.runId === record.result?.runId, result: cleanResult(record.result) }] } catch (_) { return [] }
+        try { return [{ id: clip(record.id, 128), at: clip(record.at, 64), lessonId: record.lessonId, revision: Number(record.revision) || 0, code: clip(record.code, MAX_CODE), stdin: clip(record.stdin, 8192), tests: cleanTests(record.tests), exercise: optionalPractice(record.exercise), source: plain(record.source) ? { title: clip(record.source.title, 500), url: clip(record.source.url, 3000) } : null, referenceValidation: record.referenceValidation === true && record.code === record.exercise?.referenceCode && record.result?.status === 'accepted' && record.exercise?.verification?.runId === record.result?.runId, result: cleanResult(record.result) }] } catch (_) { return [] }
       })
       if (Array.isArray(cached.backups)) state.backups = cached.backups.slice(0, 10).filter(record => plain(record) && LESSONS.some(l => l.id === record.lessonId) && typeof record.code === 'string').map(record => ({ id: clip(record.id, 128), at: clip(record.at, 64), lessonId: record.lessonId, code: clip(record.code, MAX_CODE), stdin: clip(record.stdin, 8192), tests: cleanTests(record.tests), exercise: optionalPractice(record.exercise) }))
     }
@@ -182,7 +182,7 @@
       const lesson = lessonFor(state.lessonId)
       let workspace = state.workspaces[lesson.language]
       cancelCheck()
-      const operation = { controller: new AbortController(), seq: ++sequence, revision: state.revision, lessonId: state.lessonId, draft: draft(), started: false }
+      const operation = { controller: new AbortController(), seq: ++sequence, revision: state.revision, lessonId: state.lessonId, draft: draft(), source: source(), started: false }
       if (mode === 'check') { activeCheck = operation; state.checking = true }
       else { activeRun = operation; state.busy = true }
       if (!quiet) { state.error = ''; state.notice = mode === 'check' ? '正在使用语言工具检查当前版本…' : `正在执行版本 ${operation.revision}…` }
@@ -205,7 +205,7 @@
         if (result.revision !== operation.revision) throw new Error('执行结果版本不匹配，已丢弃，未更新当前诊断。')
         if (mode === 'run' && result.workspaceId) { workspaceEpoch++; state.workspaces[lesson.language] = { id: result.workspaceId, revision: result.workspaceRevision, uncertain: false } }
         if (mode === 'run') {
-          state.history.unshift({ id: result.runId || `${Date.now()}-${operation.seq}`, at: new Date().toISOString(), lessonId: operation.lessonId, revision: operation.revision, ...operation.draft, result })
+          state.history.unshift({ id: result.runId || `${Date.now()}-${operation.seq}`, at: new Date().toISOString(), lessonId: operation.lessonId, revision: operation.revision, ...operation.draft, source: operation.source, result })
           state.history = state.history.slice(0, MAX_HISTORY)
           if (state.lessonId === operation.lessonId) state.lastOutput = result
           if (state.revision === operation.revision && state.lessonId === operation.lessonId) state.result = result
@@ -706,14 +706,35 @@
     const status = node('p', 'learning-status'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite')
     const error = node('p', 'learning-error'); error.setAttribute('role', 'alert')
     const storageStatus = node('p', 'learning-storage-status'); storageStatus.setAttribute('role', 'status')
-    root.append(heading, toolbar, editorPane, resizer, consolePane, statusbar, status, error, storageStatus); container.append(root)
+    const evidence = node('details', 'learning-evidence')
+    evidence.append(node('summary', '', '错题现场 · 保存与复盘'))
+    const evidenceTitle = node('input'); evidenceTitle.maxLength = 300; evidenceTitle.placeholder = '给这个卡住的地方起个名字（可选）'
+    const evidenceProblem = node('textarea'); evidenceProblem.maxLength = 20000; evidenceProblem.placeholder = '这段代码要完成什么？保留题目、约束与复现步骤。'
+    const evidenceStdin = node('textarea'); evidenceStdin.maxLength = 8192; evidenceStdin.placeholder = '批量运行时输入到标准输入的内容；交互终端可直接打字。'
+    evidenceStdin.addEventListener('input', () => session.edit({ stdin: evidenceStdin.value }))
+    const evidenceExplanation = node('textarea'); evidenceExplanation.maxLength = 12000; evidenceExplanation.placeholder = '我当时怎么想、哪里错了、这次怎样修正（可选）'
+    for (const [label, field] of [['现场标题', evidenceTitle], ['题目与复现步骤', evidenceProblem], ['标准输入', evidenceStdin], ['本次复盘', evidenceExplanation]]) { const row = node('label', '', label); row.append(field); evidence.append(row) }
+    const evidenceActions = node('div', 'learning-evidence-actions')
+    const saveFailureButton = button('保存失败现场', () => saveEvidence(false))
+    const saveAttemptButton = button('保存这次重做 / 修正', () => saveEvidence(true))
+    const evidenceLink = node('a', '', '成长回放 ↗'); evidenceLink.href = '/growth/'
+    evidenceActions.append(saveFailureButton, saveAttemptButton, evidenceLink)
+    const evidenceStatus = node('p', 'learning-evidence-status', '先真实运行代码。失败后可保存现场；重做并运行后，再保存新的尝试。'); evidenceStatus.setAttribute('role', 'status')
+    const evidenceResult = node('p', 'learning-evidence-result')
+    const evidenceRatings = node('div', 'learning-evidence-ratings'); evidenceRatings.hidden = true
+    for (const [rating, label] of [[1, '重来'], [2, '困难'], [3, '良好'], [4, '简单']]) evidenceRatings.append(button(label, () => rateEvidence(rating)))
+    const evidenceRun = button('按标准输入运行并记录结果', () => { setPanel('output'); return session.run('run', session.state.tests.length > 0) })
+    evidence.append(evidenceResult, evidenceActions, evidenceRun, evidenceStatus, evidenceRatings)
+    root.append(heading, toolbar, evidence, editorPane, resizer, consolePane, statusbar, status, error, storageStatus); container.append(root)
 
     let storage; try { storage = window.localStorage } catch (_) {}
     let timer = null; let adapter = null; let lastAutoRevision = null; let lastResult; let lastChecked; let lastOutputRevision; let lastHistory; let lastBackups; let lastMarked
     let connectionState = window.NANALY_AGENT?.snapshot?.().connection || (window.NANALY_AGENT?.configured() ? 'connected' : 'disconnected')
     const request = (path, options) => window.NANALY_AGENT.request(path, options)
     const connected = () => window.NANALY_AGENT?.configured() === true
-    const session = createSession({ request, storage, available: () => !!window.NANALY_AGENT?.configured(), permitted: unlocked, changed: () => render() })
+    let historyCase = null, latestAttempt = null, savedAttemptId = null, evidenceBusy = false, attemptFromHistory = null
+    let snippetSource = article ? { title: article.title, url: article.url } : null
+    const session = createSession({ request, storage, source: () => snippetSource, available: () => !!window.NANALY_AGENT?.configured(), permitted: unlocked, changed: () => render() })
     const shellModes = { git: 'terminal', linux: 'terminal' }
     try { const saved = JSON.parse(readStore(MODE_KEY) || '{}'); for (const id of SHELLS) if (['terminal', 'script'].includes(saved?.[id])) shellModes[id] = saved[id] } catch (_) {}
     // terminal / script for Git and Linux, code for C/C++/Go/Python, sql for MySQL; file while a
@@ -755,7 +776,10 @@
       views[key] = entry
       return entry
     }
-    const inputTo = (entry, data) => entry.shell ? entry.link.write(data) : entry.task?.write(data)
+    const inputTo = (entry, data) => {
+      if (!entry.shell && entry.taskCapture) entry.taskCapture.stdin = clip(entry.taskCapture.stdin + data, 65536)
+      return entry.shell ? entry.link.write(data) : entry.task?.write(data)
+    }
     const loadView = entry => entry.loading ||= loadTerminalBundle().then(bundle => {
       if (lifetime.signal.aborted || views[entry.key] !== entry) return null
       terminalProblem = ''
@@ -813,21 +837,30 @@
     // Run: a program in its own terminal, a script typed into the shell, or SQL through the API.
     const runCode = async () => {
       const language = session.state.lessonId, code = session.state.code
+      const capturedProblem = session.state.exercise?.statement || evidenceProblem.value || ''
       if (!code.trim() || !connected()) return
       setPanel('terminal')
       const entry = await showTerminal()
       if (!entry || session.state.lessonId !== language) return
       if (entry.task) { entry.task.terminate(); entry.task.close() }
+      const capture = { id: window.crypto?.randomUUID?.() || `task-${Date.now()}`, at: new Date().toISOString(), language, code, stdin: '', tests: [], problem: capturedProblem, source: snippetSource, stdout: '', decoder: new TextDecoder(), sessionId: '', truncated: false }
       const link = createTerminalLink({
         kind: 'task', language, code, request, WebSocketImpl: window.WebSocket, socketURL: path => window.NANALY_AGENT.socketURL(path),
-        size: () => entry.view.size(), onOutput: bytes => { entry.view.write(bytes); publishSoon() }, onEvent: event => taskEvent(entry, link, event)
+        size: () => entry.view.size(), onOutput: bytes => { entry.view.write(bytes); const value = capture.stdout + capture.decoder.decode(bytes, { stream: true }); capture.truncated ||= value.length > 65536; capture.stdout = clip(value, 65536); publishSoon() }, onEvent: event => taskEvent(entry, link, event)
       })
-      entry.task = link; entry.taskState = { running: true }
+      entry.task = link; entry.taskCapture = capture; entry.taskState = { running: true }
       link.connect(); entry.view.focus(); render()
     }
     const taskEvent = (entry, link, event) => {
       if (lifetime.signal.aborted || entry.task !== link) return
+      if (event.type === 'ready' && entry.taskCapture) entry.taskCapture.sessionId = event.sessionId || ''
       if (event.type === 'exit') {
+        const captured = entry.taskCapture
+        if (captured?.sessionId && !['stopped', 'replaced', 'shutdown'].includes(event.reason) && Number.isInteger(event.code)) {
+          latestAttempt = { id: captured.id, at: captured.at, language: captured.language, code: captured.code, stdin: captured.stdin, tests: captured.tests, problem: captured.problem, source: captured.source,
+            result: { runId: captured.sessionId, status: event.code === 0 ? 'accepted' : event.reason === 'timeout' ? 'timeout' : 'runtime_error', stdout: captured.stdout, stderr: event.message || '', exitCode: event.code, evidence: 'terminal', truncated: captured.truncated } }
+          savedAttemptId = null
+        }
         entry.taskState = { running: false, exit: event }
         entry.view?.notice(event.reason === 'stopped' || event.reason === 'replaced' ? '[已停止]' : `[程序已结束 · 退出码 ${event.code} · 用时 ${event.seconds} 秒]`)
       } else if (event.type === 'error') { entry.taskState = { running: false, error: event.message }; entry.view?.notice(event.message, 'error') }
@@ -849,6 +882,13 @@
       window.clearTimeout(timer)
       const current = layout()
       if (current === 'file') return
+      if (historyCase?.attempts[0].tests.length) {
+        // An exit code of zero cannot verify a wrong-answer case. Replay the
+        // original tests through the runner, including their expected outputs.
+        const tests = historyCase.attempts[0].tests
+        if (JSON.stringify(session.state.tests) !== JSON.stringify(tests)) session.edit({ tests })
+        setPanel('output'); return session.run('run', true)
+      }
       if (current === 'code') return runCode()
       if (current === 'script' || current === 'terminal') return runInShell()
       setPanel('output'); return session.run()
@@ -942,6 +982,69 @@
       if (!connected()) { session.note('代码已经放进编辑器。连接个人后端以后，按「运行」就能执行。'); return null }
       return run()
     }
+    const historyAPI = () => window.NOIMPTY_LEARNING_HISTORY
+    function fromRecord(record) { return ({ id: record.id.replace(/[^\w:.-]/g, '-').slice(0, 170), at: record.at, language: record.lessonId, code: record.code, stdin: record.stdin, tests: record.tests, problem: record.exercise?.statement || '', source: record.source || null, result: { ...record.result, evidence: 'runner' } }) }
+    const saveEvidence = async append => {
+      if (evidenceBusy || !latestAttempt || !unlocked()) return
+      evidenceBusy = true; render()
+      try {
+        if (!historyAPI()) throw new Error('学习记录组件尚未加载，请稍后重试。')
+        const value = { ...latestAttempt, title: evidenceTitle.value.trim(), problem: latestAttempt.problem || evidenceProblem.value, explanation: evidenceExplanation.value }
+        if (append) {
+          if (!historyCase) throw new Error('先从错题现场打开一道题再保存重做。')
+          historyCase = await historyAPI().addAttempt(historyCase.id, value)
+          savedAttemptId = value.id
+          evidenceStatus.textContent = '这次真实尝试已保存。按记忆难度选择一次评分，安排下次重做。'
+        } else {
+          historyCase = await historyAPI().saveFailure(value)
+          savedAttemptId = null
+          evidenceStatus.textContent = '失败现场已保存；语言、代码、输入、题目、实际结果与来源都留在本机。修正运行后可继续保存。'
+        }
+        if (lifetime.signal.aborted) return
+        evidenceLink.href = '/growth/?case=' + encodeURIComponent(historyCase.id)
+      } catch (problem) { if (!lifetime.signal.aborted) evidenceStatus.textContent = '没有保存：' + problem.message }
+      finally { evidenceBusy = false; render() }
+    }
+    const rateEvidence = async rating => {
+      if (evidenceBusy || !historyCase || !savedAttemptId) return
+      evidenceBusy = true; render()
+      try { await historyAPI().rate(historyCase.id, savedAttemptId, rating); savedAttemptId = null; evidenceStatus.textContent = '已安排下次实际重做，可在复习页查看。' }
+      catch (problem) { evidenceStatus.textContent = problem.message }
+      finally { evidenceBusy = false; render() }
+    }
+    const loadCase = async key => {
+      try {
+        const value = await historyAPI()?.get(key)
+        if (lifetime.signal.aborted || !unlocked()) return
+        if (!value) throw new Error('没有找到这个错题现场，请先导入原设备的学习备份。')
+        const original = value.attempts[0]
+        session.loadSnippet({ language: original.language, code: original.code })
+        session.edit({ stdin: original.result.evidence === 'terminal' ? '' : original.stdin, tests: original.tests })
+        historyCase = value; snippetSource = original.source; latestAttempt = null
+        const last = value.attempts.at(-1)
+        savedAttemptId = last !== original && last.id && !value.reviews?.some(item => item.attemptId === last.id) ? last.id : null
+        evidenceTitle.value = value.title; evidenceProblem.value = original.problem; evidenceStdin.value = session.state.stdin; evidenceExplanation.value = ''
+        evidence.open = true; syncEditor()
+        if (layout() === 'terminal') setMode('script'); else applyLayout()
+        evidenceLink.href = '/growth/?case=' + encodeURIComponent(value.id)
+        evidenceStatus.textContent = original.result.evidence === 'terminal'
+          ? '已恢复最初失败的代码。旧解法仍隐藏；上次输入是终端按键记录，请按题目重新输入，再运行并保存这次尝试。'
+          : '已恢复最初失败的代码、输入和测试。旧解法仍隐藏；请修改后用保存的输入 / 测试重做，再保存这次尝试。'
+        if (savedAttemptId) evidenceStatus.textContent += '\n上次已保存的重做还没有评分。可用下面的按钮补评分，或继续运行新的尝试；补评分不会运行代码。'
+        render()
+      } catch (problem) { if (!lifetime.signal.aborted) { evidence.open = true; evidenceStatus.textContent = problem.message } }
+    }
+    const openSnippet = async snippet => {
+      if (!unlocked()) throw new Error('请先解锁私人学习空间。')
+      if (fileEdit && !closeFile()) return { loaded: false }
+      const previous = session.state.lessonId === snippet.language ? session.state.code : session.state.drafts[snippet.language]?.code
+      if (previous?.trim() && previous !== snippet.code && !window.confirm('载入这段代码？当前语言的草稿会保存在恢复点，可随时找回。')) return { loaded: false }
+      const result = session.loadSnippet(snippet)
+      snippetSource = snippet.sourceUrl ? { title: snippet.title || '互动文章', url: snippet.sourceUrl } : snippetSource
+      historyCase = null; latestAttempt = null; savedAttemptId = null
+      syncEditor(); if (layout() === 'terminal') setMode('script'); else applyLayout()
+      return result
+    }
     const jump = diagnostic => {
       if (!diagnostic.line) return
       if (adapter) return adapter.jump(diagnostic)
@@ -959,6 +1062,15 @@
     const render = () => {
       if (lifetime.signal.aborted) return
       const state = session.state; const isConnected = connected()
+      if (state.history[0] && state.history[0] !== attemptFromHistory) { attemptFromHistory = state.history[0]; latestAttempt = fromRecord(state.history[0]); savedAttemptId = null }
+      evidence.hidden = !window.NOIMPTY_LEARNING_HISTORY
+      evidenceResult.textContent = latestAttempt ? `将保存 ${latestAttempt.language} · ${STATUS[latestAttempt.result.status] || latestAttempt.result.status} · ${new Date(latestAttempt.at).toLocaleString()} 的真实运行快照。${state.code !== latestAttempt.code ? '当前编辑器已修改；再次运行后才能保存新代码。' : ''}` : '暂无已完成的运行结果；检查语法不算运行。'
+      saveFailureButton.disabled = evidenceBusy || !latestAttempt || latestAttempt.result.status === 'accepted'
+      saveAttemptButton.disabled = evidenceBusy || !historyCase || !latestAttempt || historyCase.attempts.some(item => item.result.runId === latestAttempt.result.runId)
+      evidenceStdin.value = state.stdin
+      evidenceRun.disabled = evidenceBusy || state.busy || !isConnected || !state.code.trim()
+      evidenceRatings.hidden = !historyCase || !savedAttemptId
+      for (const [index, item] of Array.from(evidenceRatings.children).entries()) item.disabled = evidenceBusy || (index > 0 && !(historyAPI()?.canAdvance ? historyAPI().canAdvance(historyCase, savedAttemptId) : latestAttempt?.result.status === 'accepted'))
       const current = layout(), entry = views[viewKey()]
       const linkState = entry ? (entry.shell ? entry.link.state() : entry.taskState?.running ? 'open' : 'idle') : 'idle'
       root.dataset.mode = current
@@ -1038,6 +1150,7 @@
         for (const record of state.history) {
           const item = node('details', 'learning-history-entry'); const time = new Date(record.at)
           item.append(node('summary', '', `${FILE_NAMES[record.lessonId]} · ${resultLabel(record.result)} · ${Number.isNaN(time.getTime()) ? record.at : time.toLocaleString()}`), pre(record.code), button('恢复代码', () => { if (!fileEdit && session.restore(record.id)) { syncEditor(); applyLayout(); focusEditor() } }))
+          if (window.NOIMPTY_LEARNING_HISTORY && record.result.status !== 'accepted') item.append(button('保存为错题现场', () => { latestAttempt = fromRecord(record); evidence.open = true; evidenceTitle.value = ''; evidenceExplanation.value = ''; return saveEvidence(false) }))
           if (record.result.stdout) item.append(pre(record.result.stdout))
           if (record.result.stderr) item.append(pre(record.result.stderr, 'learning-stderr'))
           historyList.append(item)
@@ -1117,7 +1230,15 @@
     // Opened next to an article: start in the language the article teaches.
     if (article?.language && LANGUAGE_NAMES[article.language] && session.state.lessonId !== article.language) session.select(article.language)
     syncEditor(); setPanel(viewKey() ? 'terminal' : 'output'); applyLayout(); connectionChanged()
-    return { session, context, loadPractice, runSnippet, dispose: () => {
+    if (!article) {
+      const caseId = new URL(window.location.href).searchParams.get('case')
+      if (caseId) void loadCase(caseId)
+      try {
+        const raw = window.sessionStorage?.getItem('noimpty-learning-pending-snippet')
+        if (raw) { window.sessionStorage.removeItem('noimpty-learning-pending-snippet'); const pending = JSON.parse(raw); if (Date.now() - pending.at < 300000) void openSnippet(pending.snippet).catch(problem => session.note(problem.message)) }
+      } catch (_) { /* Optional cross-page transfer never replaces a draft on failure. */ }
+    }
+    return { session, context, loadPractice, runSnippet, openSnippet, dispose: () => {
       window.clearTimeout(timer); window.clearTimeout(publishTimer); lifetime.abort(); unsubscribe?.()
       // Closing the sockets detaches this page: shells keep running on the server for a while.
       for (const entry of Object.values(views)) { entry.link?.close(); entry.task?.close(); entry.view?.dispose() }
@@ -1251,6 +1372,15 @@
   window.NOIMPTY_LEARNING = Object.freeze({ createSession, createTerminalLink, lessons: LESSONS, mount, articleLanguage, blockSnippet, context: () => unlocked() ? mounted?.context() || null : null })
   window.LEARNING_LAB = Object.freeze({
     context: () => unlocked() ? mounted?.context() || null : null,
+    openSnippet: async snippet => {
+      if (!unlocked()) throw new Error('请先解锁私人学习空间。')
+      if (!plain(snippet) || !LANGUAGE_NAMES[snippet.language] || typeof snippet.code !== 'string' || !snippet.code.trim() || snippet.code.length > MAX_CODE) throw new Error('代码片段无效。')
+      if (!mounted && launch) launch.click()
+      if (mounted) { mounted.showCode?.(); return mounted.openSnippet(snippet) }
+      try { window.sessionStorage.setItem('noimpty-learning-pending-snippet', JSON.stringify({ at: Date.now(), snippet: { language: snippet.language, code: snippet.code, title: clip(snippet.title, 500), sourceUrl: clip(snippet.sourceUrl, 3000) } })) }
+      catch (_) { throw new Error('浏览器禁止暂存片段，请打开代码小屋后手动复制。') }
+      window.location.assign('/learn/'); return { loaded: false, navigating: true }
+    },
     loadPractice: exercise => { if (!unlocked() || !mounted) throw new Error('请先解锁并打开练习页面，再载入练习。'); return mounted.loadPractice(exercise) },
     runCurrent: async ({ signal } = {}) => {
       if (!unlocked() || !mounted) throw new Error('请先解锁并打开当前练习。')

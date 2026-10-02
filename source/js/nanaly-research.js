@@ -185,7 +185,10 @@
       let corpus = null
       let calls = 0
       let rounds = 0
-      const query = textOf(p.query).slice(0, 2000)
+      const directQuery = textOf(p.query).slice(0, 2000)
+      const priorQuestion = (Array.isArray(p.messages) ? p.messages : []).filter(m => m && m.role === 'user' && typeof m.content === 'string').slice(-3).reverse().find(m => textOf(m.content).length > 12)
+      const followup = directQuery.length < 40 && /^(那|这个|它|这里|所以|继续|举个|还有|为啥)/.test(directQuery)
+      const query = followup && priorQuestion ? directQuery + '\n承接的问题：' + textOf(priorQuestion.content).slice(0, 600) : directQuery
       const check = () => {
         if (revision !== generation) throw aborted('SEARCH_RESET')
         if (signal.aborted) throw signal.reason || aborted()
@@ -286,7 +289,9 @@
           if (article) selectArticle(article, query, origin, 3).forEach(add)
           if (p.mode === 'site' || p.mode === 'web') await execute(p.mode === 'site' ? 'search_blog' : 'search_web', { query: query.replace(/^(全站搜(?:一下)?|上网搜)[：:]\s*/, '') })
           if (typeof opts.complete === 'function') {
-            const conversation = (Array.isArray(p.messages) ? p.messages : []).filter(m => record(m) && ['user', 'assistant'].includes(m.role) && typeof m.content === 'string').slice(-6).map(m => ({ role: m.role, content: m.content.slice(-1800) }))
+            const conversation = (Array.isArray(p.messages) ? p.messages : []).filter(m => record(m) && ['user', 'assistant'].includes(m.role) && typeof m.content === 'string').slice(-8).map(m => ({
+              role: m.role, content: m.content.length > 1400 ? m.content.slice(0, 650) + '\n（中段已节选）\n' + m.content.slice(-650) : m.content
+            }))
             const dialogue = [{ role: 'system', content: INSTRUCTIONS }, ...conversation,
               { role: 'user', content: `当前问题：${query}\n${article ? '当前文章：' + normal(article.title) + '\n' : ''}${contextFor([...used.values()].slice(-8))}${diagnostics.length ? '\n检索状态：' + diagnostics.join('；') : ''}` }]
             while (rounds < 3 && calls < 5) {

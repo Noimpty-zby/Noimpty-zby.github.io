@@ -19,7 +19,7 @@
     const host = new URL(url).hostname
     const payload = {
       model: useVision ? cfg.visionModel : deep ? cfg.reasonModel : cfg.model,
-      messages, stream, max_tokens: tools ? 2048 : 8192
+      messages, stream, max_tokens: tools ? (deep ? 6144 : 2048) : 8192
     }
     if (stream) payload.stream_options = { include_usage: true }
     if (host === 'api.deepseek.com') {

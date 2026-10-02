@@ -331,7 +331,7 @@
     if (brain === 'on') return true
     if (brain === 'off') return false
     // 带着一堆检索材料回来的，要综合、要取舍，一律上推理
-    if (mode === 'web' || mode === 'site' || window.NANALY_COACH?.context()) return true
+    if (mode === 'web' || mode === 'site') return true
     const t = String(text || '').trim()
     if (wantsBrainRe.test(t) || window.NANALY_KNOWLEDGE?.intent(t).reasoning) return true
     // 短追问沿用最近问题的性质；长闲聊不因字数自动升级。
@@ -1456,7 +1456,7 @@
     <div class="nanaly-quick" data-role="quick">
       <button data-q="summary">总结本文</button>
       <button data-q="check">检查本文链接</button>
-      <button data-q="quiz">考考我</button>\n      <button data-q="coach">讲给我听</button>
+      <button data-q="quiz">考考我</button>
       <button data-q="site">全站搜一下…</button>
       <button data-q="web">上网搜…</button>
     </div>
@@ -2084,8 +2084,7 @@
 
   const buildMessages = async (userText, mode, signal, baseHistory = history, attachments = [], files = []) => {
     const msgs = [{ role: 'system', content: PERSONA }]
-    const coachContext = activeTurn?.coachContext
-    const art = coachContext?.article || currentArticle()
+    const art = currentArticle()
     // 文章清单和行动记录每轮都给。按关键词才给的话，「Git 我学到哪了」「你会做什么」
     // 这种问法拿不到清单，她就会凭记忆说「他还没写过」「那是另一个程序做的」——两个都犯过。
     const metadata = await abortable(Promise.all([postDigest(), selfLog()]), signal)
@@ -2095,11 +2094,11 @@
       loadCorpus, searchWeb, complete: completeResearch, canRead: canReadPageContext, origin: location.origin
     })
     // 只有明确的寒暄跳过规划，普通自然语言问题都可以真正调用工具。
-    const casual = !coachContext && /^(你好|嗨|在吗|谢谢[你啦]?|晚安|早安|好[的呀啊]|哈哈+|喵+)[！!。~～ ]*$/.test(userText.trim())
+    const casual = /^(你好|嗨|在吗|谢谢[你啦]?|晚安|早安|好[的呀啊]|哈哈+|喵+)[！!。~～ ]*$/.test(userText.trim())
     let sources = []
     if (research) {
       const result = await research.prepare({
-        query: coachContext ? coachContext.topic + '：' + userText : userText.replace(WEB_PREFIX, '').replace(SITE_PREFIX, ''), article: art,
+        query: userText.replace(WEB_PREFIX, '').replace(SITE_PREFIX, ''), article: art,
         messages: baseHistory, priorSources: baseHistory.flatMap(m => m.sources || []).slice(-12),
         mode: ['web', 'site'].includes(mode) ? mode : 'auto', signal, noPlan: casual,
         onStatus: status => {
@@ -2115,13 +2114,6 @@
       msgs.push({ role: 'system', content: '检索模块未加载，本轮没有检索资料，不能声称查过博客或互联网。' })
     }
     if (activeTurn) activeTurn.sources = sources
-    if (coachContext && window.NANALY_COACH) msgs.push({ role: 'system', content: window.NANALY_COACH.prompt(coachContext, sources) })
-    if (coachContext && window.NOIMPTY_LEARNING_HISTORY?.summary && canReadPageContext()) {
-      try {
-        const summary = await abortable(window.NOIMPTY_LEARNING_HISTORY.summary(), signal)
-        if (canReadPageContext()) msgs.push({ role: 'system', content: '学习记录统计（不是掌握程度，只在有帮助时提及）：' + JSON.stringify(summary).slice(0, 1200) })
-      } catch (error) { if (signal?.aborted) throw error }
-    }
     if (/打开|跳|带我|切换|深色|浅色|主题|音乐|放歌|顶部|返回|回到/.test(userText)) {
       try {
         const map = await abortable(getSiteMap(), signal)
@@ -2301,7 +2293,6 @@
     const baseHistory = history.slice()
     const turn = { controller: new AbortController(), discard: false, sources: [], status: 'failed', error: '',
       practiceContext: options.practiceContext || window.NANALY_AGENT?.context() || null,
-      coachContext: options.coachContext || window.NANALY_COACH?.context() || null,
       deep: wantsBrain(text, mode),
       researchImages: attachments.length ? attachments : (baseHistory.slice(-HISTORY_MAX).filter(m => m.attachments?.length).slice(-1)[0]?.attachments || []),
       researchFiles: files.length ? files : (baseHistory.slice(-HISTORY_MAX).filter(m => m.files?.length).slice(-1)[0]?.files || []) }
@@ -2403,7 +2394,6 @@
         }
       }
       completed = actionSucceeded && !signal.aborted && !turn.discard
-      if (completed && turn.coachContext) window.NANALY_COACH?.complete({ context: turn.coachContext, explanation: text, feedback: shown, sources: turn.sources })
       if (completed && window.NANALY_VOICE && panel.classList.contains('is-open')) {
         voiceController?.chime('done')
         if (shown) {
@@ -2766,7 +2756,6 @@
     const q = btn.dataset.q
     if (q === 'summary') send('用几条要点总结一下这篇文章，重点讲清楚它到底解决了什么问题。', 'article')
     if (q === 'check') checkArticleLinks()
-    if (q === 'coach') window.NANALY_COACH?.open()
     if (q === 'quiz') send(
       '基于这篇文章出 3 道题考我：一道概念题、一道推导或计算题、一道容易踩坑的辨析题。'
       + '一次全部列出来，先不要给答案。等我把答案发给你，你再逐题批改，指出我漏掉或说错的地方。', 'article')
@@ -3092,56 +3081,12 @@
     stopStream()
   })
 
-  let qualityRunning = false
-  const connectionStatus = () => ({ configured: !!(secrets.apiKey || secrets.visionKey), locked: locked(),
-    model: secrets.apiKey ? cfg.model : cfg.visionModel, reasonModel: secrets.apiKey ? cfg.reasonModel : cfg.visionModel })
-  const evaluateQuality = async ({ signal, onProgress, limit = 6 } = {}) => {
-    if (qualityRunning || busy) throw new Error('请先等当前回答或自检结束。')
-    if (!secrets.apiKey && !secrets.visionKey) throw new Error('请先填写或解锁聊天 API Key。')
-    const knowledge = window.NANALY_KNOWLEDGE
-    if (!knowledge) throw new Error('能力评测模块没有加载。')
-    qualityRunning = true
-    const results = []
-    try {
-      for (const sample of knowledge.cases.slice(0, Math.max(1, Math.min(6, Math.floor(limit) || 6)))) {
-        signal?.throwIfAborted()
-        const ctl = new AbortController(), stop = () => ctl.abort(signal.reason)
-        signal?.addEventListener('abort', stop, { once: true })
-        const timeout = setTimeout(() => ctl.abort(new Error('本题自检超时')), 60000)
-        try {
-          onProgress?.({ id: sample.id, title: sample.title, completed: results.length })
-          const question = sample.messages.at(-1).content
-          const messages = [{ role: 'system', content: (window.NANALY_IDENTITY?.prompt || PERSONA) + '\n' + knowledge.prompt(question, { examples: false }) },
-            ...(sample.context ? [{ role: 'system', content: sample.context }] : []), ...sample.messages]
-          const request = window.NANALY_PROVIDER.request({ cfg, secrets, messages, deep: sample.deep, stream: false })
-          request.payload.max_tokens = sample.deep ? 4096 : 1536
-          const response = await fetch(request.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + request.key },
-            body: JSON.stringify(request.payload), signal: ctl.signal, redirect: 'error', credentials: 'omit', cache: 'no-store' })
-          if (!response.ok) throw new Error('模型自检请求失败（HTTP ' + response.status + '）')
-          const data = await response.json(); ctl.signal.throwIfAborted(); addUsage(data.usage)
-          const choice = data.choices?.[0], answer = String(choice?.message?.content || '')
-          results.push({ id: sample.id, title: sample.title, model: request.payload.model, answer, usage: data.usage || null,
-            ...knowledge.assess(sample, answer), ...(choice?.finish_reason === 'length' ? { incomplete: true } : {}) })
-        } catch (error) {
-          if (signal?.aborted) throw error
-          results.push({ id: sample.id, title: sample.title, error: ctl.signal.aborted ? '本题超过60秒，未取得完整结果' : String(error.message || error).slice(0, 160), needsHumanReview: true })
-          // Credential/quota/network failures should not bill five repeated requests.
-          break
-        } finally { clearTimeout(timeout); signal?.removeEventListener('abort', stop) }
-      }
-      return { kind: 'live-model', note: '真实模型输出；规则检查只是筛查，需逐题人工核对，不能据此声称能力等同另一模型。', results }
-    } finally { qualityRunning = false }
-  }
-  window.NANALY_COACH?.create({ panel, input, quick, openPanel, canRead: canReadPageContext,
-    currentArticle, loadCorpus, isBusy: () => busy || view !== 'chat',
-    connectionStatus, evaluateQuality, notify: message => addMsg('sys', message) })
-
   // 供控制台调试/换人设用
   window.NANALY = Object.freeze({
     open: openPanel,
     close: closePanel,
     chatState: () => chatBridge.snapshot(),
-    contextAction, connectionStatus, evaluateQuality,
+    contextAction,
     askPractice, preparePractice, agentTool,
     confirmedMemories: () => workspace?.snapshot().memories || [],
     reset: () => { stopStream(true); history = []; historyAnchor = 0; writeLog(history); backToChat() },

@@ -209,7 +209,7 @@ await test('out-of-order refreshes cannot replace a newer private summary', asyn
   const first = deferred(), second = deferred(); let calls = 0
   const h = boot({ unlocked: true, summary: () => ++calls === 1 ? first.promise : second.promise }); await h.mount()
   const update = h.window.fire('noimpty:learning-history')
-  second.resolve({ cases: 3, due: 1, explanations: 2, dueExplanations: 1 }); await update
+  second.resolve({ cases: 5, due: 2 }); await update
   first.resolve({ cases: 100, due: 100 }); await settle()
   const progress = h.root().querySelector('.room-progress')
   assert.equal(progress.hidden, false)

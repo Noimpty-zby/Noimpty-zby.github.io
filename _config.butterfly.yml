@@ -38,7 +38,6 @@ menu:
     日程: /schedule/ || fas fa-calendar-days
     练习台: /learn/ || fas fa-code
     复习: /review/ || fas fa-layer-group
-    讲给我听: /teach/ || fas fa-chalkboard-user
     成长回放: /growth/ || fas fa-images
     时间线: /timeline/ || fas fa-timeline
     归档: /archives/ || fas fa-box-archive
@@ -1157,7 +1156,6 @@ inject:
     - <link rel="stylesheet" href="/css/review.css">
     - <link rel="stylesheet" href="/css/study-timeline.css">
     - <link rel="stylesheet" href="/css/learning-history.css">
-    - <link rel="stylesheet" href="/css/nanaly-coach.css">
     - <link rel="stylesheet" href="/css/study-room.css">
     # 顺序有讲究：protected-manifest 给出锁清单，privacy-gate 立刻据此打遮罩，
     # noimpty-search 依赖 gate 存下的暗号才能解密索引。三者不能调换。
@@ -1178,7 +1176,6 @@ inject:
     - <script src="/js/nanaly-provider.js"></script>
     - <script src="/js/nanaly-identity.js"></script>
     - <script src="/js/nanaly-knowledge.js"></script>
-    - <script src="/js/nanaly-coach.js"></script>
     - <script src="/js/learning-history.js"></script>
     - <script src="/js/nanaly-agent.js"></script>
     - <script src="/js/nanaly-vision.js"></script>

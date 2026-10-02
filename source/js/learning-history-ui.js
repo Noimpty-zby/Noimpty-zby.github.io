@@ -44,36 +44,18 @@
     item.append(actions, compare)
     return item
   }
-  const notesView = notes => {
-    const section = el('section', 'growth-explanations')
-    section.append(el('h2', '', '讲明白的路上'))
-    for (const value of notes.sort((a, b) => b.createdAt.localeCompare(a.createdAt))) {
-      const row = el('details', 'growth-explanation')
-      row.append(el('summary', '', `${value.topic} · ${time(value.createdAt)}`), el('h3', '', '我的解释'), el('p', '', value.explanation), el('h3', '', '当时的反馈'), el('p', '', value.feedback))
-      if (value.reviewQuestions.length) { const list = el('ul'); value.reviewQuestions.forEach(q => list.append(el('li', '', q))); row.append(el('h3', '', '还想再讲清楚的问题'), list) }
-      row.append(link('再讲一次 ↗', '/teach/?explanation=' + encodeURIComponent(value.id)))
-      section.append(row)
-    }
-    return section
-  }
   const renderQueue = async (root, token) => {
-    const [records, notes] = await Promise.all([store().list(), store().listExplanations()])
+    const records = await store().list()
     if (token !== version || !store().unlocked()) return
     root.replaceChildren(el('h2', '', '回到真实现场重做'))
     root.append(el('p', '', '这里的题来自你保存的实际失败。打开练习台运行新尝试、保存结果后，再按 FSRS 安排下一次；翻卡不会算作完成。'))
     const due = records.filter(item => Date.parse(item.due) <= Date.now())
     if (!due.length) root.append(el('p', '', '暂时没有到期的操作题。可在练习台保存失败现场，之后回到这里重做。'))
     for (const item of due) root.append(link(`${item.title} · ${item.attempts[0].language} · 开始重做`, '/learn/?case=' + encodeURIComponent(item.id)))
-    const revised = new Set(notes.map(item => item.revises).filter(Boolean))
-    const gaps = notes.filter(item => item.reviewQuestions.length && !revised.has(item.id))
-    if (gaps.length) {
-      root.append(el('h3', '', '再讲清楚一个问题'))
-      for (const item of gaps) root.append(link(`${item.topic} · ${item.reviewQuestions.length} 个待讲问题`, '/teach/?explanation=' + encodeURIComponent(item.id)))
-    }
     root.append(link('查看成长回放与备份 ↗', '/growth/'))
   }
   const renderGrowth = async (root, token) => {
-    const [records, notes] = await Promise.all([store().list(), store().listExplanations()])
+    const records = await store().list()
     if (token !== version || !store().unlocked()) return
     root.replaceChildren()
     const title = el('p', 'growth-intro', '不只记下做对了什么，也留下从哪里卡住、怎样想通。私人代码只存在这台浏览器；换设备前请导出备份。')
@@ -93,7 +75,7 @@
         const value = JSON.parse(await chosen.text()); if (token !== version || !store().unlocked()) return
         const result = await store().importData(value)
         if (active !== root || !store().unlocked()) return
-        flash = `已合并 ${result.cases} 个错题现场和 ${result.explanations} 段讲解；旧记录仍保留。`
+        flash = `已合并 ${result.cases} 个错题现场；旧记录仍保留。`
         await mount()
       } catch (error) { if (token === version) status.textContent = `未导入：${error.message}` }
     })
@@ -104,7 +86,6 @@
     const focus = new URL(window.location.href).searchParams.get('case')
     const ordered = [...records].sort((a, b) => (b.id === focus) - (a.id === focus) || b.updatedAt.localeCompare(a.updatedAt))
     for (const value of ordered) root.append(caseView(value))
-    if (notes.length) root.append(notesView(notes))
   }
   const mount = async () => {
     const growth = document.getElementById('learning-growth'), review = document.getElementById('review-app')

@@ -8,8 +8,7 @@
     { id: 'evidence', source: 'source/js/nanaly-research.js', text: '站内原文来自解锁后的文章和搜索索引，检索工具返回段落及真实链接；互联网搜索依赖单独配置。未命中不能推断没有写过。' },
     { id: 'files', source: 'source/js/nanaly-files.js', text: '附件在用户发送后按实际提取范围读取。正文与图片有请求预算，扫描图及未读页会明确标记；不能声称看过未传入部分。' },
     { id: 'execution', source: 'source/js/nanaly-agent.js', text: '代码运行与私有任务需要连接后端；静态讨论不是执行。是否运行成功取决于实际任务结果，工具未连接时只能解释和准备。' },
-    { id: 'learning', source: 'source/js/nanaly-coach.js', text: '「讲给我听」使用当前文章或自选主题练习解释。娜娜莉依据实际材料追问、举反例，只有用户点击保存后才写入学习记录。' },
-    { id: 'voice', source: 'source/js/nanaly-voice.js', text: '声音按钮是合成朗读，不等于语音识别。讲解练习只在浏览器提供语音识别时显示转写按钮，由用户明确启动。' },
+    { id: 'voice', source: 'source/js/nanaly-voice.js', text: '声音按钮是合成朗读，不等于语音识别。' },
     { id: 'memory', source: 'source/js/nanaly-workspace.js', text: '会话、用户确认的记忆与学习记录帮助衔接上下文；不修改模型权重。模型由用户配置，实际效果需要真实评测。' }
   ]
   const examples = [
@@ -27,7 +26,7 @@
       inventory: /(?:几篇|多少篇|全部文章|所有文章|有哪些文章|文章清单|站点结构)/.test(t),
       activity: /(?:你|娜娜莉).{0,10}(?:干了|做了|忙了|行动记录|工作记录)|(?:今天|昨天).{0,6}(?:巡逻|日报|回评)/.test(t),
       capability: /(?:你|娜娜莉).{0,8}(?:能做|会做|能力|模型|聪明|训练|微调)|语音识别|转写/.test(t),
-      memory: /记得|上次|以前|之前|最近|继续|学习进度|复习|讲给|解释一下/.test(t),
+      memory: /记得|上次|以前|之前|最近|继续|学习进度|复习/.test(t),
       reasoning: /为什么|为何|怎么|如何|区别|对比|原理|设计|推导|证明|复杂度|矩阵|转置|行列|函数|概率|公式|报错|错误|bug|优化|重构|分析|解释|反例|边界|一定|成立|递归|循环|死锁|并发|二分|指针|内存|正确|[<>]=?|===|!=|while|for\s*\(/i.test(t)
     }
   }

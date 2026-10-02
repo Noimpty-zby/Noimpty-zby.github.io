@@ -227,17 +227,6 @@ const ART = {
     heart(60, 7, 0.38, '#ff8fab') +
     face(60, 90, { gap: 22, k: 0.9, mouth: 'u' }),
 
-  // 讲给我听：画架上的小黑板，粉笔画了一道公式和一颗星
-  blackboard: () =>
-    `<path d="M32 86L22 112M88 86l10 26M60 86v18" fill="none" stroke="${INK}" stroke-width="6" stroke-linecap="round"/>` +
-    '<path d="M32 86L22 112M88 86l10 26M60 86v18" fill="none" stroke="#e8c39e" stroke-width="2.6" stroke-linecap="round"/>' +
-    `<rect x="10" y="14" width="100" height="74" rx="10" fill="#e8c39e" ${S}/>` +
-    '<rect x="18" y="22" width="84" height="58" rx="6" fill="#5d8a78"/>' +
-    '<path d="M27 36c5-6 9 6 14 0M48 33v8M44 37h8" fill="none" stroke="#f2fff8" stroke-width="2.2" stroke-linecap="round" opacity=".85"/>' +
-    sparkle(88, 36, 6, '#fff3b8', 0.5) +
-    `<rect x="40" y="84" width="22" height="6" rx="3" fill="#fffaf5" ${S2}/>` +
-    face(60, 60, { gap: 24, mouth: 'w', ink: '#f2fff8', cheek: '#ff9fb8' }),
-
   // 聊一会儿：圆滚滚的对话泡泡，左下角拖着小尾巴
   bubble: () =>
     `<path d="M30 92l-10 18 26-18" fill="#ffe0ea" ${S}/>` +
@@ -341,7 +330,6 @@ const SINGLE = {
   notebook: ['notebook', {}, '螺旋线圈的复习本'],
   record: ['record', {}, '唱片机'],
   album: ['album', {}, '拍立得照片'],
-  blackboard: ['blackboard', {}, '画架上的小黑板'],
   bubble: ['bubble', {}, '对话泡泡']
 }
 

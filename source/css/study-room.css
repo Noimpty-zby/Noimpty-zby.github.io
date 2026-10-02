@@ -50,14 +50,17 @@
 .noimpty-room__bunting i:nth-of-type(5n + 5) { background: #dccbff; }
 
 .noimpty-room__items {
-  display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  /* flex 而不是 grid：放不满一行时，最后一排能居中 */
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  --room-cols: 7;
   gap: 26px var(--room-gap);
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.noimpty-room__items li { margin: 0; padding: 0; min-width: 0; }
+.noimpty-room__items li { flex: 0 0 calc((100% - (var(--room-cols) - 1) * var(--room-gap)) / var(--room-cols)); margin: 0; padding: 0; min-width: 0; }
 .noimpty-room__items li::before { display: none; }
 
 .noimpty-room__item {
@@ -180,11 +183,11 @@ html[data-theme='dark'] .noimpty-room__bunting i { opacity: .78; }
 html[data-theme='dark'] .noimpty-room__tag::before { background: #f3dbe4; }
 
 @media (max-width: 980px) {
-  .noimpty-room__items { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .noimpty-room__items { --room-cols: 4; }
 }
 @media (max-width: 560px) {
   .noimpty-room__wall { margin-top: 18px; padding: 50px 12px 24px; border-radius: 22px; }
-  .noimpty-room__items { gap: 22px 2px; }
+  .noimpty-room__items { --room-gap: 2px; row-gap: 22px; }
   .noimpty-room__art { width: min(100%, 84px); }
   .noimpty-room__tag { margin-top: 16px; padding: 2px 7px 3px; border-width: 1.5px; font-size: 11.5px; }
   .noimpty-room__bunting i { width: 14px; height: 12px; }

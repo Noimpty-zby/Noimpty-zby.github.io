@@ -106,8 +106,8 @@
       try {
         const value = await window.NOIMPTY_LEARNING_HISTORY.summary()
         if (signal.aborted || current !== revision || request !== summaryRequest || !unlocked() || !value) return
-        const total = Number(value.cases ?? value.total ?? 0) + Number(value.explanations ?? 0)
-        const due = Number(value.due ?? 0) + Number(value.dueExplanations ?? 0)
+        const total = Number(value.cases ?? value.total ?? 0)
+        const due = Number(value.due ?? 0)
         if (!Number.isFinite(total) || !Number.isFinite(due) || total < 1) return
         const link = document.createElement('a'); link.href = '/growth/'
         link.textContent = `${total} 个留下来的问题${due > 0 ? ` · ${due} 个可以再试一次` : ' · 慢慢看见自己的进步'} →`

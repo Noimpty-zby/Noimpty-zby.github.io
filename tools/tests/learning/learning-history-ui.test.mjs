@@ -68,5 +68,5 @@ await test('successful import feedback survives its own storage-change repaint',
   const file = h.root.all().find(node => node.tagName === 'input')
   file.files = [{ size: 100, text: async () => '{}' }]
   await file.listeners.get('change')()
-  assert.match(h.root.textContent, /已合并 2 个错题现场和 1 段讲解/)
+  assert.match(h.root.textContent, /已合并 2 个错题现场；/)
 })

@@ -531,19 +531,4 @@ await test('technical follow-ups use configured reasoning for retrieval and fina
   assert.match(flattenText(h.planningRequests()[0].payload.messages), /矩阵A有2行3列/)
 })
 
-await test('coach context and actual source material reach the model; completion only proposes a save', async () => {
-  const h = harness(), outcomes = []
-  h.context.window.NANALY_COACH = {
-    context: () => ({ id: 'fixture', topic: '矩阵转置', article: corpus[0] }),
-    prompt: () => '讲解练习：指出边界并只追问一个问题，候选必须用户确认后保存。',
-    complete: value => outcomes.push(value)
-  }
-  await h.send('我认为矩阵转置就是把行变成列。', 'article')
-  assert.match(flattenText(h.finalRequests()[0].payload.messages), /讲解练习/)
-  assert.match(flattenText(h.finalRequests()[0].payload.messages), /非方阵转置时/)
-  assert.equal(outcomes.length, 1)
-  assert.equal(outcomes[0].context.id, 'fixture')
-  assert.ok(outcomes[0].sources.length)
-})
-
 console.log(`\n${passed} core upgrade integration cases passed`)

@@ -1,4 +1,4 @@
-# 娜娜莉质量改进与讲解练习
+# 娜娜莉质量改进
 
 这轮修改没有训练或微调模型权重，也没有更换服务商、默认模型或购买新模型。它修正了互相冲突的角色提示、无关背景注入、检索规划与回答的推理档不一致，以及短追问丢失问题上下文。
 
@@ -8,7 +8,6 @@
 - source/js/nanaly-knowledge.js：公开产品能力及其源码来源、示例与六种质量案例。没有私人档案、凭据或用户文件。
 - source/js/noimpty-ai.js：在已有历史和附件预算内保留材料首尾。推理决策在检索之前确定，并传给检索规划与最终回答。文章清单和行动日志每轮都给（曾改成按关键词才给，「Git 我学到哪了」这种问法就拿不到清单，2026-10-02 改回）。
 - source/js/nanaly-research.js：短追问带上最近具体问题；保留真实来源编号和片段，不把未命中当作不存在。
-- source/js/nanaly-coach.js：/teach/ 使用既有聊天输入，选择真实文章或一般主题，收到反馈后由用户确认保存。保存失败会保留候选；新反馈不会被旧保存回调清空。
 - source/js/learning-history.js：由学习记录模块提供 gated、事务完成后返回的 recordExplanation 与追加修订链。
 - 自动化写作依旧通过既有 ask() 与共享 identity。
 
@@ -20,7 +19,7 @@
 
 在仓库中运行：
 
-    node tools/tests/ai/nanaly-coach.test.mjs
+    node tools/tests/ai/nanaly-knowledge.test.mjs
     node tools/tests/ai/nanaly-core-upgrade.test.mjs
     node tools/tests/ai/nanaly-research.test.mjs
     node tools/nanaly/quality-eval.mjs
@@ -29,9 +28,9 @@
 
 ## 真实模型评测
 
-方式一：站点解锁、已有聊天模型连接后，在 /teach/ 点击“运行 6 题能力自检”。它使用现有保险箱中的配置，不展示密钥，不发送用户历史、附件或学习记录。页面显示每题实际回答，允许停止；离页或重新上锁会取消后续请求。
+原来 /teach/ 页面上有一个「运行 6 题能力自检」按钮，「讲给我听」2026-10-02 删掉以后只剩下面的命令行方式。
 
-方式二：显式提供仅用于此模型的环境变量 DEEPSEEK_API_KEY，必要时沿用 DEEPSEEK_API_BASE、DEEPSEEK_MODEL、DEEPSEEK_PRO_MODEL：
+显式提供仅用于此模型的环境变量 DEEPSEEK_API_KEY，必要时沿用 DEEPSEEK_API_BASE、DEEPSEEK_MODEL、DEEPSEEK_PRO_MODEL：
 
     node tools/nanaly/quality-eval.mjs --live --limit 2 --out /tmp/nanaly-quality.json
 
@@ -47,4 +46,3 @@
 
 ## 可重复的教学习惯
 
-从成长记录再次打开 /teach/?explanation=<id> 时，只在解锁后读取该条记录，正文不会放进 URL。再次保存追加一条带 revises 的解释，旧记录保留，待复习队列按最新一版统计。更换设备前使用学习记录导出功能备份。

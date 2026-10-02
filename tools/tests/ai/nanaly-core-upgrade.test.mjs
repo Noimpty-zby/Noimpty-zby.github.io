@@ -505,15 +505,17 @@ await test('workspace restoration never replays completion and switching clears 
 
 
 
-await test('casual chat does not load the full catalogue or private work log', async () => {
-  const h = harness()
-  h.context.window.NOIMPTY_SEARCH.loadCorpus = async () => { throw new Error('catalogue should not load for hello') }
-  h.context.window.NOIMPTY_SEARCH.loadJournal = async () => { throw new Error('private journal should not load for hello') }
-  await h.send('你好', 'article')
-  assert.equal(h.planningRequests().length, 0)
-  const all = flattenText(h.finalRequests()[0].payload.messages)
-  assert.doesNotMatch(all, /博客里现有的全部文章|我在别的地方干的活|行动记录读不到/)
-  assert.match(all, /不要固定称呼/)
+// 清单按关键词才给的话，「Git 我学到哪了」「你都会做什么」这类问法拿不到清单和行动记录，
+// 她就会凭记忆说「他还没写过」「那是另一个程序做的」。所以每轮都给，打招呼也给。
+await test('every turn carries the article catalogue and the work log, even a hello', async () => {
+  for (const text of ['你好', 'Git 我学到哪了']) {
+    const h = harness()
+    await h.send(text, 'article')
+    const all = flattenText(h.finalRequests()[0].payload.messages)
+    assert.match(all, /博客里现有的全部文章/, text)
+    assert.match(all, /我在别的地方干的活|行动记录读不到/, text)
+    assert.match(all, /你不只是这个聊天框/, text)
+  }
 })
 
 await test('technical follow-ups use configured reasoning for retrieval and final answer', async () => {

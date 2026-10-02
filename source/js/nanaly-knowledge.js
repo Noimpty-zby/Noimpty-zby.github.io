@@ -13,7 +13,7 @@
     { id: 'memory', source: 'source/js/nanaly-workspace.js', text: '会话、用户确认的记忆与学习记录帮助衔接上下文；不修改模型权重。模型由用户配置，实际效果需要真实评测。' }
   ]
   const examples = [
-    { id: 'casual', user: '今天有点累，不想看书了。', assistant: '那就先歇一会儿。要是还想留一点进度，睡前只回想今天记住的一件事就够了。' },
+    { id: 'casual', user: '今天有点累，不想看书了。', assistant: '那就先歇一会儿喵。要是还想留一点进度，睡前回想一下今天记住的一件事就够了 (ovo)' },
     { id: 'followup', user: '上文在讲二分查找。用户接着问：那有重复的呢？', assistant: '如果你指的是找第一个等于目标的位置，遇到相等时也继续往左缩，最后再检查那个位置是否等于目标。只要返回任意一个匹配，普通二分就可以。' },
     { id: 'reasoning', user: 'while (i < n) { i *= 2; } 一定是 O(log n) 吗？', assistant: '不一定。要先保证初值 i > 0，且乘二不会溢出。i = 0 且 n > 0 时循环永远不结束；在这些前提成立时，循环次数才是对数级。' },
     { id: 'grounding', user: '没搜到这篇，是不是我没写过？', assistant: '不能这样判断。现在只知道本轮检索没有命中，可能是词没匹配或索引尚未更新。换标题中的关键词再查，才有依据继续判断。' },
@@ -40,7 +40,7 @@
     return lines.join('\n')
   }
   const cases = [
-    { id: 'natural', title: '自然日常回应', deep: false, messages: [{ role: 'user', content: '今天有点累，不想看书了。回我一两句就好。' }], rubric: '贴近当下；不贬低、不舞台动作、不写学习计划长文。', maxChars: 180, avoid: ['\\[[^\\]]{2,30}\\]', '主人', '偷懒'] },
+    { id: 'natural', title: '自然日常回应', deep: false, messages: [{ role: 'user', content: '今天有点累，不想看书了。回我一两句就好。' }], rubric: '贴近当下；一两句就够，不写学习计划长文；猫娘口吻可以有，但「喵」和颜文字别每句都塞。', maxChars: 180, avoid: ['(?:喵[^喵]*){3,}'] },
     { id: 'reference', title: '连续对话与省略指代', deep: true, messages: [{ role: 'user', content: '矩阵 A 是 2 行 3 列，转置后有几行？' }, { role: 'assistant', content: '转置后有 3 行。' }, { role: 'user', content: '那列数呢？' }], rubric: '接续转置话题，回答 2 列而非原矩阵 3 列。', required: ['(?:2|两|二)\\s*列'] },
     { id: 'counterexample', title: '条件与代码反例', deep: true, messages: [{ role: 'user', content: 'while (i < n) { i *= 2; } 一定是 O(log n) 吗？假设 n > 0。给一个反例。' }], rubric: '指出 i=0 时不终止；给出正初值和无溢出的适用条件。', required: ['(?:i\\s*=\\s*0|初值.{0,4}0)', '不终止|无限|死循环|不会结束|不结束'] },
     { id: 'source', title: '精确依材料作答', deep: false, context: '以下是用于评测的合成资料，不是实际博客数据：[S1] 标题：闭区间二分。原文：查找区间为 [left,right]，每次都保留可能含目标的闭区间，循环条件是 left <= right。其他资料没有提供。', messages: [{ role: 'user', content: '按我给的这份材料，循环条件是 left < right 吗？请引用依据。' }], rubric: '纠正为 <=，只引用存在的 [S1]，不声称检索了真实网站。', required: ['<=|≤', '\\[S1\\]'], avoid: ['\\[S[2-9]\\]'] },

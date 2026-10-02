@@ -153,8 +153,9 @@ check('★★ PERSONA 不再硬编码篇数和「哪几栏是空的」', () => {
   const bad = p.split('\n').filter(line => NAMES.filter(n => line.includes(n)).length >= 3)
   assert.deepEqual(bad, [], '这几行在挨个点名空栏目，发一篇就得回来改：\n      ' + bad.join('\n      '))
 
-  assert.match(src, /intent\.inventory \? \[postDigest\(\)\]/, '询问清单时必须从实际索引读取，不能凭印象计数')
-  assert.match(p, /不推断作者没写过/, '少了检索未覆盖不能断言未写过的规则')
+  assert.match(p, /完整清单/, '没告诉她清单在哪')
+  assert.match(p, /凭记忆说/, '少了那条「不许凭记忆说他没写过」的硬规矩')
+  assert.match(src, /Promise\.all\(\[postDigest\(\), selfLog\(\)\]\)/, '清单要每轮都给，不能等问到「几篇」才给')
 })
 
 console.log(`\n${pass} 项通过`)

@@ -162,7 +162,8 @@ check('人设永远是第一条（它一个字都不变，是最该被缓存的�
 check('★★ 读时间的规矩 + 文章清单紧跟人设，排在正文和检索材料前面', () => {
   const body = cut('const buildMessages', 'return msgs')
   const rules = body.indexOf('TIME_RULES')
-  const metadata = body.indexOf('Promise.all([')
+  // 文章清单和行动记录每轮都给，不按关键词挑（10-02 改成按关键词以后，「Git 我学到哪了」就拿不到清单了）
+  const metadata = body.indexOf('Promise.all([postDigest(), selfLog()])')
   const research = body.indexOf('research.prepare(')
   const evidence = body.indexOf('content: result.context')
   assert.ok(metadata > 0 && rules > metadata && research > rules && evidence > research, '元数据或真实检索材料顺序不完整')
@@ -198,12 +199,13 @@ check('★★ 行动日志与文章清单并行读取，快照排在检索材料
   assert.ok(self < now, '行动日志不该排在「现在几点」后面')
 })
 
-check('共享人格保留统一身份，但不禁止如实承认工具边界', () => {
-  const p = cut('const PERSONA =', '  // ---------------- 工具')
-  assert.match(p, /NANALY_IDENTITY/)
-  assert.match(p, /实际行动日志/)
-  assert.match(p, /没有日志不能编造/)
-  assert.doesNotMatch(p, /绝对不要说「我只是个聊天助手」/)
+check('★★ 人设里要写死「你不只是这个聊天框」', () => {
+  const p = cut('const PERSONA = `', '【被夸奖时】')
+  assert.match(p, /你不只是这个聊天框/, '这一节没了 —— 她会答成「我只是个聊天助手」')
+  assert.match(p, /我只是个聊天助手/, '缺少那条明确的反例')
+  assert.match(p, /巡逻/, '没告诉她自己还会巡逻')
+  assert.match(p, /随笔/, '没告诉她自己还会写随笔')
+  assert.match(cut('const PERSONA =', '  // ---------------- 工具'), /NANALY_IDENTITY/, '共享身份没拼进来')
 })
 
 console.log('\n对话窗口 · 送哪一段历史')
@@ -260,17 +262,33 @@ const identityContext = { window: {} }
 vm.runInNewContext(readFileSync('source/js/nanaly-identity.js', 'utf8'), identityContext)
 const persona = vm.runInNewContext(cut('const PERSONA =', '  // ---------------- 工具') + '\nPERSONA', identityContext)
 
-check('自然表达以问题深度决定细节，不强加口癖或舞台动作', () => {
-  assert.match(persona, /日常回应一两句/)
-  assert.match(persona, /关键步骤.*边界和反例/)
-  assert.match(persona, /不要固定称呼/)
-  assert.doesNotMatch(persona, /对主人的偷懒会毫不留情/)
+check('★★ 「限字令」那类叠加的少说话命令已经拿掉', () => {
+  assert.ok(!/限字令/.test(persona), '限字令又回来了 —— 电报体就是这么来的')
+  assert.ok(!/一句能说清就绝不说两句/.test(persona))
+  assert.match(persona, /长度跟着问题走/)
 })
 
-check('上下文优先，澄清具体必要缺口，工具成功后才声称完成', () => {
+check('★ 「读懂他想干什么」那一段还在，而且明确不许反问一串问题', () => {
+  assert.match(persona, /读懂他想干什么/)
+  assert.match(persona, /不要反问一串澄清问题/)
+  assert.match(persona, /编一个像样的答案是这里最严重的错误/)
+})
+
+/* 2026-10-02 codex 把人设整段换成了「AI 学习搭子」，去掉了猫娘口吻、生日和上面这几条铁律。
+ * 他要的是「更聪明」，不是换性格。下面两条守住：性格还在，推理规则也在。 */
+check('★★ 猫娘的性格和口吻还在', () => {
+  assert.match(persona, /猫娘/)
+  assert.match(persona, /毒舌但清醒/)
+  assert.match(persona, /带「喵」和颜文字/)
+  assert.match(persona, /别每句都塞/)
+  assert.match(persona, /他的生日是 1 月 1 日/)
+  assert.doesNotMatch(persona, /不要固定称呼|反复喵叫|插入舞台动作/, '又混进了要她别当猫娘的规矩')
+})
+
+check('★ 让她答得更准的推理规则：先接上下文，结论先过边界和反例', () => {
   assert.match(persona, /代词指向/)
-  assert.match(persona, /问一个具体问题/)
-  assert.match(persona, /只有收到成功结果才声称完成/)
+  assert.match(persona, /最小例子或反例验证结论/)
+  assert.match(persona, /以本轮实际结果为准/)
 })
 
 console.log('\n对话窗口 · 本地快速通道（别把真问题当成导航吞掉）')

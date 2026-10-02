@@ -113,7 +113,7 @@ await test('departing the teach page aborts live quality requests', async () => 
 })
 
 await test('knowledge is public, traceable and the six rubrics cover actual reported weaknesses', async () => {
-  assert.equal(identity.version, 2)
+  assert.equal(identity.version, 3)
   assert.deepEqual(knowledge.cases.map(c => c.id), ['natural', 'reference', 'counterexample', 'source', 'execution', 'attachment'])
   assert.equal(knowledge.intent('矩阵转置为什么成立').reasoning, true)
   assert.equal(knowledge.intent('你好').inventory, false)
@@ -121,7 +121,9 @@ await test('knowledge is public, traceable and the six rubrics cover actual repo
   assert.equal(report.kind, 'offline-contract')
   assert.equal(report.modelRequests, 0)
   assert.ok(report.checks.every(item => item.ok))
-  assert.equal(knowledge.assess(knowledge.cases[0], '[眯眼] 主人又偷懒了').warnings.length > 0, true)
+  // 猫娘口吻本身不扣分，只有「喵」塞得太满才提醒人工看一眼
+  assert.equal(knowledge.assess(knowledge.cases[0], '[伸了个懒腰] 那就先歇一会儿喵 (ovo)').warnings.length, 0)
+  assert.equal(knowledge.assess(knowledge.cases[0], '喵～歇会儿喵，喝口水喵').warnings.length > 0, true)
 })
 
 await test('live evaluator requires dedicated key and bounds calls without logging credentials', async () => {

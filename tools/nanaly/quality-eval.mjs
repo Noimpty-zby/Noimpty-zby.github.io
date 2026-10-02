@@ -13,7 +13,7 @@ export async function evaluate({ live = false, limit = 6, env = process.env, req
   const count = Math.max(1, Math.min(6, Math.floor(limit) || 6))
   if (!live) {
     const checks = [
-      { name: 'shared identity', ok: identity.version >= 2 && identity.prompt.includes('真实工具结果') },
+      { name: 'shared identity', ok: identity.version >= 2 && identity.prompt.includes('以本轮实际结果为准') },
       ...knowledge.facts.map(fact => ({ name: 'source:' + fact.id, ok: existsSync(resolve(project, fact.source)) })),
       { name: 'case coverage', ok: new Set(knowledge.cases.map(c => c.id)).size === 6 },
       { name: 'human review required', ok: knowledge.cases.every(c => knowledge.assess(c, '').needsHumanReview) }

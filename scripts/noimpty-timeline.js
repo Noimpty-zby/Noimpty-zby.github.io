@@ -10,6 +10,18 @@
 
 const { render } = require('../tools/study-timeline.cjs')
 
+// Hexo 会缓存没有修改过的页面正文；其他文章的增删改不会使时间线页面失效。
+// 在内置 render_post（优先级 10）之前，只清掉使用本标签的页面缓存。
+// 每次生成都重算这些聚合页，也能覆盖从 db.json 恢复的增量构建。
+hexo.extend.filter.register('before_generate', () => Promise.all(
+  hexo.model('Page').toArray()
+    .filter(page => page.content != null && !page.disableNunjucks && /\{%\s*study_timeline\s*%\}/.test(page._content))
+    .map(page => {
+      page.content = undefined
+      return page.save()
+    })
+), 5)
+
 hexo.extend.tag.register('study_timeline', () => {
   const zone = hexo.config.timezone
   const posts = hexo.locals.get('posts').toArray().map(post => {

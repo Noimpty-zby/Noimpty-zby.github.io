@@ -935,7 +935,10 @@
     const runSnippet = snippet => {
       if (fileEdit && !closeFile()) return null
       try { session.loadSnippet(snippet) } catch (problem) { session.note(problem.message); return null }
-      syncEditor(); applyLayout()
+      syncEditor()
+      // Keep the loaded script and Run action visible even before a backend is connected.
+      if (layout() === 'terminal') setMode('script')
+      else applyLayout()
       if (!connected()) { session.note('代码已经放进编辑器。连接个人后端以后，按「运行」就能执行。'); return null }
       return run()
     }

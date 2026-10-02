@@ -59,7 +59,7 @@ check('复习页、排程算法和页面脚本都在', () => {
   assert.ok(existsSync('tools/assets/review-fsrs-entry.mjs'))
   const app = readFileSync('source/js/review.js', 'utf8')
   assert.match(app, /const STORE = 'noimpty-review-v1'/)
-  assert.match(app, /value\.v === 1/)
+  assert.match(app, /value\.v !== 1/)
 })
 
 console.log(`\n${pass} review card checks passed`)

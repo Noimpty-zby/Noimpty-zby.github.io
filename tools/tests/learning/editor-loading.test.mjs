@@ -85,6 +85,52 @@ const boot = ({ page = false } = {}) => {
   }
 }
 
+test('offline article shell snippets expose the editor and Run action, including after connecting', async () => {
+  for (const language of ['git', 'linux']) {
+    const app = boot(), lab = app.mount()
+    lab.select.value = language; lab.select.fire('change')
+    assert.equal(lab.root.dataset.mode, 'terminal')
+    lab.session.edit({ code: 'original shell draft' })
+    const code = language === 'git' ? 'git status' : 'pwd'
+    lab.runSnippet({ language, code })
+    const run = lab.root.querySelector('.learning-run')
+    assert.equal(lab.root.dataset.mode, 'script', language)
+    assert.equal(lab.textarea.value, code)
+    assert.equal(run.hidden, false)
+    assert.equal(run.disabled, true, 'running waits for a backend connection')
+    assert.equal(lab.session.state.backups[0].code, 'original shell draft')
+    assert.match(lab.root.querySelector('.learning-status').textContent, /连接个人后端/)
+
+    app.window.NANALY_AGENT = {
+      configured: () => true,
+      snapshot: () => ({ connection: 'connected' }),
+      request: async path => path === '/api/workspaces' ? { workspaces: [] } : { runs: [] }
+    }
+    app.window.fire('nanaly:agent-configured'); await flush()
+    assert.equal(lab.root.dataset.mode, 'script')
+    assert.equal(run.hidden, false)
+    assert.equal(run.disabled, false, 'the promised Run action becomes usable after connecting')
+    lab.dispose()
+  }
+})
+
+test('article program and SQL snippets keep their language-specific editor modes', () => {
+  for (const [language, code, mode] of [
+    ['c', 'int main(void) { return 0; }', 'code'],
+    ['cpp', 'int main() { return 0; }', 'code'],
+    ['go', 'package main\nfunc main() {}', 'code'],
+    ['python', 'print(1)', 'code'],
+    ['mysql', 'SELECT 1;', 'sql']
+  ]) {
+    const app = boot(), lab = app.mount()
+    lab.runSnippet({ language, code })
+    assert.equal(lab.root.dataset.mode, mode, language)
+    assert.equal(lab.textarea.value, code)
+    assert.equal(lab.root.querySelector('.learning-run').hidden, false)
+    lab.dispose()
+  }
+})
+
 test('late CodeMirror upgrade preserves typed draft, backwards selection and focus', async () => {
   const app = boot(), lab = app.mount()
   assert.equal(lab.textarea.hidden, false)

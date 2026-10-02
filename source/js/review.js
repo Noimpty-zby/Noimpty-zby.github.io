@@ -22,13 +22,6 @@
   })
 
   const today = () => new Date().toLocaleDateString('sv-SE')
-  const read = () => {
-    try {
-      const value = JSON.parse(window.localStorage.getItem(STORE) || 'null')
-      return value && value.v === 1 && value.cards && typeof value.cards === 'object' ? value : null
-    } catch (_) { return null }
-  }
-  const write = state => { try { window.localStorage.setItem(STORE, JSON.stringify(state)); return true } catch (_) { return false } }
 
   // 下次复习还有多久：一律写成「N 分钟 / N 小时 / N 天 / N 个月 / N 年」。
   const span = ms => {
@@ -45,11 +38,17 @@
   const node = (tag, className, text) => { const el = document.createElement(tag); if (className) el.className = className; if (text != null) el.textContent = String(text); return el }
   const button = (text, className, click) => { const el = node('button', className, text); el.type = 'button'; el.addEventListener('click', click); return el }
 
-  let lifetime = null
+  let lifetime = null, mountedRoot = null
   const mount = async () => {
     const root = document.getElementById('review-app')
     const source = document.getElementById('review-cards')
+    // A failed/cancelled PJAX request leaves this DOM alive. Dispose only after
+    // a completed navigation actually replaces it, so that page stays usable.
+    if (mountedRoot && mountedRoot !== root) {
+      lifetime?.abort(); lifetime = null; mountedRoot = null
+    }
     if (!root || !source || root.dataset.mounted) return
+    mountedRoot = root
     root.dataset.mounted = 'yes'
     lifetime?.abort(); lifetime = new AbortController()
     const { signal } = lifetime
@@ -62,15 +61,58 @@
 
     const scheduler = F.fsrs(F.generatorParameters({ enable_fuzz: true }))
     const seriesIds = data.series.map(item => item.id)
-    const state = read() || { v: 1, cards: {}, series: seriesIds, daily: { date: today(), fresh: 0, extra: 0 } }
-    if (!Array.isArray(state.series)) state.series = seriesIds
-    const daily = () => {
-      if (state.daily?.date !== today()) state.daily = { date: today(), fresh: 0, extra: 0 }
-      return state.daily
+    const empty = () => ({ v: 1, cards: {}, series: [...seriesIds], daily: { date: today(), fresh: 0, extra: 0 } })
+    const record = value => value !== null && typeof value === 'object' && !Array.isArray(value)
+    const count = value => Number.isSafeInteger(value) && value >= 0
+    const date = value => (typeof value === 'string' || typeof value === 'number' || value instanceof Date) && Number.isFinite(new Date(value).getTime())
+    // Both storage and imports use the original v1 format. Build a fresh object,
+    // and validate every queue/FSRS field before replacing any live state.
+    const validCard = value => {
+      if (!record(value) || !date(value.due) || ![0, 1, 2, 3].includes(value.state) ||
+        !['elapsed_days', 'scheduled_days', 'reps', 'lapses', 'learning_steps'].every(key => count(value[key])) ||
+        !Number.isFinite(value.stability) || value.stability < 0 || !Number.isFinite(value.difficulty) || value.difficulty < 0 || value.difficulty > 10 ||
+        value.lapses > value.reps || (value.last_review != null && !date(value.last_review)) ||
+        (value.state !== 0 && (!value.reps || !value.stability || value.difficulty < 1 || value.last_review == null))) throw new Error('bad card')
+      const card = {
+        due: new Date(value.due).toISOString(), stability: value.stability, difficulty: value.difficulty,
+        elapsed_days: value.elapsed_days, scheduled_days: value.scheduled_days, reps: value.reps,
+        lapses: value.lapses, learning_steps: value.learning_steps, state: value.state
+      }
+      if (value.last_review != null) card.last_review = new Date(value.last_review).toISOString()
+      return card
     }
-    const progress = id => state.cards[id] ? F.TypeConvert.card(state.cards[id]) : null
+    const validate = value => {
+      if (!record(value) || value.v !== 1 || !record(value.cards) || !Array.isArray(value.series) || !value.series.length ||
+        !value.series.every(id => typeof id === 'string' && id.length) || !record(value.daily) ||
+        typeof value.daily.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.daily.date) || !date(value.daily.date) ||
+        new Date(value.daily.date).toISOString().slice(0, 10) !== value.daily.date ||
+        !count(value.daily.fresh) || !count(value.daily.extra) || !Number.isSafeInteger(NEW_PER_DAY + value.daily.extra)) throw new Error('bad progress')
+      const series = [...new Set(value.series)].filter(id => seriesIds.includes(id))
+      return {
+        v: 1, cards: Object.fromEntries(Object.entries(value.cards).map(([id, card]) => [id, validCard(card)])),
+        series: series.length ? series : [...seriesIds],
+        daily: { date: value.daily.date, fresh: value.daily.fresh, extra: value.daily.extra }
+      }
+    }
+    const read = () => {
+      const value = JSON.parse(window.localStorage.getItem(STORE) || 'null')
+      return value == null ? empty() : validate(value)
+    }
+    const locks = window.navigator?.locks
+    let state = empty(), sessionOnly = !locks?.request, pending = false
+    let storageProblem = sessionOnly ? '浏览器不支持安全地同步多个复习页面，本次进度只暂存在当前页面。离开前请导出进度。' : ''
+    try { state = read() } catch (_) {
+      sessionOnly = true
+      storageProblem = '已保存的复习进度无法读取，原记录没有被改动。本次进度只暂存在当前页面，离开前请导出进度。'
+    }
+    const daily = (value = state) => {
+      if (value.daily.date !== today()) value.daily = { date: today(), fresh: 0, extra: 0 }
+      return value.daily
+    }
+    const progress = id => Object.hasOwn(state.cards, id) ? F.TypeConvert.card(state.cards[id]) : null
+    const version = card => card ? [card.reps, card.last_review || '', card.due].join(':') : ''
 
-    let current = null, revealed = false, timer = null, storageProblem = false
+    let current = null, revealed = false, timer = null
     const queue = () => {
       const now = Date.now()
       const active = data.cards.filter(card => state.series.includes(card.series))
@@ -103,16 +145,18 @@
     card.append(meta, front, hint, back)
     const actions = node('div', 'review-actions')
     const tools = node('div', 'review-tools')
+    const warning = node('p', 'review-warn'); warning.setAttribute('role', 'status')
     const note = node('p', 'review-note', '进度只保存在这台浏览器里。换电脑或清理浏览器数据之前，先导出一份。')
     const file = node('input'); file.type = 'file'; file.accept = 'application/json,.json'; file.hidden = true
-    root.append(stats, chips, card, actions, tools, note, file)
+    root.append(stats, chips, card, actions, warning, tools, note, file)
 
     for (const item of data.series) {
       const chip = button(`${item.name} · ${item.count}`, 'review-chip', () => {
-        const on = state.series.includes(item.id)
-        if (on && state.series.length === 1) return
-        state.series = on ? state.series.filter(id => id !== item.id) : [...state.series, item.id]
-        save(); next()
+        return update(draft => {
+          const on = draft.series.includes(item.id)
+          if (!on || draft.series.length > 1) draft.series = on ? draft.series.filter(id => id !== item.id) : [...draft.series, item.id]
+          return draft
+        })
       })
       chip.dataset.series = item.id
       chips.append(chip)
@@ -129,27 +173,86 @@
       const chosen = file.files?.[0]; file.value = ''
       if (!chosen) return
       try {
-        const value = JSON.parse(await chosen.text())
-        if (!value || value.v !== 1 || typeof value.cards !== 'object') throw new Error('bad file')
+        const value = validate(JSON.parse(await chosen.text()))
+        if (signal.aborted || pending) return
+        // Reject unusable FSRS parameters before either storage or the UI changes.
+        for (const card of Object.values(value.cards)) {
+          const preview = scheduler.repeat(F.TypeConvert.card(card), new Date())
+          for (const [rating] of GRADES) validCard(preview[rating].card)
+        }
         if (!window.confirm(`导入后会用这份文件替换当前的复习进度（${Object.keys(value.cards).length} 张卡有记录），确定吗？`)) return
-        for (const key of Object.keys(state)) delete state[key]
-        Object.assign(state, value); save(); next()
-      } catch (_) { window.alert('这个文件不是导出的复习进度。') }
+        await update(() => value, true)
+      } catch (_) { if (!signal.aborted) window.alert('这个文件不是导出的复习进度。') }
     })
 
-    const save = () => { storageProblem = !write(state) }
+    // A storage event alone cannot protect read/modify/write or the daily count.
+    // Writers take the same origin-wide lock and reread inside it. Older browsers
+    // keep an exportable session copy instead of risking lost updates.
+    const update = async (change, replace = false) => {
+      if (pending || signal.aborted) return
+      pending = true
+      for (const el of root.querySelectorAll('button')) el.disabled = true
+      let attempted = false
+      const commit = canWrite => {
+        attempted = true
+        if (signal.aborted) return
+        let draft = validate(state)
+        if (!sessionOnly && !replace) {
+          try { draft = read() } catch (_) {
+            sessionOnly = true
+            storageProblem = '已保存的复习进度无法读取，原记录没有被改动。本次进度只暂存在当前页面，离开前请导出进度。'
+          }
+        }
+        const value = validate(change(draft))
+        if (canWrite && (!sessionOnly || replace)) {
+          try {
+            window.localStorage.setItem(STORE, JSON.stringify(value))
+            sessionOnly = false; storageProblem = ''
+          } catch (_) {
+            sessionOnly = true
+            storageProblem = '浏览器没有让这一页保存进度。本次进度只暂存在当前页面，离开前请导出进度。'
+          }
+        }
+        state = value
+      }
+      try {
+        if (locks?.request) await locks.request(STORE, { mode: 'exclusive', signal }, () => commit(true))
+        else commit(false)
+      } catch (_) {
+        if (!signal.aborted) {
+          if (!attempted) {
+            sessionOnly = true
+            storageProblem = '无法安全地保存复习进度。本次进度只暂存在当前页面，离开前请导出进度。'
+            commit(false)
+          } else {
+            storageProblem = '这次操作没有完成，原进度没有被改动。请导出备份后刷新页面重试。'
+          }
+        }
+      } finally {
+        pending = false
+        for (const el of root.querySelectorAll('button')) el.disabled = false
+        if (!signal.aborted) next()
+      }
+    }
     const show = () => {
-      if (!current || revealed) return
+      if (!current || revealed || pending) return
       revealed = true; back.hidden = false; render()
       actions.querySelector('.review-grade')?.focus({ preventScroll: true })
     }
     const grade = rating => {
-      if (!current || !revealed) return
-      const before = progress(current.id) || F.createEmptyCard(new Date())
-      const isNew = !state.cards[current.id]
-      state.cards[current.id] = scheduler.next(before, new Date(), rating).card
-      if (isNew) daily().fresh++
-      save(); next()
+      if (!current || !revealed || pending) return
+      const id = current.id, expected = version(state.cards[id])
+      return update(draft => {
+        // A second tab may already have answered the card still visible here.
+        // Do not schedule or count that stale answer a second time.
+        if (version(draft.cards[id]) !== expected) return draft
+        const day = daily(draft), isNew = !draft.cards[id]
+        if (isNew && day.fresh >= NEW_PER_DAY + day.extra) return draft
+        const before = isNew ? F.createEmptyCard(new Date()) : F.TypeConvert.card(draft.cards[id])
+        draft.cards[id] = validCard(scheduler.next(before, new Date(), rating).card)
+        if (isNew) day.fresh++
+        return draft
+      })
     }
     const next = () => {
       clearTimeout(timer)
@@ -160,6 +263,7 @@
     }
     const render = () => {
       const { due, fresh, freshLeft, next: upcoming, total } = queue()
+      warning.textContent = storageProblem; warning.hidden = !storageProblem
       stats.textContent = `今天要复习 ${due.length} 张 · 新卡还能学 ${Math.min(freshLeft, fresh.length)} 张 · 共 ${total} 张`
       for (const chip of chips.children) chip.setAttribute('aria-pressed', String(state.series.includes(chip.dataset.series)))
       actions.replaceChildren()
@@ -169,7 +273,7 @@
         if (upcoming) lines.push(`下一张卡在 ${span(upcoming - Date.now())}后到期。`)
         if (fresh.length && freshLeft === 0) lines.push(`今天的 ${NEW_PER_DAY + daily().extra} 张新卡已经学完，剩下 ${fresh.length} 张新卡明天继续。`)
         front.replaceChildren(...lines.map(line => node('p', '', line)))
-        if (fresh.length && freshLeft === 0) actions.append(button('再学 10 张新卡', 'review-more', () => { daily().extra += 10; save(); next() }))
+        if (fresh.length && freshLeft === 0) actions.append(button('再学 10 张新卡', 'review-more', () => update(draft => { daily(draft).extra += 10; return draft })))
         // 刚答错的卡几分钟后就到期，到时自动翻出来。
         if (upcoming && upcoming - Date.now() < SOON) timer = setTimeout(next, Math.max(1000, upcoming - Date.now() + 500))
         return
@@ -200,9 +304,16 @@
         choice.title = `快捷键 ${rating}`
         actions.append(choice)
       }
-      if (storageProblem) actions.append(node('p', 'review-warn', '浏览器没有让这一页保存进度，关掉页面后这次的复习记录会丢失。'))
     }
 
+    window.addEventListener('storage', event => {
+      if (event.key !== STORE || sessionOnly || pending || signal.aborted) return
+      try { state = read(); next() } catch (_) {
+        sessionOnly = true
+        storageProblem = '其他页面保存的复习进度无法读取，当前进度保留在本页。离开前请导出进度。'
+        render()
+      }
+    }, { signal })
     document.addEventListener('keydown', event => {
       if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return
       if (event.target.closest?.('input, textarea, select, [contenteditable="true"]')) return
@@ -213,7 +324,6 @@
     next()
   }
 
-  document.addEventListener('pjax:send', () => { lifetime?.abort(); lifetime = null })
   document.addEventListener('pjax:complete', () => { void mount() })
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { void mount() }, { once: true })
   else void mount()

@@ -338,6 +338,12 @@ html:is(.learning-page, .learning-is-open) :is(#noimpty-music-player, #mao-toggl
   .learning-console-tabs { gap: 15px; }
   .learning-result-state { max-width: 128px; }
 }
+/* ▶ in the toolbar of article code blocks that can run as they are (learning-lab.js decorateBlocks). */
+#article-container .highlight-tools .learning-run-block { display: inline-flex; align-items: center; justify-content: center; min-width: 24px; min-height: 24px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+#article-container .highlight-tools .learning-run-block i { font-size: .9em; }
+#article-container .highlight-tools .learning-run-block:hover i, #article-container .highlight-tools .learning-run-block:focus-visible i { color: var(--lab-accent, #ba547d); }
+#article-container .highlight-tools .learning-run-block:focus-visible { outline: 2px solid var(--lab-accent, #ba547d); outline-offset: 1px; border-radius: 4px; }
+.noimpty-private-locked .learning-run-block { display: none !important; }
 .learning-lab [hidden], .learning-article-holder[hidden], .learning-mobile-switch[hidden], .learning-divider[hidden] { display: none !important; }
 .noimpty-private-locked .learning-article-holder, .noimpty-private-locked .learning-launch, .noimpty-private-locked #learning-lab, .noimpty-private-locked .learning-mobile-switch, .noimpty-private-locked .learning-divider { display: none !important; }
 @media (prefers-reduced-motion: reduce) {

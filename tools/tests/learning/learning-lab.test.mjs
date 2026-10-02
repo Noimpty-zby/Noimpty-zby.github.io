@@ -295,6 +295,49 @@ await check('exercise reference tests remain immutable when the learner edits su
   session.select('go'); assert.equal(session.state.exercise, null)
   session.select('c'); assert.equal(session.state.exercise.id, 'exercise-1')
 })
+await check('article code blocks get a run button only when they run as they are', () => {
+  // Plain copies: objects built inside the vm context have that realm's prototype.
+  const run = (...args) => { const value = api.blockSnippet(...args); return value && { ...value } }
+  // Whole programs run; fragments of a larger program (DSA functions, UE5 classes) do not.
+  assert.deepEqual(run('c', '#include <stdio.h>\nint main(void) {\n    puts("hi");\n}\n'), { language: 'c', code: '#include <stdio.h>\nint main(void) {\n    puts("hi");\n}\n' })
+  assert.equal(run('c', 'void Display(struct Array arr) {\n    printf("%d ", arr.A[0]);\n}'), null)
+  // A short C example without its #include lines gets the standard headers it uses.
+  assert.equal(run('c', 'int main(void) {\n    int *p = malloc(4);\n    printf("%zu\\n", sizeof(p));\n    free(p);\n}').code, '#include <stdio.h>\n#include <stdlib.h>\n\nint main(void) {\n    int *p = malloc(4);\n    printf("%zu\\n", sizeof(p));\n    free(p);\n}\n')
+  assert.equal(run('c', 'int main() {\n    int a = 10;\n    return 0;\n}').code, 'int main() {\n    int a = 10;\n    return 0;\n}\n')
+  assert.equal(run('cpp', 'void ARogueItemChest::Interact_Implementation(APawn* InstigatorPawn)\n{\n}'), null)
+  assert.equal(run('cpp', 'int main() { return 0; }').language, 'cpp')
+  assert.equal(run('go', 'func add(a, b int) int { return a + b }'), null)
+  assert.equal(run('go', 'package main\n\nfunc main() {}').language, 'go')
+  assert.equal(run('python', 'print(1)').language, 'python')
+  // Shell blocks follow the article: Linux posts to the Linux shell, Git posts to the Git workspace.
+  assert.deepEqual(run('bash', 'ls -la          # 等价于 ls -l -a\n', 'linux'), { language: 'linux', code: 'ls -la          # 等价于 ls -l -a' })
+  assert.equal(run('bash', 'git switch master\ngit merge feature\n# Updating 18f9e7f..505a06e', 'git').language, 'git')
+  assert.equal(run('sh', 'pwd', 'linux').language, 'linux')
+  // Blocks that only show output or need a placeholder filled in stay plain.
+  assert.equal(run('bash', '# On branch master\n# nothing to commit', 'git'), null)
+  assert.equal(run('bash', 'git merge <分支名>', 'git'), null)
+  assert.equal(run('bash', 'git switch <branch>', 'git'), null)
+  assert.equal(run('bash', 'cat < a.txt > copy.txt', 'linux').language, 'linux')
+  assert.equal(run('text', 'Hello'), null)
+  assert.equal(run('diff', '-a\n+b'), null)
+  assert.equal(run('bash', '   \n'), null)
+})
+await check('an article code block replaces its language draft and keeps the old draft as a restore point', () => {
+  const { session } = setup()
+  session.select('c'); session.edit({ code: 'my own C draft', stdin: '1 2' })
+  session.select('linux')
+  const loaded = session.loadSnippet({ language: 'c', code: 'int main(void) { return 0; }\n' })
+  assert.equal(loaded.lessonId, 'c'); assert.equal(session.state.lessonId, 'c')
+  assert.equal(session.state.code, 'int main(void) { return 0; }\n'); assert.equal(session.state.stdin, '')
+  assert.equal(session.state.backups[0].code, 'my own C draft'); assert.equal(session.state.backups[0].lessonId, 'c')
+  assert.match(session.state.notice, /恢复点/)
+  // Loading the same block again keeps no duplicate restore point; an empty draft keeps none.
+  session.loadSnippet({ language: 'c', code: 'int main(void) { return 0; }\n' }); assert.equal(session.state.backups.length, 1)
+  session.loadSnippet({ language: 'git', code: 'git status' }); assert.equal(session.state.backups.length, 1)
+  assert.doesNotMatch(session.state.notice, /恢复点/)
+  assert.throws(() => session.loadSnippet({ language: 'csharp', code: 'class A {}' }), /不能在练习台里运行/)
+  assert.throws(() => session.loadSnippet({ language: 'c', code: '  ' }), /不能在练习台里运行/)
+})
 await check('generated practice and pre-load draft backups survive local reload', () => {
   const disk = storage(); const first = setup({ storage: disk }); first.session.edit({ code: 'draft before generation' }); first.session.loadPractice(practice())
   const reloaded = setup({ storage: disk }); assert.equal(reloaded.session.state.exercise.id, 'exercise-1')

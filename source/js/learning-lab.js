@@ -300,6 +300,21 @@
       state.notice = '已载入 AI 生成练习；参考解已通过所列测试，当前起始代码尚未运行。原草稿保留在恢复点中。'; emit()
       return { loaded: true, id: prepared.id, revision: state.revision, verification: prepared.verification }
     }
+    // A code block from an article replaces the draft of its language. The draft it replaces
+    // stays as a restore point, the same way an AI exercise keeps it.
+    const loadSnippet = ({ language, code } = {}) => {
+      if (closed || !permitted()) throw new Error('请先解锁练习页面。')
+      if (state.busy) throw new Error('当前代码仍在执行，请等待完成后再载入。')
+      const lesson = LESSONS.find(item => item.language === language)
+      const text = typeof code === 'string' ? clip(code, MAX_CODE) : ''
+      if (!lesson || !text.trim()) throw new Error('这段代码不能在练习台里运行。')
+      select(lesson.id)
+      const kept = !!state.code.trim() && state.code !== text
+      if (kept) state.backups = [{ id: `draft-${Date.now()}-${++sequence}`, at: new Date().toISOString(), lessonId: state.lessonId, ...draft() }, ...state.backups].slice(0, 10)
+      edit({ code: text, stdin: '', tests: [], exercise: null })
+      state.notice = kept ? '已载入文章里的这段代码，原来的草稿保留在恢复点中。' : '已载入文章里的这段代码。'; emit()
+      return { loaded: true, lessonId: lesson.id, revision: state.revision }
+    }
     const restoreBackup = id => {
       if (closed || state.busy || !permitted()) return false
       const record = state.backups.find(item => item.id === id)
@@ -347,7 +362,7 @@
     const dispose = () => { save(); cancel(); activeSync?.abort(); invalidateWorkspaces(); closed = true }
     const initial = state.drafts[state.lessonId] || { code: '', stdin: '', tests: [], exercise: null }
     state.code = initial.code; state.stdin = initial.stdin; state.tests = cleanTests(initial.tests); state.exercise = optionalPractice(initial.exercise)
-    return { state, edit, select, run, cancel, reset, restore, loadPractice, restoreBackup, persistence, setAutoCheck, canAutoCheck, autoCheckCurrent, clearHistory, syncHistory, restoreWorkspaces, invalidateWorkspaces, adoptWorkspace, note, dispose }
+    return { state, edit, select, run, cancel, reset, restore, loadPractice, loadSnippet, restoreBackup, persistence, setAutoCheck, canAutoCheck, autoCheckCurrent, clearHistory, syncHistory, restoreWorkspaces, invalidateWorkspaces, adoptWorkspace, note, dispose }
   }
 
   // A terminal's connection: a one-time ticket from the authenticated API, then a socket that
@@ -916,6 +931,14 @@
       fallback.value = value; select.value = state.lessonId
     }
     const loadPractice = exercise => { const result = session.loadPractice(exercise); syncEditor(); applyLayout(); return result }
+    // ▶ on an article code block: load it into the editor, then run it the way 「运行」 would.
+    const runSnippet = snippet => {
+      if (fileEdit && !closeFile()) return null
+      try { session.loadSnippet(snippet) } catch (problem) { session.note(problem.message); return null }
+      syncEditor(); applyLayout()
+      if (!connected()) { session.note('代码已经放进编辑器。连接个人后端以后，按「运行」就能执行。'); return null }
+      return run()
+    }
     const jump = diagnostic => {
       if (!diagnostic.line) return
       if (adapter) return adapter.jump(diagnostic)
@@ -1091,7 +1114,7 @@
     // Opened next to an article: start in the language the article teaches.
     if (article?.language && LANGUAGE_NAMES[article.language] && session.state.lessonId !== article.language) session.select(article.language)
     syncEditor(); setPanel(viewKey() ? 'terminal' : 'output'); applyLayout(); connectionChanged()
-    return { session, context, loadPractice, dispose: () => {
+    return { session, context, loadPractice, runSnippet, dispose: () => {
       window.clearTimeout(timer); window.clearTimeout(publishTimer); lifetime.abort(); unsubscribe?.()
       // Closing the sockets detaches this page: shells keep running on the server for a while.
       for (const entry of Object.values(views)) { entry.link?.close(); entry.task?.close(); entry.view?.dispose() }
@@ -1114,7 +1137,65 @@
     }
     return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
   }
-  const cleanup = () => { mountedPage = null; mounted?.dispose(); mounted = null; launch?.remove(); launch = null; document.documentElement.classList.remove('learning-is-open', 'learning-page'); delete document.documentElement.dataset.learningPane }
+  // Which article code blocks run as they are. C/C++ needs a main and Go a main package; most
+  // DSA and UE5 blocks are fragments of a larger program and get no button. Shell blocks go to
+  // the article's shell (Git posts to the Git workspace) unless they carry a <占位符> to fill in.
+  const PLACEHOLDER = /<[^<>\s]*[\u4e00-\u9fff][^<>\n]*>|<[a-z][\w-]*>/i
+  // Posts often leave out the #include lines to keep a C example short. GCC 14 rejects the
+  // implicit declarations that follow, so add the standard headers the block actually uses.
+  const C_HEADERS = [['stdio.h', /\b(?:printf|puts|scanf|putchar|getchar|fprintf|sprintf|snprintf|fgets)\s*\(/], ['stdlib.h', /\b(?:malloc|calloc|realloc|free|exit|rand|srand|qsort|abs)\s*\(/], ['string.h', /\b(?:memcpy|memset|memmove|strlen|strcmp|strcpy|strcat|strncpy)\s*\(/], ['stdbool.h', /\b(?:bool|true|false)\b/]]
+  const withHeaders = code => {
+    const missing = C_HEADERS.filter(([header, used]) => used.test(code) && !new RegExp(`#\\s*include\\s*<${header.replace('.', '\\.')}>`).test(code)).map(([header]) => `#include <${header}>`)
+    return missing.length ? missing.join('\n') + '\n\n' + code : code
+  }
+  const blockSnippet = (name, text, shell = 'linux') => {
+    const kind = BLOCK_LANGUAGES[name]
+    const code = String(text == null ? '' : text).replace(/\s+$/, '')
+    if (!kind || !code.trim() || code.length > MAX_CODE) return null
+    if (kind === 'c') return /\bmain\s*\(/.test(code) ? { language: kind, code: withHeaders(code) + '\n' } : null
+    if (kind === 'cpp') return /\bmain\s*\(/.test(code) ? { language: kind, code: code + '\n' } : null
+    if (kind === 'go') return /^package\s+main\b/m.test(code) ? { language: kind, code: code + '\n' } : null
+    if (kind !== 'linux') return { language: kind, code: code + '\n' }
+    // Output is pasted in as # comments and may contain <file>; only the commands are checked.
+    const commands = code.split('\n').map(line => line.replace(/(^|\s)#.*$/, '')).filter(line => line.trim())
+    if (!commands.length || commands.some(line => PLACEHOLDER.test(line))) return null
+    return { language: shell === 'git' ? 'git' : 'linux', code }
+  }
+  const blockText = figure => {
+    const pre = figure.querySelector('td.code pre') || figure.querySelector('pre')
+    if (!pre) return ''
+    const lines = pre.querySelectorAll(':scope > .line')
+    return lines.length ? Array.from(lines, line => line.textContent).join('\n') : pre.textContent
+  }
+  // Butterfly adds each block's toolbar on its own schedule, so wait a little for late ones.
+  let blockWatch = null
+  const decorateBlocks = (article, onRun) => {
+    blockWatch?.disconnect(); blockWatch = null
+    const shell = articleLanguage(article) === 'git' ? 'git' : 'linux'
+    const attach = () => {
+      let waiting = 0
+      for (const figure of article.querySelectorAll('figure.highlight')) {
+        if (figure.dataset.learningRun) continue
+        const name = Array.from(figure.classList).find(item => BLOCK_LANGUAGES[item])
+        const snippet = name ? blockSnippet(name, blockText(figure), shell) : null
+        if (!snippet) { figure.dataset.learningRun = 'no'; continue }
+        const tools = figure.querySelector('.highlight-tools')
+        if (!tools) { waiting++; continue }
+        figure.dataset.learningRun = 'yes'
+        const run = node('button', 'learning-run-block')
+        run.type = 'button'; run.title = '在练习台运行'; run.setAttribute('aria-label', '在练习台运行这段代码')
+        const icon = node('i', 'fas fa-play'); icon.setAttribute('aria-hidden', 'true'); run.append(icon)
+        run.addEventListener('click', event => { event.stopPropagation(); onRun(snippet) })
+        tools.insertBefore(run, tools.querySelector('.copy-button'))
+      }
+      return waiting
+    }
+    if (!attach() || typeof MutationObserver !== 'function') return
+    blockWatch = new MutationObserver(() => { if (!attach()) { blockWatch?.disconnect(); blockWatch = null } })
+    blockWatch.observe(article, { childList: true, subtree: true })
+    window.setTimeout(() => { blockWatch?.disconnect(); blockWatch = null }, 5000)
+  }
+  const cleanup = () => { blockWatch?.disconnect(); blockWatch = null; mountedPage = null; mounted?.dispose(); mounted = null; launch?.remove(); launch = null; document.documentElement.classList.remove('learning-is-open', 'learning-page'); delete document.documentElement.dataset.learningPane }
   const mount = () => {
     const host = document.getElementById('learning-lab')
     const article = host ? null : document.querySelector('#post #article-container')
@@ -1149,14 +1230,22 @@
       const close = () => { mounted?.dispose(); mounted = null; launch?.focus(); window.scrollTo({ top: scrollY, behavior: 'instant' }) }
       document.documentElement.classList.add('learning-is-open'); setPane('code')
       mounted = mountLab(holder, data, close)
+      mounted.showCode = () => setPane('code')
       const originalDispose = mounted.dispose
       mounted.dispose = () => { originalDispose(); holder.remove(); divider.remove(); mobileSwitch.remove(); articleTitle.remove(); layout.style.removeProperty('--learning-reading-width'); document.documentElement.classList.remove('learning-is-open'); delete document.documentElement.dataset.learningPane; post.scrollTop = 0 }
       layout.scrollIntoView({ block: 'start', behavior: 'instant' }); holder.querySelector('select')?.focus({ preventScroll: true })
     }, 'learning-launch')
     article.before(launch)
+    decorateBlocks(article, snippet => {
+      if (!unlocked()) return
+      if (!mounted) launch.click()
+      if (!mounted) return
+      mounted.showCode?.()
+      void mounted.runSnippet(snippet)
+    })
   }
 
-  window.NOIMPTY_LEARNING = Object.freeze({ createSession, createTerminalLink, lessons: LESSONS, mount, articleLanguage, context: () => unlocked() ? mounted?.context() || null : null })
+  window.NOIMPTY_LEARNING = Object.freeze({ createSession, createTerminalLink, lessons: LESSONS, mount, articleLanguage, blockSnippet, context: () => unlocked() ? mounted?.context() || null : null })
   window.LEARNING_LAB = Object.freeze({
     context: () => unlocked() ? mounted?.context() || null : null,
     loadPractice: exercise => { if (!unlocked() || !mounted) throw new Error('请先解锁并打开练习页面，再载入练习。'); return mounted.loadPractice(exercise) },

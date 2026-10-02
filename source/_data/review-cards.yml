@@ -331,6 +331,42 @@ linux:
     back: '`&>` 是 bash 的简写。Ubuntu 和 Debian 上的 `sh` 其实是 dash，它把 `&` 理解成后台运行，`> all.txt` 变成了一次单独的清空操作，结果输出照常显示在屏幕上，all.txt 是空的。'
   - front: '`/dev/null` 是什么？'
     back: 一个特殊的文件，写进去的内容会被直接丢弃。比如 `命令 2>/dev/null` 可以不显示报错。
+- post: Linux-Command-Line-Chapter9
+  cards:
+  - front: '`A | B` 把什么接到了什么上？'
+    back: 把 A 的标准输出（1 号）接到 B 的标准输入（0 号）上。连接由 Shell 在启动两条命令之前完成，中间是内核里的一块缓冲区，不经过任何文件。
+  - front: '把 `date | rev` 误写成 `date > rev` 会怎样？'
+    back: Shell 不会报错，而是把 `date` 的结果写进一个名叫 `rev` 的文件，`rev` 这条命令根本没有运行。重定向符号后面是文件名，管道符号后面是命令。
+  - front: '`echo /usr/bin | ls` 为什么列出的还是当前目录？'
+    back: 管道传过去的是数据的内容，不是参数。`ls` 只看参数、从不读标准输入，所以管道里的 `/usr/bin` 被忽略了。
+  - front: '`cat a.txt missing.txt | wc -l` 里的报错会进入管道吗？怎样让它进入？'
+    back: 不会，管道只连接 1 号，报错写在 2 号上，仍然显示在屏幕上。写成 `2>&1 |` 或者 bash 的简写 `|&` 才会让报错也进入管道。
+  - front: '第八章说 `2>&1` 要写在 `>` 后面，为什么 `cmd 2>&1 | wc` 写在 `|` 前面也有效？'
+    back: Shell 先把管道接好，再从左往右处理这条命令自己的重定向。处理 `2>&1` 时 1 号已经接在管道上了，所以 2 号跟过去的也是管道。
+  - front: '`ls > list.txt | wc -l` 为什么输出 0？'
+    back: 1 号先接到管道上，随后又被 `> list.txt` 改接到了文件，所以 `ls` 的结果全部进了 list.txt，`wc` 一行都没有收到。
+  - front: '`date +%T; sleep 3 | date +%T` 的两个时间为什么是同一秒？'
+    back: 管道两边的命令是同时启动的，右边的 `date` 不会等 `sleep` 结束。Shell 只是要等管道里的命令全部结束，才会执行后面的命令。
+  - front: '`yes` 永远不会自己停下来，`yes | head -3` 为什么能立刻结束？'
+    back: 两边同时运行，`head` 读完三行就退出了。管道的另一头没有命令在读以后，`yes` 再往里写就会被系统直接结束。
+  - front: '`cat f.txt | sort > f.txt` 的结果是什么？'
+    back: 不确定。`cat` 读文件和 Shell 清空文件同时进行，多数时候得到空文件，偶尔内容完好，大文件还可能只剩一部分。应该先写到另一个文件，再用 `mv` 替换回来。
+  - front: '`tr s S sally.txt` 为什么报错？'
+    back: '`tr` 只读标准输入，不接受文件名参数，sally.txt 被当成了多余的参数（extra operand）。要写成 `cat sally.txt | tr s S` 或 `tr s S < sally.txt`。'
+  - front: "`echo 'hello world' | tr 'world' 'WORLD'` 的输出是什么？为什么？"
+    back: '`heLLO WORLD`。`tr` 按字符一一对应（w→W、o→O、r→R、l→L、d→D），并不认识 world 这个词，所以 hello 里的 l 和 o 也被换掉了。替换字符串要用别的工具，比如 `sed`。'
+  - front: '`tr -d` 和 `tr -s` 分别做什么？'
+    back: '`-d` 删除 SET1 里的所有字符，比如 `tr -d s` 删掉所有小写 s；`-s` 把连续重复的同一个字符压缩成一个，比如 `tr -s '' ''` 让单词之间只留一个空格。'
+  - front: '`tr -d [:alpha:]` 为什么要写成 `tr -d ''[:alpha:]''`？'
+    back: 不加引号时，Shell 把 `[:alpha:]` 当成方括号通配符，匹配名字是 `:`、`a`、`l`、`p`、`h` 之一的单字符文件。如果当前目录里有文件 `a`，`tr` 实际收到的就是 `tr -d a`，而且不会有任何报错。
+  - front: '`[:blank:]` 和 `[:space:]` 有什么区别？'
+    back: '`[:blank:]` 只有空格和制表符；`[:space:]` 还包括换行符，用它删除空白会把所有行连成一行。'
+  - front: '`tr -d ''你''` 能只删掉「你」这个字吗？'
+    back: 不能。GNU tr 按字节处理，「你」在 UTF-8 里占 3 个字节，这 3 个字节会从所有汉字里删掉，含有相同字节的「好」「世」也被删坏，输出变成乱码。
+  - front: '`ls /usr/bin | tee cmds.txt | wc -l` 中 `tee` 做了什么？'
+    back: 把经过的数据写进 cmds.txt，同时原样交给 `wc -l`。所以屏幕上照常显示行数，cmds.txt 里保存了完整的列表。名字来自水管的 T 形三通。
+  - front: '`tee` 会覆盖文件还是追加？能保存报错吗？'
+    back: 默认和 `>` 一样先清空再写，追加要用 `tee -a`（相当于 `>>`）。`tee` 只能收到标准输出，想保存报错要在前面加 `2>&1`。
 git:
 - post: Git-Chapter0-Command-Line
   cards:

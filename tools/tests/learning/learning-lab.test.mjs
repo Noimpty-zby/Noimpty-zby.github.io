@@ -318,6 +318,12 @@ await check('article code blocks get a run button only when they run as they are
   assert.equal(run('bash', 'git merge <分支名>', 'git'), null)
   assert.equal(run('bash', 'git switch <branch>', 'git'), null)
   assert.equal(run('bash', 'cat < a.txt > copy.txt', 'linux').language, 'linux')
+  // 终端实录：只取 $ 开头的命令、去掉提示符，输出行不能当成命令贴进终端（第六到九章里有几十段这样的块）
+  assert.deepEqual(run('bash', '$ date | rev\n6202 TSC 10:93:12 2  tcO irF', 'linux'), { language: 'linux', code: 'date | rev' })
+  assert.deepEqual(run('bash', '$ cat a.txt missing.txt | wc -l\ncat: missing.txt: No such file or directory\n1\n$ cat a.txt missing.txt |& wc -l\n2', 'linux'),
+    { language: 'linux', code: 'cat a.txt missing.txt | wc -l\ncat a.txt missing.txt |& wc -l' })
+  assert.equal(run('bash', '$ cat <文件名>\nhello', 'linux'), null)
+  assert.equal(run('bash', 'echo $HOME', 'linux').code, 'echo $HOME')
   assert.equal(run('text', 'Hello'), null)
   assert.equal(run('diff', '-a\n+b'), null)
   assert.equal(run('bash', '   \n'), null)

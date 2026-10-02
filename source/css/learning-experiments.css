@@ -1,9 +1,8 @@
 /* Article experiments: all graphics are local SVG/canvas and controls stay native. */
 .learning-experiment { --le-text: #493a50; --le-muted: #746079; --le-line: #d8c8d3; --le-card: #fffdf9; --le-soft: #f8edf2; --le-accent: #9d3d68; --le-blue: #315f9e; container-type: inline-size; margin: 2rem 0; padding: clamp(16px, 3vw, 28px); border: 1px solid var(--le-line); border-radius: 18px; background: var(--le-card); color: var(--le-text); box-shadow: 0 8px 30px #59395009; }
 [data-theme='dark'] .learning-experiment { --le-text: #efe2ed; --le-muted: #c4b3c7; --le-line: #62516a; --le-card: #28212e; --le-soft: #382c40; --le-accent: #f0a4c1; --le-blue: #a5c6fb; }
-#article-container .learning-experiment h2 { margin: .3rem 0 .7rem; padding: 0; font-size: clamp(1.25rem, 3vw, 1.55rem); }
-#article-container .learning-experiment h2::before { display: none; }
 #article-container .learning-experiment p { margin: .65rem 0; }
+#article-container .learning-experiment .learning-experiment__title { margin: .3rem 0 .7rem; color: var(--le-text); font-size: clamp(1.25rem, 3vw, 1.55rem); font-weight: 700; line-height: 1.4; }
 .learning-experiment__eyebrow { color: var(--le-accent); font-size: .76rem; font-weight: 700; letter-spacing: .12em; }
 .learning-experiment [hidden] { display: none !important; }
 .learning-experiment button, .learning-experiment input, .learning-experiment select { font: inherit; }

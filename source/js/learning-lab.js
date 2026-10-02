@@ -737,6 +737,8 @@
     const session = createSession({ request, storage, source: () => snippetSource, available: () => !!window.NANALY_AGENT?.configured(), permitted: unlocked, changed: () => render() })
     const shellModes = { git: 'terminal', linux: 'terminal' }
     try { const saved = JSON.parse(readStore(MODE_KEY) || '{}'); for (const id of SHELLS) if (['terminal', 'script'].includes(saved?.[id])) shellModes[id] = saved[id] } catch (_) {}
+    // 他自己选的默认模式；临时换的视图只改 shellModes，不进这里，也就不会被顺带存下来
+    const savedModes = { ...shellModes }
     // terminal / script for Git and Linux, code for C/C++/Go/Python, sql for MySQL; file while a
     // file opened from the terminal with `code` is in the editor.
     const layout = () => {
@@ -949,11 +951,12 @@
       if (viewKey()) void showTerminal({ focus: current === 'terminal' })
       render()
     }
-    const setMode = next => {
+    // remember: false 只是这一次临时换个视图（比如载入一道错题要看代码），不改他选好的默认模式
+    const setMode = (next, { remember = true } = {}) => {
       const language = session.state.lessonId
       if (!SHELLS.has(language) || shellModes[language] === next) return
       shellModes[language] = next
-      writeStore(MODE_KEY, JSON.stringify(shellModes))
+      if (remember) { savedModes[language] = next; writeStore(MODE_KEY, JSON.stringify(savedModes)) }
       applyLayout()
       if (next === 'script') focusEditor()
     }
@@ -975,11 +978,12 @@
     const runSnippet = snippet => {
       if (fileEdit && !closeFile()) return null
       try { session.loadSnippet(snippet) } catch (problem) { session.note(problem.message); return null }
-      syncEditor()
-      // Keep the loaded script and Run action visible even before a backend is connected.
-      if (layout() === 'terminal') setMode('script')
-      else applyLayout()
-      if (!connected()) { session.note('代码已经放进编辑器。连接个人后端以后，按「运行」就能执行。'); return null }
+      syncEditor(); applyLayout()
+      // ▶ 不改他选的模式：终端模式就贴进真终端执行，脚本模式就在编辑器里运行
+      if (!connected()) {
+        session.note(layout() === 'terminal' ? '这段命令已经备好了。连接个人后端以后再点一次 ▶，就会在终端里运行。' : '代码已经放进编辑器。连接个人后端以后，按「运行」就能执行。')
+        return null
+      }
       return run()
     }
     const historyAPI = () => window.NOIMPTY_LEARNING_HISTORY
@@ -1025,7 +1029,7 @@
         savedAttemptId = last !== original && last.id && !value.reviews?.some(item => item.attemptId === last.id) ? last.id : null
         evidenceTitle.value = value.title; evidenceProblem.value = original.problem; evidenceStdin.value = session.state.stdin; evidenceExplanation.value = ''
         evidence.open = true; syncEditor()
-        if (layout() === 'terminal') setMode('script'); else applyLayout()
+        if (layout() === 'terminal') setMode('script', { remember: false }); else applyLayout()
         evidenceLink.href = '/growth/?case=' + encodeURIComponent(value.id)
         evidenceStatus.textContent = original.result.evidence === 'terminal'
           ? '已恢复最初失败的代码。旧解法仍隐藏；上次输入是终端按键记录，请按题目重新输入，再运行并保存这次尝试。'
@@ -1042,7 +1046,7 @@
       const result = session.loadSnippet(snippet)
       snippetSource = snippet.sourceUrl ? { title: snippet.title || '互动文章', url: snippet.sourceUrl } : snippetSource
       historyCase = null; latestAttempt = null; savedAttemptId = null
-      syncEditor(); if (layout() === 'terminal') setMode('script'); else applyLayout()
+      syncEditor(); if (layout() === 'terminal') setMode('script', { remember: false }); else applyLayout()
       return result
     }
     const jump = diagnostic => {
@@ -1280,10 +1284,14 @@
     if (kind === 'cpp') return /\bmain\s*\(/.test(code) ? { language: kind, code: code + '\n' } : null
     if (kind === 'go') return /^package\s+main\b/m.test(code) ? { language: kind, code: code + '\n' } : null
     if (kind !== 'linux') return { language: kind, code: code + '\n' }
+    // 终端实录（$ 命令 + 输出）只取 $ 开头的命令行、去掉提示符；输出原样贴进终端会被当成命令执行
+    const lines = code.split('\n')
+    const transcript = lines.some(line => /^\$ /.test(line))
+    const script = transcript ? lines.filter(line => /^\$ /.test(line)).map(line => line.slice(2)).join('\n') : code
     // Output is pasted in as # comments and may contain <file>; only the commands are checked.
-    const commands = code.split('\n').map(line => line.replace(/(^|\s)#.*$/, '')).filter(line => line.trim())
+    const commands = script.split('\n').map(line => line.replace(/(^|\s)#.*$/, '')).filter(line => line.trim())
     if (!commands.length || commands.some(line => PLACEHOLDER.test(line))) return null
-    return { language: shell === 'git' ? 'git' : 'linux', code }
+    return { language: shell === 'git' ? 'git' : 'linux', code: script }
   }
   const blockText = figure => {
     const pre = figure.querySelector('td.code pre') || figure.querySelector('pre')

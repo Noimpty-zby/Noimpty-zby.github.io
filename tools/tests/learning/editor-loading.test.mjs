@@ -80,27 +80,28 @@ const boot = ({ page = false } = {}) => {
     } }
     scripts.find(script => script.src.includes('learning-editor.js')).onload()
   }
-  return { scripts, timers, adapters, window, document, mount, resolveEditor,
+  return { scripts, timers, adapters, storage, window, document, mount, resolveEditor,
     mountPage: () => { window.NOIMPTY_LEARNING.mount(); return pageHost },
     setPage: value => { pageHost = value }
   }
 }
 
-test('offline article shell snippets expose the editor and Run action, including after connecting', async () => {
+// ▶ 不改他选的模式。10-02 曾改成「终端模式下点 ▶ 就切到脚本模式」，而且把这个切换存成了默认，
+// 点过一次以后 Linux / Git 每次打开都是脚本模式，他要的是真终端。
+test('▶ on an article shell block keeps the terminal mode and never rewrites the saved default', async () => {
   for (const language of ['git', 'linux']) {
     const app = boot(), lab = app.mount()
     lab.select.value = language; lab.select.fire('change')
     assert.equal(lab.root.dataset.mode, 'terminal')
+    const saved = app.storage.get('noimpty-code-shell-mode') ?? null
     lab.session.edit({ code: 'original shell draft' })
     const code = language === 'git' ? 'git status' : 'pwd'
     lab.runSnippet({ language, code })
-    const run = lab.root.querySelector('.learning-run')
-    assert.equal(lab.root.dataset.mode, 'script', language)
-    assert.equal(lab.textarea.value, code)
-    assert.equal(run.hidden, false)
-    assert.equal(run.disabled, true, 'running waits for a backend connection')
+    assert.equal(lab.root.dataset.mode, 'terminal', language)
+    assert.equal(lab.session.state.code, code)
     assert.equal(lab.session.state.backups[0].code, 'original shell draft')
-    assert.match(lab.root.querySelector('.learning-status').textContent, /连接个人后端/)
+    assert.match(lab.root.querySelector('.learning-status').textContent, /连接个人后端以后再点一次 ▶/)
+    assert.equal(app.storage.get('noimpty-code-shell-mode') ?? null, saved, '点 ▶ 改写了他存下的默认模式')
 
     app.window.NANALY_AGENT = {
       configured: () => true,
@@ -108,11 +109,23 @@ test('offline article shell snippets expose the editor and Run action, including
       request: async path => path === '/api/workspaces' ? { workspaces: [] } : { runs: [] }
     }
     app.window.fire('nanaly:agent-configured'); await flush()
-    assert.equal(lab.root.dataset.mode, 'script')
-    assert.equal(run.hidden, false)
-    assert.equal(run.disabled, false, 'the promised Run action becomes usable after connecting')
+    assert.equal(lab.root.dataset.mode, 'terminal')
     lab.dispose()
   }
+})
+
+test('▶ in script mode stays in script mode with the code in the editor', () => {
+  const app = boot()
+  app.storage.set('noimpty-code-shell-mode', JSON.stringify({ linux: 'script' }))
+  const lab = app.mount()
+  lab.select.value = 'linux'; lab.select.fire('change')
+  assert.equal(lab.root.dataset.mode, 'script')
+  lab.runSnippet({ language: 'linux', code: 'pwd' })
+  assert.equal(lab.root.dataset.mode, 'script')
+  assert.equal(lab.textarea.value, 'pwd')
+  assert.equal(lab.root.querySelector('.learning-run').hidden, false)
+  assert.equal(JSON.parse(app.storage.get('noimpty-code-shell-mode')).linux, 'script')
+  lab.dispose()
 })
 
 test('article program and SQL snippets keep their language-specific editor modes', () => {

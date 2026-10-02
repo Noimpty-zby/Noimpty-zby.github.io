@@ -54,13 +54,15 @@ const T = (id, text, when) => ({ id, text, done: false, when })
 
 /* 判据是「任务日期之后有没有这个信号」，信号直接从仓库里数 ——
  * 所以测试要真的往沙盒里放文章，而不是喂一个 newPosts 数组。
- * 时间写 00:01：listPosts 会滤掉日期还没到的文章（_config.yml 里 future: false），
- * 写 10:00 的话上午跑这个文件就会飘。 */
+ * 时间写 00:00:00：listPosts 会滤掉日期还没到的文章（_config.yml 里 future: false），
+ * 写 10:00 的话上午跑这个文件就会飘。原来写的是 00:01，北京时间零点后的那一分钟里照样飘 ——
+ * 2026-10-03 00:00:23 的 CI 就挂在这儿（UTC 16:00 正好是北京零点）。listPosts 用的是 <=，
+ * 写 00:00:00 就从零点那一刻起算已发布。 */
 const POSTS_BOX = join(box, 'source/_posts')
 const addPost = (slug, title, day, leaf) => {
   const cats = leaf ? `categories:\n  - [课外, 测试, ${leaf}]\n` : ''
   writeFileSync(join(POSTS_BOX, slug + '.md'),
-    `---\ntitle: ${title}\ndate: ${day} 00:01:00\n${cats}---\n\n正文，随便写够几个字。\n`)
+    `---\ntitle: ${title}\ndate: ${day} 00:00:00\n${cats}---\n\n正文，随便写够几个字。\n`)
   return slug
 }
 const dropPost = slug => { try { rmSync(join(POSTS_BOX, slug + '.md')) } catch (_) {} }

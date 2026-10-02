@@ -1,6 +1,7 @@
 /**
- * Builds the offline, self-hosted code studio bundles: the CodeMirror editor and the
- * xterm.js terminal (loaded only when a terminal opens). All bundled third-party
+ * Builds the offline, self-hosted bundles: the code studio's CodeMirror editor and
+ * xterm.js terminal (loaded only when a terminal opens), and the review page's ts-fsrs
+ * scheduler (loaded only on /review/). All bundled third-party
  * packages are MIT licensed; exact copyright/license texts from installed
  * packages are preserved at the end of each distributed file.
  */
@@ -13,7 +14,8 @@ import { Script } from 'node:vm';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const bundles = [
   { entry: 'tools/assets/learning-editor-entry.mjs', output: 'source/js/learning-editor.js', banner: 'Learning IDE editor: CodeMirror 6' },
-  { entry: 'tools/assets/learning-terminal-entry.mjs', output: 'source/js/learning-terminal.js', banner: 'Learning IDE terminal: xterm.js' }
+  { entry: 'tools/assets/learning-terminal-entry.mjs', output: 'source/js/learning-terminal.js', banner: 'Learning IDE terminal: xterm.js' },
+  { entry: 'tools/assets/review-fsrs-entry.mjs', output: 'source/js/review-fsrs.js', banner: 'Review cards scheduler: ts-fsrs' }
 ];
 for (const bundle of bundles) {
   const outfile = join(root, bundle.output);

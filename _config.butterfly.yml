@@ -37,6 +37,7 @@ menu:
     资讯: /news/ || fas fa-newspaper
     日程: /schedule/ || fas fa-calendar-days
     练习台: /learn/ || fas fa-code
+    复习: /review/ || fas fa-layer-group
     归档: /archives/ || fas fa-box-archive
     分类: /categories/ || fas fa-folder-open
     标签: /tags/ || fas fa-tags
@@ -1150,6 +1151,7 @@ inject:
     - <link rel="stylesheet" href="/css/nanaly-agent.css">
     - <link rel="stylesheet" href="/css/learning-lab.css">
     - <link rel="stylesheet" href="/css/noimpty-cast.css">
+    - <link rel="stylesheet" href="/css/review.css">
     # 顺序有讲究：protected-manifest 给出锁清单，privacy-gate 立刻据此打遮罩，
     # noimpty-search 依赖 gate 存下的暗号才能解密索引。三者不能调换。
     - <script src="/js/protected-manifest.js"></script>
@@ -1184,6 +1186,9 @@ inject:
     - <script src="/js/learning-lab.js"></script>
     # Terminal recordings ({% cast %}): loads asciinema-player only on pages that have one.
     - <script src="/js/noimpty-cast.js"></script>
+    # Review cards (/review/): the ts-fsrs scheduler loads only there, from this tag's fingerprinted src.
+    - <script type="text/plain" id="review-fsrs-src" src="/js/review-fsrs.js"></script>
+    - <script src="/js/review.js"></script>
     # xterm.js for the code studio terminal. text/plain: not fetched or run here; learning-lab.js
     # loads it on first use from this tag's src, which carries the content fingerprint.
     - <script type="text/plain" id="learning-terminal-src" src="/js/learning-terminal.js"></script>

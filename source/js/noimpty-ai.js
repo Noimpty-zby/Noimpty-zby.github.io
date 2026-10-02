@@ -1159,7 +1159,7 @@
       const said = await runAction({ do: 'music', op }, succeeded => { if (succeeded && !signal?.aborted) onSuccess() })
       signal?.throwIfAborted()
       if (said) return say(t, `${said}。`)
-      return say(t, '这个页面上没有找到播放器。')
+      return say(t, '这个页面上没找到播放器。')
     }
     if (/^(回到?顶(部|上)?|上去|回顶)\s*$/.test(t)) {
       const said = await runAction({ do: 'top' })

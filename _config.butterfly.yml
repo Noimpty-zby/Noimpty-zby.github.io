@@ -1149,6 +1149,7 @@ inject:
     - <link rel="stylesheet" href="/css/mao-play.css">
     - <link rel="stylesheet" href="/css/nanaly-agent.css">
     - <link rel="stylesheet" href="/css/learning-lab.css">
+    - <link rel="stylesheet" href="/css/noimpty-cast.css">
     # 顺序有讲究：protected-manifest 给出锁清单，privacy-gate 立刻据此打遮罩，
     # noimpty-search 依赖 gate 存下的暗号才能解密索引。三者不能调换。
     - <script src="/js/protected-manifest.js"></script>
@@ -1181,6 +1182,8 @@ inject:
     # CodeMirror loads when the studio opens; ordinary reading does not download it.
     - <script type="text/plain" id="learning-editor-src" src="/js/learning-editor.js"></script>
     - <script src="/js/learning-lab.js"></script>
+    # Terminal recordings ({% cast %}): loads asciinema-player only on pages that have one.
+    - <script src="/js/noimpty-cast.js"></script>
     # xterm.js for the code studio terminal. text/plain: not fetched or run here; learning-lab.js
     # loads it on first use from this tag's src, which carries the content fingerprint.
     - <script type="text/plain" id="learning-terminal-src" src="/js/learning-terminal.js"></script>

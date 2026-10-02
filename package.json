@@ -16,6 +16,7 @@
     "svgcheck": "node tools/checks/svg-check.mjs",
     "emotioncheck": "node tools/checks/emotion-check.mjs",
     "vendor:live2d": "node tools/assets/vendor-live2d.mjs",
+    "vendor:asciinema": "node tools/assets/vendor-asciinema.mjs",
     "server:agent": "node server/index.mjs",
     "test:runner": "NANALY_DOCKER_TESTS=1 node --test tools/tests/server/docker*.integration.test.mjs",
     "deploy:backend": "bash tools/deploy/backend.sh",
@@ -70,6 +71,7 @@
   },
   "devDependencies": {
     "@napi-rs/canvas": "1.0.9",
+    "asciinema-player": "3.17.0",
     "esbuild": "^0.28.2",
     "js-yaml": "^4.3.2",
     "pixi-live2d-display-lipsyncpatch": "^0.5.0-ls-8",

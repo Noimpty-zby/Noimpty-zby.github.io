@@ -1,0 +1,32 @@
+/* 终端录屏（scripts/noimpty-cast.js 的 {% cast %}，source/js/noimpty-cast.js 播放）。
+ * 配色取自代码小屋终端（tools/assets/learning-terminal-entry.mjs 的 THEMES），
+ * 同一套提示符颜色在文章和练习台里看起来是一样的。 */
+#article-container .noimpty-cast { margin: 1.4em 0; }
+#article-container .noimpty-cast__player { overflow: hidden; border: 1px solid #ecdde8; border-radius: 10px; background: #fffdf9; }
+#article-container .noimpty-cast__fallback { margin: 0; padding: 1.2em; color: #7e6c82; font-size: .9em; text-align: center; }
+#article-container .noimpty-cast figcaption { margin-top: .5em; color: #8a7c8d; font-size: .88em; text-align: center; }
+
+/* 播放器自己的样式表是后加载的，选择器要带上 #article-container 才压得住它的默认配色。 */
+#article-container .asciinema-player-theme-noimpty {
+  --term-color-foreground: #46364f;
+  --term-color-background: #fffdf9;
+  --term-color-0: #3b2f40; --term-color-1: #bd3a58; --term-color-2: #2f7d55; --term-color-3: #94620f;
+  --term-color-4: #3f5db3; --term-color-5: #a3407f; --term-color-6: #237a87; --term-color-7: #8a7c8d;
+  --term-color-8: #7e6c82; --term-color-9: #d0506f; --term-color-10: #3a8f63; --term-color-11: #a8741d;
+  --term-color-12: #5570c4; --term-color-13: #b8549a; --term-color-14: #2f8c99; --term-color-15: #46364f;
+}
+[data-theme='dark'] #article-container .noimpty-cast__player { border-color: #48364d; background: #231e29; }
+[data-theme='dark'] #article-container .noimpty-cast figcaption { color: #b9a8bd; }
+[data-theme='dark'] #article-container .asciinema-player-theme-noimpty {
+  --term-color-foreground: #f0e0ed;
+  --term-color-background: #231e29;
+  --term-color-0: #3a3140; --term-color-1: #ff8fa3; --term-color-2: #9ad4a8; --term-color-3: #efc98a;
+  --term-color-4: #a7b8ff; --term-color-5: #f0a6d8; --term-color-6: #8fd6e0; --term-color-7: #e6d9e3;
+  --term-color-8: #8d7a95; --term-color-9: #ffa9b9; --term-color-10: #b3e6bf; --term-color-11: #f7dba8;
+  --term-color-12: #c1ceff; --term-color-13: #f7c2e6; --term-color-14: #aee6ee; --term-color-15: #fff7fc;
+}
+/* 浅色底上白色的播放按钮看不清，换成站点的粉色。 */
+#article-container .asciinema-player-theme-noimpty .ap-overlay-start .ap-play-button svg .ap-play-btn-fill { fill: #ba547d; }
+#article-container .asciinema-player-theme-noimpty .ap-overlay-start .ap-play-button svg .ap-play-btn-stroke { stroke: #ba547d; }
+[data-theme='dark'] #article-container .asciinema-player-theme-noimpty .ap-overlay-start .ap-play-button svg .ap-play-btn-fill { fill: #f0a4c1; }
+[data-theme='dark'] #article-container .asciinema-player-theme-noimpty .ap-overlay-start .ap-play-button svg .ap-play-btn-stroke { stroke: #f0a4c1; }

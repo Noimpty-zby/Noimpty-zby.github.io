@@ -10,7 +10,7 @@ tags:
   - 定时器(Timer)
   - RadialForce
   - Instigator
-description: ActionRoguelike 课程 Assignment 2 的完整复盘。先清掉第三、四章遗留的七处崩溃级与逻辑级隐患，再抽出弹丸基类，实现具备引力吞噬的黑洞弹与两段计时的传送弹，最后用 FTimerDelegate 把三个技能的发射流程收口成一套。覆盖 UCLASS(Abstract)、PostInitializeComponents 绑定时机、TeleportTo 的 bNoCheck 陷阱、FTimerHandle 生命周期，以及 check / ensure / if 的选择标准。
+description: 这是 ActionRoguelike 课程 Assignment 2 的完整复盘。首先清理第三、四章遗留下来的七处崩溃级和逻辑级隐患，然后抽出弹丸基类，实现带有引力吞噬效果的黑洞弹和分两段计时的传送弹，最后使用 FTimerDelegate 把三个技能的发射流程合并成一套。内容涵盖 UCLASS(Abstract)、PostInitializeComponents 的绑定时机、TeleportTo 的 bNoCheck 陷阱、FTimerHandle 的生命周期，以及 check、ensure 和 if 的选择标准。
 cover: /img/covers/UE5-ActionRoguelike-Assignment2.svg
 series: UE5 ActionRoguelike
 privacy: protected
@@ -22,7 +22,7 @@ private_section: 课外
 
 本文是 Tom Looman《UE5 C++》**Assignment 2** 的完整复盘。
 
-本次使用的开发环境：
+本次使用的开发环境如下：
 
 - Unreal Engine `5.6.1`
 - Rider
@@ -31,15 +31,15 @@ private_section: 课外
 
 ## 这次作业和作业一的区别
 
-作业一是**从零造一个新东西**（爆炸桶），所有代码都是新写的，不需要动已有的类。
+作业一是**从零开始制作一个新东西**（爆炸桶），所有代码都是新写的，不需要改动已有的类。
 
-作业二是**在既有代码上长新功能**。它要新增两个技能，而这两个技能会：
+而作业二是**在已有的代码上扩展新功能**。它要新增两个技能，而这两个技能会带来下面这些影响：
 
-- 用到第二章写的弹丸类（要抽基类）
-- 用到第三章写的交互组件所在的角色/控制器（要加输入绑定）
-- 大量销毁 Actor（会踩到第三章遗留的悬空指针问题）
+- 要用到第二章写的弹丸类（因此需要抽出基类）；
+- 要用到第三章写的交互组件所在的角色和控制器（因此需要添加输入绑定）；
+- 会大量销毁 Actor（因此会遇到第三章遗留下来的悬空指针问题）。
 
-所以这次真正的第一步不是写黑洞，而是**把前面欠的账还掉**。第一节整节都在做这件事，它不属于作业清单，但如果跳过，后面所有 bug 都要多排查一层。
+所以这次真正的第一步并不是写黑洞弹，而是**先把前面遗留的问题解决掉**。第一节整节都在做这件事，它不属于作业清单，但如果跳过这一步，后面所有的 bug 都要多排查一层。
 
 ## 作业原始需求
 
@@ -94,10 +94,10 @@ private_section: 课外
 
 ## 最终效果
 
-- 鼠标左键发射魔法弹（原有功能，行为不变）
-- `Q` 发射黑洞弹：缓慢飞行、穿透一切、吸引周围物理方块并销毁、5 秒后消失、不影响玩家
-- `F` 发射传送弹：0.2 秒后（或撞到东西时）爆炸并停在原地、再过 0.2 秒把角色传送过去
-- 三个技能共用同一套发射流程，代码只有一份
+- 按鼠标左键发射魔法弹（原有的功能，行为保持不变）；
+- 按 `Q` 发射黑洞弹，它飞得很慢，能穿透一切，会吸引周围的物理方块并将其销毁，5 秒后消失，而且不影响玩家；
+- 按 `F` 发射传送弹，它在 0.2 秒后（或者撞到东西时）爆炸并停在原地，再过 0.2 秒，把角色传送过去；
+- 三个技能共用同一套发射流程，代码只有一份。
 
 ---
 
@@ -121,16 +121,16 @@ private_section: 课外
 
 ## 1.1 为什么必须先做这一步
 
-第三、四章一路攒下一张"遗留待办"清单，当时的判断都是"不影响跑通，以后再说"。
+第三、四章一路积累下了一张「遗留待办」清单，当时对这些问题的判断都是「不影响跑通，以后再说」。
 
-作业二让其中三条从"以后再说"变成了"现在必须做"，原因只有一个：**黑洞弹会大批量销毁 Actor**。
+而作业二让其中的三条从「以后再说」变成了「现在必须做」，原因只有一个，那就是**黑洞弹会大批量地销毁 Actor**。
 
-在此之前，关卡里没有任何东西会在运行时消失，所以"扫到的 Actor 一直存在"这个隐含假设从来没被打破过。黑洞一上线，假设立刻失效：
+在此之前，关卡里没有任何东西会在运行时消失，所以「扫描到的 Actor 会一直存在」这个隐含的假设从来没有被打破过。而黑洞弹一加入，这个假设就立刻失效了：
 
-- 交互组件的 `SelectedActor` 可能指向一个已被黑洞销毁的方块
-- `OverlapMultiByChannel` 返回的组件，其宿主 Actor 可能在同一帧被销毁
+- 交互组件的 `SelectedActor` 可能会指向一个已经被黑洞销毁的方块；
+- `OverlapMultiByChannel` 返回的组件，它的宿主 Actor 可能在同一帧里被销毁。
 
-这两条都是空指针解引用，直接崩。
+这两种情况都是空指针解引用，程序会直接崩溃。
 
 ## 1.2 崩溃级：三处指针
 
@@ -140,15 +140,15 @@ private_section: 课外
 UEnhancedInputComponent* EnhancedInput = CastChecked<UEnhancedInputComponent>(InputComponent);
 ```
 
-选 `CastChecked` 而不是 `Cast` + 判空，判断依据是：**这个条件为假时，程序还能不能正常工作？**
+这里选择 `CastChecked`，而不是 `Cast` 加判空，判断的依据是，**这个条件为假时，程序还能不能正常工作？**
 
-如果项目设置里的 Default Input Component Class 不是 `UEnhancedInputComponent`，那么优雅降级的结果是"游戏能启动，但一个按键都没反应"。这种 bug 排查起来能耗掉半天。所以这里要的不是降级，是**立刻崩**。
+如果项目设置里的 Default Input Component Class 不是 `UEnhancedInputComponent`，那么优雅降级的结果就是「游戏能够启动，但是所有按键都没有反应」。这种 bug 排查起来能耗掉半天的时间。所以这里需要的不是降级，而是**立刻崩溃**。
 
-`CastChecked` 在 Shipping 构建里断言会被编译掉，退化成 `static_cast`。所以它保护的是**开发期**——这没问题，因为这类配置错误必然在开发期暴露。
+`CastChecked` 中的断言在 Shipping 构建里会被编译掉，退化成 `static_cast`。所以它保护的是**开发期**，这并没有问题，因为这类配置错误必然会在开发期暴露出来。
 
 ### ② `GetPawn()` 未判空
 
-交互组件挂在 `ARoguePlayerController` 上，而坐标在 Pawn 身上，所以必须走一次 `GetPawn()`：
+交互组件挂在 `ARoguePlayerController` 上，而坐标在 Pawn 身上，所以必须调用一次 `GetPawn()`：
 
 ```cpp
 APlayerController* PC = CastChecked<APlayerController>(GetOwner());
@@ -162,22 +162,22 @@ if (MyPawn == nullptr)
 FVector Center = MyPawn->GetActorLocation();
 ```
 
-`TickComponent` 从组件注册那一刻就开始跑，而 `Possess` 是 GameMode 后续才做的；角色死亡到重生之间也有一段真空期。这两个时刻 `GetPawn()` 返回 `nullptr`。
+`TickComponent` 从组件注册的那一刻起就开始执行，而 `Possess` 是 GameMode 在之后才做的；另外，从角色死亡到重生之间也有一段空档期。在这两个时刻，`GetPawn()` 都会返回 `nullptr`。
 
-**这里同一个函数里出现了两种相反的处理，值得对照记住**：
+**在同一个函数里出现了两种相反的处理方式，值得对照着记住**：
 
 | 指针 | 为空意味着 | 处理 |
 | --- | --- | --- |
 | `GetOwner()` 不是 PlayerController | 程序结构错了 | `CastChecked`，立刻崩 |
 | `GetPawn()` 为空 | 正常运行时状态 | 静默 `if` + `return` |
 
-这里有一条容易走的弯路：把 `Center` 改成 `GetOwner()->GetActorLocation()`，想省掉那次 `GetPawn()`。
+这里有一条容易走的弯路，就是把 `Center` 改成 `GetOwner()->GetActorLocation()`，想省掉那次 `GetPawn()` 调用。
 
-**这行代码能编译、能运行、不崩，但结果是错的。** `AController` 确实是 `AActor`，有 Transform，但它的 `bAttachToPawn` 默认为 `false`——控制器的 Transform **不跟随** Pawn，它停在 GameMode 生成它时的位置，也就是世界原点附近。结果是交互检测球固定在世界原点，跟角色位置完全无关。
+**这行代码能够编译、能够运行，也不会崩溃，但结果是错误的。** `AController` 确实是一个 `AActor`，也有 Transform，但它的 `bAttachToPawn` 默认为 `false`，也就是说，控制器的 Transform **不会跟随** Pawn，而是停留在 GameMode 生成它时的位置，也就是世界原点附近。结果就是交互检测球固定在世界原点，和角色的位置完全无关。
 
-发现它只花了两秒，因为 Tick 里那行 `DrawDebugSphere` 画的就是 `Center`——白球没跟着角色，而是待在地图角落。**这是把中间状态可视化的探针第一次真正兑现价值。**
+这个问题很快就能发现，因为 Tick 里那行 `DrawDebugSphere` 画的正是 `Center`，白色的球没有跟着角色移动，而是待在地图的角落里。**在这里，把中间状态可视化的探针真正发挥了作用。**
 
-结论：**控制器是玩家意志的代理，没有身体。它的坐标是无意义的。**
+结论是，**控制器是玩家意志的代理，它没有身体，所以它的坐标是没有意义的。**
 
 ### ③ `SelectedActor` 未判空
 
@@ -196,7 +196,7 @@ void URogueInteractionComponent::Interact()
 }
 ```
 
-判断"该不该判空"最可靠的办法是**点进去看被调函数开头有没有 `check`**。UHT 生成的 `Execute_Interact` 长这样：
+判断「应不应该判空」，最可靠的办法是**点进被调用的函数，看它的开头有没有 `check`**。UHT 生成的 `Execute_Interact` 是这样的：
 
 ```cpp
 static void Execute_Interact(UObject* O)
@@ -210,13 +210,13 @@ static void Execute_Interact(UObject* O)
 }
 ```
 
-两句 `check` 就是它的**前置条件**。外面这两个 `if` 一一对应地把这两个前置条件挡在门外。有几个 `check`，外面就该有几道守卫——这比背规则管用。
+这两句 `check` 就是它的**前置条件**。外面的两个 `if` 一一对应地把这两个前置条件挡在了门外。函数里有几个 `check`，外面就应该有几道守卫，这比死记规则更管用。
 
 ## 1.3 `check` / `ensure` / `if` 的选择标准
 
-这三者在写的时候很容易反复摇摆，最后收敛成一条标准：
+写代码时，很容易在这三者之间反复摇摆，最后可以归结为一条标准：
 
-> **这个条件为假，是"不该发生的事"，还是"正常会发生的事"？**
+> **这个条件为假，是「不应该发生的事」，还是「正常情况下会发生的事」？**
 
 | 场景 | 是不是正常 | 该不该告诉我 | 写法 |
 | --- | --- | --- | --- |
@@ -225,21 +225,21 @@ static void Execute_Interact(UObject* O)
 | 玩家对着空气按 E | 是，每天几百次 | 不该 | `if` + `return` |
 | 目标没实现交互接口 | 否，资产配错了 | 该，但不该崩 | `if (!ensure(...))` |
 
-把 `SelectedActor` 的判空写成 `ensure(SelectedActor);` 是个常见写法，两个错误叠在一起：
+把 `SelectedActor` 的判空写成 `ensure(SelectedActor);` 是一种常见的写法，但它有两个错误叠加在一起。
 
-**① `ensure` 不中断执行。** 它的语义是"检查、报告一次、**返回 bool 继续往下跑**"。所以它触发之后紧跟着还是会执行 `Execute_Interact(nullptr)`，然后被里面的 `check` 崩掉——想防的崩溃一次都没防住。正确用法是接住返回值：`if (!ensure(X)) { return; }`。
+**① `ensure` 不会中断执行。** 它的语义是「检查，报告一次，然后**返回一个 bool 值，继续往下执行**」。所以它触发之后，紧接着还是会执行 `Execute_Interact(nullptr)`，然后被函数里面的 `check` 弄崩溃，想要防止的崩溃一次都没有防住。正确的用法是接住它的返回值，写成 `if (!ensure(X)) { return; }`。
 
-**② 这里根本不该用 `ensure`。** 玩家对着空气按 E 完全正常，而 `ensure` 在开发版本里会弹断言。测关卡时手贱按一下就吃一次。
+**② 这里根本不应该使用 `ensure`。** 玩家对着空气按 E 是完全正常的操作，而 `ensure` 在开发版本里会弹出断言，测试关卡时随手按一下就会弹出一次。
 
-`ensure` 默认整个进程只触发一次（`ensureAlways` 才每次都报），这个设计本身就说明它是给"稀有异常"准备的。
+`ensure` 默认在整个进程里只触发一次（`ensureAlways` 才会每次都报告），这个设计本身就说明它是为「罕见的异常」准备的。
 
 ## 1.4 逻辑级：三处筛选
 
 ### ④ `SelectedActor` 每帧未重置
 
-原来的写法是"循环里找到更好的就赋值"，没找到就保留上一帧的值。走开之后 `SelectedActor` 还指着那个方块，黑洞把它销毁之后就是悬空指针。
+原来的写法是「在循环里找到更好的候选就赋值」，如果没找到，就保留上一帧的值。于是角色走开之后，`SelectedActor` 仍然指着那个方块，而黑洞把方块销毁之后，它就变成了悬空指针。
 
-修法不是在 Tick 开头写 `SelectedActor = nullptr`，而是循环结束后**无条件赋值**：
+修复的方法并不是在 Tick 的开头写 `SelectedActor = nullptr`，而是在循环结束之后**无条件地赋值**：
 
 ```cpp
 AActor* BestActor = nullptr;
@@ -247,7 +247,7 @@ AActor* BestActor = nullptr;
 SelectedActor = BestActor;
 ```
 
-**能用一次无条件赋值解决的，不要用"先清空再有条件填充"**——后者有两个写入点，就有两倍的出错面。
+**如果能用一次无条件赋值来解决，就不要使用「先清空，再有条件地填充」的写法。** 因为后者有两个写入点，出错的可能性也就翻了一倍。
 
 ### ⑤ `Overlap.GetActor()` 裸解引用
 
@@ -259,11 +259,11 @@ if (OverlapActor == nullptr)
 }
 ```
 
-重叠查询返回的是**组件**列表，`GetActor()` 是从组件反查宿主的弱引用解析，可以返回 `nullptr`。
+重叠查询返回的是**组件**的列表，`GetActor()` 是从组件反查宿主的弱引用解析，它可能返回 `nullptr`。
 
-注意这里用 `continue` 而不是 `return`：**一个候选无效不该终止整轮筛选**，后面可能还有合法目标。这和函数开头的 `return`（前提不成立，整件事做不了）是两种不同的语义。
+需要注意，这里用的是 `continue` 而不是 `return`，因为**一个候选无效，不应该终止整轮的筛选**，后面可能还有合法的目标。这和函数开头的 `return`（前提条件不成立，整件事都做不了）是两种不同的语义。
 
-顺带把两次 `GetActor()` 合并成一次缓存。
+同时顺便把两次 `GetActor()` 调用合并成了一次，并缓存它的结果。
 
 ### ⑥ 点积没有阈值
 
@@ -271,57 +271,57 @@ if (OverlapActor == nullptr)
 float HighestDotResult = 0.7f;   // 原来是 -1.0f
 ```
 
-原来初始化成 `-1.0f`，意味着**任何方向都能通过**——正后方的点积正好是 `-1.0`，只要不是浮点意义上的精确相等，背后的宝箱也会被选中。改之前先转身实测一次，能确认红框真的还在。
+原来的初始值是 `-1.0f`，这意味着**任何方向都能通过**。正后方的点积正好是 `-1.0`，只要不是浮点意义上的精确相等，背后的宝箱也会被选中。修改之前，可以先转身实际测试一次，确认红框确实还在。
 
-`0.7` 约等于 45° 半角。这里有个顺手的收益：**阈值和"取最大值"合并成了同一个机制**。低于 0.7 的候选连进入 `if` 的资格都没有，不需要额外写一句 `if (DotResult < Threshold) continue;`。用初始值编码约束，省一个分支，也省掉了"阈值和初始值不一致"这种未来的 bug。
+`0.7` 大约等于 45° 的半角。这里还有一个附带的好处，**阈值和「取最大值」被合并成了同一个机制**。点积低于 0.7 的候选连进入 `if` 的资格都没有，所以不需要再额外写一句 `if (DotResult < Threshold) continue;`。用初始值来表达约束，既省掉了一个分支，也避免了将来出现「阈值和初始值不一致」这种 bug。
 
 ### ⑦ `Implements<U>()` 校验
 
-碰撞通道已经过滤过一轮，为什么代码还要再验一次？因为**碰撞通道和接口实现是两张互相独立、由人手工维护的表，引擎不做任何交叉校验**：
+碰撞通道已经过滤过一轮了，为什么代码里还要再验证一次呢？因为**碰撞通道和接口实现是两张互相独立、由人手工维护的表，引擎不会对它们做任何交叉校验**：
 
-1. 美术在编辑器里给一个装饰物设了 `Interaction` 预设，但没实现接口——碰撞预设是运行时数据，编译器看不见。
-2. 有人在蓝图的 Class Settings 里删掉了接口——同样不触发编译错误。
-3. **通道在组件上，接口在 Actor 上。** 一个 Actor 挂十个组件，只要其中一个开了 Interaction 通道，这个 Actor 就进候选列表。第三章把宝箱盖子设成 `NoCollision` 来避免重复计数，那是**内容层面的修补**，不是代码层面的保证。
+1. 美术人员在编辑器里给一个装饰物设置了 `Interaction` 预设，但它并没有实现接口。碰撞预设是运行时的数据，编译器看不到。
+2. 有人在蓝图的 Class Settings 里删掉了接口，这同样不会触发编译错误。
+3. **通道设置在组件上，而接口实现在 Actor 上。** 一个 Actor 挂着十个组件，只要其中一个开启了 Interaction 通道，这个 Actor 就会进入候选列表。第三章把宝箱盖子设成 `NoCollision` 来避免重复计数，那只是**内容层面的修补**，而不是代码层面的保证。
 
-概括一句：**碰撞通道是"谁能被扫到"的过滤器，不是"谁能被交互"的类型断言。**
+概括来说，**碰撞通道是决定「谁能被扫描到」的过滤器，而不是判断「谁能被交互」的类型断言。**
 
-注意模板参数是 **U 类**：
+需要注意，模板参数使用的是 **U 类**：
 
 ```cpp
 SelectedActor->Implements<URogueInteractionInterface>()
 ```
 
-只有 U 类进反射系统、有 `UClass` 和 `StaticClass()`，而 `Implements` 是查表操作。写成 `Implements<IRogueInteractionInterface>` 是编译不过的。
+只有 U 类会进入反射系统，拥有 `UClass` 和 `StaticClass()`，而 `Implements` 是一种查表操作。如果写成 `Implements<IRogueInteractionInterface>`，是无法通过编译的。
 
-**凡是"查表 / 路由"的场合一律用 U 类，凡是 C++ 继承链上的场合用 I 类。** 同一行代码里两个都会出现：`IRogueInteractionInterface::Execute_Interact` 用 I（那是静态成员函数），模板参数用 U。
+**凡是「查表」或者「路由」的场合，一律使用 U 类；凡是 C++ 继承链上的场合，使用 I 类。** 在同一行代码里，两者都会出现，`IRogueInteractionInterface::Execute_Interact` 使用的是 I 类（因为那是一个静态成员函数），而模板参数使用的是 U 类。
 
-也不能退回去用 `Cast<IRogueInteractionInterface>`——那是第四章修掉的 bug：纯蓝图实现的接口在 C++ 层没有 I 类实例，转型必然返回 `nullptr`。
+这里也不能退回去使用 `Cast<IRogueInteractionInterface>`，那是第四章修复过的 bug，用纯蓝图实现的接口，在 C++ 层没有 I 类的实例，所以转型必然会返回 `nullptr`。
 
 ## 1.5 一个附带发现：调试球写进了循环里
 
-跑起来之后发现一个现象：周围没有可交互物时，那个白色调试球会消失，靠近才又出现。
+运行之后发现了一个现象，周围没有可交互的物体时，那个白色的调试球会消失，靠近可交互物体时才又出现。
 
-原因是 `DrawDebugSphere` 被写进了 `for` 循环体内。`Overlaps` 为空 → 循环一次都不执行 → 球不画；同时捞到三个物体 → 球被重复画三遍。
+原因是 `DrawDebugSphere` 被写进了 `for` 循环的循环体里。如果 `Overlaps` 为空，循环一次都不会执行，球也就不会被画出来；而如果同时捕获到三个物体，球就会被重复画三遍。
 
-**这个 bug 把探针的价值整个反转了。** 调试球存在的意义，就是在"什么都没发生"的时候还能看见检测范围——半径够不够、中心在不在角色身上。这些问题恰恰只在没捞到东西时才需要排查，而它偏偏在那个时候消失。
+**这个 bug 让探针的作用完全反了过来。** 调试球存在的意义，就是在「什么都没有发生」的时候，仍然能看见检测的范围，比如半径够不够、中心在不在角色身上。这些问题恰恰只有在没有捕获到东西时才需要排查，而它偏偏在那个时候消失了。
 
-顺带说清楚这个球是什么：它**不是**碰撞体，不参与任何碰撞。`DrawDebugSphere` 只是往渲染器的调试线框列表里塞一组线段。真正做检测的是 `OverlapMultiByChannel`，那是一次瞬时查询，不留下任何东西。两者靠同一个 `Center` 和 `InteractionRadius` 保持一致，但代码上没有强制关系。
+顺便说明一下这个球是什么。它**并不是**碰撞体，也不参与任何碰撞。`DrawDebugSphere` 只是往渲染器的调试线框列表里加入了一组线段。真正负责检测的是 `OverlapMultiByChannel`，它是一次瞬时的查询，不会留下任何东西。两者依靠同一个 `Center` 和 `InteractionRadius` 保持一致，但在代码上并没有强制的关联。
 
-**调试可视化是"我以为我在算什么"的显示，不是"我实际在算什么"。两者对不上的时候，错的可能是任何一边。**
+**调试可视化显示的是「以为代码在算什么」，而不是「代码实际在算什么」。当两者对不上的时候，出错的可能是其中任何一方。**
 
 ## 1.6 关卡准备
 
-作业"准备级别"两条，加上一个作业没写但必须做的判断。
+作业的「准备级别」有两条要求，此外还有一个作业没有写、但必须要做的判断。
 
-**判断关卡地面是不是 Landscape。** 作业提示说 UE5 自带的开放世界关卡会导致 `TeleportTo` 失败。在 `P_OpenWorldTestMap` 上很容易以为"我在平地上，避开有地形的地方就行"——**这个想法是错的：Open World 模板里整片地面就是一个 Landscape Actor，包括看起来完全平坦的部分。平不平是高度数据的事，跟几何体类型无关。**
+**判断关卡的地面是不是 Landscape。** 作业的提示说，UE5 自带的开放世界关卡会导致 `TeleportTo` 失败。在 `P_OpenWorldTestMap` 上，很容易以为「只要站在平地上，避开有地形的地方就可以了」。**但这个想法是错误的，因为 Open World 模板里的整片地面就是一个 Landscape Actor，包括那些看起来完全平坦的部分。地面平不平取决于高度数据，和几何体的类型无关。**
 
-验证方法：点一下要测试的地面，看大纲里选中的是什么。显示成 `LandscapeStreamingProxy_3_2_0` 就说明是地形。
+验证的方法是点击一下要测试的地面，看看大纲里选中的是什么。如果显示的是 `LandscapeStreamingProxy_3_2_0`，就说明它是地形。
 
-**铺一块拉伸立方体当地板。** 复制粘贴一面墙，缩放成 `X=40, Y=40, Z=0.5`（即 4000×4000×50），Z 抬高约 100 让它明确是独立的一层——贴太近，传送查询可能仍然摸到下面的地形。碰撞预设保持 `BlockAll`（`WorldStatic`），**不要开物理模拟**，否则黑洞会把地板吸走。
+**铺一块拉伸的立方体作为地板。** 复制粘贴一面墙，把它缩放成 `X=40, Y=40, Z=0.5`（也就是 4000×4000×50），然后把 Z 抬高大约 100，让它明确地成为独立的一层。如果贴得太近，传送查询仍然可能碰到下面的地形。碰撞预设保持 `BlockAll`（`WorldStatic`），**不要开启物理模拟**，否则黑洞会把地板吸走。
 
-材质用作业指定的 `MI_PrototypeGrid_TopDark`。这一步别省：**网格纹理是判断传送落点偏了多少、偏在哪个方向的唯一参照。** 灰色平板上根本看不出位移。
+材质使用作业指定的 `MI_PrototypeGrid_TopDark`。这一步不要省略，因为**网格纹理是判断传送落点偏了多少、往哪个方向偏的唯一参照。** 在灰色的平板上根本看不出位移。
 
-**三个方块的设置。** 作业只写了"生成重叠事件"，实际要检查三项：
+**设置三个方块。** 作业只写了「生成重叠事件」，但实际上要检查三项设置：
 
 | 设置 | 值 | 为什么 |
 | --- | --- | --- |
@@ -329,11 +329,11 @@ SelectedActor->Implements<URogueInteractionInterface>()
 | 模拟物理 | 开 | 黑洞要吸它们，静止 Actor 吸不动 |
 | 对象类型 | `PhysicsBody` | `RadialForceComponent` 默认只影响这个类型 |
 
-第三条作业没写但一定会咬人：物理开了、事件也勾了，ObjectType 不对照样吸不动。开了模拟物理后 UE 通常会自动把碰撞预设切成 `PhysicsActor`（对象类型即 `PhysicsBody`），没自动切就手动改。这跟作业一那个 `ObjectTypesToAffect` 的坑是同一个。
+第三条作业里没有写，但一定会出问题。即使开启了物理，也勾选了事件，如果 ObjectType 不对，照样吸不动。开启模拟物理之后，UE 通常会自动把碰撞预设切换成 `PhysicsActor`（它的对象类型就是 `PhysicsBody`），如果没有自动切换，就需要手动修改。这和作业一中 `ObjectTypesToAffect` 的那个坑是同一个问题。
 
-**顺带清掉一条 World Partition 警告。** 消息日志的"地图检测"里有一条：关卡蓝图引用了一个"空间加载"的 Actor（第四章那个 `BP_ProjectileSpammer`）。关卡蓝图属于持久关卡永远加载，而世界里的 Actor 是玩家走近才流送进来的，这是一条从"永远存在"指向"随时可能不存在"的硬引用。
+**顺便清除一条 World Partition 警告。** 消息日志的「地图检测」里有一条警告，说关卡蓝图引用了一个「空间加载」的 Actor（也就是第四章的那个 `BP_ProjectileSpammer`）。关卡蓝图属于持久关卡，会一直处于加载状态，而世界里的 Actor 要等玩家走近时才会被流送进来，所以这是一条从「永远存在」指向「随时可能不存在」的硬引用。
 
-它不阻止 PIE，但打包后引用可能解析成空，`StartSpawning` 静默不执行。**又是一个"不崩、不报错、就是不工作"。** 处理方式三选一：取消勾选该 Actor 的 `Is Spatially Loaded`、改用事件分发器让 Actor 自己持有引用、或者直接删掉这个练习产物 —— 这里走的是最后一条。
+它不会阻止 PIE，但打包之后，这个引用可能会被解析成空，`StartSpawning` 也就会静默地不执行。**这又是一个「不崩溃、不报错，但就是不工作」的问题。** 处理方式有三种，可以取消勾选该 Actor 的 `Is Spatially Loaded`，可以改用事件分发器，让 Actor 自己持有引用，也可以直接删掉这个练习时留下的产物。这里选择的是最后一种。
 
 ---
 
@@ -341,17 +341,17 @@ SelectedActor->Implements<URogueInteractionInterface>()
 
 ## 2.1 问题
 
-作业两处都写了"从抛射体基类派生"。看一眼第二章的 `ARogueProjectileMagic`，再看黑洞和传送弹的需求，三者共有的东西是：一个球形碰撞体、一个抛射物移动组件、一套飞行途中的循环特效与音效。
+作业中有两处都写了「从抛射体基类派生」。看一眼第二章的 `ARogueProjectileMagic`，再看看黑洞弹和传送弹的需求，可以发现三者共有的东西包括一个球形碰撞体、一个抛射物移动组件，以及一套飞行途中的循环特效和音效。
 
-如果每个类各写一遍，改一处施法表现就要改三处。
+如果每个类都各写一遍，那么修改一处施法表现时，就要改三个地方。
 
 ## 2.2 执行顺序
 
-这一步按"**先建空基类 → 改继承 → 再搬成员**"三段走，每段编译一次。合并成一步做的话，出问题时分不清是继承关系的锅还是成员搬迁的锅。
+这一步按照「**先建立空的基类，再修改继承关系，最后搬移成员**」这三个阶段进行，每个阶段都编译一次。如果合并成一步来做，出了问题时就分不清是继承关系的问题，还是成员搬移的问题。
 
 ## 2.3 搬哪些
 
-判断依据是逐个成员问一句：**黑洞弹和传送弹也需要它吗？**
+判断的依据是对每一个成员都问一句，**黑洞弹和传送弹是否也需要它？**
 
 | 成员 | 去向 | 理由 |
 | --- | --- | --- |
@@ -361,14 +361,14 @@ SelectedActor->Implements<URogueInteractionInterface>()
 | `UAudioComponent`（循环音效） | 基类 | 同上 |
 | 伤害数值 | 留在魔法弹 | 黑洞不造成伤害，传送弹也不 |
 
-基类构造函数里顺带设了两个所有弹丸通用的默认值：
+在基类的构造函数里，顺便设置了两个所有弹丸通用的默认值：
 
 ```cpp
 ProjectileMovementComponent->InitialSpeed = 2000.f;
 ProjectileMovementComponent->ProjectileGravityScale = 0.0f;   // 弹丸不受重力
 ```
 
-子类想改（比如黑洞飞得更慢），在子类构造函数里直接改就行——基类构造已经跑完，指针有效。
+如果子类想修改这些值（比如让黑洞弹飞得更慢），直接在子类的构造函数里修改就可以了，因为这时基类的构造函数已经执行完毕，指针都是有效的。
 
 ## 2.4 组件名字符串是身份，不能随便改
 
@@ -376,29 +376,29 @@ ProjectileMovementComponent->ProjectileGravityScale = 0.0f;   // 弹丸不受重
 SphereComponent = CreateDefaultSubobject<USphereComponent>(TEXT("SphereComp"));
 ```
 
-那个 `TEXT("SphereComp")` 是**组件的身份标识**。蓝图里对组件做的所有默认值覆盖（半径、Niagara 资产、碰撞预设）都是按这个名字挂上去的。
+那个 `TEXT("SphereComp")` 是**组件的身份标识**。在蓝图里对组件所做的所有默认值覆盖（比如半径、Niagara 资产和碰撞预设），都是按照这个名字挂上去的。
 
-**搬到基类时，字符串和 `UPROPERTY` 变量名都必须一字不差。** 改一个字母，蓝图里的覆盖静默丢失——不报错，就是回到默认值。搬的时候要用复制粘贴，别手打。
+**搬到基类时，字符串和 `UPROPERTY` 的变量名都必须一字不差。** 只要改了一个字母，蓝图里的覆盖值就会静默地丢失，不会报错，只是回到了默认值。所以搬移的时候要使用复制粘贴，不要手动输入。
 
-黑洞类上就打错了一个：`TEXT("RadiaForceComp")`，少了个 `l`。现在改的话会丢掉 `BP_BlackHole` 里对 RadialForce 的所有覆盖值，所以暂时留着当记号，列进遗留待办。**别在有蓝图依赖之后随手改这类字符串。**
+黑洞类上就有一个拼写错误，`TEXT("RadiaForceComp")` 少了一个 `l`。如果现在修改，就会丢掉 `BP_BlackHole` 里对 RadialForce 的所有覆盖值，所以暂时保留它作为标记，并列入遗留待办。**有了蓝图依赖之后，就不要随手修改这类字符串。**
 
 ## 2.5 `UCLASS(Abstract)`
 
-作业专门点名了这个说明符。它**不影响 C++ 编译**（那是 `= 0` 纯虚函数管的事），它管的是引擎的内容层：让这个类在类选择器、放置面板里消失，`SpawnActor` 也拒绝生成它。
+作业专门点名了这个说明符。它**不影响 C++ 的编译**（那是 `= 0` 纯虚函数负责的事情），它影响的是引擎的内容层，会让这个类从类选择器和放置面板里消失，`SpawnActor` 也会拒绝生成它。
 
-为什么基类需要它：基类没有赋任何资产（Niagara 是空的、音效是空的），也没有具体行为，拖进关卡就是个隐形的、什么都不做的 Actor。`Abstract` 从源头杜绝这件事。
+基类之所以需要它，是因为基类没有设置任何资产（Niagara 和音效都是空的），也没有具体的行为，拖进关卡之后就是一个隐形的、什么都不做的 Actor。`Abstract` 从源头上杜绝了这种情况。
 
-**这里的错是把它顺手也加到了黑洞类上。** 黑洞是具体类，理应可以被直接生成。之所以一直没暴露，是因为 `ProjectileClass` 指向的是 `BP_BlackHole`，而**蓝图子类不继承 `Abstract`**。但如果哪天在 C++ 里直接 `SpawnActor<ARogueProjectileBlackhole>`，会静默返回 `nullptr`。
+**这里的错误在于，把它顺手也加到了黑洞类上。** 黑洞是一个具体的类，理应可以被直接生成。这个问题之所以一直没有暴露，是因为 `ProjectileClass` 指向的是 `BP_BlackHole`，而**蓝图子类不会继承 `Abstract`**。但是如果哪天在 C++ 里直接调用 `SpawnActor<ARogueProjectileBlackhole>`，它就会静默地返回 `nullptr`。
 
-发现它的方式很朴素：传送弹是 `UCLASS()`，黑洞是 `UCLASS(Abstract)`——**两个平级的兄弟类标记不一致，这本身就是复制粘贴留下的痕迹。**
+发现这个问题的方式很简单，传送弹是 `UCLASS()`，而黑洞是 `UCLASS(Abstract)`，**两个平级的兄弟类标记不一致，这本身就是复制粘贴留下的痕迹。**
 
 ## 2.6 改完之后
 
-打开 `BP_MagicProjectile` 确认能正常打开、变量还在。C++ 类的身份是"模块 + 类名"，只改父类不改类名的话不需要 CoreRedirects；如果顺手改了类名，第三章那套就得上场。
+打开 `BP_MagicProjectile`，确认它能正常打开，变量也都还在。C++ 类的身份是「模块 + 类名」，如果只修改了父类而没有修改类名，就不需要 CoreRedirects；但如果顺手改了类名，就需要用上第三章的那套方法。
 
-另外：**Live Coding 处理不了新增 UCLASS 和继承关系变更。** 这一步要关掉编辑器、在 Rider 里完整 Build、再重开编辑器。虽然慢，但比排查"为什么改了代码没生效"快得多。
+另外需要注意，**Live Coding 无法处理新增的 UCLASS 和继承关系的变更。** 这一步要先关掉编辑器，在 Rider 里完整地 Build 一遍，然后再重新打开编辑器。这样做虽然慢，但比排查「为什么改了代码却没有生效」要快得多。
 
-**检查点：火球攻击行为完全不变**——飞行速度、命中特效、命中音效、伤害数值全部和重构前一样。重构的定义就是"改结构不改行为"，这一步没做到就不该往下走。
+**检查点是火球攻击的行为完全不变**，飞行速度、命中特效、命中音效和伤害数值，全都要和重构之前一样。重构的定义就是「只改结构，不改行为」，如果这一步没有做到，就不应该继续往下走。
 
 ---
 
@@ -421,7 +421,7 @@ SphereComponent = CreateDefaultSubobject<USphereComponent>(TEXT("SphereComp"));
 
 ## 3.2 和爆炸桶几乎全部相反
 
-作业一的爆炸桶也用了 `URadialForceComponent`，但两者的配置是镜像的：
+作业一的爆炸桶也使用了 `URadialForceComponent`，但两者的配置正好是镜像的：
 
 | | 爆炸桶 | 黑洞 |
 | --- | --- | --- |
@@ -429,25 +429,25 @@ SphereComponent = CreateDefaultSubobject<USphereComponent>(TEXT("SphereComp"));
 | 强度符号 | 正（推开） | 负（吸引） |
 | `bAutoActivate` | `false` | `true` |
 
-持续力走的是组件 Tick 路径，所以必须激活；冲量走的是 `FireImpulse()` 主动调用路径，与激活状态无关。这是同一个组件的两条完全独立的路径，第一次接触时很容易混。
+持续的力走的是组件的 Tick 路径，所以必须激活；而冲量走的是主动调用 `FireImpulse()` 的路径，与激活状态无关。这是同一个组件的两条完全独立的路径，初次接触时很容易混淆。
 
 ## 3.3 数量级
 
-作业提示"想想几百万个数字吧"，按直觉试 `-2000` 是方块纹丝不动，一路往上加到 `-2000000` 才有效果。
+作业提示说「想想几百万个数字吧」，凭直觉先试了 `-2000`，结果方块纹丝不动，一路往上加，直到 `-2000000` 才有效果。
 
-**这个弯路值得走一次。** 亲手体验"数量级错误"比直接抄一个数字记得牢。原因是 `ForceStrength` 走的是 `AddForce` 路径，力要先除以质量才变成加速度，而且是每帧施加、要克服重力和摩擦；`ImpulseStrength` 配合 `bImpulseVelChange = true` 则是直接改速度、跳过质量。所以爆炸桶的 `2500` 和黑洞的 `2000000` 不在一个尺度上——**它们根本不是同一种物理量。**
+**这段弯路值得走一次**，因为亲手体验一次「数量级错误」，比直接照抄一个数字记得更牢。原因在于，`ForceStrength` 走的是 `AddForce` 路径，力要先除以质量才会变成加速度，而且它是每帧施加的，还要克服重力和摩擦力；而 `ImpulseStrength` 配合 `bImpulseVelChange = true` 时，是直接修改速度，跳过了质量。所以爆炸桶的 `2500` 和黑洞的 `2000000` 不在同一个尺度上，**它们根本就不是同一种物理量。**
 
 ## 3.4 两个半径是两件事
 
-`SphereComponent` 的半径管**重叠判定**（销毁），`RadialForceComponent` 的 `Radius` 管**吸力范围**。两者独立。
+`SphereComponent` 的半径负责**重叠判定**（也就是销毁），而 `RadialForceComponent` 的 `Radius` 负责**吸力的范围**，两者是相互独立的。
 
-调错会出现两种症状：吸力范围小于碰撞球 → 方块还没被吸就已经被销毁了，看不到吸引过程；反过来则是"被吸过来但一直不消失"。
+如果调错了，会出现两种症状。如果吸力范围小于碰撞球，方块还没有被吸过来就已经被销毁了，看不到吸引的过程；反过来，方块就会被吸过来，但一直不消失。
 
-这里设的是 `RadialForceComponent->Radius = 750.f`，明显大于球体半径，先看到吸引再看到销毁。
+这里设置的是 `RadialForceComponent->Radius = 750.f`，明显大于球体的半径，所以能先看到吸引，再看到销毁。
 
 ## 3.5 "只能销毁模拟角色"
 
-这句是需求里最容易写错的一条。关键是判断依据挂在**组件**上而不是 Actor 上——物理模拟是 `UPrimitiveComponent` 的属性：
+这是需求里最容易写错的一条。关键在于，判断的依据挂在**组件**上，而不是挂在 Actor 上，因为物理模拟是 `UPrimitiveComponent` 的属性：
 
 ```cpp
 if (OtherActor && OtherComp && OtherComp->IsSimulatingPhysics()
@@ -457,13 +457,13 @@ if (OtherActor && OtherComp && OtherComp->IsSimulatingPhysics()
 }
 ```
 
-三个额外条件对应三个具体的失败场景：
+三个额外的条件，分别对应着三个具体的失败场景：
 
-- `IsSimulatingPhysics()` —— 不加会把地板、墙壁一起销毁，地图出现大洞
-- `!= GetInstigator()` —— 不加会把玩家自己删掉
-- `!= this` —— 不加，黑洞在某些情况下会自己删自己
+- 如果不加 `IsSimulatingPhysics()`，地板和墙壁也会被一起销毁，地图上会出现大洞；
+- 如果不加 `!= GetInstigator()`，玩家自己会被删除；
+- 如果不加 `!= this`，黑洞在某些情况下会把自己删除。
 
-顺带：`Destroy()` 是显式销毁并标记 pending kill，`!= nullptr` 判不出"正在销毁中"的对象。所以第一节那个 `SelectedActor` 更稳的写法其实是 `IsValid(SelectedActor)`，它同时检查空指针和 pending kill 标记。
+另外需要注意，`Destroy()` 是显式地销毁对象，并把它标记为 pending kill，而 `!= nullptr` 判断不出「正在被销毁」的对象。所以第一节里的那个 `SelectedActor`，更稳妥的写法其实是 `IsValid(SelectedActor)`，它会同时检查空指针和 pending kill 标记。
 
 ## 3.6 `SetLifeSpan` 而不是自己起 Timer
 
@@ -475,9 +475,9 @@ void ARogueProjectileBlackhole::BeginPlay()
 }
 ```
 
-`AActor::SetLifeSpan` 内部就是一个定时器，到期调 `Destroy()`。自己写一遍没有任何收益。
+`AActor::SetLifeSpan` 的内部就是一个定时器，到期时会调用 `Destroy()`，所以自己再写一遍没有任何好处。
 
-**但要记住它的边界**：到期走的是 `Destroy()`，**不会**触发任何自定义的爆炸逻辑。黑洞不需要（消失就是它的终态），传送弹需要，所以传送弹用的是显式 `FTimerHandle`（见 4.2）。
+**但要记住它的边界**，到期时它走的是 `Destroy()`，**不会**触发任何自定义的爆炸逻辑。黑洞不需要这样的逻辑（消失就是它的最终状态），而传送弹需要，所以传送弹使用的是显式的 `FTimerHandle`（见 4.2 节）。
 
 ## 3.7 `AddDynamic` 放在 `PostInitializeComponents`
 
@@ -489,9 +489,9 @@ void ARogueProjectileBlackhole::PostInitializeComponents()
 }
 ```
 
-不放构造函数的原因：构造函数运行在 CDO（类默认对象）创建时，绑定会被序列化进 CDO。`PostInitializeComponents` 是每个实例各绑各的，更干净。
+不放在构造函数里的原因是，构造函数会在创建 CDO（类默认对象）时运行，绑定会被序列化进 CDO 中。而 `PostInitializeComponents` 是每个实例各自进行绑定，所以更干净。
 
-`OnSphereOverlap` 必须加 `UFUNCTION()`。`AddDynamic` 是**动态多播委托**，靠反射系统按函数名查找，不标记就找不到——而且这个错误的形态是运行时才报，不是编译错误。
+`OnSphereOverlap` 必须加上 `UFUNCTION()`。`AddDynamic` 绑定的是**动态多播委托**，它依靠反射系统按函数名来查找，如果不加标记，就找不到这个函数，而且这个错误要到运行时才会报出来，而不是在编译时。
 
 ---
 
@@ -499,7 +499,7 @@ void ARogueProjectileBlackhole::PostInitializeComponents()
 
 ## 4.1 时序设计
 
-这是本次作业逻辑最复杂的部分。先把时序画出来再写代码：
+这是本次作业中逻辑最复杂的部分。先把时序画出来，然后再写代码：
 
 ```text
 生成 ──[0.2s 定时器]──▶ Explode ──[0.2s 定时器]──▶ TeleportInstigator ──▶ Destroy
@@ -508,16 +508,16 @@ void ARogueProjectileBlackhole::PostInitializeComponents()
                      撞到世界时从这里进
 ```
 
-两个 0.2 秒是**两个不同性质的等待**：
+两个 0.2 秒是**两种性质不同的等待**：
 
-- 第一个决定"弹丸飞多远"
-- 第二个是纯粹的视觉留白，让玩家看清爆炸再被传送
+- 第一个决定了「弹丸飞多远」；
+- 第二个纯粹是视觉上的留白，让玩家先看清爆炸，然后再被传送。
 
-作业专门强调了第二条的理由："让爆炸效果播放一会儿再传送，以便玩家可以看到"。直接传送的话，打击感会整个消失。
+作业专门强调了第二个等待的理由，「让爆炸效果播放一会儿再传送，以便玩家可以看到」。如果直接传送，打击感就会完全消失。
 
 ## 4.2 为什么这里不能用 `SetLifeSpan`
 
-3.6 说过：`SetLifeSpan` 到期走 `Destroy()`，不触发自定义逻辑。传送弹的第一段等待必须能调用 `Explode()`，所以只能用显式定时器：
+3.6 节说过，`SetLifeSpan` 到期时走的是 `Destroy()`，不会触发自定义的逻辑。而传送弹的第一段等待必须能够调用 `Explode()`，所以只能使用显式的定时器：
 
 ```cpp
 void ARogueProjectileTeleport::BeginPlay()
@@ -527,11 +527,11 @@ void ARogueProjectileTeleport::BeginPlay()
 }
 ```
 
-**这是"超时不生效"最高频的来源**：写 `SetLifeSpan` 然后奇怪为什么爆炸逻辑从来没跑过。要么重写 `LifeSpanExpired()`，要么就用定时器。
+**这是「超时之后逻辑不生效」最常见的原因。** 写了 `SetLifeSpan`，然后奇怪为什么爆炸逻辑从来没有执行过。解决办法是要么重写 `LifeSpanExpired()`，要么直接使用定时器。
 
 ## 4.3 "受到世界攻击时执行相同行为"
 
-这句话意味着 `Explode` 有**两个入口**：定时器到期，和命中事件。这正是把它做成一个独立函数（而不是写在回调里）的理由。
+这句话意味着 `Explode` 有**两个入口**，一个是定时器到期，另一个是命中事件。这也正是把它做成一个独立的函数（而不是写在回调里）的理由。
 
 ```cpp
 void ARogueProjectileTeleport::OnActorHit(UPrimitiveComponent* HitComponent, AActor* OtherActor,
@@ -541,16 +541,16 @@ void ARogueProjectileTeleport::OnActorHit(UPrimitiveComponent* HitComponent, AAc
 }
 ```
 
-**注意碰撞设置和黑洞相反**：黑洞是 `ECR_Overlap`（穿透一切），传送弹必须能被 `Block` 才会触发 `OnComponentHit`。全设成 Overlap 的话，弹丸直接穿墙而过，永远不触发爆炸。
+**需要注意，碰撞设置和黑洞是相反的。** 黑洞使用 `ECR_Overlap`（穿透一切），而传送弹必须能够被 `Block`，才会触发 `OnComponentHit`。如果全部设置成 Overlap，弹丸就会直接穿墙而过，永远不会触发爆炸。
 
 ```cpp
 SphereComponent->SetCollisionProfileName("Projectile");
 SphereComponent->IgnoreActorWhenMoving(GetInstigator(), true);
 ```
 
-第二行是忽略发射者自身，否则弹丸第一帧就撞在角色胶囊体上原地爆炸。
+第二行的作用是忽略发射者自身，否则弹丸在第一帧就会撞到角色的胶囊体上，在原地爆炸。
 
-**位置很关键**：这行必须在 `PostInitializeComponents` 里，不能在构造函数里。`Instigator` 是 `SpawnActor` 过程中在 `PostSpawnInitialize` 设置的，早于 `PostInitializeComponents`，但晚于构造函数——放构造函数里取到的是 `nullptr`。
+**这行代码的位置很关键**，它必须放在 `PostInitializeComponents` 里，而不能放在构造函数里。`Instigator` 是在 `SpawnActor` 的过程中、由 `PostSpawnInitialize` 设置的，早于 `PostInitializeComponents`，但是晚于构造函数，所以在构造函数里取到的是 `nullptr`。
 
 ## 4.4 停止运动要停两样
 
@@ -567,9 +567,9 @@ void ARogueProjectileTeleport::Explode()
 }
 ```
 
-`ClearTimer` 挡住"撞墙之后定时器又炸一次"，`StopMovementImmediately` 让弹丸悬停在原地展示特效。
+`ClearTimer` 可以防止「撞墙之后定时器又触发一次爆炸」，而 `StopMovementImmediately` 会让弹丸悬停在原地展示特效。
 
-**这里的幂等保护其实不完整**：`ClearTimer` 挡不住"同一帧触发两次 Hit"。更彻底的做法是加一个 `bool bExploded` 守卫，或者在 `Explode()` 开头 `SetActorEnableCollision(false)`。这跟作业一爆炸桶那个 `bExploded` 是同一个模式，列进遗留待办。
+**但这里的幂等保护其实并不完整**，因为 `ClearTimer` 挡不住「同一帧里触发两次 Hit」的情况。更彻底的做法是加上一个 `bool bExploded` 守卫，或者在 `Explode()` 的开头调用 `SetActorEnableCollision(false)`。这和作业一爆炸桶的那个 `bExploded` 是同一种模式，已经列入遗留待办。
 
 ## 4.5 爆炸特效必须是独立生成的
 
@@ -578,9 +578,9 @@ UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ExplosionEffect, GetActorLo
 UGameplayStatics::PlaySoundAtLocation(this, ExplosionSound, GetActorLocation(), FRotator::ZeroRotator);
 ```
 
-不能做成挂在弹丸上的组件。弹丸 0.2 秒后就 `Destroy()` 了，附着的组件跟着一起销毁，特效播一瞬就没。
+爆炸特效不能做成挂在弹丸上的组件。因为弹丸在 0.2 秒之后就会被 `Destroy()`，附着在它上面的组件也会跟着一起被销毁，特效只能播放一瞬间。
 
-这和作业一爆炸桶的"循环燃烧用组件、一次性爆炸用 `SpawnSystemAtLocation`"是同一条判断：**效果的生命周期是否需要超出宿主 Actor。**
+这和作业一爆炸桶的「循环燃烧使用组件，一次性的爆炸使用 `SpawnSystemAtLocation`」是同一条判断标准，也就是**效果的生命周期是否需要超出宿主 Actor。**
 
 ## 4.6 `TeleportTo` 与那个被关掉的安全检查
 
@@ -599,35 +599,35 @@ void ARogueProjectileTeleport::TeleportInstigator()
 }
 ```
 
-作业明确要求用 `TeleportTo` 而不是 `SetActorLocation`，理由是前者带碰撞检查，会在落点不合法时尝试寻找空位，防止玩家卡进墙里。
+作业明确要求使用 `TeleportTo` 而不是 `SetActorLocation`，理由是前者带有碰撞检查，在落点不合法时会尝试寻找空位，防止玩家卡进墙里。
 
-**而这个收益很容易被自己关掉。** 完整签名是：
+**但这个好处很容易被开发者自己关掉。** 它的完整签名如下：
 
 ```cpp
 bool TeleportTo(const FVector& DestLocation, const FRotator& DestRotation,
                 bool bIsATest = false, bool bNoCheck = false);
 ```
 
-最初写的是 `TeleportTo(..., false, true)`。`bNoCheck = true` 的含义是**跳过落点合法性检查**——不做 encroachment 查询、不尝试寻找空位、不管目标点是否被几何体占据，直接挪过去。
+最初的写法是 `TeleportTo(..., false, true)`。`bNoCheck = true` 的含义是**跳过落点的合法性检查**，也就是不做 encroachment 查询，不尝试寻找空位，也不管目标点是否被几何体占据，直接把角色挪过去。
 
-也就是说：换了函数名，又用第四个参数把那个函数存在的意义关掉了，行为退回到 `SetActorLocation`。
+也就是说，虽然换了一个函数名，但又用第四个参数把这个函数存在的意义关掉了，它的行为退回到了 `SetActorLocation`。
 
-之所以会写成这样，是因为不加它传送经常失败，加了就"好了"。**这是个值得记住的模式：当一个参数让问题消失时，先搞清楚它关掉的是什么。**
+之所以会写成这样，是因为不加这个参数时，传送经常失败，加上之后问题就「好了」。**这是一个值得记住的模式，当一个参数让问题消失的时候，要先弄清楚它关掉的是什么。**
 
-改回 `false` 之后要配合那行 `UE_LOG`。`TeleportTo` 失败时是**静默返回 `false`**，不打任何日志。有了这行，"传送没反应"能立刻分成两种：
+改回 `false` 之后，要配合那一行 `UE_LOG` 来使用。`TeleportTo` 失败时只会**静默地返回 `false`**，不会打印任何日志。有了这行日志，「传送没有反应」这个问题就能立刻分成两种情况：
 
-- 打了 `FAILED` → 几何体拒绝了落点，去看角色站在什么上面
-- **什么都没打** → 这行代码压根没执行，问题在时序或定时器
+- 如果打印了 `FAILED`，说明几何体拒绝了这个落点，应该去看看角色站在什么东西上面；
+- 如果**什么都没有打印**，说明这行代码根本没有执行，问题出在时序或者定时器上。
 
-**没有这行日志，这两种情况在屏幕上长得一模一样。** 这已经是本次作业里第三次遇到"不崩、不报错、就是不工作"了（前两次是 `GetOwner()` 取错坐标、调试球写进循环）。这类 bug 的通用解法就是**在关键分支上留一个可观测点**。
+**如果没有这行日志，这两种情况在屏幕上看起来一模一样。** 这已经是本次作业里第三次遇到「不崩溃、不报错，但就是不工作」的情况了（前两次分别是 `GetOwner()` 取错了坐标，以及调试球被写进了循环）。这类 bug 的通用解决办法，就是**在关键的分支上留下一个可观测点**。
 
 ## 4.7 `Instigator`：作业提示指向的那个字段
 
 作业提示说"看看我们之前用来忽略碰撞的 `Instigator`，在这里它可以用来进行传送"。
 
-第二章设 `Instigator` 是为了让弹丸忽略发射者的碰撞；这次用它找回"该被传送的那个角色"。同一个字段，两种用途。
+第二章设置 `Instigator`，是为了让弹丸忽略发射者的碰撞；而这一次是用它来找回「应该被传送的那个角色」。同一个字段，有两种用途。
 
-它和 `Owner` 的区别值得记牢：
+它和 `Owner` 的区别值得牢记：
 
 | | `AActor::GetOwner()` | `AActor::GetInstigator()` |
 | --- | --- | --- |
@@ -635,9 +635,9 @@ bool TeleportTo(const FVector& DestLocation, const FRotator& DestRotation,
 | 返回类型 | `AActor*` | `APawn*` |
 | 主要用途 | 网络权限、所有权 | 伤害归属、行为溯源 |
 
-注意 `GetInstigator()` 返回 `APawn*` 而不是 `AActor*`——**Instigator 在语义上只可能是 Pawn，类型直接把这件事说清楚了。** 这和第二节把 `TSubclassOf` 收窄到基类是同一条原则：用能满足需求的最合适的类型，类型本身在传递设计意图。
+需要注意，`GetInstigator()` 返回的是 `APawn*`，而不是 `AActor*`，**因为 Instigator 在语义上只可能是 Pawn，类型本身就把这件事说清楚了。** 这和第二节把 `TSubclassOf` 收窄到基类遵循的是同一条原则，也就是使用能满足需求的、最合适的类型，类型本身就在传递设计意图。
 
-还要和组件上的同名函数区分开：`UActorComponent::GetOwner()` 问的是"我挂在哪个 Actor 上"，来自 Outer 链、构造时确定、实际上不会为空；`AActor::GetOwner()` 需要手动 `SetOwner`，经常是空的。同名不同义。
+此外，还要和组件上的同名函数区分开来。`UActorComponent::GetOwner()` 问的是「挂在哪个 Actor 上」，它来自 Outer 链，在构造时就已经确定，实际上不会为空；而 `AActor::GetOwner()` 需要手动调用 `SetOwner` 来设置，所以经常是空的。两者名字相同，含义却不同。
 
 ---
 
@@ -645,7 +645,7 @@ bool TeleportTo(const FVector& DestLocation, const FRotator& DestRotation,
 
 ## 5.1 问题
 
-图省事的第一版，三个技能各写一对函数，一共六个：
+第一版为了省事，给三个技能各写了一对函数，一共有六个：
 
 ```text
 PrimaryAttack()   / AttackTimerElapsed()
@@ -653,11 +653,11 @@ BlackHoleAttack() / BlackHoleAttackTimerElapsed()
 TeleportAttack()  / TeleportTimerElapsed()
 ```
 
-三对之间是**逐字复制**的，只有两处不同：定时器回调的函数指针，和 `SpawnActor` 的类。
+这三对函数之间是**逐字复制**的，只有两处不同，一处是定时器回调的函数指针，另一处是 `SpawnActor` 的类。
 
-省下的是当时的十分钟。代价是：改施法特效要改三处、加冷却要改三处、加"施法期间不能移动"要改三处，漏一处就有一个技能行为不一致。
+这样写当时能省下十分钟，但代价是修改施法特效要改三处，加冷却要改三处，加上「施法期间不能移动」也要改三处，只要漏掉一处，就会有一个技能的行为不一致。
 
-而作业提示专门点了 `FTimerDelegate` 和 `BindAction 传额外参数`——**这两条提示存在的唯一目的就是让人做这个重构。** 它不是额外要求，是作业的一部分。
+而作业的提示专门提到了 `FTimerDelegate` 和 `BindAction 传额外参数`，**这两条提示存在的唯一目的，就是引导学习者完成这次重构。** 它并不是额外的要求，而是作业的一部分。
 
 ## 5.2 先修一个真 bug：`FTimerHandle` 是局部变量
 
@@ -670,15 +670,15 @@ void ARoguePlayerCharacter::BlackHoleAttack()
 }   // 函数返回，handle 析构
 ```
 
-定时器本身注册在 `TimerManager` 里，所以回调**照样会执行**——这就是它当时"能跑"的原因。
+定时器本身注册在 `TimerManager` 里，所以回调**照样会执行**，这也是它当时「能运行」的原因。
 
-但那个 handle 是**取消、查询、重置定时器的唯一凭据**，函数一返回就没了。后果：
+但是那个 handle 是**取消、查询和重置定时器的唯一凭据**，函数一返回，它就不存在了。这会带来下面这些后果：
 
-- 快速连按技能键 → 每次注册一个新定时器，全部会触发 → 一次按键连发多个弹丸
-- 角色在 0.2 秒窗口内被销毁 → 定时器照常触发，对着正在析构的对象调成员函数
-- 想加打断、冷却、"施法中不能再施法" → 没有 handle，做不了
+- 如果快速地连按技能键，每按一次就会注册一个新的定时器，而且它们全部都会触发，于是按一次键就会连发多个弹丸；
+- 如果角色在 0.2 秒的窗口内被销毁，定时器仍然会照常触发，对着一个正在析构的对象调用成员函数；
+- 如果想加入打断、冷却或者「施法期间不能再施法」的功能，因为没有 handle，所以根本做不到。
 
-`FTimerHandle` 必须是成员变量。顺带 `const float AttackDelayTime = 0.2f;` 也是局部的、三处各写一遍，改成 `UPROPERTY(EditDefaultsOnly)`——这个值是要反复试手感的。
+所以 `FTimerHandle` 必须是成员变量。另外，`const float AttackDelayTime = 0.2f;` 也是一个局部变量，而且在三个地方各写了一遍，应该改成 `UPROPERTY(EditDefaultsOnly)`，因为这个值需要反复调试手感。
 
 ## 5.3 统一 `TSubclassOf` 的类型参数
 
@@ -690,13 +690,13 @@ TSubclassOf<ARogueProjectileBlackhole> BlackHoleProjectileClass;
 TSubclassOf<ARogueProjectileTeleport>  TeleportClass;
 ```
 
-三个不同的类型，没法传给同一个函数。既然抽了基类，这里就该统一成 `TSubclassOf<ARogueProjectileBase>`——**这正是基类存在的意义之一**，而且蓝图里的下拉框仍然只会列出弹丸类，不会污染成全部 Actor。
+三个不同的类型，无法传给同一个函数。既然已经抽出了基类，这里就应该统一成 `TSubclassOf<ARogueProjectileBase>`，**这正是基类存在的意义之一**，而且蓝图里的下拉框仍然只会列出弹丸类，不会变成列出所有的 Actor。
 
-类型收窄成父类是兼容的，改完打开 `BP_playerCharacter` 确认三个资产引用还在即可。
+把类型收窄成父类是兼容的，修改之后打开 `BP_playerCharacter`，确认三个资产引用都还在就可以了。
 
 ## 5.4 `FTimerDelegate::CreateUObject`
 
-`SetTimer` 的常规重载只接受无参函数指针，没法把"生成哪个类"传进去。作业提示的 `FTimerDelegate` 就是解法：
+`SetTimer` 的常规重载只接受无参的函数指针，没有办法把「要生成哪个类」传进去。作业提示中的 `FTimerDelegate` 就是解决办法：
 
 ```cpp
 void ARoguePlayerCharacter::StartAttack(TSubclassOf<ARogueProjectileBase> InProjectileClass)
@@ -714,13 +714,13 @@ void ARoguePlayerCharacter::StartAttack(TSubclassOf<ARogueProjectileBase> InProj
 }
 ```
 
-`CreateUObject` 把 `this`、成员函数指针、以及**额外参数**一起打包，0.2 秒后连同参数一起调用。
+`CreateUObject` 会把 `this`、成员函数指针以及**额外的参数**打包在一起，0.2 秒之后连同参数一起调用。
 
-**为什么不用 `CreateLambda`**：Lambda 版本也能捕获参数，但它**不检查对象是否还活着**。角色在那 0.2 秒里被销毁，Lambda 照样执行，访问已析构的 `this`。`CreateUObject` 内部存的是弱引用，对象没了 delegate 自动失效。
+**为什么不用 `CreateLambda` 呢？** Lambda 版本也能捕获参数，但它**不会检查对象是否还存在**。如果角色在那 0.2 秒里被销毁了，Lambda 照样会执行，并访问已经析构的 `this`。而 `CreateUObject` 内部存储的是弱引用，对象不存在了，delegate 就会自动失效。
 
-> **在 UE 里凡是延迟执行的回调，优先选带 UObject 生命周期检查的版本。**
+> **在 UE 里，凡是延迟执行的回调，都应该优先选择带有 UObject 生命周期检查的版本。**
 
-三个技能共用一个 `AttackTimerHandle` 之后，语义也变对了：施法期间再按别的技能，`SetTimer` 覆盖前一个，等于打断重来。这通常正是想要的行为。
+三个技能共用一个 `AttackTimerHandle` 之后，语义也变得正确了。在施法期间按下别的技能，`SetTimer` 会覆盖前一个定时器，相当于打断之后重新开始。这通常正是想要的行为。
 
 ## 5.5 生成端
 
@@ -740,14 +740,14 @@ void ARoguePlayerCharacter::AttackTimerElapsed(TSubclassOf<ARogueProjectileBase>
 }
 ```
 
-几个点：
+这里有几点需要说明：
 
-- `SpawnActor` 的模板参数用基类，它只影响返回值的静态类型，实际生成什么由 `InProjectileClass` 决定。
-- `ensure` 用在这里是合适的：蓝图里忘了给某个技能赋类引用，属于"资产配错了，需要被告知"，符合 1.3 那张表的标准。
-- `AlwaysSpawn` 是第四章遗留待办里的一条。默认的 `AdjustIfPossibleButAlwaysSpawn` 会在生成点被占据时悄悄挪动弹丸位置，从枪口发射时经常和角色胶囊体重叠，导致弹丸莫名偏移。
-- `SpawnParams.Instigator = this` 是传送弹能找回"家"的前提，漏了它传送弹会静默不传送。
+- `SpawnActor` 的模板参数使用的是基类，它只影响返回值的静态类型，实际生成什么类，由 `InProjectileClass` 决定。
+- 在这里使用 `ensure` 是合适的，因为在蓝图里忘了给某个技能设置类引用，属于「资产配置错误，需要被告知」的情况，符合 1.3 节那张表的标准。
+- `AlwaysSpawn` 是第四章遗留待办里的一条。默认的 `AdjustIfPossibleButAlwaysSpawn` 会在生成点被占据时悄悄地挪动弹丸的位置，而从枪口发射时，弹丸经常会和角色的胶囊体重叠，导致弹丸莫名其妙地偏移。
+- `SpawnParams.Instigator = this` 是传送弹能够找回「家」的前提，如果漏掉了它，传送弹会静默地不进行传送。
 
-三个入口各剩一行，输入绑定完全不用改：
+三个入口函数各自只剩下一行，输入绑定完全不需要修改：
 
 ```cpp
 void ARoguePlayerCharacter::PrimaryAttack()   { StartAttack(ProjectileClass); }
@@ -755,7 +755,7 @@ void ARoguePlayerCharacter::BlackHoleAttack() { StartAttack(BlackHoleProjectileC
 void ARoguePlayerCharacter::TeleportAttack()  { StartAttack(TeleportClass); }
 ```
 
-六个函数变四个，重复代码从三份变成一份。
+六个函数变成了四个，重复的代码从三份变成了一份。
 
 ---
 
@@ -802,7 +802,7 @@ public:
 };
 ```
 
-> 这四个组件用的是 `EditDefaultsOnly`，标准写法应为 `VisibleAnywhere`——组件指针本身不该被替换，需要编辑的是组件**内部**的属性。作业一的第 6 个坑就是这条，这次又回退了。见遗留待办。
+> 这四个组件使用的是 `EditDefaultsOnly`，标准的写法应该是 `VisibleAnywhere`，因为组件指针本身不应该被替换，需要编辑的是组件**内部**的属性。作业一的第 6 个坑就是这一条，这次又退回去了，详见遗留待办。
 
 ## RogueProjectileBase.cpp
 
@@ -832,7 +832,7 @@ ARogueProjectileBase::ARogueProjectileBase()
 }
 ```
 
-`ProjectileMovementComponent` 没有 `SetupAttachment`，因为 `UMovementComponent` 派生自 `UActorComponent` 而不是 `USceneComponent`——它没有 Transform，不参与组件树。这是第三章那条"`UActorComponent` vs `USceneComponent`"的直接应用。
+`ProjectileMovementComponent` 没有调用 `SetupAttachment`，这是因为 `UMovementComponent` 派生自 `UActorComponent`，而不是 `USceneComponent`，它没有 Transform，也不参与组件树。这是第三章那条「`UActorComponent` 与 `USceneComponent`」区别的直接应用。
 
 ## RogueProjectileBlackhole.h
 
@@ -1264,7 +1264,7 @@ void URogueInteractionComponent::Interact()
 
 ## 主线一：类型选择在传递设计意图
 
-这次有四处都在做同一件事——**用能满足需求的最合适的类型**：
+这次有四个地方都在做同一件事，那就是**使用能满足需求的、最合适的类型**：
 
 | 位置 | 选择 | 传达的意图 |
 | --- | --- | --- |
@@ -1273,32 +1273,32 @@ void URogueInteractionComponent::Interact()
 | 交互组件里用 `APlayerController` 而非 `ARoguePlayerController` | 放宽 | 不需要知道具体型号，可复用 |
 | `GetInstigator()` 返回 `APawn*` 而非 `AActor*` | 引擎的选择 | Instigator 语义上只可能是 Pawn |
 
-放宽和收窄不矛盾，标准是同一条：**恰好覆盖需求，不多不少。** 多了限制复用（低层模块认识高层模块），少了丢失约束（蓝图下拉框里出现一堆不该选的东西）。
+放宽和收窄并不矛盾，它们遵循的是同一条标准，**恰好覆盖需求，不多也不少。** 类型选得太具体，会限制复用（低层模块认识了高层模块）；选得太宽泛，又会丢失约束（蓝图的下拉框里会出现一堆不应该选择的东西）。
 
 ## 主线二：静态类型只是"看这块内存的窗口"
 
-`GetOwner()` 返回 `AActor*`，却能转成 `APlayerController*`，因为那块内存里的对象**本来就是**一个 `ARoguePlayerController`。
+`GetOwner()` 返回的是 `AActor*`，却能转换成 `APlayerController*`，这是因为那块内存里的对象**本来就是**一个 `ARoguePlayerController`。
 
-派生类对象在内存里的布局是基类部分放在起始位置，所以两个指针存的是**完全相同的地址**，转型在机器层面可能连一条指令都不产生。变的只是编译器允许你调用什么。
+派生类对象在内存中的布局，是把基类部分放在起始位置，所以两个指针存储的是**完全相同的地址**，转型在机器层面可能连一条指令都不会产生。改变的只是编译器允许调用哪些成员。
 
-`Cast` 的验证机制走的是反射系统：拿到实际对象的 `UClass`，沿 `SuperStruct` 链往上找目标类。UE 不用标准的 `dynamic_cast`，三个原因：项目默认关闭 RTTI、遍历 `SuperStruct` 更快、**蓝图类在编译期不存在**，RTTI 里根本没有它们的条目。
+`Cast` 的验证机制依靠的是反射系统，它拿到实际对象的 `UClass`，然后沿着 `SuperStruct` 链往上查找目标类。UE 不使用标准的 `dynamic_cast`，原因有三个，一是项目默认关闭了 RTTI，二是遍历 `SuperStruct` 的速度更快，三是**蓝图类在编译期并不存在**，RTTI 里根本没有它们的条目。
 
-第三条也解释了为什么 `Cast<IRogueInteractionInterface>` 找不到纯蓝图实现——**编译期类型系统看不见蓝图**，这是同一个根源的两种表现。
+第三个原因也解释了为什么 `Cast<IRogueInteractionInterface>` 找不到纯蓝图的实现，因为**编译期的类型系统看不见蓝图**，这是同一个根源的两种表现。
 
 ## 主线三：同一个组件的两条独立路径
 
-`URadialForceComponent` 在作业一和作业二里的用法完全相反：
+`URadialForceComponent` 在作业一和作业二中的用法正好相反：
 
 ```text
 冲量路径   FireImpulse() 主动调用   一次性   与 bAutoActivate 无关   爆炸桶
 力路径     组件 Tick 自动执行       持续     必须 bAutoActivate      黑洞
 ```
 
-`ImpulseStrength` 配合 `bImpulseVelChange = true` 直接改速度、跳过质量；`ForceStrength` 走 `AddForce`，要除以质量、要克服重力和摩擦、每帧施加。所以 `2500` 和 `2000000` 不在一个尺度上——**它们不是同一种物理量。**
+`ImpulseStrength` 配合 `bImpulseVelChange = true`，会直接修改速度，跳过质量；而 `ForceStrength` 走的是 `AddForce`，要除以质量，要克服重力和摩擦力，而且是每帧施加的。所以 `2500` 和 `2000000` 不在同一个尺度上，**它们不是同一种物理量。**
 
 ## 主线四：静默失败的形态
 
-这次遇到的三个"不崩、不报错、就是不工作"：
+这次遇到了三个「不崩溃、不报错，但就是不工作」的问题：
 
 | 现象 | 静默原因 | 怎么发现的 |
 | --- | --- | --- |
@@ -1306,11 +1306,11 @@ void URogueInteractionComponent::Interact()
 | 周围没东西时看不到检测范围 | `DrawDebugSphere` 写进了 for 循环 | 移动时观察到球时有时无 |
 | 传送落点不合法但仍然传送 | `bNoCheck = true` 关掉了落点检查 | 对照函数签名逐个参数核对 |
 
-**通用解法只有一条：在关键分支上留可观测点。** 一行 `UE_LOG` 或一个 debug 绘制，能把排查范围砍掉一半。而且要注意：**可视化探针本身也可能是错的**（第二条就是探针自己坏了），所以它和被观测的逻辑要尽量解耦。
+**通用的解决办法只有一条，那就是在关键的分支上留下可观测点。** 一行 `UE_LOG` 或者一次 debug 绘制，就能把排查的范围缩小一半。而且需要注意，**可视化探针本身也可能是错的**（第二个问题就是探针自己出了问题），所以它和被观测的逻辑要尽量解耦。
 
 ## 主线五：延迟执行的三种写法
 
-这次一共出现了三种"等一会儿再做"：
+这次一共出现了三种「等一会儿再做」的写法：
 
 | 写法 | 到期行为 | 能否取消 | 用在 |
 | --- | --- | --- | --- |
@@ -1318,9 +1318,9 @@ void URogueInteractionComponent::Interact()
 | `SetTimer(Handle, this, &Func, T)` | 调用无参成员函数 | 可以 | 传送弹两段计时 |
 | `SetTimer(Handle, FTimerDelegate, T)` | 调用带参函数 | 可以 | 三技能共用发射 |
 
-选择依据：**到期时需不需要跑自己的逻辑**（需要 → 不能用 `SetLifeSpan`），以及**需不需要传参**（需要 → `FTimerDelegate`）。
+选择的依据有两条，一是**到期时需不需要执行自己的逻辑**（如果需要，就不能使用 `SetLifeSpan`），二是**需不需要传递参数**（如果需要，就使用 `FTimerDelegate`）。
 
-`FTimerHandle` 必须是成员变量，否则失去取消/查询能力。`FTimerDelegate` 优先用 `CreateUObject` 而不是 `CreateLambda`，因为前者带弱引用检查。
+`FTimerHandle` 必须是成员变量，否则就失去了取消和查询的能力。`FTimerDelegate` 应该优先使用 `CreateUObject`，而不是 `CreateLambda`，因为前者带有弱引用检查。
 
 ---
 
@@ -1328,51 +1328,51 @@ void URogueInteractionComponent::Interact()
 
 ### ① 组件的 `UPROPERTY` 改成 `VisibleAnywhere`
 
-现在基类四个组件和黑洞的 `RadialForceComponent` 用的都是 `EditDefaultsOnly`。标准写法是 `VisibleAnywhere`：组件指针本身不该被替换，需要编辑的是组件**内部**的属性。
+现在基类的四个组件和黑洞的 `RadialForceComponent` 使用的都是 `EditDefaultsOnly`。标准的写法是 `VisibleAnywhere`，因为组件指针本身不应该被替换，需要编辑的是组件**内部**的属性。
 
-作业一的第 6 个坑就是这一条，这次又回退了。**说明当时只记住了"改成什么"，没记住"为什么"。**
+作业一的第 6 个坑就是这一条，这次又退回去了。**这说明作业一只记住了「改成什么」，却没有理解「为什么」。**
 
 ### ② `TEXT("RadiaForceComp")` 拼写
 
-少了一个 `l`。现在改会丢掉 `BP_BlackHole` 里对 RadialForce 的所有覆盖值，需要改完重新配一遍数值。
+少了一个 `l`。如果现在修改，就会丢掉 `BP_BlackHole` 里对 RadialForce 的所有覆盖值，所以修改之后需要重新配置一遍数值。
 
 ### ③ 把 `Explode()` 提到基类做成 `BlueprintNativeEvent`
 
-现在三个弹丸的"炸掉"逻辑各写各的，传送弹的 `Explode()` 既不是 `virtual` 也不是 `BlueprintNativeEvent`——基类和蓝图都碰不到。
+现在三个弹丸的「爆炸」逻辑各写各的，传送弹的 `Explode()` 既不是 `virtual`，也不是 `BlueprintNativeEvent`，基类和蓝图都无法触及它。
 
-提到基类之后：基类给默认实现（播特效 + `Destroy`），子类各自覆盖，蓝图侧也能改表现，不用回来动 C++。第四章刚学的东西在这里能派上用场。
+把它提到基类之后，由基类提供默认的实现（播放特效并调用 `Destroy`），子类各自覆盖，蓝图这一侧也能修改表现，不需要再回来改动 C++。第四章刚学过的内容在这里就能派上用场。
 
 ### ④ 传送弹的幂等保护做彻底
 
-`ClearTimer` 挡不住同一帧触发两次 `Hit`。加 `bool bExploded` 守卫，或在 `Explode()` 开头 `SetActorEnableCollision(false)`。
+`ClearTimer` 挡不住同一帧里触发两次 `Hit` 的情况。可以加上一个 `bool bExploded` 守卫，或者在 `Explode()` 的开头调用 `SetActorEnableCollision(false)`。
 
-参照作业一爆炸桶的 `bExploded` 模式。
+可以参照作业一爆炸桶的 `bExploded` 模式。
 
 ### ⑤ 传送落点补胶囊半高
 
-角色胶囊半高是 88，而弹丸中心离地可能只有几十单位。`TeleportTo` 打开检查后会自己往上找空位，但给它一个合理的起点成功率会高很多。
+角色胶囊体的半高是 88，而弹丸的中心离地面可能只有几十个单位。打开检查之后，`TeleportTo` 会自己往上寻找空位，但如果给它一个合理的起点，成功率会高很多。
 
 ### ⑥ `bDrawDebug` 开关
 
-交互组件里的三个 debug 绘制 + 每帧构造的 `FString::Printf` 应该收进一个 `UPROPERTY(EditAnywhere) bool bDrawDebug`。弹丸满天飞的时候屏幕上挂着白球、红框、点积文字会很吵。
+交互组件里的三处 debug 绘制，加上每帧构造的 `FString::Printf`，应该都收进一个 `UPROPERTY(EditAnywhere) bool bDrawDebug` 开关里。否则弹丸满天飞的时候，屏幕上挂着的白球、红框和点积文字会显得非常杂乱。
 
-更进阶的做法是用 `TAutoConsoleVariable`，运行时敲命令切换。
+更进一步的做法是使用 `TAutoConsoleVariable`，在运行时通过敲命令来切换。
 
 ### ⑦ `Interact()` 改名 `PrimaryInteract()`
 
-现在这条调用链上有三个同名 `Interact`：PlayerController 的输入回调、组件的方法、接口的函数。同一个函数体里会同时出现 `URogueInteractionComponent::Interact` 和 `Execute_Interact`。
+现在这条调用链上有三个同名的 `Interact`，分别是 PlayerController 的输入回调、组件的方法和接口的函数。同一个函数体里会同时出现 `URogueInteractionComponent::Interact` 和 `Execute_Interact`。
 
 ### ⑧ 交互接口加 `InstigatorPawn` 参数
 
-改接口签名会连带改所有实现类和调用点。课程后面讲 Action 系统时会自然需要它，那时一起改。
+修改接口的签名会连带修改所有的实现类和调用点。课程后面讲到 Action 系统时自然会需要它，到那时再一起修改。
 
 ### ⑨ 交互评分加距离权重
 
-现在只看角度不看距离，远处正对着的会赢过近处偏一点的。这是手感优化不是 bug，做的时候要处理"角度和距离怎么加权"的调参问题。
+现在只看角度，不看距离，远处正对着的物体会胜过近处稍微偏一点的物体。这属于手感上的优化，并不是 bug，做的时候需要处理「角度和距离怎样加权」的调参问题。
 
 ### ⑩ 用 `BindAction` 传参的另一条路
 
-作业提示给了两条路，这里走的是 `FTimerDelegate`。另一条是在 `BindAction` 时就把弹丸类作为额外参数传进来，那样连三个一行的入口函数都能省掉。值得试一次做对比。
+作业提示给出了两条路，这里走的是 `FTimerDelegate`。另一条路是在 `BindAction` 时就把弹丸类作为额外的参数传进来，这样连三个只有一行的入口函数都可以省掉。值得尝试一次，做个对比。
 
 ---
 

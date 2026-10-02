@@ -10,7 +10,7 @@ tags:
   - 伤害系统
   - 物理冲量
   - Niagara
-description: ActionRoguelike 课程 Assignment 1 的完整复盘。第一部分用 Enhanced Input 实现角色跳跃并读通 ACharacter::Jump 的源码分层；第二部分从零设计一个爆炸桶，覆盖 TakeDamage 重写、伤害系统的双端结构、UPROPERTY 说明符的判断标准、组件与一次性效果的生命周期差异、RadialForceComponent 与冲量、以及本次实际踩过的十四个坑。
+description: 这是 ActionRoguelike 课程 Assignment 1 的完整复盘。第一部分使用 Enhanced Input 实现角色跳跃，并读懂 ACharacter::Jump 在源码中的分层；第二部分从零开始设计一个爆炸桶，内容包括 TakeDamage 的重写、伤害系统的双端结构、UPROPERTY 说明符的判断标准、组件与一次性效果在生命周期上的差异、RadialForceComponent 与冲量，以及这次作业中实际遇到的十四个坑。
 cover: /img/covers/UE5-ActionRoguelike-Assignment1.svg
 series: UE5 ActionRoguelike
 privacy: protected
@@ -22,7 +22,7 @@ private_section: 课外
 
 本文是 Tom Looman《UE5 C++》**Assignment 1** 的完整复盘。
 
-本次使用的开发环境：
+本次使用的开发环境如下：
 
 - Unreal Engine `5.6.1`
 - Rider
@@ -31,9 +31,9 @@ private_section: 课外
 
 ## 这次作业和前两章的根本区别
 
-前两章是**跟着敲**：老师写一行，跟一行，遇到不懂的地方回看视频。作业是**自己设计**：只给一份需求清单和几个资产名，中间所有的类结构、成员划分、函数职责、执行顺序都要自己决定。
+前两章都是**跟着老师敲代码**，老师写一行，就跟着写一行，遇到不懂的地方再回看视频。而作业需要**自己设计**，课程只给出一份需求清单和几个资产名，中间所有的类结构、成员划分、函数职责和执行顺序，都要自己来决定。
 
-作业原始需求（课程给出的完整清单）：
+作业的原始需求（课程给出的完整清单）如下：
 
 **资产**
 
@@ -66,17 +66,17 @@ private_section: 课外
 - 提示：力是持续施加的，冲量是一次强烈的力作用。
 - **始终在蓝图中分配资源，而不是在 C++ 中分配。**
 
-最终效果：
+最终实现的效果如下：
 
-- 空格键跳跃，动画蓝图自动播放起跳/滞空/落地动画；
-- 法球击中油桶 → 油桶开始冒火并发出燃烧声 → 3 秒后爆炸，火焰停止，播放爆炸特效和音效，周围物体被推开；
+- 按空格键跳跃，动画蓝图自动播放起跳、滞空和落地动画；
+- 法球击中油桶后，油桶开始冒火并发出燃烧声，3 秒后爆炸，火焰停止，同时播放爆炸特效和音效，周围的物体被推开；
 - 重复击中不会重复起爆。
 
-这篇文章的重点不是"最终代码长什么样"，而是：
+这篇文章的重点并不是「最终代码长什么样」，而是下面三个问题：
 
 - 每一个设计决策的**判断依据**是什么；
-- 需求里的每一句话对应代码里的哪一行；
-- 中间实际出错的十四个地方，以及每个错误暴露了什么认知盲区。
+- 需求里的每一句话对应着代码里的哪一行；
+- 中间实际出错的十四个地方，以及每个错误暴露出了哪些认知上的盲区。
 
 ---
 
@@ -104,9 +104,9 @@ private_section: 课外
 
 ## 1.1 读源码：`Jump()` 到底做了什么
 
-作业第一句就是"查看引擎源代码，找到玩家角色内置的跳跃逻辑"。这不是走过场，读完之后第二个需求才有意义。
+作业的第一句就是「查看引擎源代码，找到玩家角色内置的跳跃逻辑」。这一步并不是走过场，只有读完源码，第二个需求才有意义。
 
-`ACharacter::Jump()` 的实现极其简单：
+`ACharacter::Jump()` 的实现非常简单：
 
 ```cpp
 void ACharacter::Jump()
@@ -122,9 +122,9 @@ void ACharacter::StopJumping()
 }
 ```
 
-**它根本没有让角色动。** 它只是置了一个标志位。
+**它根本没有让角色移动**，只是设置了一个标志位。
 
-真正的执行在别处。`ACharacter::CheckJumpInput(float DeltaTime)` 每帧被调用，读取 `bPressedJump`，做一系列合法性判断（是否在地面、`JumpMaxCount` 有没有用完、是否处于下蹲状态、`JumpKeyHoldTime` 有没有超过 `JumpMaxHoldTime`），通过之后才调用 `UCharacterMovementComponent::DoJump()`：
+真正的执行发生在别处。`ACharacter::CheckJumpInput(float DeltaTime)` 每一帧都会被调用，它读取 `bPressedJump`，并做一系列合法性判断，包括是否在地面上、`JumpMaxCount` 有没有用完、是否处于下蹲状态，以及 `JumpKeyHoldTime` 有没有超过 `JumpMaxHoldTime`。这些判断都通过之后，才会调用 `UCharacterMovementComponent::DoJump()`：
 
 ```cpp
 bool UCharacterMovementComponent::DoJump(bool bReplayingMoves, float DeltaTime)
@@ -142,9 +142,9 @@ bool UCharacterMovementComponent::DoJump(bool bReplayingMoves, float DeltaTime)
 }
 ```
 
-到这里才真正修改了速度。
+到了这一步，才真正修改了速度。
 
-**这个分层是本节最值得记住的东西**：
+**这种分层是本节最值得记住的内容**：
 
 ```text
 输入层    Jump()               只记录"玩家想跳"
@@ -152,74 +152,74 @@ bool UCharacterMovementComponent::DoJump(bool bReplayingMoves, float DeltaTime)
 执行层    DoJump()             真正修改 Velocity
 ```
 
-第一章的 `Move()` 也是同样结构 —— `AddMovementInput` 只是累加输入向量，`CharacterMovementComponent` 才是执行者。**UE 的角色系统里，"表达意图"和"执行结果"永远是分开的两步。** 后面做冲刺、闪避、攀爬时还会反复见到这个模式。
+第一章的 `Move()` 也是同样的结构，`AddMovementInput` 只是累加输入向量，真正的执行者是 `CharacterMovementComponent`。**在 UE 的角色系统里，「表达意图」和「执行结果」始终是分开的两个步骤。** 后面做冲刺、闪避和攀爬时，还会反复见到这种模式。
 
-理解这一点，第 1.4 节的错误就能自己避免了。
+理解了这一点，就能自己避免第 1.4 节里的错误。
 
 ## 1.2 `IA_Jump` 资产配置
 
-新建 Input Action，路径放在第一章建好的 `Input` 文件夹里。
+新建一个 Input Action，把它放在第一章建好的 `Input` 文件夹里。
 
 | 项 | 值 | 说明 |
 | --- | --- | --- |
 | 值类型（Value Type） | 数字（布尔）Digital (bool) | 跳跃只有"按下/没按下"两种状态，不需要轴数据 |
 | 触发器（Triggers） | 已按下（Pressed） | 可选，见下 |
 
-对比第二章的 `IA_PrimaryAttack`：那里加"已按下"触发器是**必须的**，因为绑定用的是 `ETriggerEvent::Triggered`，不加触发器会导致按住鼠标每帧喷出一发法球。
+和第二章的 `IA_PrimaryAttack` 对比一下。在那里加上「已按下」触发器是**必须的**，因为绑定使用的是 `ETriggerEvent::Triggered`，如果不加触发器，按住鼠标时每一帧都会喷出一发法球。
 
-这里最终用的是 `ETriggerEvent::Started`，所以触发器加不加都能正常工作。留着它只是保持资产配置的一致性。**但两者的可靠性完全不同**，见 1.3。
+而这里最终使用的是 `ETriggerEvent::Started`，所以无论加不加触发器，都能正常工作。保留它只是为了让资产配置保持一致。**但是两种写法的可靠性完全不同**，详见 1.3 节。
 
-然后在 `IMC_DefaultPlayer` 里添加映射：`IA_Jump` → 空格键。这一步的映射条目下面的"触发器/修改器"数组都保持为空，因为按键级不需要额外处理，`设置行为` 保持"从操作中继承设置"即可。
+然后在 `IMC_DefaultPlayer` 里添加一条映射，把 `IA_Jump` 映射到空格键。这条映射下面的「触发器」和「修改器」数组都保持为空，因为按键这一级不需要额外的处理，`设置行为` 保持「从操作中继承设置」即可。
 
 ## 1.3 输入绑定
 
-头文件里加一个 Input Action 槽位，格式和第一章的 `Input_Move` 完全一致：
+在头文件里加上一个 Input Action 槽位，格式和第一章的 `Input_Move` 完全一致：
 
 ```cpp
 UPROPERTY(EditDefaultsOnly, Category="Input")
 TObjectPtr<UInputAction> Input_Jump;
 ```
 
-`SetupPlayerInputComponent` 里两行绑定：
+在 `SetupPlayerInputComponent` 里写两行绑定：
 
 ```cpp
 EnhancedInput->BindAction(Input_Jump, ETriggerEvent::Started,   this, &ACharacter::Jump);
 EnhancedInput->BindAction(Input_Jump, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
 ```
 
-注意函数指针写的是 `&ACharacter::Jump` 而不是 `&ARogueCharacter::Jump` —— 这两个函数是从 `ACharacter` 继承来的，不需要在自己的类里重新声明。
+需要注意，函数指针写的是 `&ACharacter::Jump`，而不是 `&ARogueCharacter::Jump`，因为这两个函数是从 `ACharacter` 继承来的，不需要在自己的类里重新声明。
 
 ### 为什么用 `Started` 而不是 `Triggered`
 
-这两个 `ETriggerEvent` 的语义不同：
+这两个 `ETriggerEvent` 的语义是不同的：
 
 | 事件 | 触发时机 |
 | --- | --- |
 | `Started` | Action 从"未激活"跃迁到"开始激活"的**那一帧**，只发一次 |
 | `Triggered` | 每次 Action 判定为"已触发"就发，无触发器时按住期间**每帧都发** |
 
-写成 `Triggered` 也能跑，而且完全正常 —— 因为 `IA_Jump` 上挂了"已按下"触发器，把 `Triggered` 压成了只在按下那一帧发射。
+写成 `Triggered` 也能运行，而且完全正常，这是因为 `IA_Jump` 上挂了「已按下」触发器，把 `Triggered` 限制成了只在按下的那一帧发出。
 
-**问题在于：这样一来 C++ 的正确性依赖于资产配置。** 哪天有人在编辑器里删掉那个触发器，或者改成 Hold，`Triggered` 就恢复成每帧发射，`Jump()` 会被调用 60 次/秒。
+**问题在于，这样一来，C++ 代码的正确性就依赖于资产的配置了。** 如果哪天有人在编辑器里删掉了那个触发器，或者把它改成了 Hold，`Triggered` 就会恢复成每一帧都发出，`Jump()` 每秒会被调用 60 次。
 
-`Jump()` 内部只是重复置同一个 `true`，是幂等的，所以不会崩。但换成攻击、扔手雷、开门这类**非幂等**的逻辑，同样的写法就是灾难 —— 而且这种 bug 只在别人改了资产之后才出现，极难定位。
+`Jump()` 内部只是重复地设置同一个 `true`，它是幂等的，所以不会出问题。但是如果换成攻击、扔手雷或者开门这类**非幂等**的逻辑，同样的写法就会造成严重的后果，而且这种 bug 只有在别人修改了资产之后才会出现，非常难以定位。
 
-**规则：一次性动作用 `Started`，持续输入（移动、瞄准）用 `Triggered`。** `Started` 是引擎层保证的"按下瞬间"语义，与资产配置解耦。
+**所以一次性的动作应该使用 `Started`，持续性的输入（比如移动和瞄准）应该使用 `Triggered`。** `Started` 是由引擎层保证的「按下瞬间」语义，与资产配置无关。
 
 ### 为什么必须绑 `Completed` → `StopJumping`
 
-`Jump()` 置 `bPressedJump = true`，`CharacterMovementComponent` 每帧检查这个标志。只要它为 true 且 `JumpKeyHoldTime` 没超过 `JumpMaxHoldTime`，就持续给一个向上的速度 —— 这就是"长按跳更高"的实现方式。
+`Jump()` 会设置 `bPressedJump = true`，而 `CharacterMovementComponent` 每一帧都会检查这个标志。只要它为 true，并且 `JumpKeyHoldTime` 没有超过 `JumpMaxHoldTime`，就会持续施加一个向上的速度，「长按跳得更高」就是这样实现的。
 
-不绑 `StopJumping`，标志永远不清，后果有两个：
+如果不绑定 `StopJumping`，这个标志就永远不会被清除，这会带来两个后果：
 
-- `JumpMaxHoldTime` 一旦设成非 0，短按和长按跳一样高（因为它以为你一直按着），高度控制完全失效；
-- `bPressedJump` 残留会干扰 `JumpMaxCount > 1` 的多段跳判定。
+- 一旦把 `JumpMaxHoldTime` 设成非 0 的值，短按和长按就会跳得一样高（因为引擎以为按键一直没有松开），高度控制完全失效；
+- 残留的 `bPressedJump` 会干扰 `JumpMaxCount > 1` 时的多段跳判定。
 
-默认 `JumpMaxHoldTime = 0`，所以现在看不出差别。**这是典型的"配置一改就崩"的隐藏 bug** —— 代码现在能跑，不代表它是对的。
+默认情况下 `JumpMaxHoldTime = 0`，所以现在还看不出差别。**这是一种典型的「配置一改就出错」的隐藏 bug**，代码现在能够运行，并不代表它是正确的。
 
 ## 1.4 第一版的错法：不要自己重写 `Jump()`
 
-第一版是这样写的：
+第一版的写法是这样的：
 
 ```cpp
 // 错误示范
@@ -230,23 +230,23 @@ void ARogueCharacter::Jump()
 }
 ```
 
-并且在头文件里加了一个 `TObjectPtr<UAnimMontage> JumpMontage;`。
+同时还在头文件里加了一个 `TObjectPtr<UAnimMontage> JumpMontage;`。
 
-三个问题：
+这种写法有三个问题。
 
-**① 作业已经说了"动画蓝图已经设置好"。** 动画蓝图靠 `UCharacterMovementComponent::IsFalling()` 驱动状态机切换到滞空状态，再叠一层 Montage 会和状态机抢同一个输出通道（第二章的 Slot 节点问题）。
+**① 作业已经说明了「动画蓝图已经设置好」。** 动画蓝图依靠 `UCharacterMovementComponent::IsFalling()` 驱动状态机切换到滞空状态，如果再叠加一层 Montage，就会和状态机争抢同一个输出通道（也就是第二章遇到的 Slot 节点问题）。
 
-**② 顺序错误。** `PlayAnimMontage` 写在 `Super::Jump()` **之前**，是无条件执行的。但由 1.1 可知，`Jump()` 只是置标志位，跳跃本身随时可能被 `CheckJumpInput` 拒绝（空中连按、`JumpMaxCount` 用完、下蹲中）。结果就是**跳没跳成，动画照播**。
+**② 顺序错误。** `PlayAnimMontage` 写在了 `Super::Jump()` 的**前面**，它是无条件执行的。但是由 1.1 节可知，`Jump()` 只是设置标志位，跳跃本身随时可能被 `CheckJumpInput` 拒绝（比如在空中连按、`JumpMaxCount` 已经用完，或者正在下蹲）。结果就是**跳跃没有成功，动画却照样播放了**。
 
-**③ 更本质的问题：这是把表现层塞进了输入层。** 攻击需要 Montage，是因为攻击的动画不由移动状态决定，必须代码显式播放。跳跃的动画完全可以由"是否在空中"这个状态推导出来，交给动画蓝图是更正确的分层。
+**③ 更本质的问题在于，这是把表现层塞进了输入层。** 攻击之所以需要 Montage，是因为攻击的动画不由移动状态决定，必须由代码显式地播放。而跳跃的动画完全可以由「是否在空中」这个状态推导出来，交给动画蓝图来处理，分层才更合理。
 
-最后的处理：把 `Jump()` 重写和 `JumpMontage` 成员一起删掉，`BindAction` 直接绑基类的 `&ACharacter::Jump`。
+最终的处理方式是，把重写的 `Jump()` 和 `JumpMontage` 成员一起删掉，`BindAction` 直接绑定基类的 `&ACharacter::Jump`。
 
-**这个错误的根源是 1.1 的源码没读透。** 如果先看清楚 `Jump()` 只是置标志、真正执行在两层之外，就不会把动画播放放在那个位置。
+**这个错误的根源在于没有读透 1.1 节的源码。** 如果先弄清楚 `Jump()` 只是设置标志位，真正的执行在两层之外，就不会把动画播放放在那个位置。
 
 ## 1.5 跳跃手感参数
 
-跳跃跑通之后，去 `CharacterMovementComponent` 调这几个值感受差异（在 BP 的组件详情面板里改，改完立即生效）：
+跳跃功能跑通之后，可以去 `CharacterMovementComponent` 里调整下面这几个值，感受一下差异（在 BP 的组件详情面板里修改，改完立即生效）：
 
 | 参数 | 默认值 | 作用 |
 | --- | --- | --- |
@@ -256,7 +256,7 @@ void ARogueCharacter::Jump()
 | `JumpMaxHoldTime` | 0 | 长按跳更高的最长持续时间，配合 `StopJumping` 使用 |
 | `JumpMaxCount` | 1 | 最大跳跃次数，改成 2 就是二段跳 |
 
-这些参数的直觉只能靠手感积累，代码上没有可讲的。但值得注意的是：**动作游戏的跳跃手感几乎全在这五个数里**，理解它们比多写一百行代码更有用。
+这些参数的直觉只能依靠手感来积累，在代码上没有什么可讲的。但是值得注意的是，**动作游戏的跳跃手感几乎全部取决于这五个数值**，理解它们比多写一百行代码更有用。
 
 ---
 
@@ -266,14 +266,14 @@ void ARogueCharacter::Jump()
 
 ## 2.1 需求里藏着一个三状态机
 
-把需求清单里和行为相关的几条拎出来：
+把需求清单里和行为相关的几条挑出来：
 
 - 受到伤害后，延迟 3 秒爆炸
 - 延迟期间播放燃烧音效和粒子效果
 - 爆炸时循环燃烧效果停止
 - 爆炸只能发生一次
 
-这四条描述的是同一个东西 —— 一个只有三个状态的小机器：
+这四条描述的是同一个东西，也就是一个只有三个状态的小型状态机：
 
 ```text
    完好  ──(挨打)──>  引信燃烧中  ──(3秒到)──>  已爆炸
@@ -282,7 +282,7 @@ void ARogueCharacter::Jump()
                                             火焰和燃烧声停止
 ```
 
-一旦画出这张图，两个函数的职责就自动确定了：
+一旦画出这张图，两个函数的职责也就自然确定了：
 
 | 函数 | 职责 | 对应状态转移 |
 | --- | --- | --- |
@@ -291,26 +291,26 @@ void ARogueCharacter::Jump()
 
 ## 2.2 最关键的认知：`TakeDamage` 不负责爆炸
 
-很多人的第一反应是"挨打了 → 炸"，然后发现要延迟 3 秒，就开始想在 `TakeDamage` 里怎么"等待"。
+很多人的第一反应是「挨打之后就爆炸」，然后发现需要延迟 3 秒，于是开始思考怎样在 `TakeDamage` 里「等待」。
 
-这是错的。**挨打和爆炸是两个在时间上分离的事件，中间靠定时器连接。**
+这种思路是错误的。**挨打和爆炸是两个在时间上分离的事件，它们之间依靠定时器来连接。**
 
-`TakeDamage` 只做"按下启动按钮"这一件事，然后**立刻返回**。3 秒后由 `FTimerManager` 主动调用 `Explode`。这和第二章"延迟 0.2 秒生成法球"是完全相同的结构：
+`TakeDamage` 只做「按下启动按钮」这一件事，然后**立刻返回**。3 秒之后，由 `FTimerManager` 主动调用 `Explode`。这和第二章「延迟 0.2 秒生成法球」是完全相同的结构：
 
 ```text
 第二章：PrimaryAttack()  → SetTimer(0.2s) → AttackTimerElapsed()  → 生成法球
 本次：  TakeDamage()     → SetTimer(3.0s) → Explode()             → 爆炸
 ```
 
-**UE 里凡是"延迟做某事"，答案永远是定时器，不是等待。** 游戏线程不能阻塞，任何形式的"睡眠"都会卡死整个游戏。
+**在 UE 里，凡是需要「延迟做某件事」，都应该使用定时器，而不是等待。** 游戏线程不能被阻塞，任何形式的「睡眠」都会让整个游戏卡死。
 
 ## 2.3 创建 C++ 类的正确姿势
 
-这里有两个坑，值得单独记录。
+这里有两个坑，值得单独记录下来。
 
 ### 坑一：在 Rider 里手写文件
 
-在 Rider 的解决方案树里右键"新建 C++ 类"，得到的是这样一个文件：
+在 Rider 的解决方案树里右键选择「新建 C++ 类」，得到的是下面这样一个文件：
 
 ```cpp
 #pragma once
@@ -322,19 +322,19 @@ public:
 };
 ```
 
-这是**普通 C++ 类，不是 UE 类**。没有基类、没有 `UCLASS()`、没有 `GENERATED_BODY()`、没有 include `CoreMinimal.h` 和 `.generated.h`。
+这是一个**普通的 C++ 类，而不是 UE 类**。它没有基类，没有 `UCLASS()`，没有 `GENERATED_BODY()`，也没有包含 `CoreMinimal.h` 和 `.generated.h`。
 
-后果是：UBT 能编译它（它是合法的 C++），但 **UHT 不会为它生成反射代码**。你写的所有 `UPROPERTY`、`UFUNCTION` 全部失效，蓝图里看不到任何属性，也无法创建蓝图子类。而且这个失败是**静默的** —— 编译通过，就是什么都不工作。
+这样做的后果是，UBT 能够编译它（因为它是合法的 C++ 代码），但是 **UHT 不会为它生成反射代码**。所有写下的 `UPROPERTY` 和 `UFUNCTION` 全部失效，蓝图里看不到任何属性，也无法创建蓝图子类。而且这种失败是**静默的**，编译能够通过，只是什么都不工作。
 
-**正确做法：编辑器 → 工具 → 新建 C++ 类 → 选 Actor 基类。** 编辑器会生成正确的样板，并自动更新模块的源文件列表。
+**正确的做法是依次选择编辑器中的「工具」和「新建 C++ 类」，然后选择 Actor 作为基类。** 编辑器会生成正确的样板代码，并自动更新模块的源文件列表。
 
 ### 坑二：先建蓝图后建 C++ 类
 
-先在 Content Browser 里建 `BP_ExplodingBarrel`、C++ 类还不存在的话，它的父类就是 `AActor`。
+如果先在 Content Browser 里创建了 `BP_ExplodingBarrel`，而这时 C++ 类还不存在，那么它的父类就是 `AActor`。
 
-后来 C++ 类建好了，Rider 在 `UCLASS()` 上方提示"没有派生的蓝图类" —— 这条提示就是在说：**你的 C++ 类和你的蓝图没有任何关系。**
+后来 C++ 类建好了，Rider 在 `UCLASS()` 的上方提示「没有派生的蓝图类」，这条提示的意思是，**这个 C++ 类和那个蓝图之间没有任何关系。**
 
-修复方式是在 BP 里"类设置 → 父类"改成 `ExplodingBarrel`，或者删掉重建。改完可以在资产的悬浮提示里验证：
+修复的方法是在 BP 的「类设置」里把「父类」改成 `ExplodingBarrel`，或者删掉蓝图重新创建。修改之后，可以在资产的悬浮提示里进行验证：
 
 ```text
 父类：              ActionRoguelike.ExplodingBarrel
@@ -342,19 +342,19 @@ Native Parent Class：ActionRoguelike.ExplodingBarrel
 Is Data Only：      True
 ```
 
-`Is Data Only: True` 是个好信号 —— 说明这个蓝图只用来填资产、没有蓝图逻辑，符合"逻辑在 C++、资源在蓝图"的分工。整个作业过程中应该保持它是 Data Only。
+`Is Data Only: True` 是一个好的信号，它说明这个蓝图只用来填写资产，没有蓝图逻辑，符合「逻辑写在 C++ 里、资源放在蓝图里」的分工。在整个作业的过程中，都应该让它保持 Data Only 的状态。
 
-**正确顺序：先 C++ 类编译通过 → 再从它创建蓝图子类**（在 C++ 类上右键 → 基于此类创建蓝图类）。
+**正确的顺序是先让 C++ 类编译通过，然后再从它创建蓝图子类**（在 C++ 类上右键，选择「基于此类创建蓝图类」）。
 
 ### 附带一个后续会遇到的现象
 
-C++ 类改了组件结构（增删组件、改默认值）之后，已存在的蓝图子类有时不会立刻同步。看到蓝图里组件对不上时，先重新编译蓝图或重开编辑器，别急着怀疑代码。
+C++ 类修改了组件结构（增加或删除组件、修改默认值）之后，已经存在的蓝图子类有时不会立刻同步。如果发现蓝图里的组件对不上，先重新编译蓝图，或者重新打开编辑器，不要急着怀疑代码。
 
 ---
 
 # 第三节：头文件设计
 
-完整头文件见[完整代码](#完整代码)，这里逐块解释设计依据。
+完整的头文件见[完整代码](#完整代码)，这里逐块解释设计的依据。
 
 ## 3.1 前向声明
 
@@ -371,17 +371,17 @@ class UAudioComponent;
 class UStaticMeshComponent;
 ```
 
-和第一章、第二章一致：**头文件里只前向声明，实际的 include 放到 cpp**。这样修改 `NiagaraComponent.h` 不会导致所有 include 了本头文件的翻译单元重新编译。
+和第一章、第二章一样，**头文件里只做前向声明，实际的 include 放到 cpp 文件里**。这样修改 `NiagaraComponent.h` 时，就不会导致所有包含了本头文件的翻译单元都重新编译。
 
-一个容易漏掉的点：不写 `UStaticMeshComponent` 的前向声明，编译一样过 —— 因为 `GameFramework/Actor.h` 的传递包含把它带进来了。
+有一个容易漏掉的地方，即使不写 `UStaticMeshComponent` 的前向声明，编译也一样能通过，因为 `GameFramework/Actor.h` 通过传递包含把它带了进来。
 
-**这属于依赖运气。** IWYU（Include What You Use）的原则是：你用到的每个类型，都应该由你自己保证它可见，而不是指望别的头文件顺手带进来。上游头文件一旦重构，你的代码就会莫名其妙编译失败。要么全部显式声明，要么全部不声明，**保持一致**，别一半一半。
+**但这属于依赖运气。** IWYU（Include What You Use）的原则是，用到的每一个类型，都应该由当前文件自己保证它可见，而不是指望别的头文件顺便把它带进来。一旦上游的头文件被重构，代码就会莫名其妙地编译失败。所以要么全部显式声明，要么全部不声明，**保持一致**，不要一半声明、一半不声明。
 
 ## 3.2 `UPROPERTY` 说明符的判断标准（本次作业最重要的一条）
 
-这是整份作业里最容易错、也最值得想清楚的一处。
+这是整份作业里最容易出错、也最值得想清楚的一个地方。
 
-第一版把所有成员都标成了 `EditDefaultsOnly`，包括两个组件：
+第一版把所有成员都标记成了 `EditDefaultsOnly`，其中也包括两个组件：
 
 ```cpp
 // 错误示范
@@ -389,9 +389,9 @@ UPROPERTY(EditDefaultsOnly, Category="Components")
 TObjectPtr<UNiagaraComponent> BurntEffect;
 ```
 
-**为什么错**：`BurntEffect` 是要在构造函数里用 `CreateDefaultSubobject` 创建的**组件实例**，不是可替换的资产引用。标成 `EditDefaultsOnly` 会让蓝图里冒出一个可编辑的对象引用框，改它没有任何意义（组件早已被构造出来了），改错了还会留下悬空引用。
+**错误的原因在于**，`BurntEffect` 是要在构造函数里用 `CreateDefaultSubobject` 创建的**组件实例**，而不是一个可以替换的资产引用。把它标记成 `EditDefaultsOnly`，会让蓝图里出现一个可以编辑的对象引用框，修改它没有任何意义（因为组件早就已经被构造出来了），改错了还会留下悬空引用。
 
-**正确的判断标准**：
+**正确的判断标准**如下：
 
 | 成员类型 | 说明符 | 判断依据 |
 | --- | --- | --- |
@@ -400,26 +400,26 @@ TObjectPtr<UNiagaraComponent> BurntEffect;
 | 配置参数（`float FuseDelay`） | `EditDefaultsOnly` | 需要调整的数值 |
 | 运行时状态（`FTimerHandle`、`bool bExploded`） | 不加 `UPROPERTY` | 纯运行时数据，不需要序列化也不需要暴露 |
 
-一个容易混淆的点：`VisibleAnywhere` 对**组件**是有用的，因为面板上虽然那个指针本身是只读的，但组件展开后的子属性（静态网格体、Niagara 系统资产、音效等）仍然可以编辑 —— 这正是第七节配置资产的地方。
+有一个容易混淆的地方，`VisibleAnywhere` 对**组件**是有用的。虽然面板上那个指针本身是只读的，但组件展开之后的子属性（比如静态网格体、Niagara 系统资产和音效等）仍然可以编辑，第七节配置资产的地方正是这里。
 
-而 `VisibleAnywhere` 对一个 `float` 就毫无价值，只是把一个灰掉的数字摆出来给人看。
+而 `VisibleAnywhere` 对一个 `float` 来说毫无价值，它只是把一个灰色的数字摆出来给人看。
 
 ### 关于 `FuseDelay` 该不该可编辑
 
-当时的想法是："延迟固定就是 3 秒，用 `VisibleAnywhere` 就行了吧？"
+第一版还考虑过另一种写法，既然延迟固定为 3 秒，那么使用 `VisibleAnywhere` 应该就可以了。
 
-这个想法混了两件事。**"当前设计值是 3 秒"不等于"这个值该被锁死"**：
+这个想法混淆了两件事。**「当前的设计值是 3 秒」并不等于「这个值应该被锁死」**，原因有两点：
 
-- 策划要调手感时得改 C++ 重新编译，而不是在面板里拖一下；
-- 想做变体（快引信桶 0.5 秒 / 慢引信桶 5 秒）只需建两个蓝图子类填不同值，零代码改动。写死了就得改类。
+- 策划要调整手感时，就得修改 C++ 并重新编译，而不是在面板里拖动一下；
+- 如果想做变体（比如引信 0.5 秒的快速桶和引信 5 秒的慢速桶），只需要创建两个蓝图子类，填写不同的值，不需要改动任何代码。而如果把值写死，就得修改类。
 
-判断标准很简单：**这个值将来有没有可能想调？** 有 → `EditDefaultsOnly`。
+判断的标准很简单，就是**这个值将来有没有可能需要调整**。如果有可能，就使用 `EditDefaultsOnly`。
 
-真正永不改变的常量（数学常数、协议魔数）根本不该进反射系统，直接 `static constexpr` 就行，连 `UPROPERTY` 都不用。`FuseDelay` 显然属于第一类。
+真正永远不会改变的常量（比如数学常数、协议中的魔数）根本不应该进入反射系统，直接使用 `static constexpr` 就可以了，连 `UPROPERTY` 都不需要。而 `FuseDelay` 显然属于需要调整的那一类。
 
 ### 三层覆盖关系
 
-`Radius`、`ImpulseStrength` 这类属性在 `URadialForceComponent` 源码里本身就带 `UPROPERTY(EditAnywhere, BlueprintReadWrite)`，所以蓝图里能直接改。那在 C++ 构造函数里赋值还有意义吗？有 —— 那是**设默认值**。
+`Radius` 和 `ImpulseStrength` 这类属性在 `URadialForceComponent` 的源码里本身就带有 `UPROPERTY(EditAnywhere, BlueprintReadWrite)`，所以在蓝图里可以直接修改。那么在 C++ 构造函数里给它们赋值还有意义吗？答案是有，因为这是在**设置默认值**。
 
 ```text
 C++ 构造函数赋值   →  这个类所有实例的初始值，改代码要重编译
@@ -427,11 +427,11 @@ C++ 构造函数赋值   →  这个类所有实例的初始值，改代码要�
 关卡实例上改      →  只影响那一个桶
 ```
 
-下层覆盖上层。构造函数给一个合理的默认，让类拿出去就能用；具体调参在蓝图里做，迭代快。
+下层会覆盖上层。构造函数给出一个合理的默认值，让这个类拿出去就能直接使用；具体的参数调整放在蓝图里做，迭代起来更快。
 
-**一个必踩的陷阱**：如果先在蓝图里改了某个值（比如把 `Radius` 改成 1500），之后再去改 C++ 构造函数里的默认值，**蓝图里的改动会覆盖你的新默认值** —— 因为蓝图记录了"这个属性被我改过"。
+**这里有一个一定会遇到的陷阱**。如果先在蓝图里修改了某个值（比如把 `Radius` 改成 1500），之后再去修改 C++ 构造函数里的默认值，**蓝图里的修改就会覆盖新的默认值**，因为蓝图记录了「这个属性已经被修改过」。
 
-现象是：C++ 改了但游戏里没反应。检查蓝图详情面板里那个属性右边有没有黄色的回退箭头（↩），有就说明被覆盖了，点一下恢复继承。
+它的现象是，C++ 改了，但游戏里没有反应。这时检查蓝图详情面板里那个属性的右边有没有黄色的回退箭头（↩），如果有，就说明这个值被覆盖了，点击它就可以恢复继承。
 
 ## 3.3 函数声明与 `override`
 
@@ -442,20 +442,20 @@ virtual float TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent,
 void Explode();
 ```
 
-第一版写的是：
+第一版的写法是：
 
 ```cpp
 // 错误示范
 void TakeDamage();
 ```
 
-**这不是重写，是新定义了一个同名函数。** 参数一个不能少，返回类型必须是 `float`。
+**这并不是重写，而是新定义了一个同名的函数。** 参数一个都不能少，返回类型也必须是 `float`。
 
-`override` 关键字在这里是关键防线：没有它，签名写错编译器**不会报错**，只会静默地生成一个永远不被调用的新函数。你会跑起来发现桶死活不炸，然后去检查定时器、检查资产、检查碰撞，唯独想不到问题出在函数签名上。
+`override` 关键字在这里是一道关键的防线。如果没有它，签名写错时编译器**不会报错**，只会静默地生成一个永远不会被调用的新函数。运行之后会发现桶怎么也不爆炸，于是去检查定时器、检查资产、检查碰撞，唯独想不到问题出在函数签名上。
 
-**养成习惯：所有重写虚函数一律加 `override`，让编译器帮你检查。**
+**所以要养成一个习惯，所有重写的虚函数一律加上 `override`，让编译器来帮忙检查。**
 
-关于 `Explode()` 要不要加 `UFUNCTION()`：这里留着了，但严格说不必要。`SetTimer` 有一个模板重载直接接受成员函数指针，不走反射：
+至于 `Explode()` 要不要加 `UFUNCTION()`，这里保留了它，但严格来说并不必要。因为 `SetTimer` 有一个模板重载，可以直接接受成员函数指针，不经过反射：
 
 ```cpp
 template<class UserClass>
@@ -464,9 +464,9 @@ FORCEINLINE void SetTimer(FTimerHandle& InOutHandle, UserClass* InObj,
                           float InRate, bool InbLoop = false, float InFirstDelay = -1.f);
 ```
 
-`UFUNCTION()` 只在两种情况下必需：用 `SetTimer` 的 FName 版本（`SetTimer(Handle, this, FName("Explode"), ...)`），或者需要在蓝图里调用/绑定这个函数。
+`UFUNCTION()` 只在两种情况下是必需的，一是使用 `SetTimer` 的 FName 版本（`SetTimer(Handle, this, FName("Explode"), ...)`），二是需要在蓝图里调用或者绑定这个函数。
 
-**这一点和第二章的 `OnActorHit` 形成对照**：那里的 `UFUNCTION()` 是**强制的**，因为 `AddDynamic` 绑定的是动态多播委托，必须走反射按名字查找。同样是"把函数交给别人调用"，是否需要反射取决于对方的调用机制。
+**这一点和第二章的 `OnActorHit` 正好形成对照。** 那里的 `UFUNCTION()` 是**强制的**，因为 `AddDynamic` 绑定的是动态多播委托，必须通过反射按名字查找。同样是「把函数交给别人调用」，是否需要反射，取决于对方的调用机制。
 
 ---
 
@@ -504,26 +504,26 @@ AExplodingBarrel::AExplodingBarrel()
 
 ## 4.1 `PrimaryActorTick.bCanEverTick = false`
 
-`Tick` 是 Actor 的每帧回调。`bCanEverTick = false` 的意思是：**这个 Actor 永远不需要每帧更新，别把我加进 Tick 列表。**
+`Tick` 是 Actor 每一帧的回调。`bCanEverTick = false` 的意思是，**这个 Actor 永远不需要每帧更新，不要把它加入 Tick 列表。**
 
-这个桶完全是**事件驱动**的：挨打时做事，定时器到期时做事，其他时候什么都不做。它根本没有重写 `Tick()`，开着这个开关，引擎每帧都会为它做一次调度检查、执行一个空函数。
+这个桶完全是**事件驱动**的，挨打时做事，定时器到期时做事，其他时候什么都不做。它根本没有重写 `Tick()`，如果开着这个开关，引擎每一帧都会为它做一次调度检查，并执行一个空函数。
 
-单个桶的开销可以忽略。但关卡里放 200 个桶，就是每帧 200 次无意义的调度。**这类"每个都很小但数量很大"的浪费是性能问题的典型来源**，而且事后极难定位 —— profiler 里看到的是一片均匀的低开销，没有明显热点。
+单个桶的开销可以忽略不计。但如果关卡里放了 200 个桶，每一帧就会有 200 次毫无意义的调度。**这种「每一个都很小，但数量很大」的浪费，是性能问题的典型来源**，而且事后很难定位，因为在 profiler 里看到的是一片均匀的低开销，没有明显的热点。
 
-Rider 和 UE 的类模板默认生成 `bCanEverTick = true`，这是个为了新手方便而设的坏默认值。**新建 Actor 第一件事就是判断它需不需要 Tick，不需要就关掉。**
+Rider 和 UE 的类模板默认生成的是 `bCanEverTick = true`，这是一个为了方便新手而设置的不好的默认值。**新建一个 Actor 之后，第一件事就是判断它是否需要 Tick，如果不需要就关掉。**
 
-注意区分两个 Tick：
+需要注意区分两种 Tick：
 
 | | 位置 | 本例中 |
 | --- | --- | --- |
 | Actor 级 Tick | `PrimaryActorTick.bCanEverTick` | 关掉 |
 | 组件级 Tick | 蓝图组件详情面板的"启用 Tick 并开始" | **保持开启**，静态网格组件需要它来同步物理模拟的位置 |
 
-Actor 关了不影响组件。
+关掉 Actor 级的 Tick，并不会影响组件。
 
 ## 4.2 组件创建与挂载
 
-结构和第一章的相机、第二章的投射物完全一致：
+它的结构和第一章的相机、第二章的投射物完全一致：
 
 ```text
 BarrelMeshComponent（Root）
@@ -534,19 +534,19 @@ BarrelMeshComponent（Root）
 
 ### 为什么网格组件当根
 
-`AActor` 是最裸的基类，什么都没有 —— 没有内置网格，也**没有 RootComponent**。必须自己指定一个，否则这个 Actor 连位置都没有。
+`AActor` 是最基础的基类，里面什么都没有，既没有内置的网格，也**没有 RootComponent**。所以必须自己指定一个根组件，否则这个 Actor 连位置都没有。
 
-对比：`ACharacter` 的继承链里已经带了 `USkeletalMeshComponent` 和 `UCapsuleComponent`，所以第一章只需要加相机和弹簧臂。
+与之对比，`ACharacter` 的继承链里已经带有 `USkeletalMeshComponent` 和 `UCapsuleComponent`，所以第一章只需要添加相机和弹簧臂。
 
-让网格当根是最省事的选择，原因和物理有关：**开了物理模拟的组件会跟着物理引擎移动**，挂在它下面的子组件自动跟随，这正是我们要的（桶被撞飞，火焰跟着飞）。反过来，如果把网格挂在一个非模拟的根组件下面，物理模拟会脱离父子关系，导致视觉错位。
+让网格组件作为根组件是最省事的选择，原因和物理有关。**开启了物理模拟的组件会跟着物理引擎移动**，挂在它下面的子组件也会自动跟随，这正是这里想要的效果（桶被撞飞时，火焰也跟着飞）。反过来，如果把网格挂在一个没有开启模拟的根组件下面，物理模拟就会脱离父子关系，导致视觉上的错位。
 
 ### 为什么三个组件都要挂载
 
-`URadialForceComponent` 派生自 `USceneComponent`，有自己的世界坐标 —— **爆炸的原点就是它的位置**。挂在根上，它就跟着桶走，桶滚到哪爆炸就在哪。不挂载的话它没有父级，位置永远是世界原点 (0,0,0)。
+`URadialForceComponent` 派生自 `USceneComponent`，有自己的世界坐标，**爆炸的原点就是它的位置**。把它挂在根组件上，它就会跟着桶移动，桶滚到哪里，爆炸就发生在哪里。如果不挂载，它就没有父级，位置永远是世界原点 (0,0,0)。
 
-`BurningEffect` 同理：火焰要在桶的位置烧。
+`BurningEffect` 也是同样的道理，火焰要在桶的位置燃烧。
 
-`BurningSound` 是 3D 空间音源，位置决定了玩家听到的方位和距离衰减。
+`BurningSound` 是一个 3D 空间音源，它的位置决定了玩家听到的方位和距离衰减。
 
 ## 4.3 物理配置：注意顺序
 
@@ -555,19 +555,19 @@ BarrelMeshComponent->SetCollisionProfileName("PhysicsActor");
 BarrelMeshComponent->SetSimulatePhysics(true);
 ```
 
-作业要求"启用桶的物理模拟功能，使其能对弹丸撞击产生的冲击力做出反应"，对应这两行。
+作业要求「启用桶的物理模拟功能，使其能够对弹丸撞击产生的冲击力做出反应」，对应的就是这两行代码。
 
-`PhysicsActor` 是引擎内置的碰撞预设，Object Type 为 `PhysicsBody`，对大部分通道 Block。用它而不是默认预设，是因为默认预设不一定支持物理响应。
+`PhysicsActor` 是引擎内置的碰撞预设，它的 Object Type 是 `PhysicsBody`，对大部分通道都是 Block。之所以使用它而不是默认预设，是因为默认预设不一定支持物理响应。
 
-**顺序上有讲究**：Profile 会重设碰撞响应，所以应该**先配置碰撞、再开物理**。在构造函数里两种顺序通常都没事（构造阶段还没进入物理场景），但养成正确的顺序习惯，在运行时动态切换碰撞设置的场景里就不会出问题。
+**在顺序上有讲究**。Profile 会重新设置碰撞响应，所以应该**先配置碰撞，再开启物理**。在构造函数里，两种顺序通常都不会出问题（因为构造阶段还没有进入物理场景），但养成正确的顺序习惯之后，在运行时动态切换碰撞设置的场景里就不会出错。
 
 ### 一个静默失败的坑
 
-**如果静态网格资产没有碰撞体，`SetSimulatePhysics(true)` 会静默失败** —— 桶就那么飘在空中不动，没有任何报错。
+**如果静态网格资产没有碰撞体，`SetSimulatePhysics(true)` 就会静默地失败**，桶会一直飘在空中不动，而且没有任何报错。
 
-`SM_OilBarrel` 自带碰撞所以没遇到。但如果用 Engine Content 里的基础形状（需要在 Content Browser 的设置里勾选"显示引擎内容"）或者自己导入的模型，一定要先确认碰撞体存在。
+`SM_OilBarrel` 自带碰撞体，所以没有遇到这个问题。但是如果使用 Engine Content 里的基础形状（需要在 Content Browser 的设置里勾选「显示引擎内容」），或者使用自己导入的模型，一定要先确认碰撞体是存在的。
 
-这一条和第二章的经验一致：**物理和碰撞相关的问题，绝大多数是静默失败。**
+这一条和第二章的经验一致，**与物理和碰撞相关的问题，绝大多数都是静默失败。**
 
 ## 4.4 关闭自动激活
 
@@ -577,15 +577,15 @@ BurningSound->SetAutoActivate(false);
 RadialForceComponent->SetAutoActivate(false);
 ```
 
-这三个组件默认 `bAutoActivate = true`。不关掉的后果：
+这三个组件默认都是 `bAutoActivate = true`。如果不关掉，会产生下面这些后果：
 
-- `BurningEffect`：桶一放进关卡就开始冒火
-- `BurningSound`：一直循环播放燃烧声
-- `RadialForceComponent`：**每帧持续推开周围的所有物体**
+- `BurningEffect` 会让桶一放进关卡就开始冒火；
+- `BurningSound` 会一直循环播放燃烧声；
+- `RadialForceComponent` 会**每一帧都持续推开周围的所有物体**。
 
-第三个尤其明显 —— 关卡里的箱子会被一个看不见的力持续推走。
+第三个后果尤其明显，关卡里的箱子会被一股看不见的力持续地推走。
 
-`RadialForceComponent` 之所以有"自动激活"这个概念，是因为它有两种工作模式，见 4.5。
+`RadialForceComponent` 之所以有「自动激活」这个概念，是因为它有两种工作模式，详见 4.5 节。
 
 ## 4.5 `RadialForceComponent` 与冲量
 
@@ -597,7 +597,7 @@ RadialForceComponent->ImpulseStrength = 2500.f;
 
 ### 力与冲量：作业提示三的真正含义
 
-作业提示说"力是持续施加的，冲量是一次强烈的力作用"。这不是一句物理科普，它对应 `URadialForceComponent` 源码里两条完全不同的代码路径：
+作业的提示说「力是持续施加的，冲量是一次强烈的力作用」。这并不只是一句物理科普，它对应着 `URadialForceComponent` 源码里两条完全不同的代码路径：
 
 ```text
 URadialForceComponent
@@ -610,24 +610,24 @@ URadialForceComponent
                         用途：爆炸、冲击波
 ```
 
-爆炸是瞬间事件，所以：
+爆炸是一个瞬间发生的事件，所以：
 
-- 用 `FireImpulse()`，不用 `Activate()`
-- `bAutoActivate = false`，否则会走 Tick 那条路径持续施力
+- 要使用 `FireImpulse()`，而不是 `Activate()`；
+- 要设置 `bAutoActivate = false`，否则就会走 Tick 那条路径，持续地施加力。
 
-**这两件事是一体的** —— 选了冲量路径，就必须关掉自动激活，否则等于两条路径同时在跑。
+**这两件事是一体的**，选择了冲量的路径，就必须关掉自动激活，否则就相当于两条路径同时在运行。
 
 ### `bImpulseVelChange` 为什么要忽略质量
 
-物理上，冲量 J 施加到质量 m 的物体上，速度变化是 `Δv = J / m`。同一次爆炸，10kg 的箱子飞得快，1000kg 的车几乎不动 —— 这是真实的。
+在物理上，把冲量 J 施加到质量为 m 的物体上，速度的变化量是 `Δv = J / m`。同一次爆炸，10kg 的箱子会飞得很快，而 1000kg 的车几乎不动，这是符合真实情况的。
 
-但游戏里这会带来一个麻烦：关卡里各种物体的质量差异可能有两三个数量级，而质量往往是美术随手设的（或者由网格体积自动算出来的）。你调 `ImpulseStrength` 调到轻物体看起来爽，重物体就纹丝不动；调到重物体能飞，轻物体直接飞出天际。**手感完全不可控。**
+但是在游戏里，这会带来一个麻烦。关卡里各种物体的质量可能相差两三个数量级，而且质量往往是美术人员随手设置的（或者是根据网格的体积自动算出来的）。如果把 `ImpulseStrength` 调到让轻的物体看起来效果很好，重的物体就会纹丝不动；如果调到让重的物体能飞起来，轻的物体就会直接飞出天际。**这样手感就完全无法控制。**
 
-`bImpulseVelChange = true` 的作用是：**把 `ImpulseStrength` 直接当作速度变化量（cm/s）来用，跳过除以质量那一步。** 所有物体获得相同的初速度，爆炸看起来一致，只需要调一个数就能控制全局手感。
+`bImpulseVelChange = true` 的作用是，**把 `ImpulseStrength` 直接当作速度的变化量（cm/s）来使用，跳过除以质量的那一步。** 这样所有物体都会获得相同的初速度，爆炸的效果看起来是一致的，只需要调整一个数值，就能控制全局的手感。
 
-在源码里，这个布尔最终变成传给 `AddImpulse` 的 `bVelChange` 参数。
+在源码里，这个布尔值最终会变成传给 `AddImpulse` 的 `bVelChange` 参数。
 
-代价是不真实 —— 但游戏里"可控"通常比"真实"重要。**这是一个典型的 gameplay 向物理妥协**，值得记住这类取舍的存在。
+这样做的代价是不够真实，但在游戏里，「可控」通常比「真实」更重要。**这是一种典型的、面向玩法的物理妥协**，值得记住有这类取舍存在。
 
 ### 数值与单位
 
@@ -636,13 +636,13 @@ URadialForceComponent
 | `Radius` | 750 | 厘米 | 约 7.5 米的影响半径 |
 | `ImpulseStrength` | 2500 | cm/s（因为开了 `bImpulseVelChange`） | 物体瞬间获得 25 m/s 的速度 |
 
-注意 `Radius` 是**裸的成员变量赋值**，不是 `SetRadius()`（这个函数不存在）。UE 里组件属性有的提供 Setter 有的不提供，规律不强，写之前直接看头文件里的成员声明。
+需要注意，`Radius` 是**直接给成员变量赋值**，而不是调用 `SetRadius()`（这个函数并不存在）。UE 里的组件属性，有的提供了 Setter，有的没有提供，规律性不强，所以写之前最好直接去看头文件里的成员声明。
 
-作业的排错提示说"如果脉冲没有任何反应，请先尝试更大的值"，原因就在这里：默认 `ImpulseStrength = 1000` 但 `bImpulseVelChange = false`，除以质量之后基本等于零。
+作业的排错提示中说「如果脉冲没有任何反应，请先尝试更大的值」，原因就在这里。默认情况下 `ImpulseStrength = 1000`，但是 `bImpulseVelChange = false`，除以质量之后，效果基本上等于零。
 
 ### `ObjectTypesToAffect`
 
-还有一个数组成员 `ObjectTypesToAffect`，控制冲量影响哪些 Object Type。如果冲量对周围物体没反应，除了调大数值，也要检查目标物体的 Object Type 在不在这个数组里。默认值包含 `PhysicsBody`，所以对同样设了 `PhysicsActor` 预设的物体是生效的。
+此外还有一个数组成员 `ObjectTypesToAffect`，它控制冲量会影响哪些 Object Type。如果冲量对周围的物体没有反应，除了调大数值之外，还要检查目标物体的 Object Type 在不在这个数组里。它的默认值包含 `PhysicsBody`，所以对同样设置了 `PhysicsActor` 预设的物体是生效的。
 
 ---
 
@@ -672,9 +672,9 @@ float AExplodingBarrel::TakeDamage(float DamageAmount, FDamageEvent const& Damag
 
 ## 5.1 前提：伤害系统是双端的
 
-**`TakeDamage` 不会自己被调用。** 它是一个虚函数，必须有人主动调用 `UGameplayStatics::ApplyDamage`（或 `ApplyPointDamage` / `ApplyRadialDamage`），引擎才会转发到目标 Actor 的 `TakeDamage`。
+**`TakeDamage` 不会自己被调用。** 它是一个虚函数，必须有人主动调用 `UGameplayStatics::ApplyDamage`（或者 `ApplyPointDamage`、`ApplyRadialDamage`），引擎才会把调用转发到目标 Actor 的 `TakeDamage` 上。
 
-完整链路：
+完整的调用链路如下：
 
 ```text
 弹丸命中 → OnActorHit 回调触发
@@ -683,26 +683,26 @@ float AExplodingBarrel::TakeDamage(float DamageAmount, FDamageEvent const& Damag
         → 桶被点燃
 ```
 
-中间任何一环缺失，桶都不会炸。
+中间任何一个环节缺失，桶都不会爆炸。
 
-**这决定了调试顺序**：写完 `TakeDamage` 的第一版时，里面只放一行 `UE_LOG`，先跑起来验证链路。
+**这决定了调试的顺序。** 在写 `TakeDamage` 的第一版时，里面只放一行 `UE_LOG`，先运行起来验证整条链路。
 
-- log 打不出来 → 问题在**弹丸端**（没有 `ApplyDamage`，或者碰撞根本没检测到）
-- log 打出来了但没火焰 → 问题在**组件或资产分配**
+- 如果日志打印不出来，问题就出在**弹丸端**（没有调用 `ApplyDamage`，或者根本没有检测到碰撞）；
+- 如果日志打印出来了，但是没有火焰，问题就出在**组件或者资产的分配**上。
 
-如果不先做这个区分，很容易出现的情况是：弹丸打在桶上，桶被物理撞击推得滚动（这是碰撞产生的，和伤害无关），但引信永远不点燃 —— 然后你在桶的代码里反复检查构造函数、检查定时器、检查资产，而问题根本不在这个类里。
+如果不先做这个区分，就很容易出现下面这种情况。弹丸打在桶上，桶被物理撞击推得滚动起来（这是碰撞造成的，和伤害无关），但引信永远也不会点燃。于是开发者在桶的代码里反复检查构造函数、定时器和资产，而问题根本就不在这个类里。
 
-本次项目里第二章已经写好了 `ApplyPointDamage`，所以链路是通的。
+本项目在第二章已经写好了 `ApplyPointDamage`，所以这条链路是通的。
 
 ## 5.2 逐行解析
 
 ### `Super::TakeDamage(...)` 放在最前面
 
-基类实现会做伤害修正（应用 `DamageType` 的倍率）、检查 `bCanBeDamaged`、广播 `OnTakeAnyDamage` 事件，并返回实际生效的伤害值。
+基类的实现会做伤害修正（应用 `DamageType` 的倍率），检查 `bCanBeDamaged`，广播 `OnTakeAnyDamage` 事件，并返回实际生效的伤害值。
 
-**为什么放在守卫判断之前**：桶就算已经点燃了，它**仍然是"挨了打"**，基类的事件广播、伤害统计不该被跳过。跳过的只是"再点一次火"这个动作。
+**为什么要把它放在守卫判断之前呢？** 因为桶就算已经被点燃了，它**仍然是「挨了打」**，基类的事件广播和伤害统计不应该被跳过，需要跳过的只是「再点一次火」这个动作。
 
-这是一个需要自己权衡的设计点，没有唯一答案 —— 但必须有理由。如果放在守卫之后，语义就变成"已点燃的桶完全免疫伤害"，那也是一种合理设计（比如你要做"点燃后无敌"的机制），只是和当前需求不符。
+这是一个需要自己权衡的设计点，没有唯一的答案，但必须有理由。如果放在守卫的后面，语义就变成了「已经点燃的桶完全免疫伤害」，这也是一种合理的设计（比如要做「点燃之后无敌」的机制），只是和当前的需求不符。
 
 ### 守卫判断 + 立刻置标志位
 
@@ -714,17 +714,17 @@ if (bExploded)
 bExploded = true;
 ```
 
-这两行合起来实现需求里的"**爆炸只能发生一次**"。
+这两行代码合在一起，实现了需求里的「**爆炸只能发生一次**」。
 
-`bExploded = true` 必须在**任何表现代码之前**执行。原因是防重入：`Activate()`、`Play()` 这些调用理论上可能触发某些回调链，如果中间有什么绕回来又进了 `TakeDamage`，标志位已经置上就不会重复起爆。
+`bExploded = true` 必须在**任何表现代码之前**执行，这是为了防止重入。`Activate()` 和 `Play()` 这些调用在理论上可能会触发某些回调链，如果中间有什么调用又绕回到了 `TakeDamage`，由于标志位已经设置好了，就不会重复起爆。
 
-这是一个便宜的保险 —— 一行代码的位置调整，换掉一整类难以复现的 bug。
+这是一份成本很低的保险，只需要调整一行代码的位置，就能避免一整类难以复现的 bug。
 
 ### 命名上的一个小瑕疵
 
-`bExploded` 字面意思是"已爆炸"，但它实际表示的是"**引信已点燃**"。在 3 秒的引信期间，这个变量是 true 但桶还没炸。
+`bExploded` 的字面意思是「已爆炸」，但它实际表示的是「**引信已点燃**」。在 3 秒的引信期间，这个变量是 true，但桶还没有爆炸。
 
-不影响功能，但语义有偏差。更准确的命名是 `bIsFused` 或 `bTriggered`。记录下来提醒自己：**变量名应该描述它实际承载的状态，而不是它最终会导致的结果。**
+这不影响功能，但语义上有偏差，更准确的命名是 `bIsFused` 或者 `bTriggered`。这里记录下来作为提醒，**变量名应该描述它实际承载的状态，而不是它最终会导致的结果。**
 
 ### 激活两个组件
 
@@ -733,11 +733,11 @@ BurningEffect->Activate();
 BurningSound->Play();
 ```
 
-对应需求"延迟期间播放燃烧音效和粒子效果"。
+这对应着需求中的「延迟期间播放燃烧音效和粒子效果」。
 
-**注意 API 不对称**：`UNiagaraComponent` 用 `Activate()` / `Deactivate()`，`UAudioComponent` 用 `Play()` / `Stop()`。
+**需要注意这里的 API 是不对称的。** `UNiagaraComponent` 使用的是 `Activate()` 和 `Deactivate()`，而 `UAudioComponent` 使用的是 `Play()` 和 `Stop()`。
 
-`UAudioComponent` 其实也继承了 `Activate()`（它是 `USceneComponent` 的方法），但音频组件的惯用接口是 `Play()`，因为它还能带一个起始时间参数（`Play(float StartTime)`）。写代码时按各自的惯用接口来。
+`UAudioComponent` 其实也继承了 `Activate()`（它是 `USceneComponent` 的方法），但音频组件惯用的接口是 `Play()`，因为它还可以带一个起始时间参数（`Play(float StartTime)`）。写代码时，按照各自惯用的接口来调用即可。
 
 ### 定时器
 
@@ -746,13 +746,13 @@ GetWorldTimerManager().SetTimer(FuseTimerHandle, this,
                                 &AExplodingBarrel::Explode, FuseDelay, false);
 ```
 
-五个参数：句柄、对象、成员函数指针、延迟秒数、**是否循环**。
+这里有五个参数，分别是句柄、对象、成员函数指针、延迟的秒数，以及**是否循环**。
 
-最后那个 `false` 在第一版里**漏写了**。它的默认值恰好是 `false`，所以功能上侥幸是对的 —— 但"漏写"和"依赖默认值"在 code review 里是两种性质。显式写出来，读代码的人不需要去查函数签名才能确认这是个一次性定时器。
+最后那个 `false` 在第一版里**漏写了**。它的默认值恰好是 `false`，所以功能上碰巧是对的，但在 code review 里，「漏写」和「依赖默认值」是两种不同性质的问题。把它显式地写出来，读代码的人就不需要去查函数签名，也能确认这是一个一次性的定时器。
 
-写成 `true` 的后果：桶每 3 秒爆炸一次，永远不停。
+如果写成 `true`，后果是桶每隔 3 秒就爆炸一次，永远不会停止。
 
-**`FTimerHandle` 是成员变量而不是局部变量**，这一点第二章已经踩过坑（局部句柄导致连点出一堆法球）。这里它的作用是：如果将来需要"拆除引信"的功能，可以用这个句柄调 `ClearTimer`。
+**`FTimerHandle` 是成员变量，而不是局部变量**，第二章已经遇到过这方面的问题（局部的句柄导致连续点击时生成了一大堆法球）。在这里，它的作用是如果将来需要「拆除引信」的功能，可以使用这个句柄来调用 `ClearTimer`。
 
 ---
 
@@ -778,7 +778,7 @@ void AExplodingBarrel::Explode()
 }
 ```
 
-这个函数是纯粹的"执行"，**没有任何条件判断** —— 该不该炸的判断已经在 `TakeDamage` 里做完了。结构是"停止旧的 → 播放新的 → 施加物理"。
+这个函数是纯粹的「执行」，**里面没有任何条件判断**，因为该不该爆炸的判断已经在 `TakeDamage` 里做完了。它的结构是先停止旧的效果，再播放新的效果，最后施加物理冲量。
 
 ## 6.1 停止循环效果
 
@@ -787,11 +787,11 @@ BurningEffect->Deactivate();
 BurningSound->Stop();
 ```
 
-对应需求"爆炸时循环燃烧效果停止"。开了两个组件就要关两个。
+这对应着需求中的「爆炸时循环燃烧效果停止」。开启了两个组件，就要关闭两个组件。
 
 ## 6.2 本作业最重要的设计判断：组件 vs 静态函数生成
 
-这里有一个看起来很奇怪的不对称：
+这里有一个看起来很奇怪的不对称现象：
 
 | 效果 | 存储形式 | 播放方式 |
 | --- | --- | --- |
@@ -802,32 +802,32 @@ BurningSound->Stop();
 
 **为什么同样是特效，处理方式完全不同？**
 
-区别不在 API，在**生命周期需求**。
+两者的区别不在于 API，而在于**生命周期的需求**。
 
 ### 组件的特征
 
-- 跟着 Actor 移动（桶被撞飞，火焰跟着飞）
-- 可以被反复开关
-- **Actor 销毁时它们一起销毁**
+- 会跟着 Actor 移动（桶被撞飞时，火焰也跟着飞）；
+- 可以被反复地开启和关闭；
+- **Actor 销毁时，它们也会一起被销毁**。
 
-引信燃烧正好需要这三条：要持续 3 秒、要跟着桶、要在爆炸时被关掉。
+引信燃烧正好需要这三个特征，它要持续 3 秒，要跟着桶移动，还要在爆炸时被关掉。
 
 ### 一次性效果的特征
 
-- 只播一次，播完就该消失
-- **不需要跟着桶** —— 甚至桶如果被销毁了，爆炸也该继续播完
-- 没有"关掉它"的需求
+- 只播放一次，播放完就应该消失；
+- **不需要跟着桶移动**，甚至在桶被销毁之后，爆炸也应该继续播放完；
+- 没有「把它关掉」的需求。
 
-如果把爆炸也做成组件，会面临两个尴尬：
+如果把爆炸也做成组件，就会面临两个尴尬的问题：
 
-1. 这个组件在桶的整个生命周期里都躺着不动，只为最后那一下；
-2. 桶一销毁，正在播的特效**瞬间消失**（第二章的法球爆炸就踩过这个坑 —— `SpawnSoundAttached` 被 `Destroy()` 带走，爆炸音只响一瞬间）。
+1. 这个组件在桶的整个生命周期里都闲置着，只是为了最后那一下；
+2. 桶一旦被销毁，正在播放的特效就会**瞬间消失**（第二章的法球爆炸就遇到过这个问题，`SpawnSoundAttached` 被 `Destroy()` 一起带走了，爆炸音只响了一瞬间）。
 
-`SpawnSystemAtLocation` 生成的是一个**独立的临时 Actor**（`ANiagaraActor`），在世界里自生自灭，播完自己销毁。`PlaySoundAtLocation` 更彻底，连 Actor 都不生成，直接给音频引擎一个"在这个坐标播这段声音"的指令，是纯粹的 fire-and-forget。
+`SpawnSystemAtLocation` 生成的是一个**独立的临时 Actor**（`ANiagaraActor`），它在世界里独立存在，播放完之后会自己销毁。`PlaySoundAtLocation` 则更彻底，它连 Actor 都不生成，而是直接给音频引擎发送一条「在这个坐标播放这段声音」的指令，是纯粹的 fire-and-forget。
 
-**判断标准：需要持续控制的用组件，一次性 fire-and-forget 的用静态函数。**
+**判断的标准是，需要持续控制的效果使用组件，一次性 fire-and-forget 的效果使用静态函数。**
 
-这条规律和第二章的"音效三件套"是同一套逻辑的不同应用：
+这条规律和第二章的「音效三件套」是同一套逻辑在不同场景下的应用：
 
 | 场景 | 方式 | 原因 |
 | --- | --- | --- |
@@ -843,11 +843,11 @@ if (ExplosionEffect) { ... }
 if (ExplosionSound)  { ... }
 ```
 
-**为什么这两个要判空**：它们是蓝图里手填的资产引用，忘填就是 `nullptr`，直接传进去会 crash。
+**这两个之所以要判空**，是因为它们是在蓝图里手动填写的资产引用，如果忘了填写，就是 `nullptr`，直接传进去会导致崩溃。
 
-**为什么组件指针不用判**：`BurningEffect`、`RadialForceComponent` 这些由构造函数的 `CreateDefaultSubobject` 创建，必然非空。
+**组件指针之所以不用判空**，是因为 `BurningEffect`、`RadialForceComponent` 这些组件都是由构造函数里的 `CreateDefaultSubobject` 创建的，必然不为空。
 
-这里有个很典型的错误 —— 复制粘贴之后忘了改变量名：
+这里有一个很典型的错误，就是复制粘贴之后忘了修改变量名：
 
 ```cpp
 // 错误示范
@@ -857,17 +857,17 @@ if (BurningEffect)          // ← 判的是组件（永远非空）
 }
 ```
 
-守卫的是 `BurningEffect`（永远非空），保护的却是 `ExplosionSound`（可能为空）。**这个 `if` 恒真，等于没写。**
+守卫判断的是 `BurningEffect`（永远不为空），而保护的却是 `ExplosionSound`（可能为空）。**这个 `if` 的条件恒为真，写了也等于没写。**
 
-这类 bug 的危险在于：编译器抓不到（类型合法），逻辑上恒真恒假（不会立刻出错），只有在特定条件下（忘填资产）才 crash。**写连续的同构判空时要格外留心。**
+这类 bug 的危险在于，编译器发现不了它（因为类型是合法的），它在逻辑上恒为真或者恒为假（所以不会立刻出错），只有在特定的条件下（比如忘了填写资产）才会导致崩溃。**所以连续编写结构相同的判空代码时，要格外留心。**
 
 ## 6.4 关于 `Destroy()`
 
-第一版在 `FireImpulse()` 之后加了 `Destroy()`，后来删掉了。
+第一版在 `FireImpulse()` 之后加了一行 `Destroy()`，后来又把它删掉了。
 
-理由：**作业没有要求爆炸后销毁桶。** 桶炸完留在原地（可能换个焦黑材质）是更常见的做法。加 `Destroy()` 会导致"爆炸后桶凭空消失、地上没有任何痕迹"的视觉突兀。
+理由是**作业并没有要求在爆炸之后销毁桶。** 桶爆炸之后留在原地（可能换成一个焦黑的材质）是更常见的做法。而加上 `Destroy()` 会导致「爆炸之后桶凭空消失，地上没有任何痕迹」，视觉上会显得很突兀。
 
-如果要加，位置必须在 `FireImpulse()` **之后**（冲量已经施加完毕），而且要清楚特效和音效不受影响 —— 因为它们用的正是 6.2 讲的独立生成方式。这也反过来印证了那个设计选择的价值。
+如果要加上它，位置必须在 `FireImpulse()` **之后**（这时冲量已经施加完毕），而且要清楚特效和音效不会受到影响，因为它们使用的正是 6.2 节所讲的独立生成方式。这也从反面印证了那个设计选择的价值。
 
 ## 6.5 需要的额外 include 与模块
 
@@ -876,19 +876,19 @@ if (BurningEffect)          // ← 判的是组件（永远非空）
 #include "Kismet/GameplayStatics.h"     // PlaySoundAtLocation
 ```
 
-`Build.cs` 的 `PublicDependencyModuleNames` 里必须有 `"Niagara"`，否则是 **LNK2019 链接错误**，报错信息完全看不出是模块问题。本项目第二章已经加过了。
+`Build.cs` 的 `PublicDependencyModuleNames` 里必须包含 `"Niagara"`，否则就会出现 **LNK2019 链接错误**，而且从报错信息里完全看不出是模块的问题。本项目在第二章已经加过这个模块了。
 
-另外 `GetWorldTimerManager()` 严格说需要 `#include "TimerManager.h"`。不写也能编译过（由传递包含提供），但按 IWYU 原则应该显式包含。
+另外，严格来说，`GetWorldTimerManager()` 需要 `#include "TimerManager.h"`。不写也能编译通过（因为传递包含提供了它），但是按照 IWYU 原则，应该显式地包含它。
 
 ---
 
 # 第七节：蓝图与资产配置
 
-作业强调"**始终在蓝图中分配资源，而不是在 C++ 中分配**"。这是本次作业的一条硬纪律。
+作业强调「**始终在蓝图中分配资源，而不是在 C++ 中分配**」，这是本次作业的一条硬性纪律。
 
 ## 7.1 为什么不能在 C++ 里硬编码路径
 
-C++ 里有 `ConstructorHelpers::FObjectFinder` 可以按路径加载资产：
+C++ 里有 `ConstructorHelpers::FObjectFinder`，可以按照路径来加载资产：
 
 ```cpp
 // 反面教材，工业界严禁
@@ -896,13 +896,13 @@ static ConstructorHelpers::FObjectFinder<UNiagaraSystem>
     EffectAsset(TEXT("/Game/tharlevfx_tutorials/.../NS_Explosion"));
 ```
 
-三个问题：
+但是这样做有三个问题：
 
-1. **资产改名或移动就静默失败**，加载到 `nullptr`，运行时才发现；
-2. **编译期就把美术资源绑死在代码里**，美术改个文件夹结构就要程序重新编译；
-3. **破坏了 C++ 和蓝图的职责边界** —— 逻辑在 C++、数据在蓝图，是 UE 的基本工作流。
+1. **资产一旦改名或者移动，加载就会静默地失败**，得到的是 `nullptr`，要到运行时才能发现；
+2. **在编译期就把美术资源和代码绑死在了一起**，美术人员改一下文件夹结构，程序就得重新编译；
+3. **破坏了 C++ 和蓝图的职责边界**，逻辑写在 C++ 里、数据放在蓝图里，这是 UE 的基本工作流。
 
-正确的做法就是本次用的：C++ 声明 `EditDefaultsOnly` 的槽位 → 蓝图子类里填资产。和第一章的 `Input_Move` → `IA_Move`、第二章的 `ProjectileClass` → `BP_MagicProjectile` 是同一套模式。
+正确的做法就是本次使用的做法，在 C++ 里声明 `EditDefaultsOnly` 的槽位，然后在蓝图子类里填写资产。这和第一章把 `IA_Move` 填进 `Input_Move`、第二章把 `BP_MagicProjectile` 填进 `ProjectileClass` 是同一套模式。
 
 ## 7.2 需要配置的五处
 
@@ -914,27 +914,27 @@ static ConstructorHelpers::FObjectFinder<UNiagaraSystem>
 | 类默认值 → Effects | `Explosion Effect` | `NS_Explosion` |
 | 类默认值 → Effects | `Explosion Sound` | `MSS_Environmental_BarrelExplode` |
 
-**前三项在组件的详情面板里**（因为组件用 `VisibleAnywhere`，指针本身只读，但子属性可编辑）；**后两项在类默认值面板的 Effects 分类下**（因为它们是 `EditDefaultsOnly` 的资产引用）。
+**前三项在组件的详情面板里**（因为组件使用的是 `VisibleAnywhere`，指针本身是只读的，但它的子属性可以编辑）；**后两项在类默认值面板的 Effects 分类下**（因为它们是 `EditDefaultsOnly` 的资产引用）。
 
-这个分布正好印证了 3.2 的判断标准 —— 说明符选对了，配置的位置就是自然的。
+这种分布正好印证了 3.2 节的判断标准，只要说明符选对了，配置的位置就是自然而然的。
 
 ## 7.3 配错的两个资产
 
 **① 循环燃烧音填成了 `MSS_Enemy_StatusEffect...`**
 
-作业指定的是 `MSS_Environmental_BarrelAftermath`。资产名相似 + 下拉框搜索时手快，很容易选错。
+作业指定的是 `MSS_Environmental_BarrelAftermath`。由于资产的名字很相似，在下拉框里搜索时又操作得太快，所以很容易选错。
 
-验证方法：打开这个 MetaSound 确认它是**循环**的。一次性音效塞进 `UAudioComponent` 会播完就停，引信还剩两秒但声音已经没了 —— 这种"部分正常"的 bug 最容易被忽略。
+验证的方法是打开这个 MetaSound，确认它是**循环**播放的。如果把一次性的音效塞进 `UAudioComponent`，它播放完就会停止，引信还剩两秒，声音却已经没有了。这种「部分正常」的 bug 最容易被忽略。
 
 **② 火焰特效填成了 `NS_Burning`**
 
-作业指定的是 `NS_Flames`。两者可能是相似的资产，但作业既然点名了，就用点名的那个 —— 万一后面的章节复用了这个资产的某个参数，用错会埋雷。
+作业指定的是 `NS_Flames`。两者可能是相似的资产，但既然作业点名了，就应该使用点名的那一个，因为如果后面的章节复用了这个资产的某个参数，用错了就会留下隐患。
 
 ## 7.4 Niagara 的首次运行现象
 
-作业的排错提示专门写了这条：**首次运行时粒子系统可能仍在编译 Niagara 脚本，导致特效第一次不显示。**
+作业的排错提示专门写了这一条，**首次运行时，粒子系统可能还在编译 Niagara 脚本，导致特效第一次不显示。**
 
-看不到爆炸效果时，先重跑一次再判断，别急着去查代码。这一条能省掉半小时的无效排查。
+看不到爆炸效果时，先重新运行一次再做判断，不要急着去查代码，这样能省掉半个小时的无效排查。
 
 ---
 
@@ -956,7 +956,7 @@ void ARogueCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComp
 }
 ```
 
-对应的头文件成员：
+对应的头文件成员如下：
 
 ```cpp
 UPROPERTY(EditDefaultsOnly, Category="Input")
@@ -1178,7 +1178,7 @@ AExplodingBarrel::Explode()
 爆炸：  TakeDamage()（点火）  → FTimerManager（计时） → Explode()（执行）
 ```
 
-三个例子结构相同：**接收意图的函数从不直接产生结果。** 想清楚这一点，就不会把 Montage 播放塞进 `Jump()`，也不会想在 `TakeDamage` 里"等待 3 秒"。
+这三个例子的结构是相同的，**接收意图的函数从来不直接产生结果。** 想清楚了这一点，就不会把 Montage 的播放塞进 `Jump()`，也不会想在 `TakeDamage` 里「等待 3 秒」。
 
 ### 主线二：生命周期决定存储形式
 
@@ -1187,7 +1187,7 @@ AExplodingBarrel::Explode()
 一次性、播完即弃、不怕宿主销毁  →  资产引用 + 静态函数生成
 ```
 
-这条规律同时决定了 `UPROPERTY` 说明符：
+这条规律同时也决定了 `UPROPERTY` 说明符的选择：
 
 ```text
 组件      →  VisibleAnywhere   （已创建，不该替换，但子属性要能配置）
@@ -1196,11 +1196,11 @@ AExplodingBarrel::Explode()
 运行时状态 →  不加 UPROPERTY    （不序列化、不暴露）
 ```
 
-**说明符选对了，蓝图里配置的位置就是自然的**（7.2 那张表）。选错了，就会出现"面板上有个改了没用的框"这种症状。
+**说明符选对了，在蓝图里配置的位置就是自然而然的**（见 7.2 节的那张表）。如果选错了，就会出现「面板上有一个修改了也没用的输入框」这样的症状。
 
 ### 主线三：静默失败的排查顺序
 
-本次涉及的静默失败点：
+本次作业涉及的静默失败点如下：
 
 | 现象 | 静默原因 |
 | --- | --- |
@@ -1213,13 +1213,13 @@ AExplodingBarrel::Explode()
 | C++ 改了默认值但游戏里没变 | 蓝图记录了覆盖值 |
 | 首次运行没有爆炸特效 | Niagara 脚本还在编译 |
 
-**排查原则：先分段定位在哪一端，再查细节。** 具体到本次就是先用 `UE_LOG` 确认 `TakeDamage` 有没有被调用 —— 这一行 log 能把排查范围砍掉一半。
+**排查的原则是，先分段定位问题出在哪一端，再去检查细节。** 具体到这次作业，就是先用 `UE_LOG` 确认 `TakeDamage` 有没有被调用，这一行日志就能把排查范围缩小一半。
 
 ---
 
 # 本次实际踩过的十四个坑
 
-按出现顺序整理。每一条都记下"错误认知"比记下"正确写法"更有价值。
+下面按照出现的顺序来整理。对每一条来说，记下「错误的认知」比记下「正确的写法」更有价值。
 
 | # | 错误 | 暴露的认知盲区 |
 | --- | --- | --- |
@@ -1238,9 +1238,9 @@ AExplodingBarrel::Explode()
 | 13 | `#include "NiagaraFunctionLibrary.h"` 写了两遍 | 手滑 |
 | 14 | 资产配错两处：燃烧音、火焰特效 | 下拉框搜索时手快，没对照作业清单核验 |
 
-**其中 3、6、8、9 属于概念性错误**（不理解某个机制），**5、10、12 属于工程习惯问题**（代码现在能跑但脆弱），**1、2、14 属于流程问题**（顺序错了或没核对）。
+**其中 3、6、8、9 属于概念性的错误**（不理解某个机制），**5、10、12 属于工程习惯上的问题**（代码现在能运行，但很脆弱），**1、2、14 属于流程上的问题**（顺序错了，或者没有核对）。
 
-第二类最值得警惕 —— 它们**不会立刻表现为 bug**，只在别人改动配置、或者代码被复用到新场景时才爆发。
+第二类问题最值得警惕，因为它们**不会立刻表现为 bug**，只有在别人修改了配置，或者代码被复用到新的场景时，才会暴露出来。
 
 ---
 
@@ -1275,15 +1275,15 @@ AExplodingBarrel::Explode()
 
 ### ① 爆炸位置改用 `Hit.ImpactPoint`
 
-现状：爆炸永远从桶的**中心**发生。
+目前爆炸总是从桶的**中心**发生。
 
 ```cpp
 UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ExplosionEffect, GetActorLocation());
 ```
 
-如果弹丸打在桶的边缘，视觉上会有轻微错位。
+如果弹丸打在桶的边缘，在视觉上会有轻微的错位。
 
-`ApplyPointDamage` 传进来的 `DamageEvent` 实际类型是 `FPointDamageEvent`（`FDamageEvent` 的派生类），里面带着命中点、命中法线、被击中的具体组件。取出方式：
+`ApplyPointDamage` 传进来的 `DamageEvent`，它的实际类型是 `FPointDamageEvent`（`FDamageEvent` 的派生类），里面带有命中点、命中法线和被击中的具体组件。取出的方式如下：
 
 ```cpp
 if (DamageEvent.IsOfType(FPointDamageEvent::ClassID))
@@ -1294,9 +1294,9 @@ if (DamageEvent.IsOfType(FPointDamageEvent::ClassID))
 }
 ```
 
-注意这个数据要在 `TakeDamage` 里取出并保存为成员变量，因为 `Explode` 是 3 秒后由定时器调用的，那时候 `DamageEvent` 早就不在了。
+需要注意，这些数据要在 `TakeDamage` 里取出来，并保存为成员变量，因为 `Explode` 是 3 秒之后由定时器调用的，那时候 `DamageEvent` 早就已经不存在了。
 
-这和第二章的待办①（法球爆炸位置）是**同一个问题的两个实例**。也和"角色发射法球要用 Socket"是同一类问题 —— 效果应该出现在准确的位置，只是数据来源不同：
+这和第二章的待办①（法球爆炸的位置）是**同一个问题的两个实例**，也和「角色发射法球时要使用 Socket」属于同一类问题，效果都应该出现在准确的位置上，只是数据的来源不同：
 
 | 场景 | 位置数据来源 | 为什么 |
 | --- | --- | --- |
@@ -1310,22 +1310,22 @@ if (DamageEvent.IsOfType(FPointDamageEvent::ClassID))
 
 ### ③ 爆炸后的视觉痕迹
 
-现在爆炸完桶还是完好的橙色油桶，只是周围东西飞了。可以做：
+现在爆炸之后，桶仍然是一个完好的橙色油桶，只是周围的东西飞走了。可以考虑下面两种做法：
 
-- 爆炸后 `SetMaterial` 换成焦黑材质
-- 或者切换成一个破损的网格资产
+- 爆炸之后用 `SetMaterial` 换成焦黑的材质；
+- 或者切换成一个破损的网格资产。
 
-这比直接 `Destroy()` 更有说服力。
+这比直接调用 `Destroy()` 更有说服力。
 
 ### ④ 连锁引爆
 
-爆炸时用 `UGameplayStatics::ApplyRadialDamage` 对周围造成伤害，附近的桶收到伤害后各自开始引信。
+爆炸时使用 `UGameplayStatics::ApplyRadialDamage` 对周围造成伤害，附近的桶收到伤害之后，会各自点燃引信。
 
-这个练习的价值在于：**它会让你把伤害系统的两端都写一遍** —— 桶既是接收方（`TakeDamage`）又变成施加方（`ApplyRadialDamage`）。同时要处理"不要伤害自己"的问题，这和第二章的自伤问题是同一类。
+这个练习的价值在于，**它要求把伤害系统的两端都写一遍**，桶既是接收方（`TakeDamage`），又变成了施加方（`ApplyRadialDamage`）。同时还要处理「不要伤害自己」的问题，这和第二章的自伤问题属于同一类。
 
 ### ⑤ 拆除引信
 
-现在 `FuseTimerHandle` 存成了成员变量但从未使用。可以加一个"引信期间再受到某种伤害就熄灭"的机制，用 `GetWorldTimerManager().ClearTimer(FuseTimerHandle)` 取消。
+现在 `FuseTimerHandle` 被保存成了成员变量，但从来没有被使用过。可以加上一个「引信燃烧期间，再受到某种伤害就会熄灭」的机制，用 `GetWorldTimerManager().ClearTimer(FuseTimerHandle)` 来取消定时器。
 
 ---
 

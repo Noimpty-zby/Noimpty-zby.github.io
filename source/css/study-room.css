@@ -1,52 +1,205 @@
-/* Quiet typography and one continuous illustration, with actual object controls. */
-html.noimpty-room-home #page-header.full_page{height:auto;min-height:0;max-height:none;background:var(--global-bg)!important;padding:92px 28px 0;overflow:visible}
-html.noimpty-room-home #page-header #site-info,html.noimpty-room-home #page-header>.sakura-scene,html.noimpty-room-home #scroll-down{display:none!important}
-html.noimpty-room-home #page-header.full_page #nav{left:0;right:0;width:100%;box-sizing:border-box;background:var(--global-bg);box-shadow:none;text-shadow:none;border-bottom:1px solid #89748112}
-html.noimpty-room-home #page-header #nav :is(.site-name,.site-page,#search-button,#search-button span,#search-button i,#toggle-menu){color:var(--font-color);text-shadow:none}
-.study-room{--room-ink:#433d43;--room-muted:#786a73;--room-line:#e2d6d2;--room-paper:#fffaf5;position:relative;z-index:2;max-width:1160px;margin:0 auto;color:var(--room-ink);text-align:left}
-.room-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:28px;margin:0 0 28px;padding:0 4px}
-.room-eyebrow{display:flex;align-items:center;gap:10px;color:var(--room-muted);font-size:10px;letter-spacing:.22em;margin:0 0 13px;font-weight:700}
-.room-eyebrow>span{width:6px;height:6px;background:#a98583;border-radius:50%}
-.room-heading h1{margin:0;color:var(--room-ink);font:500 clamp(28px,3.3vw,42px)/1.35 Georgia,'Noto Serif SC','Songti SC',serif;letter-spacing:.04em}
-.room-heading h1 em{font-style:normal;color:#996c79}
-.room-intro{font-size:12px;color:var(--room-muted);margin:13px 0 0;letter-spacing:.08em}
-.room-switches{display:flex;gap:7px;flex-shrink:0;padding-bottom:3px}
-.room-switches button{display:inline-flex;gap:8px;align-items:center;min-height:38px;border:1px solid var(--room-line);border-radius:6px;background:transparent;padding:0 12px;color:var(--room-muted);font:inherit;font-size:11px;cursor:pointer}
-.room-switches button[aria-pressed=true]{background:#efe2df;color:#754b5c;border-color:#c9a5ad}
-.room-scene{position:relative;aspect-ratio:3/2;isolation:isolate;overflow:hidden;border-radius:13px;border:1px solid #d7c4b4;box-shadow:0 18px 65px -30px #57403466;background:#e2cbb3}
-.room-art{display:block;width:100%;height:100%;object-fit:cover}
-.room-light{position:absolute;inset:0;pointer-events:none;background:linear-gradient(0deg,#32252638,transparent 22%);transition:background .3s}
-.room-spots{position:absolute;inset:0}
-.room-spot{position:absolute;left:var(--spot-x);top:var(--spot-y);transform:translate(-50%,-50%);display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid #ffffffa6;border-radius:7px;color:#483630!important;background:#fffaf3ed;box-shadow:0 3px 18px #45362c26;font:inherit;font-size:12px;font-weight:500;line-height:1.25;white-space:nowrap;cursor:pointer;transition:background .18s,box-shadow .18s,translate .18s;text-decoration:none!important}
-.room-spot::before{content:'';position:absolute;left:50%;top:calc(100% + 6px);width:5px;height:5px;border-radius:50%;background:#fffaf4;box-shadow:0 0 0 5px #fff7ec40;transform:translateX(-50%)}
-.room-spot>i{font-size:11px;color:#8c6472}.room-spot>b{font-weight:400;opacity:.6;font-size:11px}
-.room-spot:hover,.room-spot:focus-visible{background:#fffdf9;box-shadow:0 5px 24px #44312440;translate:0 -3px}
-.room-scene-tag{position:absolute;left:22px;bottom:19px;color:#fffaf0d9;font:italic 13px Georgia,serif;letter-spacing:.04em;pointer-events:none}
-.room-bottom{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:16px 3px 0;line-height:1.6}
-.room-caption{font-size:11px;color:var(--room-muted);margin:0;display:flex;gap:10px;align-items:center}.room-caption i{color:#a18580}
-.room-bottom nav{display:flex;gap:24px;font-size:11px;flex-shrink:0}.room-bottom a{color:var(--room-ink)}.room-bottom a:hover{color:#996c79}.room-bottom a span{color:#a18580;margin-left:5px}
-.room-feedback{font-size:12px;color:var(--room-muted);margin:10px 3px 0}.room-feedback:empty{display:none}
-.room-progress{font-size:12px;margin-top:18px;padding:14px 18px;border:1px solid var(--room-line);border-radius:8px}.room-progress a{color:var(--room-ink)}
-.room-shortcuts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;overflow:hidden;background:var(--room-line);border:1px solid var(--room-line);border-radius:12px}
-.room-shortcuts[hidden],.room-scene[hidden],.room-progress[hidden]{display:none!important}
-.room-shortcut{position:relative;display:grid;grid-template-columns:24px 1fr;gap:8px 12px;align-content:start;text-align:left;border:0;min-height:110px;padding:24px;background:var(--room-paper);color:var(--room-ink)!important;font:inherit;cursor:pointer}
-.room-shortcut>i{grid-row:1/3;font-size:17px;color:#9d7885;padding-top:3px}.room-shortcut>span{font-size:14px;font-weight:600}.room-shortcut>small{font-size:11px;color:var(--room-muted);line-height:1.8}.room-shortcut:hover{background:#f6eae5}
-.room-clock-wrap{margin:22px 0 0;color:var(--room-muted);font-size:11px;border-top:1px solid var(--room-line);padding-top:13px}.room-clock-wrap summary{cursor:pointer;width:fit-content;min-height:28px}.room-clock-slot{display:flex;justify-content:center;padding:10px 0}.room-clock-slot .noimpty-clock{margin:12px!important}
-.study-room a:focus-visible,.study-room button:focus-visible,.study-room summary:focus-visible{outline:3px solid #875d73;outline-offset:4px}
-html.noimpty-room-home #content-inner.layout{padding-top:38px;padding-bottom:48px}
-html.noimpty-room-home .noimpty-home-sections__intro{padding:0 0 4px}html.noimpty-room-home .noimpty-home-sections__intro h2{font:500 25px Georgia,'Noto Serif SC',serif}
-html.noimpty-room-home .noimpty-home-sections__intro p:last-child{font-size:12px;color:var(--card-meta)}
-html.noimpty-room-home .noimpty-section-card{min-height:190px;aspect-ratio:1.7;border-radius:12px;box-shadow:0 8px 22px #3a24471a}
-html.noimpty-room-home .noimpty-section-card__title{font-size:25px}html.noimpty-room-home .noimpty-section-card__content{padding:20px}
-html.noimpty-room-home .noimpty-section-card__meta{display:none}html.noimpty-room-home .noimpty-section-card__action{font-size:11px}
-html[data-theme=dark] .study-room{--room-ink:#e4d9dc;--room-muted:#b6a5b0;--room-line:#4d3e48;--room-paper:#29232c}
-html[data-theme=dark] .room-heading h1 em{color:#d3a1b5}html[data-theme=dark] .room-art{filter:brightness(.66) saturate(.78)}html[data-theme=dark] .room-light{background:linear-gradient(135deg,#28223b44,transparent 60%,#17132230)}
-html[data-theme=dark] .room-scene{border-color:#56424a;box-shadow:0 22px 60px -25px #000a}html[data-theme=dark] .room-spot{background:#302630ed;color:#f0e3e3!important;border-color:#9d7d885c}html[data-theme=dark] .room-spot>i{color:#d5a8b8}html[data-theme=dark] .room-spot::before{background:#efc9bd;box-shadow:0 0 0 5px #efc9bd20}
-html[data-theme=dark] .room-switches button[aria-pressed=true],html[data-theme=dark] .room-shortcut:hover{background:#403039;color:#f0c1d0}html[data-theme=dark] .study-room :focus-visible{outline-color:#e3adc4}
-html.noimpty-focus #mao-stage,html.noimpty-focus #mao-bubble{visibility:hidden;pointer-events:none}html.noimpty-focus .sakura-petal,html.noimpty-focus .sakura-romance,html.noimpty-focus .sakura-motion-deco{display:none!important}html.noimpty-focus .room-spot{transition:none}
-@media(max-width:760px){html.noimpty-room-home #page-header.full_page{padding:84px 17px 0}.room-heading{align-items:flex-start;gap:16px;margin-bottom:20px}.room-eyebrow{font-size:9px;letter-spacing:.15em}.room-heading h1{font-size:29px}.room-intro{font-size:10px;max-width:220px;line-height:1.9}.room-switches{flex-direction:column;gap:6px}.room-switches button{font-size:10px;min-height:34px;padding:0 9px}.room-spot{min-width:32px;min-height:32px;justify-content:center;padding:7px;border-radius:50%;gap:0}.room-spot>span,.room-spot>b,.room-spot::before{display:none}.room-spot>i{font-size:12px}.room-scene{border-radius:9px}.room-scene-tag{font-size:9px;left:12px;bottom:12px}.room-bottom{align-items:flex-start;flex-direction:column;gap:13px;padding-top:13px}.room-bottom nav{font-size:12px}.room-caption{font-size:10px;min-height:28px}.room-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}.room-shortcut{min-height:96px;padding:18px 13px;gap:7px}.room-shortcut small{font-size:10px}.room-shortcut span{font-size:13px}html.noimpty-room-home .noimpty-home-sections{gap:12px}html.noimpty-room-home .noimpty-section-card{min-height:145px;aspect-ratio:.8}html.noimpty-room-home .noimpty-section-card__content{padding:12px}html.noimpty-room-home .noimpty-section-card__title{font-size:22px}html.noimpty-room-home .noimpty-section-card__action{font-size:9px}}
-@media(prefers-reduced-motion:reduce){.study-room *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
-@media(forced-colors:active){.room-spot,.room-switches button,.room-shortcut{background:Canvas;color:CanvasText!important;border:1px solid ButtonText}.room-art{opacity:.3}.room-spot>i{color:ButtonText}}
+/* 首页「我的小房间」（scripts/noimpty-room.js 生成结构，source/js/study-room.js 摆放）。
+ * 小物件站在一条木头搁板上，名字写在挂在搁板下面的小吊牌上。
+ * 眨眼、呼吸、眼珠跟着鼠标沿用 interior.css / interior-deco.js，这里只管摆放和悬停。 */
+.noimpty-room {
+  --room-ink: #5b3a48;
+  --room-plank: #f6d9bd;
+  --room-tag: #fffaf7;
+  --room-gap: 8px;
+  width: 100%;
+  margin: 0 0 clamp(34px, 5vw, 56px);
+}
+.noimpty-room__caption { min-height: 1.8em; transition: color .2s ease; }
 
-#room-focus-exit{position:fixed;z-index:100;top:72px;right:18px;background:var(--card-bg);color:var(--font-color);border:1px solid var(--noimpty-border);border-radius:20px;padding:9px 15px;font-size:12px;box-shadow:0 4px 18px #38243718;cursor:pointer}#room-focus-exit[hidden]{display:none}
-@media(max-width:760px){.room-heading h1{font-size:27px}.room-heading h1 em{display:block}}
+.noimpty-room__wall {
+  position: relative;
+  margin-top: 22px;
+  padding: 58px clamp(16px, 3vw, 34px) 30px;
+  border: 1px solid var(--noimpty-border);
+  border-radius: var(--section-radius, 26px);
+  background:
+    radial-gradient(circle, rgba(238, 93, 123, .09) 1.6px, transparent 2.2px) 0 0 / 24px 24px,
+    linear-gradient(180deg, #fff8fb 0%, #fdf1f6 66%, #f8e8f0 100%);
+  box-shadow: 0 14px 36px -24px rgba(122, 52, 82, .45);
+  overflow: hidden;
+}
+
+/* 墙上一串彩旗：绳子是一道下垂的弧，旗子按弧线的高度往下挂（下垂量在 noimpty-room.js 里算好） */
+.noimpty-room__bunting {
+  position: absolute;
+  top: 0;
+  left: 6%;
+  right: 6%;
+  height: 40px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.noimpty-room__bunting svg { position: absolute; inset: 0; width: 100%; height: 30px; overflow: visible; }
+.noimpty-room__bunting i {
+  position: relative;
+  width: 20px;
+  height: 17px;
+  margin-top: var(--sag, 0);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  background: #ffc2d1;
+}
+.noimpty-room__bunting i:nth-of-type(5n + 2) { background: #ffe39b; }
+.noimpty-room__bunting i:nth-of-type(5n + 3) { background: #b8ecd9; }
+.noimpty-room__bunting i:nth-of-type(5n + 4) { background: #c4dcff; }
+.noimpty-room__bunting i:nth-of-type(5n + 5) { background: #dccbff; }
+
+.noimpty-room__items {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 26px var(--room-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.noimpty-room__items li { margin: 0; padding: 0; min-width: 0; }
+.noimpty-room__items li::before { display: none; }
+
+.noimpty-room__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--room-ink);
+  font: inherit;
+  text-decoration: none !important;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.noimpty-room__item:focus-visible { outline: 3px dashed var(--noimpty-accent); outline-offset: 5px; border-radius: 18px; }
+
+/* 物件和它脚下的那一截搁板。相邻几截连起来就是一整条，每行两头收成圆角 */
+.noimpty-room__art { position: relative; display: block; width: min(100%, 112px); }
+.noimpty-room__art svg { position: relative; z-index: 1; display: block; width: 100%; height: auto; overflow: visible; }
+.noimpty-room__art::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  top: 88%;
+  left: calc(-50vw);
+  right: calc(-50vw);
+  height: 11px;
+  background: var(--room-plank);
+  border-block: 2.5px solid var(--room-ink);
+}
+/* 每截搁板往两边伸出去半个屏宽、被墙裁掉，一行里的几截就连成一整条。
+ * 物件不能各自开层叠上下文，否则后一个的搁板会盖住前一个的脚。 */
+
+/* 吊牌：一根细绳从搁板垂下来，单数歪一点、双数歪另一边 */
+.noimpty-room__tag {
+  position: relative;
+  margin-top: 22px;
+  padding: 4px 11px 5px;
+  border: 2px solid var(--room-ink);
+  border-radius: 999px;
+  background: var(--room-tag);
+  color: var(--room-ink);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: nowrap;
+  transform: rotate(-3deg);
+  transform-origin: 50% -14px;
+  box-shadow: 0 3px 0 rgba(91, 58, 72, .12);
+  transition: background .2s ease, transform .2s ease;
+}
+.noimpty-room__items li:nth-child(even) .noimpty-room__tag { transform: rotate(2.5deg); }
+.noimpty-room__tag::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 2px;
+  height: 14px;
+  margin-left: -1px;
+  background: var(--room-ink);
+  opacity: .55;
+}
+
+/* 指上去：跳一下、眯起眼笑、吊牌晃一晃 */
+.noimpty-room__item:is(:hover, :focus-visible) .kw-bob { animation: kw-hop .8s cubic-bezier(.3, 1.5, .5, 1) both; }
+.noimpty-room__item:is(:hover, :focus-visible) .kw-eyes { opacity: 0; }
+.noimpty-room__item:is(:hover, :focus-visible) .kw-joy { opacity: 1; }
+.noimpty-room__item:is(:hover, :focus-visible) .noimpty-room__tag { background: #ffe1ea; animation: room-swing 1s ease-in-out both; }
+.noimpty-room__item[aria-pressed='true'] .noimpty-room__tag { background: #ffd1dc; }
+@keyframes room-swing {
+  0% { transform: rotate(-3deg); }
+  30% { transform: rotate(7deg); }
+  60% { transform: rotate(-4deg); }
+  100% { transform: rotate(1deg); }
+}
+
+.noimpty-room__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px 18px;
+  margin-top: 18px;
+}
+.noimpty-room__focus {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--noimpty-border);
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: var(--noimpty-accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: transform .2s ease, background .2s ease;
+}
+.noimpty-room__focus:hover { transform: translateY(-2px); }
+.noimpty-room__focus[aria-pressed='true'] { background: var(--noimpty-accent); color: #fff; border-color: transparent; }
+.noimpty-room__focus:focus-visible { outline: 3px solid var(--noimpty-accent); outline-offset: 3px; }
+.noimpty-room .room-progress { font-size: 13px; }
+.noimpty-room .room-progress a { color: var(--noimpty-accent); font-weight: 650; }
+.noimpty-room .room-progress[hidden] { display: none; }
+
+html[data-theme='dark'] .noimpty-room { --room-plank: #c79f80; --room-tag: #fff3f7; }
+html[data-theme='dark'] .noimpty-room__wall {
+  background:
+    radial-gradient(circle, rgba(255, 143, 171, .08) 1.6px, transparent 2.2px) 0 0 / 24px 24px,
+    linear-gradient(180deg, #2d2432 0%, #271f2c 66%, #221b27 100%);
+  box-shadow: 0 16px 40px -26px #000;
+}
+html[data-theme='dark'] .noimpty-room__bunting i { opacity: .78; }
+html[data-theme='dark'] .noimpty-room__tag::before { background: #f3dbe4; }
+
+@media (max-width: 980px) {
+  .noimpty-room__items { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .noimpty-room__wall { margin-top: 18px; padding: 50px 12px 24px; border-radius: 22px; }
+  .noimpty-room__items { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px 4px; }
+  .noimpty-room__art { width: min(100%, 96px); }
+  .noimpty-room__tag { margin-top: 18px; padding: 3px 9px 4px; font-size: 12px; }
+  .noimpty-room__bunting i { width: 14px; height: 12px; }
+}
+
+/* 专注模式：看板娘、花瓣和小房间里的动静都停下来，音乐照常 */
+html.noimpty-focus #mao-stage, html.noimpty-focus #mao-bubble { visibility: hidden; pointer-events: none; }
+html.noimpty-focus .sakura-petal, html.noimpty-focus .sakura-romance, html.noimpty-focus .sakura-motion-deco { display: none !important; }
+html.noimpty-focus .noimpty-room :is(.kw-bob, .kw-eyes, .kw-twinkle, .kw-steam, .kw-led) { animation: none !important; }
+#room-focus-exit { position: fixed; z-index: 100; top: 72px; right: 18px; background: var(--card-bg); color: var(--font-color); border: 1px solid var(--noimpty-border); border-radius: 20px; padding: 9px 15px; font-size: 12px; box-shadow: 0 4px 18px #38243718; cursor: pointer; }
+#room-focus-exit[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .noimpty-room *, .noimpty-room *::before, .noimpty-room *::after { animation: none !important; transition: none !important; }
+}
+@media (forced-colors: active) {
+  .noimpty-room__tag, .noimpty-room__focus { background: Canvas; color: CanvasText; border-color: ButtonText; }
+}

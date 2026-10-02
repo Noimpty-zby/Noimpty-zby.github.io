@@ -1,21 +1,24 @@
-# 互动书房首页
+# 首页的小房间
 
-首页把书架、复习本、练习台、日程、成长回放、唱片机和聊天入口放到同一张书房插画上。入口都是链接或按钮，支持键盘聚焦；移动端可切换简洁视图，保留所有入口和文字说明。
+首页第一屏还是原来的插画、标题、猫耳时钟和问候语。往下滑，在「这里是私人记录」三张卡片前面，是一排站在木头搁板上的小物件，每个都是一个入口：
 
-- 图片：`source/img/study-room.webp`，1536 × 1024，约 307 KiB；浏览器不加载原始大 PNG。
-- 交互：`source/js/study-room.js`；样式：`source/css/study-room.css`。
-- 简洁／专注偏好存在 `noimpty-room-preferences-v1`，不包含学习记录。
-- 专注模式复用 `mao-pet.js` 的暂停逻辑，停止角色主动互动和动画。音乐仍由用户控制。其他页面也有“退出专注”按钮。
-- 首页只在门禁解锁后读取学习历史的汇总数量。锁定、跨页、过期请求不会把旧的异步进度写回页面。
-- 时间牌收进“此刻 · 小站的时间”；多个标签页改变偏好不会销毁时钟节点。
-- `/experiments/`、`/teach/`、`/growth/` 都由现有全站门禁覆盖。个人案例和解释存在浏览器 IndexedDB，不进入静态构建或公开仓库。
+| 物件 | 名字 | 去哪里 |
+| --- | --- | --- |
+| 戴学士帽的一摞书 | 书架 | 往下滚到三张卡片 |
+| 螺旋线圈本 | 复习本 | `/review/` |
+| 终端窗口 | 练习台 | `/learn/` |
+| 日历 | 日程 | `/schedule/` |
+| 锥形瓶 | 动手实验 | `/experiments/` |
+| 小黑板 | 讲给我听 | `/teach/` |
+| 拍立得 | 成长回放 | `/growth/` |
+| 唱片机 | 放张唱片 | 播放或暂停左下角的播放器 |
+| 对话泡泡 | 聊一会儿 | 打开聊天面板 |
 
-## 插画来源
+- 小物件画在 `tools/kawaii-art.cjs`，和内页页头的小角色是同一套画法（深梅色描边、小脸、白边贴纸）。眨眼、呼吸、眼珠跟着鼠标沿用 `interior.css` 和 `interior-deco.js`。
+- 结构和 SVG 由 `scripts/noimpty-room.js` 在构建时写进首页底部的 `<template id="noimpty-room-template">`，只写首页。物件清单也只在这个文件里定义一份。
+- `source/js/study-room.js` 把模板摆到 `#private-sections` 前面，接上唱片、聊天和专注三个按钮；首屏的「翻开我的小世界」改成先落到小房间。
+- 首页是公开页，房间里只写功能入口的名字。`tools/tests/site/study-room.test.mjs` 会拿泄漏检查的禁用词表扫一遍生成的结构，也会检查每个入口指向的页面确实存在。
+- 解锁后，房间下面会多一行学习记录的统计（「N 个留下来的问题 · M 个可以再试一次」），链接到成长回放。上锁时不读；上锁、换页或者迟到的旧请求都不会把数字写回页面。
+- 专注模式存在 `noimpty-room-preferences-v1` 里：看板娘、花瓣和小房间里的动画都停下来，音乐照常。换页、换标签页都跟着走，其他页面右上角有「退出专注」。
 
-2026-10-02 使用本会话的 ImageGen 工具生成，无外部素材输入。后续只将 PNG 编码为 WebP，没有改绘。
-
-生成提示词（归档）：
-
-> Use case: stylized-concept. Create a full-width interactive personal study room illustration, 1536x1024 landscape, with no UI. Exquisitely art-directed cozy Japanese-inspired editorial handpainted anime environment, fine architectural lines and gouache, not plastic or childish. Palette: ivory, honey oak, dusty rose, mauve, sage. Afternoon spring light. Wide three-quarter view. Left bookshelf; upper-center arched window with cherry branches and distant sky; desk center-right with open notebook near x52 y67, laptop near x72 y55, rose task lamp; calendar on the right near x88 y30; record player near x20 y77; three framed photos; lavender cushion side stool near x87 y79; water, plant and pencils, modest lived-in detail. No people or pets: a separate animated character will be overlaid by the site. No legible text, logos, watermark or interface. Avoid clutter, neon, sparkles and excessive pink.
-
-实际热点坐标以生成图片中的物件位置校正。后续编辑应检查亮色、暗色、手机宽度、键盘聚焦、简洁视图以及跨页退出专注。
+改动以后要在浏览器里看桌面（一排 9 个）、820 宽（一排 5 个）、手机（一排 3 个）三种宽度和深浅色。

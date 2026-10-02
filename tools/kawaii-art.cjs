@@ -192,6 +192,70 @@ const ART = {
     '<rect class="kw-led" x="52" y="45" width="7" height="11" rx="1" fill="#9ff0d0"/>' +
     face(60, 76, { gap: 26, mouth: 'w', ink: '#c9f7e6', cheek: '#ff8fab' }),
 
+  /* ---------- 首页小房间里的物件（source/js/study-room.js） ---------- */
+
+  // 复习本：螺旋线圈本，封面贴着标签，书签丝带从上面垂下来
+  notebook: () =>
+    `<rect x="40" y="10" width="62" height="40" rx="6" fill="#fff3b8" ${S2} transform="rotate(9 71 30)"/>` +
+    `<rect x="22" y="18" width="80" height="92" rx="12" fill="#bfe0ff" ${S}/>` +
+    `<path d="M80 16v24l6-5 6 5V16" fill="#ff8fab" ${S2}/>` +
+    `<rect x="40" y="32" width="44" height="18" rx="5" fill="#fffaf2" ${S2}/>` +
+    '<path d="M47 39h30M47 44h20" stroke="#c7d8ea" stroke-width="2.2" stroke-linecap="round"/>' +
+    [30, 46, 62, 78, 94].map(y => `<rect x="15" y="${y}" width="15" height="7" rx="3.5" fill="#ece7f5" ${S2}/>`).join('') +
+    face(62, 76, { gap: 22, mouth: 'u' }),
+
+  // 唱片机：桃色的底座，上面转着一张黑胶，唱臂搭在唱片上，旁边飘出音符
+  record: () =>
+    `<rect x="10" y="56" width="100" height="52" rx="14" fill="#ffd0b5" ${S}/>` +
+    `<ellipse cx="54" cy="54" rx="40" ry="13" fill="#4a3b5c" ${S}/>` +
+    '<ellipse cx="54" cy="54" rx="28" ry="8.5" fill="none" stroke="#6d5d82" stroke-width="1.6"/>' +
+    `<ellipse cx="54" cy="54" rx="10" ry="3.6" fill="#ff8fab" ${S2}/>` +
+    `<path d="M100 38v14l-20 6" fill="none" stroke="${INK}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>` +
+    '<path d="M100 38v14l-20 6" fill="none" stroke="#e9e3f2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+    `<circle cx="100" cy="36" r="5.5" fill="#ece7f5" ${S2}/>` +
+    note(14, 12, '#b89cff', 0.3) + note(98, 2, '#ff9fb8', 1.1) +
+    face(60, 82, { gap: 26, mouth: 'w' }),
+
+  // 成长回放：一张拍立得，照片里是一座小山和太阳，上面贴着一截爱心胶带
+  album: () =>
+    `<rect x="16" y="16" width="88" height="94" rx="8" fill="#fffaf5" ${S}/>` +
+    `<rect x="26" y="26" width="68" height="50" rx="4" fill="#cfe8ff" ${S2}/>` +
+    '<path d="M27.5 74.5l20-22 13 13 9-8 23 17z" fill="#a5e3c8"/>' +
+    `<path d="M27.5 74.5l20-22 13 13 9-8 23 17" fill="none" ${S2}/>` +
+    `<circle cx="80" cy="40" r="7" fill="#ffd35c" ${S2}/>` +
+    '<rect x="44" y="8" width="32" height="14" rx="3" fill="#ffc2d1" opacity=".9" transform="rotate(-6 60 15)"/>' +
+    heart(60, 7, 0.38, '#ff8fab') +
+    face(60, 90, { gap: 22, k: 0.9, mouth: 'u' }),
+
+  // 动手实验：锥形瓶，薄荷色的药水里冒着泡泡
+  flask: () =>
+    `<path d="M47 16h26v28l28 52c4 8-1 14-9 14H28c-8 0-13-6-9-14l28-52z" fill="#fffaf5" ${S}/>` +
+    '<path d="M35 67h50l13 25c3 6-1 11-7 11H29c-6 0-10-5-7-11z" fill="#a5e3c8"/>' +
+    `<path d="M47 16h26v28l28 52c4 8-1 14-9 14H28c-8 0-13-6-9-14l28-52z" fill="none" ${S}/>` +
+    `<rect x="42" y="8" width="36" height="12" rx="5" fill="#d9c8ff" ${S2}/>` +
+    '<circle class="kw-steam" cx="54" cy="56" r="3.4" fill="#a5e3c8"/><circle class="kw-steam" style="--d:.9s" cx="66" cy="48" r="2.6" fill="#a5e3c8"/>' +
+    `<circle class="kw-steam" style="--d:1.6s" cx="58" cy="36" r="2.2" fill="none" stroke="#7fcfb0" stroke-width="1.6"/>` +
+    face(60, 84, { gap: 22, k: 0.9, mouth: 'o' }),
+
+  // 讲给我听：画架上的小黑板，粉笔画了一道公式和一颗星
+  blackboard: () =>
+    `<path d="M32 86L22 112M88 86l10 26M60 86v18" fill="none" stroke="${INK}" stroke-width="6" stroke-linecap="round"/>` +
+    '<path d="M32 86L22 112M88 86l10 26M60 86v18" fill="none" stroke="#e8c39e" stroke-width="2.6" stroke-linecap="round"/>' +
+    `<rect x="10" y="14" width="100" height="74" rx="10" fill="#e8c39e" ${S}/>` +
+    '<rect x="18" y="22" width="84" height="58" rx="6" fill="#5d8a78"/>' +
+    '<path d="M27 36c5-6 9 6 14 0M48 33v8M44 37h8" fill="none" stroke="#f2fff8" stroke-width="2.2" stroke-linecap="round" opacity=".85"/>' +
+    sparkle(88, 36, 6, '#fff3b8', 0.5) +
+    `<rect x="40" y="84" width="22" height="6" rx="3" fill="#fffaf5" ${S2}/>` +
+    face(60, 60, { gap: 24, mouth: 'w', ink: '#f2fff8', cheek: '#ff9fb8' }),
+
+  // 聊一会儿：圆滚滚的对话泡泡，左下角拖着小尾巴
+  bubble: () =>
+    `<path d="M30 92l-10 18 26-18" fill="#ffe0ea" ${S}/>` +
+    `<rect x="8" y="22" width="104" height="72" rx="34" fill="#ffe0ea" ${S}/>` +
+    '<path d="M27.5 90.5l18 0" stroke="#ffe0ea" stroke-width="5"/>' +
+    heart(96, 10, 0.5, '#ff8fab', 'class="kw-twinkle" style="--d:.6s"') +
+    face(60, 58, { gap: 26, mouth: 'v' }),
+
   pixelheart: () =>
     ['.XX.XX.', 'XXXXXXX', 'XWXXXXX', '.XXXXX.', '..XXX..', '...X...'].flatMap((row, y) =>
       [...row].map((c, x) => c === '.' ? '' : `<rect x="${18 + x * 12}" y="${26 + y * 12}" width="12" height="12" fill="${c === 'W' ? '#fff' : '#ff8fab'}" ${S2}/>`)).join(''),
@@ -283,7 +347,13 @@ const SINGLE = {
   database: ['database', {}, '数据库'],
   whale: ['whale', {}, '驮着集装箱的鲸鱼'],
   snake: ['snake', {}, '小蛇'],
-  robot: ['robot', {}, '机器人']
+  robot: ['robot', {}, '机器人'],
+  notebook: ['notebook', {}, '螺旋线圈的复习本'],
+  record: ['record', {}, '唱片机'],
+  album: ['album', {}, '拍立得照片'],
+  flask: ['flask', {}, '冒泡泡的锥形瓶'],
+  blackboard: ['blackboard', {}, '画架上的小黑板'],
+  bubble: ['bubble', {}, '对话泡泡']
 }
 
 /* 页头场景：[角色, 中心 x, 脚底 y, 缩放, 旋转, 弹跳延迟]，外加一些点缀 */

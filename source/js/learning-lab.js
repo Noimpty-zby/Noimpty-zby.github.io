@@ -1038,17 +1038,6 @@
         render()
       } catch (problem) { if (!lifetime.signal.aborted) { evidence.open = true; evidenceStatus.textContent = problem.message } }
     }
-    const openSnippet = async snippet => {
-      if (!unlocked()) throw new Error('请先解锁私人学习空间。')
-      if (fileEdit && !closeFile()) return { loaded: false }
-      const previous = session.state.lessonId === snippet.language ? session.state.code : session.state.drafts[snippet.language]?.code
-      if (previous?.trim() && previous !== snippet.code && !window.confirm('载入这段代码？当前语言的草稿会保存在恢复点，可随时找回。')) return { loaded: false }
-      const result = session.loadSnippet(snippet)
-      snippetSource = snippet.sourceUrl ? { title: snippet.title || '互动文章', url: snippet.sourceUrl } : snippetSource
-      historyCase = null; latestAttempt = null; savedAttemptId = null
-      syncEditor(); if (layout() === 'terminal') setMode('script', { remember: false }); else applyLayout()
-      return result
-    }
     const jump = diagnostic => {
       if (!diagnostic.line) return
       if (adapter) return adapter.jump(diagnostic)
@@ -1237,12 +1226,8 @@
     if (!article) {
       const caseId = new URL(window.location.href).searchParams.get('case')
       if (caseId) void loadCase(caseId)
-      try {
-        const raw = window.sessionStorage?.getItem('noimpty-learning-pending-snippet')
-        if (raw) { window.sessionStorage.removeItem('noimpty-learning-pending-snippet'); const pending = JSON.parse(raw); if (Date.now() - pending.at < 300000) void openSnippet(pending.snippet).catch(problem => session.note(problem.message)) }
-      } catch (_) { /* Optional cross-page transfer never replaces a draft on failure. */ }
     }
-    return { session, context, loadPractice, runSnippet, openSnippet, dispose: () => {
+    return { session, context, loadPractice, runSnippet, dispose: () => {
       window.clearTimeout(timer); window.clearTimeout(publishTimer); lifetime.abort(); unsubscribe?.()
       // Closing the sockets detaches this page: shells keep running on the server for a while.
       for (const entry of Object.values(views)) { entry.link?.close(); entry.task?.close(); entry.view?.dispose() }
@@ -1380,15 +1365,6 @@
   window.NOIMPTY_LEARNING = Object.freeze({ createSession, createTerminalLink, lessons: LESSONS, mount, articleLanguage, blockSnippet, context: () => unlocked() ? mounted?.context() || null : null })
   window.LEARNING_LAB = Object.freeze({
     context: () => unlocked() ? mounted?.context() || null : null,
-    openSnippet: async snippet => {
-      if (!unlocked()) throw new Error('请先解锁私人学习空间。')
-      if (!plain(snippet) || !LANGUAGE_NAMES[snippet.language] || typeof snippet.code !== 'string' || !snippet.code.trim() || snippet.code.length > MAX_CODE) throw new Error('代码片段无效。')
-      if (!mounted && launch) launch.click()
-      if (mounted) { mounted.showCode?.(); return mounted.openSnippet(snippet) }
-      try { window.sessionStorage.setItem('noimpty-learning-pending-snippet', JSON.stringify({ at: Date.now(), snippet: { language: snippet.language, code: snippet.code, title: clip(snippet.title, 500), sourceUrl: clip(snippet.sourceUrl, 3000) } })) }
-      catch (_) { throw new Error('浏览器禁止暂存片段，请打开代码小屋后手动复制。') }
-      window.location.assign('/learn/'); return { loaded: false, navigating: true }
-    },
     loadPractice: exercise => { if (!unlocked() || !mounted) throw new Error('请先解锁并打开练习页面，再载入练习。'); return mounted.loadPractice(exercise) },
     runCurrent: async ({ signal } = {}) => {
       if (!unlocked() || !mounted) throw new Error('请先解锁并打开当前练习。')

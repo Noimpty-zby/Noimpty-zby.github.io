@@ -35,6 +35,5 @@
 - 每次事务提交/其他标签页变更派发 `learning-history:changed` 和兼容事件 `noimpty:learning-history`，事件不携带私有正文。
 - `get(id), list(), saveFailure(attempt), addAttempt(id, attempt), rate(id, attemptId, rating)`：门禁保护的错题接口；写失败拒绝 Promise。
 - `recordExplanation({confirmed:true, topic, source:{title,url}, explanation, feedback, reviewQuestions, revises?})`、`getExplanation(id)`、`listExplanations()`：确认后追加讲解；`revises` 指向早先记录，形成成长链。来源 URL 仅允许本站。
-- `LEARNING_LAB.openSnippet({language,code,title,sourceUrl})`：互动文章只载入不自动执行。不同的非空草稿需要确认，并留恢复点；非文章页通过一次性 sessionStorage 桥转到 `/learn/`，五分钟后过期，不把代码放到 URL。
 
 回归测试包括 IndexedDB 的跨标签追加/重复评分竞争、配额失败回滚、损坏与冲突备份、门禁、解释追加链、真实运行快照保存、恢复草稿保护、默认隐藏答案、实际操作队列和异步离页清理。

@@ -30,8 +30,6 @@ private_section: 课内
 
 <!-- more -->
 
-{% learning_experiment array %}
-
 ## 一、ADT 本体：一块内存，两个数
 
 ### 1.1 size 和 length

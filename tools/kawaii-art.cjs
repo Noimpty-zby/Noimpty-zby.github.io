@@ -227,16 +227,6 @@ const ART = {
     heart(60, 7, 0.38, '#ff8fab') +
     face(60, 90, { gap: 22, k: 0.9, mouth: 'u' }),
 
-  // 动手实验：锥形瓶，薄荷色的药水里冒着泡泡
-  flask: () =>
-    `<path d="M47 16h26v28l28 52c4 8-1 14-9 14H28c-8 0-13-6-9-14l28-52z" fill="#fffaf5" ${S}/>` +
-    '<path d="M35 67h50l13 25c3 6-1 11-7 11H29c-6 0-10-5-7-11z" fill="#a5e3c8"/>' +
-    `<path d="M47 16h26v28l28 52c4 8-1 14-9 14H28c-8 0-13-6-9-14l28-52z" fill="none" ${S}/>` +
-    `<rect x="42" y="8" width="36" height="12" rx="5" fill="#d9c8ff" ${S2}/>` +
-    '<circle class="kw-steam" cx="54" cy="56" r="3.4" fill="#a5e3c8"/><circle class="kw-steam" style="--d:.9s" cx="66" cy="48" r="2.6" fill="#a5e3c8"/>' +
-    `<circle class="kw-steam" style="--d:1.6s" cx="58" cy="36" r="2.2" fill="none" stroke="#7fcfb0" stroke-width="1.6"/>` +
-    face(60, 84, { gap: 22, k: 0.9, mouth: 'o' }),
-
   // 讲给我听：画架上的小黑板，粉笔画了一道公式和一颗星
   blackboard: () =>
     `<path d="M32 86L22 112M88 86l10 26M60 86v18" fill="none" stroke="${INK}" stroke-width="6" stroke-linecap="round"/>` +
@@ -351,7 +341,6 @@ const SINGLE = {
   notebook: ['notebook', {}, '螺旋线圈的复习本'],
   record: ['record', {}, '唱片机'],
   album: ['album', {}, '拍立得照片'],
-  flask: ['flask', {}, '冒泡泡的锥形瓶'],
   blackboard: ['blackboard', {}, '画架上的小黑板'],
   bubble: ['bubble', {}, '对话泡泡']
 }

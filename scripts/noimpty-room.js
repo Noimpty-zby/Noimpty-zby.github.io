@@ -18,7 +18,6 @@ const ITEMS = [
   { id: 'review', art: 'notebook', label: '复习本', hint: '翻一翻，看看哪些已经记住了', href: '/review/' },
   { id: 'desk', art: 'terminal', label: '练习台', hint: '把刚学的命令和代码亲手跑一遍', href: '/learn/' },
   { id: 'calendar', art: 'calendar', label: '日程', hint: '今天打算做的事都在这里', href: '/schedule/' },
-  { id: 'lab', art: 'flask', label: '动手实验', hint: '拖一拖、点一点，看看会发生什么', href: '/experiments/' },
   { id: 'teach', art: 'blackboard', label: '讲给我听', hint: '把刚学的讲一遍，看看哪里还说不清', href: '/teach/' },
   { id: 'growth', art: 'album', label: '成长回放', hint: '回头看看以前卡在哪里，现在又会了什么', href: '/growth/' },
   { id: 'music', art: 'record', label: '放张唱片', hint: '放一点音乐陪着', action: 'music' },

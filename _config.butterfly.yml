@@ -38,7 +38,6 @@ menu:
     日程: /schedule/ || fas fa-calendar-days
     练习台: /learn/ || fas fa-code
     复习: /review/ || fas fa-layer-group
-    动手实验: /experiments/ || fas fa-flask
     讲给我听: /teach/ || fas fa-chalkboard-user
     成长回放: /growth/ || fas fa-images
     时间线: /timeline/ || fas fa-timeline
@@ -1158,7 +1157,6 @@ inject:
     - <link rel="stylesheet" href="/css/review.css">
     - <link rel="stylesheet" href="/css/study-timeline.css">
     - <link rel="stylesheet" href="/css/learning-history.css">
-    - <link rel="stylesheet" href="/css/learning-experiments.css">
     - <link rel="stylesheet" href="/css/nanaly-coach.css">
     - <link rel="stylesheet" href="/css/study-room.css">
     # 顺序有讲究：protected-manifest 给出锁清单，privacy-gate 立刻据此打遮罩，
@@ -1197,7 +1195,6 @@ inject:
     # CodeMirror loads when the studio opens; ordinary reading does not download it.
     - <script type="text/plain" id="learning-editor-src" src="/js/learning-editor.js"></script>
     - <script src="/js/learning-lab.js"></script>
-    - <script src="/js/learning-experiments.js"></script>
     - <script src="/js/learning-history-ui.js"></script>
     # Terminal recordings ({% cast %}): loads asciinema-player only on pages that have one.
     - <script src="/js/noimpty-cast.js"></script>

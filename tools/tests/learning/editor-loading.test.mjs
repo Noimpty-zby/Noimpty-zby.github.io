@@ -254,14 +254,13 @@ test('evidence actions save the executed snapshot, then append a real correction
   }
   const lab = app.mount(), evidence = lab.root.querySelector('.learning-evidence')
   const click = label => Promise.all([...evidence.querySelectorAll('button').find(x => x.textContent === label).listeners.get('click')].map(fn => fn()))
-  await lab.openSnippet({ language: 'python', code: 'print(1/0)', title: '分母', sourceUrl: 'https://blog.test/posts/division/' })
+  lab.session.loadSnippet({ language: 'python', code: 'print(1/0)' })
   lab.session.edit({ stdin: '2\n', tests: [{ input: '2\n', expectedOutput: '0.5\n' }] })
   await lab.session.run('run', true)
   lab.session.edit({ code: 'edited but not run' })
   await click('保存失败现场')
   assert.equal(captured[0].code, 'print(1/0)', 'save the run snapshot, never newer unexecuted editor text')
   assert.equal(captured[0].stdin, '2\n')
-  assert.equal(captured[0].source.url, 'https://blog.test/posts/division/')
   assert.equal(captured[0].result.stderr, 'ZeroDivisionError')
   assert.equal(evidence.querySelector('.learning-evidence-ratings').hidden, true)
   status = 'accepted'; lab.session.edit({ code: 'print(1 / int(input()))' })
@@ -294,20 +293,6 @@ test('restoring a case starts with the failure and its tests, protects the draft
   assert.equal(lab.root.querySelector('.learning-evidence-ratings').hidden, true)
   lab.dispose()
 })
-
-test('safe snippet loading asks before replacing a draft and never runs it implicitly', async () => {
-  const app = boot(), lab = app.mount()
-  lab.session.edit({ code: 'my draft' })
-  app.window.confirm = () => false
-  assert.equal((await lab.openSnippet({ language: 'c', code: 'int main() {return 0;}' })).loaded, false)
-  assert.equal(lab.session.state.code, 'my draft')
-  app.window.confirm = () => true
-  await lab.openSnippet({ language: 'c', code: 'int main() {return 0;}' })
-  assert.equal(lab.session.state.backups[0].code, 'my draft')
-  assert.equal(lab.session.state.history.length, 0)
-  lab.dispose()
-})
-
 
 test('normal Run on a saved wrong-answer case executes its original tests instead of an unchecked terminal', async () => {
   const app = boot(), calls = [], tests = [{ input: '4\n', expectedOutput: '0.25\n' }]

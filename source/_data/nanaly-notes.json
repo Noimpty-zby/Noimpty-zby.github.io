@@ -58,11 +58,11 @@
     "title": "UE5 C++ 第一章复盘：从零创建 ActionRoguelike 到可移动、可观察、带动画的第三人称角色",
     "notes": [
       {
-        "anchor": "Unreal 资源之间保存的是资产引用。直接通过 Windo",
+        "anchor": "Unreal 的资源之间保存的是资产引用。如果直接通过 Wi",
         "text": "Redirector 不是自动清理的，重命名多了会攒一堆，得手动 Fix Up。"
       },
       {
-        "anchor": "这不是 Move 和 Look 在功能上必须使用不同参数，而",
+        "anchor": "所以这并不是说 Move 和 Look 在功能上必须使用不同",
         "text": "两种签名对应不同场景：无参适合简单触发，带 Instance 才能读持续时间和触发状态。"
       },
       {
@@ -76,15 +76,15 @@
     "title": "UE5 C++ 第二章复盘：从一次点击到一发法球的完整远程攻击链路",
     "notes": [
       {
-        "anchor": "为什么要加？因为 ARogueProjectileMagic",
+        "anchor": "为什么要加上这个标记呢？因为 ARogueProjectil",
         "text": "前提是蓝图子类真填了资产；若蓝图也空，Abstract 只是把崩溃换成静默不发射。"
       },
       {
-        "anchor": "如果根是空 SceneComponent，投射物移动时扫掠的",
+        "anchor": "如果根组件是一个空的 SceneComponent，那么投射",
         "text": "补充：即便根是空 SceneComponent，把 UpdatedComponent 手动指向碰撞体也能救，只是要自己配"
       },
       {
-        "anchor": "不匹配时的编译错误极其难读（通常是几十行模板展开的错误），所",
+        "anchor": "参数不匹配时，编译错误非常难读（通常是几十行模板展开的错误信",
         "text": "我上次批注也提过：直接翻引擎头文件复制签名，比对着报错猜快十倍。"
       }
     ]

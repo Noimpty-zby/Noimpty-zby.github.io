@@ -38,6 +38,7 @@ menu:
     日程: /schedule/ || fas fa-calendar-days
     练习台: /learn/ || fas fa-code
     复习: /review/ || fas fa-layer-group
+    时间线: /timeline/ || fas fa-timeline
     归档: /archives/ || fas fa-box-archive
     分类: /categories/ || fas fa-folder-open
     标签: /tags/ || fas fa-tags
@@ -1152,6 +1153,7 @@ inject:
     - <link rel="stylesheet" href="/css/learning-lab.css">
     - <link rel="stylesheet" href="/css/noimpty-cast.css">
     - <link rel="stylesheet" href="/css/review.css">
+    - <link rel="stylesheet" href="/css/study-timeline.css">
     # 顺序有讲究：protected-manifest 给出锁清单，privacy-gate 立刻据此打遮罩，
     # noimpty-search 依赖 gate 存下的暗号才能解密索引。三者不能调换。
     - <script src="/js/protected-manifest.js"></script>

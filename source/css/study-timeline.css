@@ -1,0 +1,15 @@
+/* 学习时间线（/timeline/，tools/study-timeline.cjs）。时间线本身用 Butterfly 的 .timeline 样式，
+ * 这里只管开头的总结、每天的文章列表和系列标签的颜色。颜色按系列第一次出现的先后编号。 */
+.study-timeline-page { --tl-tone-0: #3f5db3; --tl-tone-1: #2f7d55; --tl-tone-2: #ba547d; --tl-tone-3: #94620f; --tl-tone-4: #a3407f; --tl-tone-5: #237a87; }
+[data-theme='dark'] .study-timeline-page { --tl-tone-0: #a7b8ff; --tl-tone-1: #9ad4a8; --tl-tone-2: #f0a4c1; --tl-tone-3: #efc98a; --tl-tone-4: #f0a6d8; --tl-tone-5: #8fd6e0; }
+.study-timeline__summary { margin-bottom: 1.6em; line-height: 1.9; }
+#article-container .study-timeline__posts { margin: 0; padding: 0; list-style: none; }
+#article-container .study-timeline__posts li { margin: .2em 0; padding: 0; line-height: 1.7; }
+#article-container .study-timeline__posts li::before { display: none; }
+.study-timeline__series { display: inline-block; margin-right: .6em; padding: 0 .5em; border: 1px solid var(--tl-tone, currentColor); border-radius: 999px; color: var(--tl-tone, inherit); font-size: .82em; white-space: nowrap; }
+.study-timeline__series[data-tone='0'] { --tl-tone: var(--tl-tone-0); }
+.study-timeline__series[data-tone='1'] { --tl-tone: var(--tl-tone-1); }
+.study-timeline__series[data-tone='2'] { --tl-tone: var(--tl-tone-2); }
+.study-timeline__series[data-tone='3'] { --tl-tone: var(--tl-tone-3); }
+.study-timeline__series[data-tone='4'] { --tl-tone: var(--tl-tone-4); }
+.study-timeline__series[data-tone='5'] { --tl-tone: var(--tl-tone-5); }

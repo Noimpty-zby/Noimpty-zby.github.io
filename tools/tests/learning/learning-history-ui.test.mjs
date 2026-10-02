@@ -19,16 +19,16 @@ const record = () => ({ id: 'case:a', title: '除零现场', due: '2020-01-01T00
   { language: 'python', code: 'PRIVATE FAILED CODE', stdin: '2\n', tests: [], problem: '算倒数', at: '2020-01-01T00:00:00.000Z', explanation: '忘了判断', source: { title: '文章', url: '/post/' }, result: { status: 'runtime_error', stdout: '', stderr: 'ZeroDivisionError', tests: [] } },
   { language: 'python', code: 'PRIVATE FIXED CODE', stdin: '2\n', tests: [], problem: '算倒数', at: '2020-01-02T00:00:00.000Z', explanation: '先判断输入', result: { status: 'accepted', stdout: '0.5', stderr: '', tests: [] } }
 ] })
-function boot({ page = 'growth', unlocked = true, list = async () => [record()] } = {}) {
+// 错题都在复习页（/review/）复习卡下面；原来的成长回放页 2026-10-03 合并进来了
+function boot({ unlocked = true, list = async () => [record()], href = 'https://blog.test/review/' } = {}) {
   const root = new Element(), nodes = {}, window = new Element(), document = new Element()
-  if (page === 'growth') nodes['learning-growth'] = root
-  else { nodes['review-app'] = new Element(); nodes['learning-history-review'] = root }
+  nodes['review-app'] = new Element(); nodes['learning-history-review'] = root
   Object.assign(document, { readyState: 'loading', createElement: tag => new Element(tag), getElementById: id => nodes[id], body: new Element() })
-  Object.assign(window, { location: { href: 'https://blog.test/growth/' }, NOIMPTY_LEARNING_HISTORY: { unlocked: () => unlocked, list, listExplanations: async () => [] } })
+  Object.assign(window, { location: { href }, NOIMPTY_LEARNING_HISTORY: { unlocked: () => unlocked, list, listExplanations: async () => [] } })
   vm.runInNewContext(script, { window, document, URL, Blob, setTimeout })
-  return { root, window, mount: window.NOIMPTY_LEARNING_HISTORY_UI.mount, leave: () => { delete nodes['learning-growth']; delete nodes['review-app']; delete nodes['learning-history-review'] } }
+  return { root, window, mount: window.NOIMPTY_LEARNING_HISTORY_UI.mount, leave: () => { delete nodes['review-app']; delete nodes['learning-history-review'] } }
 }
-await test('growth hides old code until explicit comparison and compares exact saved attempts', async () => {
+await test('the full list hides old code until explicit comparison and compares exact saved attempts', async () => {
   const h = boot(); await h.mount()
   assert.doesNotMatch(h.root.textContent, /PRIVATE FAILED|PRIVATE FIXED/)
   assert.equal(h.root.all().find(x => x.className === 'growth-comparison').hidden, true)
@@ -41,11 +41,29 @@ await test('growth hides old code until explicit comparison and compares exact s
   assert.match(h.root.textContent, /先判断输入/)
 })
 await test('the review queue links to actual redos and offers no flip-card rating shortcut', async () => {
-  const h = boot({ page: 'review' }); await h.mount()
+  const h = boot(); await h.mount()
   const links = h.root.all().filter(x => x.tagName === 'a')
-  assert.ok(links.some(x => x.href === '/learn/?case=case%3Aa'))
-  assert.equal(h.root.all().filter(x => x.tagName === 'button').length, 0)
+  assert.ok(links.some(x => x.href === '/learn/?case=case%3Aa' && /开始重做/.test(x.textContent)))
+  // 错题只能真的去练习台重做，不能像复习卡那样翻面就打分
+  assert.deepEqual(h.root.all().filter(x => x.tagName === 'button' && /重来|困难|良好|简单/.test(x.textContent)), [])
   assert.doesNotMatch(h.root.textContent, /PRIVATE FAILED|PRIVATE FIXED/)
+  assert.match(h.root.textContent, /全部错题（1）/)
+  assert.equal(h.root.all().find(x => x.className === 'learning-history-all').open, false)
+})
+
+await test('with no saved mistakes the section says how to get one and still offers import', async () => {
+  const h = boot({ list: async () => [] }); await h.mount()
+  assert.match(h.root.textContent, /还没有保存过错题/)
+  assert.ok(h.root.all().some(x => x.tagName === 'button' && x.textContent === '导入错题备份'))
+  assert.equal(h.root.all().find(x => x.className === 'learning-history-all'), undefined)
+})
+
+await test('arriving from the lab with ?case= opens the full list with that case first', async () => {
+  const other = { ...record(), id: 'case:b', title: '另一道', updatedAt: '2026-10-02T00:00:00.000Z' }
+  const h = boot({ list: async () => [other, record()], href: 'https://blog.test/review/?case=case%3Aa' }); await h.mount()
+  const all = h.root.all().find(x => x.className === 'learning-history-all')
+  assert.equal(all.open, true)
+  assert.equal(all.children.filter(x => x.className === 'growth-case')[0].id, 'case:a')
 })
 await test('locked growth never reads private records', async () => {
   let reads = 0

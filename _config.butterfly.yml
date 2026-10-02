@@ -38,7 +38,6 @@ menu:
     日程: /schedule/ || fas fa-calendar-days
     练习台: /learn/ || fas fa-code
     复习: /review/ || fas fa-layer-group
-    成长回放: /growth/ || fas fa-images
     时间线: /timeline/ || fas fa-timeline
     归档: /archives/ || fas fa-box-archive
     分类: /categories/ || fas fa-folder-open

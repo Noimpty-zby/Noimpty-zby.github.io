@@ -11,10 +11,10 @@
   const action = (label, run) => { const node = el('button', '', label); node.type = 'button'; node.addEventListener('click', run); return node }
   const attemptView = (value, index) => {
     const node = el('section', 'growth-attempt')
-    node.append(el('h3', '', `第 ${index + 1} 次 · ${labels[value.result.status]}`), el('p', '', time(value.at)), el('p', '', value.explanation || '这次尚未留下复盘说明。'), el('pre', '', value.code))
-    if (value.stdin) node.append(el('h4', '', '本次输入'), el('pre', '', value.stdin))
-    if (value.tests.length) node.append(el('h4', '', '测试用例'), el('pre', '', JSON.stringify(value.tests, null, 2)))
-    node.append(el('h4', '', value.result.evidence === 'terminal' ? '真实终端输出（含终端控制符）' : '真实运行输出'), el('pre', '', [value.result.stdout, value.result.stderr].filter(Boolean).join('\n') || '无文本输出'))
+    node.append(el('h4', '', `第 ${index + 1} 次 · ${labels[value.result.status]}`), el('p', '', time(value.at)), el('p', '', value.explanation || '这次尚未留下复盘说明。'), el('pre', '', value.code))
+    if (value.stdin) node.append(el('h5', '', '本次输入'), el('pre', '', value.stdin))
+    if (value.tests.length) node.append(el('h5', '', '测试用例'), el('pre', '', JSON.stringify(value.tests, null, 2)))
+    node.append(el('h5', '', value.result.evidence === 'terminal' ? '真实终端输出（含终端控制符）' : '真实运行输出'), el('pre', '', [value.result.stdout, value.result.stderr].filter(Boolean).join('\n') || '无文本输出'))
     if (value.result.tests.length) node.append(el('pre', '', JSON.stringify(value.result.tests, null, 2)))
     if (value.result.truncated) node.append(el('p', '', '输出超过保存上限，仅保留前 64 KB。'))
     return node
@@ -23,7 +23,7 @@
     const item = el('article', 'growth-case')
     item.id = record.id
     const first = record.attempts[0]
-    item.append(el('h2', '', record.title), el('p', 'growth-meta', `${first.language} · ${record.attempts.length} 次尝试 · ${record.solved ? '已有修正' : '待修正'} · 下次重做 ${time(record.due)}`))
+    item.append(el('h3', '', record.title), el('p', 'growth-meta', `${first.language} · ${record.attempts.length} 次尝试 · ${record.solved ? '已有修正' : '待修正'} · 下次重做 ${time(record.due)}`))
     if (first.problem) item.append(el('p', 'growth-problem', first.problem))
     if (first.source) item.append(link(`回到《${first.source.title || '来源文章'}》`, first.source.url))
     item.append(el('p', '', '旧解法先收起来。回到练习台，从最初失败现场重做，运行完成后保存这次尝试。'))
@@ -44,30 +44,36 @@
     item.append(actions, compare)
     return item
   }
-  const renderQueue = async (root, token) => {
+  // 复习页（/review/）复习卡下面的「错题重做」：到期的错题、全部错题（收起，可以对照每次尝试）、导出导入。
+  // 原来还有一个单独的成长回放页（/growth/），和复习页重复，2026-10-03 合并到这里。
+  const render = async (root, token) => {
     const records = await store().list()
     if (token !== version || !store().unlocked()) return
-    root.replaceChildren(el('h2', '', '回到真实现场重做'))
-    root.append(el('p', '', '这里的题来自你保存的实际失败。打开练习台运行新尝试、保存结果后，再按 FSRS 安排下一次；翻卡不会算作完成。'))
+    root.replaceChildren(el('h2', '', '错题重做'))
     const due = records.filter(item => Date.parse(item.due) <= Date.now())
-    if (!due.length) root.append(el('p', '', '暂时没有到期的操作题。可在练习台保存失败现场，之后回到这里重做。'))
-    for (const item of due) root.append(link(`${item.title} · ${item.attempts[0].language} · 开始重做`, '/learn/?case=' + encodeURIComponent(item.id)))
-    root.append(link('查看成长回放与备份 ↗', '/growth/'))
-  }
-  const renderGrowth = async (root, token) => {
-    const records = await store().list()
-    if (token !== version || !store().unlocked()) return
-    root.replaceChildren()
-    const title = el('p', 'growth-intro', '不只记下做对了什么，也留下从哪里卡住、怎样想通。私人代码只存在这台浏览器；换设备前请导出备份。')
+    if (!records.length) root.append(el('p', '', '还没有保存过错题。在练习台运行失败以后点「保存失败现场」，它就会出现在这里，到时间了提醒你重做。'))
+    else if (!due.length) root.append(el('p', '', '今天没有要重做的错题。'))
+    else {
+      root.append(el('p', '', '这些题到了该重做的时间。打开练习台，从最初失败的代码重做，运行以后保存这次尝试；只看一眼不算完成。'))
+      for (const item of due) root.append(link(`${item.title} · ${item.attempts[0].language} · 开始重做`, '/learn/?case=' + encodeURIComponent(item.id)))
+    }
+    if (records.length) {
+      const focus = new URL(window.location.href).searchParams.get('case')
+      const all = el('details', 'learning-history-all'); all.open = !!focus
+      all.append(el('summary', '', `全部错题（${records.length}）`))
+      const ordered = [...records].sort((a, b) => (b.id === focus) - (a.id === focus) || b.updatedAt.localeCompare(a.updatedAt))
+      for (const value of ordered) all.append(caseView(value))
+      root.append(all)
+    }
     const status = el('p', 'growth-status', flash); status.setAttribute('role', 'status')
     const controls = el('div', 'growth-actions'), file = el('input'); file.type = 'file'; file.accept = '.json,application/json'; file.hidden = true
-    controls.append(action('导出全部学习现场', async () => {
+    controls.append(action('导出错题', async () => {
       try {
         const value = await store().exportData(); if (token !== version) return
         const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }))
         const a = link('', url); a.download = 'noimpty-learning-' + new Date().toISOString().slice(0, 10) + '.json'; document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000)
       } catch (error) { status.textContent = error.message }
-    }), action('合并导入备份', () => file.click()))
+    }), action('导入错题备份', () => file.click()))
     file.addEventListener('change', async () => {
       const chosen = file.files?.[0]; file.value = ''; if (!chosen) return
       try {
@@ -79,23 +85,17 @@
         await mount()
       } catch (error) { if (token === version) status.textContent = `未导入：${error.message}` }
     })
-    const stats = el('div', 'growth-stats')
-    for (const [value, label] of [[records.length, '真实错题'], [records.filter(x => x.solved).length, '已经修正'], [records.reduce((n, x) => n + x.attempts.length, 0), '留下的尝试'], [records.filter(x => Date.parse(x.due) <= Date.now()).length, '到期重做']]) stats.append(el('p', '', `${value} · ${label}`))
-    root.append(title, controls, file, status, stats)
-    if (!records.length) root.append(el('p', 'growth-empty', '你的成长记录还留着空位。在代码小屋真实运行一次，把失败现场保存下来；修正后保存新尝试，这里就能并排回看。'), link('去代码小屋试一试 ↗', '/learn/'))
-    const focus = new URL(window.location.href).searchParams.get('case')
-    const ordered = [...records].sort((a, b) => (b.id === focus) - (a.id === focus) || b.updatedAt.localeCompare(a.updatedAt))
-    for (const value of ordered) root.append(caseView(value))
+    root.append(el('p', 'growth-note', '错题只存在这台浏览器里，换设备之前先导出一份。'), controls, file, status)
   }
   const mount = async () => {
-    const growth = document.getElementById('learning-growth'), review = document.getElementById('review-app')
-    let root = growth || document.getElementById('learning-history-review')
-    if (!growth && review && !root) { root = el('section', 'learning-history-review'); root.id = 'learning-history-review'; review.before(root) }
+    const review = document.getElementById('review-app')
+    let root = document.getElementById('learning-history-review')
+    if (review && !root) { root = el('section', 'learning-history-review'); root.id = 'learning-history-review'; review.after(root) }
     if (active && active !== root) { active.replaceChildren(); flash = '' }
     active = root; const token = ++version
     if (!root) return
-    if (!store()?.unlocked()) { root.replaceChildren(el('p', '', '解锁私人学习空间后查看成长记录。')); return }
-    try { await (growth ? renderGrowth(root, token) : renderQueue(root, token)) }
+    if (!store()?.unlocked()) { root.replaceChildren(el('p', '', '解锁以后在这里看错题。')); return }
+    try { await render(root, token) }
     catch (error) { if (token === version) root.replaceChildren(el('p', 'review-warn', error.message), action('重试读取', () => mount())) }
   }
   window.addEventListener('learning-history:changed', () => { if (active) void mount() })

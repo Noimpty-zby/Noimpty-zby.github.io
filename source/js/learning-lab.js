@@ -717,7 +717,7 @@
     const evidenceActions = node('div', 'learning-evidence-actions')
     const saveFailureButton = button('保存失败现场', () => saveEvidence(false))
     const saveAttemptButton = button('保存这次重做 / 修正', () => saveEvidence(true))
-    const evidenceLink = node('a', '', '成长回放 ↗'); evidenceLink.href = '/growth/'
+    const evidenceLink = node('a', '', '去复习页看错题 ↗'); evidenceLink.href = '/review/'
     evidenceActions.append(saveFailureButton, saveAttemptButton, evidenceLink)
     const evidenceStatus = node('p', 'learning-evidence-status', '先真实运行代码。失败后可保存现场；重做并运行后，再保存新的尝试。'); evidenceStatus.setAttribute('role', 'status')
     const evidenceResult = node('p', 'learning-evidence-result')
@@ -1005,7 +1005,7 @@
           evidenceStatus.textContent = '失败现场已保存；语言、代码、输入、题目、实际结果与来源都留在本机。修正运行后可继续保存。'
         }
         if (lifetime.signal.aborted) return
-        evidenceLink.href = '/growth/?case=' + encodeURIComponent(historyCase.id)
+        evidenceLink.href = '/review/?case=' + encodeURIComponent(historyCase.id)
       } catch (problem) { if (!lifetime.signal.aborted) evidenceStatus.textContent = '没有保存：' + problem.message }
       finally { evidenceBusy = false; render() }
     }
@@ -1030,7 +1030,7 @@
         evidenceTitle.value = value.title; evidenceProblem.value = original.problem; evidenceStdin.value = session.state.stdin; evidenceExplanation.value = ''
         evidence.open = true; syncEditor()
         if (layout() === 'terminal') setMode('script', { remember: false }); else applyLayout()
-        evidenceLink.href = '/growth/?case=' + encodeURIComponent(value.id)
+        evidenceLink.href = '/review/?case=' + encodeURIComponent(value.id)
         evidenceStatus.textContent = original.result.evidence === 'terminal'
           ? '已恢复最初失败的代码。旧解法仍隐藏；上次输入是终端按键记录，请按题目重新输入，再运行并保存这次尝试。'
           : '已恢复最初失败的代码、输入和测试。旧解法仍隐藏；请修改后用保存的输入 / 测试重做，再保存这次尝试。'

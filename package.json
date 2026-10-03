@@ -38,7 +38,7 @@
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.13",
     "@egjs/infinitegrid": "^4.13.0",
-    "@fancyapps/ui": "^6.1.14",
+    "@fancyapps/ui": "^6.1.15",
     "@fortawesome/fontawesome-free": "^7.3.1",
     "@lezer/highlight": "^1.2.4",
     "@renbaoshuo/markdown-it-katex": "^2.0.2",
@@ -59,12 +59,12 @@
     "hexo-util": "^4.0.0",
     "hexo-wordcount": "^6.0.1",
     "instant.page": "^5.2.0",
-    "katex": "^0.18.4",
-    "mammoth": "1.12.3",
+    "katex": "^0.18.10",
+    "mammoth": "1.13.0",
     "markdown-it": "^15.0.2",
     "markdown-it-task-lists": "^2.1.1",
     "mermaid": "^11.16.1",
-    "nodemailer": "^9.1.1",
+    "nodemailer": "^10.0.13",
     "pdfjs-dist": "6.3.289",
     "pjax": "^0.2.8",
     "typed.js": "^3.0.0"
@@ -77,7 +77,7 @@
     "js-yaml": "^4.3.2",
     "pixi-live2d-display-lipsyncpatch": "^0.5.0-ls-8",
     "pixi.js": "^7.4.3",
-    "postcss": "^8.5.26",
+    "postcss": "^8.5.28",
     "ts-fsrs": "5.4.2"
   }
 }

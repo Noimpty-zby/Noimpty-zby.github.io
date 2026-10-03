@@ -8,7 +8,7 @@
       throw new Error('模型接口地址无效，请检查设置')
     return url.href.replace(/\/+$/, '') + '/chat/completions'
   }
-  const request = ({ cfg, secrets, messages, deep = false, vision = false, stream = true, tools, tool_choice }) => {
+  const request = ({ cfg, secrets, messages, deep = false, vision = false, stream = true, tools, tool_choice, json = false }) => {
     // 只有配置了视觉密钥才允许路由到视觉接口，绝不把 DeepSeek key 误发到别家。
     const containsImages = Array.isArray(messages) && messages.some(message => Array.isArray(message && message.content)
       && message.content.some(part => part && part.type === 'image_url'))
@@ -31,6 +31,8 @@
       if (deep) payload.thinking_budget = 4096
     }
     if (tools) { payload.tools = tools; payload.tool_choice = tool_choice || 'auto' }
+    // 要模型保证回一个合法的 JSON 对象（复习页出题）。DeepSeek 和硅基流动都支持，提示词里要写明返回 JSON。
+    if (json) payload.response_format = { type: 'json_object' }
     return { url, key, payload }
   }
   const responseError = async response => {

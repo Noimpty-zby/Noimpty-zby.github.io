@@ -1,6 +1,6 @@
-# 复习卡：没有术语表的系列按文章内容写的问答（UE5 的卡直接从文章的术语表和速查表里抽，
-# 不写在这里）。格式见 scripts/noimpty-review.js。front 是正面的问题，back 是答案；
-# 可以用 `代码` 和 **加粗**。改了 front 的文字就算一张新卡，原来的复习进度不再接续。
+# 复习卡：课内和课外 AI Infra 两块的知识点，按文章内容写的问答。格式见 scripts/noimpty-review.js。
+# front 是正面的问题，back 是答案；可以用 `代码` 和 **加粗**。复习页出题时以 back 为准，
+# 所以 back 要写对、写全。改了 front 的文字就算一张新卡，原来的复习进度不再接续。
 dsa:
 - post: DSA-Chapter1-Introduction
   cards:

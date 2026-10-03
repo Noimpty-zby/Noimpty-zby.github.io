@@ -279,6 +279,8 @@
   }
 
   const locked = () => hasVault() && !secrets.apiKey && !secrets.visionKey
+  // 告诉还在等密钥的页面（复习页要用它出题）：现在能调模型了。只是通知，出错也不能影响解锁本身。
+  const announceUnlocked = () => { try { window.dispatchEvent(new Event('nanaly:unlocked')) } catch (_) {} }
 
   /* 保险箱里存了个人后端令牌，就顺手连上后端 —— 不用每开一个新标签页再贴一遍那串 64 位令牌。
    *
@@ -1847,6 +1849,7 @@
         resetDwell()
         addMsg('sys', '已加密保存并解锁')
         connectBackend({ explicit: true })
+        announceUnlocked()
       } catch (err) {
         if (revision === uiRevision && box.isConnected) addSetupError(box, '保存失败：' + (err && err.message || err))
       } finally {
@@ -1903,6 +1906,7 @@
         backToChat()
         addMsg('sys', '解锁成功')
         connectBackend({ explicit: true })
+        announceUnlocked()
       } catch (_) {
         if (revision !== uiRevision || !box.isConnected) return
         addSetupError(box, '密码不对喵。再试一次？')
@@ -2562,6 +2566,22 @@
     await send(String(question || '结合当前练习讲解思路、写法及错误。').slice(0,12000), undefined, { attachments: [], files: [], practiceContext: practice })
     return !!chatBridge.snapshot().turnId && chatBridge.snapshot().turnId !== before
   }
+  /* 复习页（source/js/review.js）每天给知识点换个问法时用。一问一答，不进聊天记录、不带人设，
+   * 走便宜的那一档；token 照样记进总账。 */
+  const canComplete = () => canReadPageContext() && !!(secrets.apiKey || secrets.visionKey)
+  const complete = async ({ system, user, json = false, signal } = {}) => {
+    if (!canComplete()) throw new Error('请先解锁娜娜莉的模型密钥。')
+    const request = window.NANALY_PROVIDER.request({ cfg, secrets, stream: false, json, messages: [
+      { role: 'system', content: String(system || '') }, { role: 'user', content: String(user || '').slice(0, 12000) }
+    ] })
+    const timeout = AbortSignal.timeout(60000)
+    const res = await fetch(request.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + request.key }, body: JSON.stringify(request.payload), signal: signal ? AbortSignal.any([signal, timeout]) : timeout, redirect: 'error', credentials: 'omit', cache: 'no-store' })
+    if (!res.ok) throw await window.NANALY_PROVIDER.responseError(res)
+    const result = await res.json(); signal?.throwIfAborted(); addUsage(result.usage)
+    const text = result.choices?.[0]?.message?.content
+    if (typeof text !== 'string' || !text.trim()) throw new Error('模型没有返回内容。')
+    return text
+  }
   const agentTool = async ({ tool, input, goal, stepId, signal } = {}) => {
     if (!canReadPageContext()) throw new Error('请先解锁站点。')
     signal?.throwIfAborted()
@@ -3087,7 +3107,7 @@
     close: closePanel,
     chatState: () => chatBridge.snapshot(),
     contextAction,
-    askPractice, preparePractice, agentTool,
+    askPractice, preparePractice, agentTool, canComplete, complete,
     confirmedMemories: () => workspace?.snapshot().memories || [],
     reset: () => { stopStream(true); history = []; historyAnchor = 0; writeLog(history); backToChat() },
     lock: () => { window.NANALY_AGENT?.disconnect(); stopStream(true); clearSession(); voiceController?.stop({ clearCache: true }); secrets = { ...EMPTY_SECRETS }; showKeyUI() },

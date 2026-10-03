@@ -3,9 +3,9 @@
 /**
  * 复习卡的数据（/review/ 页面里的 {% review_cards %}）。
  *
- * 卡片有两个来源：
- *   1. UE5 系列文章里现成的「术语表」和「易错点速查表」，构建时直接从表格里抽出来；
- *   2. source/_data/review-cards.yml，DSA、Linux、Git 这些没有术语表的系列按文章内容写的问答。
+ * 卡片写在 source/_data/review-cards.yml，按系列分组，每张卡就是一个知识点。
+ * 只收课内和课外 AI Infra 两块的文章，别的板块（比如游戏开发）的卡构建时直接报错。
+ * 复习页每天从这些知识点里挑 5 个，题目由娜娜莉按卡片现场换问法，见 source/js/review.js。
  *
  * 数据直接嵌在复习页的 HTML 里，不单独生成 JSON 文件。复习页和文章一样受软锁保护，
  * 不会多出一个「一个 GET 就能拿到全部内容」的口子（见 noimpty-lockdown.js 开头的说明）。
@@ -16,11 +16,11 @@
 
 const crypto = require('crypto')
 
+// 新写一个系列的卡（比如 CSAPP、Python）时，在这里加一行，id 和 review-cards.yml 里的键一致。
 const SERIES = [
   { id: 'dsa', name: 'DSA', match: /^DSA-/ },
   { id: 'linux', name: 'Linux', match: /^Linux-/ },
-  { id: 'git', name: 'Git', match: /^Git-/ },
-  { id: 'ue5', name: 'UE5', match: /^UE5-/ }
+  { id: 'git', name: 'Git', match: /^Git-/ }
 ]
 
 // 卡片文字只认三种写法：`代码`、**加粗**、换行。先整体转义，再把这三种换回标签。
@@ -31,44 +31,10 @@ const inline = text => escape(String(text == null ? '' : text).trim())
   .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
   .replace(/\n/g, '<br>')
 
-// 表格单元格按没转义的 | 切开；`\|` 是单元格里的竖线。
-const cells = line => line.trim().replace(/^\|/, '').replace(/\|$/, '').split(/(?<!\\)\|/).map(cell => cell.trim().replace(/\\\|/g, '|'))
-const unwrapBold = text => text.replace(/^\*\*(.+)\*\*$/, '$1')
-
-// 找到某个标题下面的第一张表，返回表头和数据行。
-const tableAfter = (raw, heading) => {
-  const lines = raw.split('\n')
-  const start = lines.findIndex(line => /^#{1,4}\s/.test(line) && heading.test(line))
-  if (start < 0) return null
-  const rows = []
-  let header = null
-  for (const line of lines.slice(start + 1)) {
-    if (/^#{1,4}\s/.test(line)) break
-    if (!line.trim().startsWith('|')) { if (header) break; continue }
-    const row = cells(line)
-    if (!header) { header = row; continue }
-    if (row.every(cell => /^:?-{3,}:?$/.test(cell))) continue
-    rows.push(row)
-  }
-  return header ? { header, rows } : null
-}
-
 const cardId = (slug, front) => crypto.createHash('sha1').update(slug + '\n' + front).digest('hex').slice(0, 12)
 
-const fromTables = post => {
-  const cards = []
-  const glossary = tableAfter(post.raw, /术语表/)
-  if (glossary) for (const [term, meaning] of glossary.rows) {
-    if (!term || !meaning) continue
-    cards.push({ kind: '术语', front: unwrapBold(term), back: meaning })
-  }
-  const pitfalls = tableAfter(post.raw, /易错点速查表/)
-  if (pitfalls && /症状/.test(pitfalls.header[0])) for (const [symptom, cause, where] of pitfalls.rows) {
-    if (!symptom || !cause) continue
-    cards.push({ kind: '排错', front: symptom, hint: '最可能是什么原因？', back: cause + (where ? `\n检查位置：${where}` : '') })
-  }
-  return cards
-}
+// 文章属于课内还是课外的 AI Infra，看 front-matter 的 categories。
+const inScope = post => post.categories.toArray().some(category => category.name === '课内' || category.name === 'AI Infra')
 
 hexo.extend.tag.register('review_cards', () => {
   const posts = hexo.locals.get('posts').toArray()
@@ -85,13 +51,15 @@ hexo.extend.tag.register('review_cards', () => {
       post: { title: post.title, url: hexo.config.root + post.path }
     })
   }
+  for (const key of Object.keys(written)) {
+    if (!SERIES.some(series => series.id === key)) throw new Error(`review_cards: review-cards.yml 里的 ${key} 不在 SERIES 里`)
+  }
   for (const series of SERIES) {
-    for (const post of posts.filter(item => series.match.test(item.slug)).sort((a, b) => a.date - b.date)) {
-      for (const card of fromTables(post)) add(series, post, card)
-    }
     for (const entry of written[series.id] || []) {
       const post = bySlug.get(entry.post)
       if (!post) throw new Error(`review_cards: review-cards.yml 里写的文章 ${entry.post} 不存在`)
+      if (!series.match.test(post.slug)) throw new Error(`review_cards: ${entry.post} 不属于 ${series.name} 系列`)
+      if (!inScope(post)) throw new Error(`review_cards: ${entry.post} 不在课内或 AI Infra 板块里`)
       for (const card of entry.cards || []) add(series, post, card)
     }
   }

@@ -37,6 +37,15 @@ const vision = entries => {
   return window.NANALY_VISION
 }
 
+await check('json: true asks for a JSON object on both providers; ordinary requests stay free-form', () => {
+  const messages = [{ role: 'user', content: '只返回 JSON' }]
+  const text = provider.request({ cfg, secrets, messages, stream: false, json: true })
+  assert.deepEqual({ ...text.payload.response_format }, { type: 'json_object' })
+  const silicon = provider.request({ cfg, secrets: { apiKey: '', visionKey: 'v' }, messages, stream: false, json: true })
+  assert.equal(silicon.payload.response_format.type, 'json_object')
+  assert.equal('response_format' in provider.request({ cfg, secrets, messages }).payload, false)
+})
+
 await check('text and image models use their own keys and never mutate credentials', () => {
   const before = JSON.stringify(secrets)
   const plain = provider.request({ cfg, secrets, messages: [{ role: 'user', content: '问题' }] })

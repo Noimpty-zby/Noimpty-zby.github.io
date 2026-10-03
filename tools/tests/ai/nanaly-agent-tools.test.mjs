@@ -60,3 +60,44 @@ test('a completed review preserves the saved note identifier and text', async ()
   const result = await tool({ tool: 'review', input: 'summarize', stepId: 'fixture-step' })
   assert.equal(result.noteId, 'review-fixture-step'); assert.equal(result.text, 'review result')
 })
+
+// 复习页出题用的一问一答（window.NANALY.complete）。
+const bootComplete = ({ fetcher, secrets = { apiKey: 'fixture' }, readable = true } = {}) => {
+  const seen = { requests: [], usage: [] }
+  const context = {
+    window: {
+      NANALY_PROVIDER: {
+        request: options => { seen.requests.push(options); return { url: 'https://model.invalid/chat/completions', key: 'fixture', payload: { stream: options.stream } } },
+        responseError: async response => new Error('provider failed ' + response.status)
+      }
+    },
+    cfg: {}, secrets, canReadPageContext: () => readable, addUsage: usage => seen.usage.push(usage),
+    fetch: fetcher || (async () => Response.json({ choices: [{ message: { content: '{"question":"q"}' } }], usage: { completion_tokens: 3 } })),
+    AbortSignal, AbortController, DOMException, JSON, String, Error
+  }
+  const api = vm.runInNewContext(section('  const canComplete =', '  const agentTool =') + '\n({ canComplete, complete })', context)
+  return { ...api, seen }
+}
+
+test('complete sends one non-streaming request without credentials and counts its tokens', async () => {
+  let init
+  const h = bootComplete({ fetcher: async (_url, options) => { init = options; return Response.json({ choices: [{ message: { content: 'ok' } }], usage: { completion_tokens: 3 } }) } })
+  assert.equal(h.canComplete(), true)
+  assert.equal(await h.complete({ system: '出题', user: '卡片', json: true }), 'ok')
+  assert.equal(h.seen.requests[0].stream, false)
+  assert.equal(h.seen.requests[0].json, true)
+  assert.deepEqual(Array.from(h.seen.requests[0].messages, message => message.role), ['system', 'user'])
+  assert.equal(init.credentials, 'omit'); assert.equal(init.redirect, 'error'); assert.equal(init.cache, 'no-store')
+  assert.deepEqual(h.seen.usage, [{ completion_tokens: 3 }])
+})
+
+test('complete refuses while the site or the key vault is locked, and reports provider errors', async () => {
+  for (const options of [{ readable: false }, { secrets: { apiKey: '', visionKey: '' } }]) {
+    const h = bootComplete(options)
+    assert.equal(h.canComplete(), false)
+    await assert.rejects(h.complete({ system: 's', user: 'u' }), /解锁/)
+    assert.equal(h.seen.requests.length, 0)
+  }
+  await assert.rejects(bootComplete({ fetcher: async () => new Response('', { status: 429 }) }).complete({ system: 's', user: 'u' }), /provider failed 429/)
+  await assert.rejects(bootComplete({ fetcher: async () => Response.json({ choices: [{ message: { content: ' ' } }] }) }).complete({ system: 's', user: 'u' }), /没有返回内容/)
+})

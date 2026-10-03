@@ -346,7 +346,8 @@ const setupHarness = overrides => {
     hasCrypto: () => true, hasVault: () => false, openSecrets: async () => null,
     sealSecrets: async value => { calls.sealed.push(value); return 'sealed' }, uiRevision: 0,
     LS_VAULT: 'nanaly-vault-v1', voiceController: null, localStorage: { setItem() {} }, writeCfg() {}, writeSession() {}, markOwnerIfMine() {}, backToChat() {}, resetDwell() {}, addMsg() {},
-    connectBackend: options => { calls.connects.push(options) }, addSetupError: (_, message) => { calls.errors.push(message) }, ...overrides
+    connectBackend: options => { calls.connects.push(options) }, announceUnlocked: () => { calls.announced = (calls.announced || 0) + 1 },
+    addSetupError: (_, message) => { calls.errors.push(message) }, ...overrides
   }, ['showSetup', 'getSecrets'])
   subject.showSetup()
   return { fields, calls, getSecrets: subject.getSecrets, save: () => click({ target: { closest: () => ({ dataset: { a: 'save' } }) } }) }
@@ -363,6 +364,7 @@ await test('Vault saves the personal backend token encrypted and connects right 
   assert.equal(setup.calls.sealed.length, 1)
   assert.equal(setup.calls.sealed[0].backendToken, backend)
   assert.equal(setup.getSecrets().backendToken, backend)
+  assert.equal(setup.calls.announced, 1, 'pages waiting for the model (the review page) hear about the unlock')
   assert.equal(setup.calls.connects.length, 1)
   assert.equal(setup.calls.connects[0].explicit, true)
 })

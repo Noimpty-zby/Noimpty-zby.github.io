@@ -4,7 +4,7 @@
  * 另外盯几件只有复习时才会发现的事：
  *   - 同一篇文章里两张卡的正面一样，它们会算成同一个 id，进度互相覆盖；
  *   - 卡片文字里的 `代码` 没配对，页面上会露出半个反引号；
- *   - UE5 的卡从「术语表」「易错点速查表」两张表里抽，标题改名了就一张都抽不到；
+ *   - 复习页只收课内和课外 AI Infra 的知识点，别的板块的文章不能混进来；
  *   - 复习进度存在本地，导出的文件版本号要和读取时认的一致。
  */
 import assert from 'node:assert/strict'
@@ -48,10 +48,17 @@ check('卡片里的反引号都成对', () => {
   }
 })
 
-check('UE5 文章里还有能抽卡的术语表和速查表', () => {
-  const ue5 = [...posts].filter(name => name.startsWith('UE5-'))
-  const withTables = ue5.filter(name => /^#{1,4}\s.*(术语表|易错点速查表)/m.test(readFileSync(join('source/_posts', name + '.md'), 'utf8')))
-  assert.ok(withTables.length >= 5, `只有 ${withTables.length} 篇 UE5 文章还有术语表或速查表`)
+check('只有课内和 AI Infra 的系列，每篇文章都在这两块里', () => {
+  assert.deepEqual(Object.keys(data), ['dsa', 'linux', 'git'])
+  const script = readFileSync('scripts/noimpty-review.js', 'utf8')
+  assert.doesNotMatch(script, /ue5|术语表/i, 'UE5 的卡已经从复习页删掉了')
+  for (const series of Object.keys(data)) {
+    assert.match(script, new RegExp(`id: '${series}'`), `${series} 不在构建脚本的 SERIES 里`)
+    for (const entry of data[series]) {
+      const head = readFileSync(join('source/_posts', entry.post + '.md'), 'utf8').split(/^---$/m)[1]
+      assert.match(head, /^\s*- \[(课内|课外, AI Infra)[,\]]/m, `${entry.post} 不在课内或 AI Infra 板块里`)
+    }
+  }
 })
 
 check('复习页、排程算法和页面脚本都在', () => {

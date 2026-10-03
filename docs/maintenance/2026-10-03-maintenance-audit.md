@@ -1,6 +1,6 @@
 # 2026-10-03 每周维护审查
 
-本轮从 `99a096d`（复习卡改版）开始，修复和清理分成 `d4e512f`、`53c25df`、`7d186ad` 三个提交，检查线上运行状态、服务器、仓库和产物里的泄露风险、依赖、工作流、后端鉴权、前端注入点、代码质量，最后在本地和线上把全站每个页面都打开一遍。文章正文、图片和音乐没有改动。
+本轮从 `aaf368f`（复习卡改版）开始，修复和清理分成 `bd3c8a6`、`2b5a6b6`、`baabce2` 三个提交，检查线上运行状态、服务器、仓库和产物里的泄露风险、依赖、工作流、后端鉴权、前端注入点、代码质量，最后在本地和线上把全站每个页面都打开一遍。文章正文、图片和音乐没有改动。
 
 ## 线上状态
 
@@ -14,6 +14,8 @@
 ### 服务器的安全更新一直没有自动安装
 
 `/etc/apt/apt.conf.d/50unattended-upgrades` 里 `"${distro_id}:${distro_codename}-security";` 这一行被注释掉了，这多半是云厂商镜像的默认设置。于是自动更新只看 `noble` 这个源，日志里每天都是「No packages found that can be upgraded unattended」，而系统里已经积了 99 个安全更新，同时提示需要重启（`apparmor` 更新）。服务器写操作要由主人执行，命令见文末。
+
+主人 15:22 在腾讯云网页终端执行了文末的三行（网页会话在重启时断开）。复查结果：apt 15:24:10 正常结束，15:25:32 重启完成；安全源那一行已取消注释，安全更新 99 → 0，`reboot-required` 消失，`dpkg --audit` 没有半安装的包；nanaly、caddy 运行中，`/api/health` 正常且 runner 就绪。还剩新内核 6.8.0-146、linux-firmware、fwupd、sosreport 这 6 个普通更新，`apt-get upgrade` 遇到要装新包的升级会跳过，它们不在安全源里，所以不处理。自动更新不会自动重启，以后每周维护要看一眼 `reboot-required`。
 
 ### 旧提交号下的私有资料仍然能取到
 
@@ -29,9 +31,9 @@
 
 ## 修复与清理
 
-- 依赖（`d4e512f`）：合并 5 个 Dependabot 升级。nodemailer 9.1.1 → 10.0.13 修掉 5 条告警，10 版只要求 Node 20 以上，日报的 `await import('nodemailer')`、`createTransport`、`sendMail` 实测可用，`service: 'gmail'` 仍解析到 smtp.gmail.com:465。katex 0.18.4 → 0.18.10，同时把 `source/lib/katex/katex.min.js` 换成同一版本，否则娜娜莉渲染公式时 JS 和构建复制的 CSS、字体版本不一致。@fancyapps/ui 6.1.15、mammoth 1.13.0（继续锁精确版本）、postcss 8.5.28。在原有版本范围内顺带升级传递依赖 dompurify 3.4.16、moment 2.31.0。
-- 无障碍（`53c25df`）：时钟两条规则前加 `html` 提高一级优先级，颜色还是 9-29 定的那两个；复习页补一个只给读屏软件看的 h1，页面外观不变。
-- 清理（`7d186ad`）：删掉 `noimpty-ai.js` 里没有调用方的 `searchCorpus`（26 行，站内检索早就改走 `NanalyResearch.search`）、`absUrl` 和只写不读的 `dwellFrom`。两个测试原来拿这两个函数名当切片的结束标记，改成紧跟其后的注释行，切出来的代码不变。
+- 依赖（`bd3c8a6`）：合并 5 个 Dependabot 升级。nodemailer 9.1.1 → 10.0.13 修掉 5 条告警，10 版只要求 Node 20 以上，日报的 `await import('nodemailer')`、`createTransport`、`sendMail` 实测可用，`service: 'gmail'` 仍解析到 smtp.gmail.com:465。katex 0.18.4 → 0.18.10，同时把 `source/lib/katex/katex.min.js` 换成同一版本，否则娜娜莉渲染公式时 JS 和构建复制的 CSS、字体版本不一致。@fancyapps/ui 6.1.15、mammoth 1.13.0（继续锁精确版本）、postcss 8.5.28。在原有版本范围内顺带升级传递依赖 dompurify 3.4.16、moment 2.31.0。
+- 无障碍（`2b5a6b6`）：时钟两条规则前加 `html` 提高一级优先级，颜色还是 9-29 定的那两个；复习页补一个只给读屏软件看的 h1，页面外观不变。
+- 清理（`baabce2`）：删掉 `noimpty-ai.js` 里没有调用方的 `searchCorpus`（26 行，站内检索早就改走 `NanalyResearch.search`）、`absUrl` 和只写不读的 `dwellFrom`。两个测试原来拿这两个函数名当切片的结束标记，改成紧跟其后的注释行，切出来的代码不变。
 - 删掉日报、资讯、巡逻脚本里没用到的 `WINDOW`、`digest`、`pad`、`grab`。
 - `.gitignore` 加上 `.env` 和 `.env.*`，防止本地调试时放密钥的环境变量文件被提交进公开仓库。
 
@@ -55,7 +57,7 @@
 
 ## 需要主人处理的
 
-1. 在服务器窗口执行（不要加 `!`）。先让自动更新包含安全源，再装上积压的更新并重启，重启期间后端会断一两分钟：
+1. （已完成，见上文复查）在服务器窗口执行（不要加 `!`）。先让自动更新包含安全源，再装上积压的更新并重启，重启期间后端会断一两分钟：
 
    ```
    sudo sed -i 's|^\s*//\s*"${distro_id}:${distro_codename}-security";|\t"${distro_id}:${distro_codename}-security";|' /etc/apt/apt.conf.d/50unattended-upgrades

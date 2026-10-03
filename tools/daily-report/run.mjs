@@ -9,7 +9,7 @@ import { commitJournal, note } from '../nanaly/journal.mjs'
 //   node tools/daily-report/run.mjs --dry
 
 import { writeFileSync } from 'node:fs'
-import { CFG, WINDOW, WINDOW_LABEL, getTraffic, getComments, getNewPosts, getOwnerHeartbeat, getSchedule } from './sources.mjs'
+import { CFG, WINDOW_LABEL, getTraffic, getComments, getNewPosts, getOwnerHeartbeat, getSchedule } from './sources.mjs'
 import { runHealth, checkModel, worstOf } from './health.mjs'
 import { writeOpening, reviewPost, screenComments, writeMissYou, draftReplies, MODEL_STATE, tokenSummary } from './narrate.mjs'
 import { renderEmail, renderSubject, renderMissYou, renderJournalLine } from './render.mjs'

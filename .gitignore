@@ -3,6 +3,10 @@ public/
 db.json
 .deploy*/
 
+# 本地调试脚本时放密钥用的环境变量文件，不能进公开仓库
+.env
+.env.*
+
 # 本地跑日报时生成的临时产物，不要提交
 report.html
 report-subject.txt

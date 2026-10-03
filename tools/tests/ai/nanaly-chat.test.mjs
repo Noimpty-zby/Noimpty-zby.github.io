@@ -295,7 +295,7 @@ console.log('\n对话窗口 · 本地快速通道（别把真问题当成导航�
 
 const navCtx = vm.createContext({})
 vm.runInContext(
-  cut('  const SECTIONS = [', '  const absUrl') +
+  cut('  const SECTIONS = [', '  // 跳转目标是模型给的') +
   cut('  const norm = t =>', '  // 站点地图') +
   cut('  const NAV_RE =', '  const tryLocalCommand') +
   '\nglobalThis.__n = { SECTIONS, norm, similarity, NAV_RE }', navCtx)

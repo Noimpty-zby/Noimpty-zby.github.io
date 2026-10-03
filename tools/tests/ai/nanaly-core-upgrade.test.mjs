@@ -98,7 +98,7 @@ const harness = ({ saved = storage({ 'nanaly-deep-v1': 'off' }), imageEntries = 
     cut('  const wantsBrainRe', '  const BRAIN_LABEL'),
     cut('  const PERSONA =', '  // ---------------- 工具'),
     cut('  const WEEKDAY =', '  /* 跨文章检索'),
-    cut('  const loadCorpus =', '  const searchCorpus ='),
+    cut('  const loadCorpus =', '  // 联网搜索：Tavily'),
     cut('  const searchWeb =', '  // ---------------- 长期记忆'),
     cut('  const LS_MEM', '  // ---------------- 操控页面'),
     cut('  const abortable =', '  /* 忙的时候'),

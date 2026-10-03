@@ -14,7 +14,7 @@ import { execFileSync } from 'node:child_process'
 import { ask, whyNoModel } from '../daily-report/narrate.mjs'
 import { triggerDeploy } from './github.mjs'
 import { pushWithRetry, useNanalyIdentity, sanitizeMd, stripAngles } from './git.mjs'
-import { note, digest } from './journal.mjs'
+import { note } from './journal.mjs'
 import { listPosts, countByLeaf, POSTS_DIR } from './posts.mjs'
 
 const DIR = 'source/news'
@@ -314,7 +314,6 @@ const recentUrls = (skipDate = null) => {
   return urls
 }
 
-const pad = n => String(n).padStart(2, '0')
 const beijingNow = () => new Intl.DateTimeFormat('sv-SE', {
   timeZone: 'Asia/Shanghai',
   year: 'numeric', month: '2-digit', day: '2-digit',

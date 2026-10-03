@@ -75,7 +75,6 @@ const inspect = async pageUrl => {
   if (mathErr) issues.push({ kind: 'math', what: `有 ${mathErr} 处公式没渲染出来（KaTeX 报错）` })
 
   // 收集本文里的链接与图片
-  const grab = re => [...r.body.matchAll(re)].map(m => m[1])
   const main = (r.body.split('id="article-container"')[1] || r.body).split('id="post-comment"')[0]
   const links = new Set()
   const imgs = new Set()

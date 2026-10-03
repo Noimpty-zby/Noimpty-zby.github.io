@@ -901,32 +901,6 @@
     return window.NOIMPTY_SEARCH.loadCorpus()
   }
 
-  const searchCorpus = async (query, topN = 3) => {
-    const posts = await loadCorpus()
-    // 中文没有空格分词，这里用 2-gram 粗略切一下，够用
-    const grams = new Set()
-    const q = query.toLowerCase().replace(/[\s，。？！、,.?!]/g, '')
-    if (q.length === 1) grams.add(q)
-    for (let i = 0; i < q.length - 1; i++) grams.add(q.slice(i, i + 2))
-    query.split(/[\s，。？！、,.?!]+/).forEach(w => { if (w.length > 1) grams.add(w.toLowerCase()) })
-
-    const scored = posts.map(p => {
-      const hay = (p.title + ' ' + p.text).toLowerCase()
-      let score = 0
-      grams.forEach(g => { if (hay.includes(g)) score += g.length > 2 ? 3 : 1 })
-      return { ...p, score }
-    }).filter(p => p.score > 0).sort((a, b) => b.score - a.score).slice(0, topN)
-
-    // 每篇只截取命中附近的窗口，控制 token
-    return scored.map(p => {
-      const hay = p.text.toLowerCase()
-      let at = -1
-      for (const g of grams) { const i = hay.indexOf(g); if (i > -1) { at = i; break } }
-      const start = Math.max(0, at - 400)
-      return { title: p.title, url: p.url, excerpt: p.text.slice(start, start + 1800) }
-    })
-  }
-
   // 联网搜索：Tavily。key 同样只存本机，不写进代码。
   const searchWeb = async (query, maxResults = 5, signal) => {
     if (!secrets.tavilyKey) throw new Error('NO_TAVILY')
@@ -1080,11 +1054,6 @@
     { label: '标签', url: '/tags/', alias: ['标签', 'tags', 'tag', '标签页'] },
     { label: '关于', url: '/about/', alias: ['关于', 'about', '关于我', '关于你', '关于页'] }
   ]
-
-  const absUrl = u => {
-    try { return new URL(u, location.origin + ROOT()).href.replace(/([^:])\/{2,}/g, '$1/') }
-    catch (_) { return u }
-  }
 
   // 跳转目标是模型给的。而这个页面的同源里存着解密后的 API key
   // 和一把有仓库写权限的 GitHub token —— `javascript:` 这种伪协议放过去，
@@ -2925,7 +2894,6 @@
   const POKE_AFTER_MS = Number(window.NANALY_POKE_MS || 100000)   // 停留多久才开口
   const pokedPaths = new Set()
   let pokeTimer = null
-  let dwellFrom = 0
   let maxDepth = 0
 
   // 改名叫 pokeBubble：send() 里也有一个局部的 bubble（她回话的那个气泡），
@@ -2984,7 +2952,6 @@
 
   const resetDwell = () => {
     clearTimeout(pokeTimer)
-    dwellFrom = Date.now()
     maxDepth = 0
     hidePoke()
     if (cfg.proactive === 'off' || !currentArticle()) return

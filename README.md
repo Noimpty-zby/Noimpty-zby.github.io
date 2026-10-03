@@ -77,7 +77,7 @@ npm run check
 | `npm run voicecheck` | 真实语音服务检查，需要凭据且可能计费 |
 | `npm run svgcheck -- <文件…>` | 配图文字边界估算，仍需检查实际渲染 |
 
-最新审查、回归结果与未验范围见 [2026-09-28 日常维护审查](docs/maintenance/2026-09-28-maintenance-audit.md)；此前发布记录见 [收尾验收](docs/maintenance/2026-09-28-release-check.md)。
+最新审查、回归结果与未验范围见 [2026-10-03 每周维护审查](docs/maintenance/2026-10-03-maintenance-audit.md)；上一轮见 [2026-09-28 日常维护审查](docs/maintenance/2026-09-28-maintenance-audit.md)，此前发布记录见 [收尾验收](docs/maintenance/2026-09-28-release-check.md)。
 
 ## 前后端部署
 

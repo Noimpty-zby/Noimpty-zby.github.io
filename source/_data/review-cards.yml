@@ -439,6 +439,42 @@ linux:
     back: '`date` 的输出里 Oct 和 4 之间有两个空格。没有加双引号时，命令替换的结果会按空格再拆分一遍，两个空格就变成了一个；加上双引号，结果会作为一个完整的参数原样保留。'
   - front: Bash 展开的顺序是什么？为什么 `{1..$((1+2))}` 不会展开成 1 2 3？
     back: 顺序是花括号展开，然后从左往右做波浪号、变量、算术展开和命令替换，接着拆分单词，再做路径名展开，最后去掉引号。花括号展开最先做，那时 `$((1+2))` 还没有算出来，序列不完整，所以不展开。
+- post: Linux-Command-Line-Chapter11
+  cards:
+  - front: '`locate notes` 的参数是路径吗？在不同目录下运行，结果会不同吗？'
+    back: 不是路径，而是要在完整路径里查找的一段文字，路径里包含它的文件和目录都会列出来。`locate` 查的是数据库，所以在哪个目录下运行，结果都一样。
+  - front: '`locate` 的 `-i`、`-l 3`、`-c` 分别是什么意思？'
+    back: '`-i` 不区分大小写，`-l 3` 最多打印 3 条，`-c` 只打印匹配到的数量。'
+  - front: 为什么 `locate 'notes*'` 什么都找不到，而 `locate '*notes*'` 可以？
+    back: 模式里有通配符时，`locate` 用它去匹配整条路径，而路径都以 `/` 开头，所以 `notes*` 匹配不上。另外模式要加引号，否则会先被 Shell 展开。
+  - front: 刚新建的文件 `locate` 为什么查不到？刚删掉的文件为什么还查得到？
+    back: '`locate` 查的是 `updatedb` 生成的数据库，默认每天才更新一次。`-e` 能去掉已经删除的文件，但是找不出数据库里没有的文件，要执行 `sudo updatedb` 重建数据库。'
+  - front: '`find` 不带参数会列出什么？会跳过隐藏文件吗？'
+    back: 从当前目录开始，逐层列出所有文件和目录，包括 `.` 本身。它不会跳过以点开头的隐藏文件，输出也不按字母排序。
+  - front: '`find . -name *.md` 为什么可能漏掉文件？'
+    back: 不加引号时，Shell 会先在当前目录展开 `*.md`。当前目录只有 README.md 时，`find` 收到的是 `-name README.md`，子目录里的 guide.md 就被漏掉了，而且没有任何报错。有多个匹配时则会报 paths must precede expression。
+  - front: '`-type f`、`-type d`、`-iname` 分别是什么意思？'
+    back: '`-type f` 只找普通文件，`-type d` 只找目录，`-iname` 按名字匹配时不区分大小写。'
+  - front: '`find . -type f -size -1M` 为什么只找到了空文件？'
+    back: '`-size` 会先把大小按单位向上取整，一个 600k 的文件算作 1M，并不小于 1M，所以只剩下大小为 0 的文件。要找小文件就换小一点的单位，比如 `-size -100k`。'
+  - front: '`-size 100` 不写单位时是多大？'
+    back: 100 个 512 字节的块，也就是 51200 字节。字节的单位是 `c`，此外还有 `k`、`M`、`G`。
+  - front: atime、mtime、ctime 分别是什么？各用什么命令查看？
+    back: atime 是最近一次读取内容的时间，用 `ls -lu`；mtime 是最近一次修改内容的时间，`ls -l` 默认显示；ctime 是属性最近一次变化的时间，用 `ls -lc`。`stat` 可以一次看到全部。
+  - front: ctime 是文件的创建时间吗？
+    back: 不是，c 指的是 change。内容、权限、属主、名字有任何一项变化，ctime 都会更新，而且它不能用 `touch` 往前调。创建时间在 `stat` 的 Birth 一行。
+  - front: 连续 `cat` 同一个文件两次，atime 会更新两次吗？
+    back: 一般不会。内核默认采用 relatime 规则，只有 atime 早于 mtime 或 ctime、或者已经超过一天时，读取才会更新 atime。
+  - front: '`find . -mmin -30` 和 `find . -mmin +30` 分别找什么？'
+    back: '`-mmin -30` 找 30 分钟以内修改过的文件，`-mmin +30` 找 30 分钟以前修改的文件。数字表示从修改到现在经过了多久。'
+  - front: 30 小时前修改的文件，满足 `-mtime +1` 吗？
+    back: 不满足。`find` 先算出经过了几个 24 小时，舍掉小数部分，30 小时是 1.25，舍掉以后是 1，不大于 1。它满足的是 `-mtime 1` 和 `-mtime +0`。
+  - front: '`find . -name ''*.md'' -or -name ''*.jpg'' -exec ls -l {} \;` 为什么漏掉了 .md 文件？'
+    back: 「与」比「或」先结合，`-exec` 只和 `-name '*.jpg'` 连在一起。而条件里有了 `-exec` 以后，`find` 也不再自动打印路径。要写成 `\( -name '*.md' -or -name '*.jpg' \) -exec ...`。
+  - front: '`-exec` 结尾的分号为什么要写成 `\;`？换成 `+` 有什么不同？'
+    back: 分号是 Shell 分隔命令的符号，不加反斜杠或引号就会被 Shell 拿走，`find` 报 missing argument to `-exec`。`\;` 每个文件执行一次命令，`+` 把路径攒在一起执行。
+  - front: '`find . -name ''*.png'' | xargs ls` 在没有找到文件时会怎样？带空格的文件名呢？'
+    back: GNU `xargs` 输入为空时仍会执行一次不带参数的 `ls`，列出当前目录，加 `-r` 可以避免。`xargs` 按空格拆分，带空格的文件名会被拆开，要用 `find -print0` 配合 `xargs -0`。
 git:
 - post: Git-Chapter0-Command-Line
   cards:

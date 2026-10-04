@@ -24,48 +24,52 @@ private_section: 课外
 
 ## 一、locate：在数据库里查找
 
-`locate` 的参数是一个模式。它会在数据库里找出路径中包含这个模式的所有文件和目录，然后打印出它们的完整路径。因为查的是数据库，所以当前目录在哪里并不影响结果：
+`locate` 的参数是一个模式。它会在数据库里找出路径中包含这个模式的所有文件和目录，然后打印出它们的完整路径。这里的模式并不是一个路径，而是要在完整路径里查找的一段文字，所以只要路径里出现了这段文字，不管它出现在文件名里还是目录名里，这一条都会被列出来。因为数据库里收录的是整个系统的路径，所以一个常见的词往往能匹配到很多条。这时可以把目录名也写进模式里，把范围缩小：
 
 ```bash
 $ cd /
-$ locate notes
+$ locate -c notes
+22
+$ locate lab/notes
 /home/zby/lab/notes.txt
 ```
 
-*代码 1：在根目录下运行，照样找到了家目录里的 notes.txt。*
+*代码 1：整个系统里路径包含 notes 的有 22 条，写上目录名以后，只剩下练习目录里的那一个。*
 
-这里的 notes 并不是一个路径，而是要在路径里查找的一段文字。只要完整的路径里包含这段文字，这一条就会被列出来，目录也不例外。比如路径里包含 lab 的条目一共有 16 条，也就是 lab 目录本身，再加上它下面的 15 个文件和子目录。`-c` 选项只打印匹配到的数量，`-l` 选项则限制最多打印几条：
+上面的 `-c` 选项只打印匹配到的数量，而 `-l` 选项可以限制最多打印几条。另外，因为查的是数据库，所以当前目录在哪里并不影响结果，在根目录下运行，照样能找到家目录里的文件：
 
 ```bash
-$ locate -c lab
+$ locate -c /home/zby/lab/
 16
-$ locate -l 3 lab
+$ locate -l 3 /home/zby/lab/
 /home/zby/lab/.hidden.txt
 /home/zby/lab/README.md
 /home/zby/lab/Report.TXT
 ```
 
-*代码 2：`-c` 是 count 的缩写，`-l` 是 limit 的缩写。*
+*代码 2：练习目录下有 12 个文件和 4 个子目录，一共 16 条，`-l 3` 只打印了前 3 条。*
 
 `locate` 默认区分大小写，如果加上 `-i`，就不再区分了：
 
 ```bash
-$ locate report
-$ locate -i report
+$ locate lab/report
+$ locate -i lab/report
 /home/zby/lab/Report.TXT
 ```
 
 *代码 3：第一条命令什么都没有找到，因为文件名里的 R 是大写的。*
 
-如果模式里含有 `*`、`?` 或者方括号，`locate` 就不再按包含关系查找，而是用这个模式去匹配整条路径。这时模式一定要加上引号，否则[第十章](/2026/10/04/Linux-Command-Line-Chapter10/)讲的路径名展开会先在当前目录里把它展开。另外，因为模式要匹配的是整条路径，而路径都是以 `/` 开头的，所以 `'notes*'` 什么也找不到，要写成 `'*notes*'` 才行：
+如果模式里含有 `*`、`?` 或者方括号，`locate` 就不再按包含关系查找，而是用这个模式去匹配整条路径。这时模式一定要加上引号，否则[第十章](/2026/10/04/Linux-Command-Line-Chapter10/)讲的路径名展开会先在当前目录里把它展开。另外，因为模式要匹配的是整条路径，而路径都是以 `/` 开头的，所以 `'notes*'` 什么也找不到，前面也要加上 `*` 才行：
 
 ```bash
-$ locate '*.TXT'
+$ locate '*/lab/*.TXT'
 /home/zby/lab/Report.TXT
 $ locate 'notes*'
+$ locate '*lab/notes*'
+/home/zby/lab/notes.txt
 ```
 
-*代码 4：`*.TXT` 能够匹配，是因为开头的 `*` 匹配了 /home/zby/lab/ 这一段。*
+*代码 4：`'notes*'` 要求整条路径以 notes 开头，所以一条也匹配不到。*
 
 ### 1.1 数据库不是实时更新的
 
@@ -75,10 +79,10 @@ $ locate 'notes*'
 $ cd ~/lab
 $ touch new.txt
 $ rm todo.txt
-$ locate new.txt
-$ locate todo
+$ locate lab/new.txt
+$ locate lab/todo
 /home/zby/lab/todo.txt
-$ locate -e todo
+$ locate -e lab/todo
 ```
 
 *代码 5：刚新建的 new.txt 查不到，已经删掉的 todo.txt 却还在结果里。*
@@ -87,14 +91,16 @@ $ locate -e todo
 
 ```bash
 $ sudo updatedb
-$ locate new.txt
+$ locate lab/new.txt
 /home/zby/lab/new.txt
-$ locate todo
+$ locate lab/todo
 ```
 
 *代码 6：重建数据库以后，两个结果都和实际情况一致了。*
 
-另外，/etc/updatedb.conf 里列出了一些不收录的目录，比如 /tmp，所以放在 /tmp 下的文件用 `locate` 是查不到的。如果系统提示找不到 `locate` 这条命令，可以先用 `sudo apt install plocate` 安装。
+如果系统提示找不到 `locate` 这条命令，可以先用 `sudo apt install plocate` 安装。第一次安装时，安装脚本会先执行一次 `updatedb`，屏幕上会显示 `Initializing plocate database; this may take some time...`，等它把整个系统扫完，`locate` 就可以用了。
+
+/etc/updatedb.conf 里的 PRUNEPATHS 列出了不收录的目录，比如 /tmp，所以放在 /tmp 下的文件用 `locate` 是查不到的。在 WSL 里，Windows 的 C 盘、D 盘挂在 /mnt 下面，而默认的配置并不会跳过它们，所以 `updatedb` 扫一遍 C 盘就要好几分钟，查找结果里也会混进大量 Windows 的路径。这时可以把 /mnt 加进 PRUNEPATHS，再执行一次 `sudo updatedb`。
 
 ![左边是磁盘上的目录，updatedb 把它记进数据库，locate 查数据库，find 直接读目录；下面的表格对比了 new.txt 和 todo.txt 的查找结果](/img/posts/linux-find/locate-vs-find.svg)
 

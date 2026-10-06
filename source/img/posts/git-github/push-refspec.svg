@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 530" width="880" height="530" font-family="system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+<rect x="0.5" y="0.5" width="879" height="529" rx="14" fill="#ffffff" stroke="#e8e4ea" stroke-width="1"/>
+<defs><marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c98a2b"/></marker><marker id="mb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4d7fc4"/></marker><marker id="mg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3f9e79"/></marker><marker id="mp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ee5d7b"/></marker><marker id="md" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c0b9c8"/></marker><marker id="mi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7b7280"/></marker></defs>
+<text x="28" y="34" font-size="17" fill="#2f2a33" font-weight="700">git push origin cat:main：拿本地的 cat，去更新远程的 main</text>
+<text x="28" y="58" font-size="13" fill="#7b7280">推完之后，远程的 main 和本地的 origin/main 都指向 dade8c9，本地的 main 一动没动</text>
+<rect x="30" y="80" width="820" height="130" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="296" y="120" font-size="20" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace"><tspan fill="#2f2a33">git push </tspan><tspan fill="#4d7fc4">origin</tspan><tspan fill="#2f2a33"> </tspan><tspan fill="#ee5d7b">cat</tspan><tspan fill="#7b7280">:</tspan><tspan fill="#3f9e79">main</tspan></text>
+<line x1="404" y1="130" x2="476" y2="130" stroke="#4d7fc4" stroke-width="3" stroke-linecap="round"/>
+<line x1="488" y1="130" x2="524" y2="130" stroke="#ee5d7b" stroke-width="3" stroke-linecap="round"/>
+<line x1="536" y1="130" x2="584" y2="130" stroke="#3f9e79" stroke-width="3" stroke-linecap="round"/>
+<line x1="440" y1="134" x2="290" y2="156" stroke="#4d7fc4" stroke-opacity="0.55" stroke-width="1.3"/>
+<line x1="506" y1="134" x2="490" y2="156" stroke="#ee5d7b" stroke-opacity="0.55" stroke-width="1.3"/>
+<line x1="560" y1="134" x2="690" y2="156" stroke="#3f9e79" stroke-opacity="0.55" stroke-width="1.3"/>
+<text x="270" y="176" font-size="13" fill="#4d7fc4" font-weight="700" text-anchor="middle">origin：远程仓库的名字</text>
+<text x="270" y="195" font-size="12" fill="#7b7280" text-anchor="middle">地址记在 .git/config 里</text>
+<text x="490" y="176" font-size="13" fill="#ee5d7b" font-weight="700" text-anchor="middle">cat：本地分支（src）</text>
+<text x="490" y="195" font-size="12" fill="#7b7280" text-anchor="middle">从这里取提交</text>
+<text x="700" y="176" font-size="13" fill="#3f9e79" font-weight="700" text-anchor="middle">main：远程的分支（dst）</text>
+<text x="700" y="195" font-size="12" fill="#7b7280" text-anchor="middle">没有就新建，有就往前挪</text>
+<rect x="30" y="228" width="820" height="122" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="48" y="252" font-size="13" fill="#2f2a33" font-weight="700">本地仓库 notes</text>
+<line x1="300" y1="304" x2="580" y2="304" stroke="#c0b9c8" stroke-width="2.5"/>
+<circle cx="300" cy="304" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="300" y="334" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">10f4cfd</text>
+<circle cx="440" cy="304" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="440" y="334" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">60c3f26</text>
+<circle cx="580" cy="304" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="580" y="334" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">dade8c9</text>
+<rect x="416.6" y="254" width="46.8" height="22" rx="11" fill="#7b7280" fill-opacity="0.1" stroke="#7b7280" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="440" y="269" font-size="12" fill="#7b7280" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">main</text>
+<line x1="440" y1="276" x2="440" y2="293" stroke="#7b7280" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mi)"/>
+<rect x="560.2" y="254" width="39.6" height="22" rx="11" fill="#ee5d7b" fill-opacity="0.1" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="580" y="269" font-size="12" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">cat</text>
+<line x1="580" y1="276" x2="580" y2="293" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mp)"/>
+<rect x="606" y="293" width="97.2" height="22" rx="11" fill="#4d7fc4" fill-opacity="0.1" stroke="#4d7fc4" stroke-opacity="0.6" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="654.6" y="308" font-size="12" fill="#4d7fc4" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">origin/main</text>
+<line x1="606" y1="304" x2="592" y2="304" stroke="#4d7fc4" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mb)"/>
+<text x="728" y="300" font-size="11" fill="#7b7280">推送时顺手</text>
+<text x="728" y="316" font-size="11" fill="#7b7280">记下的远程位置</text>
+<line x1="580" y1="354" x2="580" y2="384" stroke="#ee5d7b" stroke-width="2" marker-end="url(#mp)"/>
+<text x="596" y="374" font-size="12" fill="#ee5d7b">复制 dade8c9，远程的 main 改指它</text>
+<rect x="30" y="388" width="820" height="122" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="48" y="412" font-size="13" fill="#2f2a33" font-weight="700">远程仓库 github/notes.git</text>
+<line x1="300" y1="464" x2="580" y2="464" stroke="#c0b9c8" stroke-width="2.5"/>
+<circle cx="300" cy="464" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="300" y="494" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">10f4cfd</text>
+<circle cx="440" cy="464" r="9" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.6" stroke-width="2.2"/>
+<text x="440" y="494" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">60c3f26</text>
+<circle cx="580" cy="464" r="9" fill="#ffffff" stroke="#ee5d7b" stroke-opacity="0.8" stroke-width="2.2"/>
+<text x="580" y="494" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">dade8c9</text>
+<rect x="416.6" y="414" width="46.8" height="22" rx="11" fill="#c0b9c8" fill-opacity="0.04" stroke="#c0b9c8" stroke-opacity="0.35" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="440" y="429" font-size="12" fill="#7b7280" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">main</text>
+<line x1="440" y1="436" x2="440" y2="453" stroke="#c0b9c8" stroke-opacity="0.35" stroke-width="1.4" marker-end="url(#md)" stroke-dasharray="4 3"/>
+<rect x="556.6" y="414" width="46.8" height="22" rx="11" fill="#3f9e79" fill-opacity="0.1" stroke="#3f9e79" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="580" y="429" font-size="12" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">main</text>
+<line x1="580" y1="436" x2="580" y2="453" stroke="#3f9e79" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mg)"/>
+<path d="M 464 425 L 550 425" fill="none" stroke="#3f9e79" stroke-opacity="0.5" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#mg)"/>
+<text x="612" y="460" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">60c3f26..dade8c9</text>
+<text x="612" y="477" font-size="11" fill="#7b7280">输出里 main 的旧位置和新位置</text>
+</svg>

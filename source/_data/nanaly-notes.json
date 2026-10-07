@@ -396,20 +396,20 @@
     ]
   },
   "/2026/09/05/Linux-Command-Line-Chapter2/": {
-    "hash": "01f6cf5cbed9dc38",
+    "hash": "740f72be8de31bcb",
     "title": "Linux 命令行第二章：man 手册怎么读，以及为什么 man cd 查不到",
     "notes": [
       {
         "anchor": "这个区别并不只是容易记混而已，它其实是第一章那张分工图的又一",
-        "text": "补个坑：`-P` 能换翻页器，但换掉后 `h` 里的按键说明也跟着变，别背死。"
+        "text": "前提：man 默认调用的翻页器不一定是 less，取决于系统配置和 PAGER 环境变量。"
       },
       {
         "anchor": "这里有一个容易遇到的问题。man -k 搜索的并不是手册本身",
-        "text": "`mandb` 需要 root 权限，普通用户跑会失败；另外索引过期时也可能返回旧结果。"
+        "text": "坑：mandb 需要 root 权限，普通用户跑会失败，原文没提这点。"
       },
       {
         "anchor": "echo 同时以内建命令和外部程序两种形式存在，而且内建命令",
-        "text": "这里可再点明：`type -a echo` 会列出内建和 `/usr/bin/echo` 两条，顺序即优先级。"
+        "text": "观察：type -a echo 会同时列出内建和 /usr/bin/echo，能直接看出实际用的是哪个。"
       }
     ]
   },
@@ -702,20 +702,20 @@
     ]
   },
   "/2026/09/30/Git-Chapter6-Undoing/": {
-    "hash": "2c16b8683174db53",
+    "hash": "e6afb3dbd8ea7d5d",
     "title": "Git 第六章：checkout 挪 HEAD，reset 挪分支，revert 只往前加",
     "notes": [
       {
         "anchor": "HEAD2 的意思是「从 HEAD 往回数两个」。HEAD1",
-        "text": "补个坑：HEAD~2 只在单亲提交上等于往父链数两格，遇到合并提交会走第一父，不是「时间上倒数两个」。"
+        "text": "这里只说了 HEAD~n 顺着第一父提交数，合并提交的第二个父提交要用 ^2，原文没提。"
       },
       {
-        "anchor": "多写了一个 HEAD 之后，内容的来源就从暂存区换成了提交，",
-        "text": "原文末尾被截断了，`git restore --source=HEAD --staged --worktree` 的简写"
+        "anchor": "--staged 前面的两个短横线不能省略。如果写成 git",
+        "text": "补一句：长选项和参数之间空格可省，但 --staged 这种长选项本身还是要两根横线。"
       },
       {
         "anchor": "但是 --hard 有一样东西是真的找不回来的，那就是执行的",
-        "text": "「没提交的改动找不回」要加前提：新文件未 add 时确实无救，已 add 过的内容仍在对象库里，靠 git fsck 有"
+        "text": "--hard 抹掉未提交改动的前提是那些改动没被 add 过，add 过的话还在暂存区里。"
       }
     ]
   },
@@ -770,6 +770,42 @@
       {
         "anchor": "这个区别在新建文件时最明显。touch day{4..6}.",
         "text": "补充前提：`touch day[4-6].log` 造出怪名字文件后，想删它得加引号或转义，否则 `rm` 又会去匹配。"
+      }
+    ]
+  },
+  "/2026/10/06/Git-Chapter7-GitHub/": {
+    "hash": "dd092a9b753df789",
+    "title": "Git 第七章：remote 记下地址，push 推的是本地分支",
+    "notes": [
+      {
+        "anchor": "这三条命令的输出，对应着 clone 顺手完成的三件事。第一",
+        "text": "这里默认分支写的是 master，但 GitHub 新建仓库默认是 main，两边不一致时后面第14段才补上。"
+      },
+      {
+        "anchor": "为了让每一步的输出都能在本机上复现，下面用一个本地的裸仓库（",
+        "text": "裸仓库只是替代方案，本地路径和 GitHub 地址在权限、提示输出上并不完全等价。"
+      },
+      {
+        "anchor": "因为它只是写配置，并不会去连接远程仓库，所以即使地址写错了，",
+        "text": "地址写错时 add 不报错，但 clone 会立刻失败，这个对比原文没点明。"
+      }
+    ]
+  },
+  "/2026/10/04/Linux-Command-Line-Chapter11/": {
+    "hash": "33fc44eb9e43eae2",
+    "title": "Linux 命令行第十一章：locate、find 和 xargs —— 一个查数据库，一个逐个目录去找",
+    "notes": [
+      {
+        "anchor": "如果模式里含有 、? 或者方括号，locate 就不再按包含",
+        "text": "补个前提：locate 的整路径匹配是 glob，不是正则，`?` 只匹配单个字符，别和正则的 `.` 混用。"
+      },
+      {
+        "anchor": "这里有一个反直觉的地方。find 在比较之前，会先把文件的大",
+        "text": "这里没说清：向上取整后比较，所以 `-size -1M` 只剩 0 字节文件，和直觉的「小于 1M」完全相反。"
+      },
+      {
+        "anchor": "解决的办法是让 find 用 -print0 输出，路径之间",
+        "text": "`-print0` 和 `-0` 必须成对用，只加一边会拼出错误路径；管道中间若有别的命令也要透传 NUL。"
       }
     ]
   }

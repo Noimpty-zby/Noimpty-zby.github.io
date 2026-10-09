@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 620" width="880" height="620" font-family="system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+<rect x="0.5" y="0.5" width="879" height="619" rx="14" fill="#ffffff" stroke="#e8e4ea" stroke-width="1"/>
+<defs><marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c98a2b"/></marker><marker id="mb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4d7fc4"/></marker><marker id="mg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3f9e79"/></marker><marker id="mp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ee5d7b"/></marker><marker id="mi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7b7280"/></marker><marker id="md" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c0b9c8"/></marker></defs>
+<text x="28" y="34" font-size="17" fill="#2f2a33" font-weight="700">同一段历史在三个时刻的样子（本地仓库 notes）</text>
+<text x="28" y="58" font-size="13" fill="#7b7280">粉色是本地分支 main，蓝色虚线是远程跟踪分支 origin/main，灰色虚线框表示本地还没有这个提交</text>
+<rect x="30" y="78" width="820" height="164" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="48" y="108" font-size="14" fill="#2f2a33" font-weight="700">① fetch 之前</text>
+<text x="48" y="134" font-size="12" fill="#7b7280">合作者推送的 7169997</text>
+<text x="48" y="154" font-size="12" fill="#7b7280">还只在远程仓库里，</text>
+<text x="48" y="174" font-size="12" fill="#7b7280">origin/main 停在 8c565ad</text>
+<line x1="367" y1="140" x2="393" y2="140" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="467" y1="140" x2="508" y2="140" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="460" y1="148" x2="508" y2="190" stroke="#c0b9c8" stroke-width="2.4" stroke-dasharray="4 3"/>
+<rect x="293.0" y="127" width="74" height="26" rx="13" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.75" stroke-width="1.8"/><text x="330" y="144.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">8db4435</text>
+<rect x="393.0" y="127" width="74" height="26" rx="13" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.75" stroke-width="1.8"/><text x="430" y="144.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">8c565ad</text>
+<rect x="508.0" y="127" width="74" height="26" rx="13" fill="#ffffff" stroke="#ee5d7b" stroke-opacity="0.75" stroke-width="1.8"/><text x="545" y="144.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">67f2ea7</text>
+<rect x="508.0" y="177" width="74" height="26" rx="13" fill="#ffffff" stroke="#c0b9c8" stroke-width="1.6" stroke-dasharray="4 3"/><text x="545" y="194.5" font-size="12" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">7169997</text>
+<rect x="522.6" y="89" width="44.8" height="22" rx="11" fill="#ee5d7b" fill-opacity="0.1" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.2"/><text x="545" y="104.5" font-size="12" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">main</text><line x1="545" y1="111" x2="545" y2="125" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mp)"/>
+<rect x="382.4" y="89" width="95.2" height="22" rx="11" fill="#4d7fc4" fill-opacity="0.1" stroke="#4d7fc4" stroke-opacity="0.6" stroke-width="1.2" stroke-dasharray="4 3"/><text x="430" y="104.5" font-size="12" fill="#4d7fc4" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">origin/main</text><line x1="430" y1="111" x2="430" y2="125" stroke="#4d7fc4" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mb)"/>
+<text x="722" y="144" font-size="12" fill="#7b7280">status：领先 1 个</text>
+<rect x="30" y="254" width="820" height="164" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="48" y="284" font-size="14" fill="#2f2a33" font-weight="700">② git fetch 之后</text>
+<text x="48" y="310" font-size="12" fill="#7b7280">7169997 拿到了本地，</text>
+<text x="48" y="330" font-size="12" fill="#7b7280">origin/main 跟了过去；</text>
+<text x="48" y="350" font-size="12" fill="#7b7280">main 和工作区都没变</text>
+<line x1="367" y1="316" x2="393" y2="316" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="467" y1="316" x2="508" y2="316" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="460" y1="324" x2="508" y2="366" stroke="#c0b9c8" stroke-width="2.4"/>
+<rect x="293.0" y="303" width="74" height="26" rx="13" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.75" stroke-width="1.8"/><text x="330" y="320.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">8db4435</text>
+<rect x="393.0" y="303" width="74" height="26" rx="13" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.75" stroke-width="1.8"/><text x="430" y="320.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">8c565ad</text>
+<rect x="508.0" y="303" width="74" height="26" rx="13" fill="#ffffff" stroke="#ee5d7b" stroke-opacity="0.75" stroke-width="1.8"/><text x="545" y="320.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">67f2ea7</text>
+<rect x="508.0" y="353" width="74" height="26" rx="13" fill="#ffffff" stroke="#4d7fc4" stroke-opacity="0.75" stroke-width="1.8"/><text x="545" y="370.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">7169997</text>
+<rect x="522.6" y="265" width="44.8" height="22" rx="11" fill="#ee5d7b" fill-opacity="0.1" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.2"/><text x="545" y="280.5" font-size="12" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">main</text><line x1="545" y1="287" x2="545" y2="301" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mp)"/>
+<rect x="497.4" y="395" width="95.2" height="22" rx="11" fill="#4d7fc4" fill-opacity="0.1" stroke="#4d7fc4" stroke-opacity="0.6" stroke-width="1.2" stroke-dasharray="4 3"/><text x="545" y="410.5" font-size="12" fill="#4d7fc4" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">origin/main</text><line x1="545" y1="395" x2="545" y2="381" stroke="#4d7fc4" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mb)"/>
+<text x="722" y="320" font-size="12" fill="#7b7280">status：分叉，</text>
+<text x="722" y="338" font-size="12" fill="#7b7280">各有 1 个</text>
+<rect x="30" y="430" width="820" height="164" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="48" y="460" font-size="14" fill="#2f2a33" font-weight="700">③ git pull 之后</text>
+<text x="48" y="486" font-size="12" fill="#7b7280">merge 生成了合并提交 0480eef，</text>
+<text x="48" y="506" font-size="12" fill="#7b7280">main 指向它；origin/main</text>
+<text x="48" y="526" font-size="12" fill="#7b7280">要等 push 之后才会跟上</text>
+<line x1="367" y1="492" x2="393" y2="492" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="467" y1="492" x2="508" y2="492" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="460" y1="500" x2="508" y2="542" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="582" y1="492" x2="633" y2="492" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="575" y1="534" x2="633" y2="498" stroke="#c0b9c8" stroke-width="2.4"/>
+<rect x="293.0" y="479" width="74" height="26" rx="13" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.75" stroke-width="1.8"/><text x="330" y="496.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">8db4435</text>
+<rect x="393.0" y="479" width="74" height="26" rx="13" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.75" stroke-width="1.8"/><text x="430" y="496.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">8c565ad</text>
+<rect x="508.0" y="479" width="74" height="26" rx="13" fill="#ffffff" stroke="#ee5d7b" stroke-opacity="0.75" stroke-width="1.8"/><text x="545" y="496.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">67f2ea7</text>
+<rect x="508.0" y="529" width="74" height="26" rx="13" fill="#ffffff" stroke="#4d7fc4" stroke-opacity="0.75" stroke-width="1.8"/><text x="545" y="546.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">7169997</text>
+<rect x="633.0" y="479" width="74" height="26" rx="13" fill="#ffffff" stroke="#ee5d7b" stroke-opacity="0.75" stroke-width="1.8"/><text x="670" y="496.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">0480eef</text>
+<rect x="647.6" y="441" width="44.8" height="22" rx="11" fill="#ee5d7b" fill-opacity="0.1" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.2"/><text x="670" y="456.5" font-size="12" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">main</text><line x1="670" y1="463" x2="670" y2="477" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mp)"/>
+<rect x="497.4" y="571" width="95.2" height="22" rx="11" fill="#4d7fc4" fill-opacity="0.1" stroke="#4d7fc4" stroke-opacity="0.6" stroke-width="1.2" stroke-dasharray="4 3"/><text x="545" y="586.5" font-size="12" fill="#4d7fc4" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">origin/main</text><line x1="545" y1="571" x2="545" y2="557" stroke="#4d7fc4" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mb)"/>
+<text x="722" y="496" font-size="12" fill="#7b7280">status：领先 2 个</text>
+</svg>

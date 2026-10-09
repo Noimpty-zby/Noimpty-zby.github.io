@@ -696,3 +696,39 @@ git:
     back: 因为上游（远程的 main）和本地分支（cat）的名字不同。默认的 push 行为出于安全会中止推送，并列出 `git push origin HEAD:main` 和 `git push origin HEAD` 两种写法让人自己选。
   - front: 本地分支落后于远程时，怎样只设置上游、不推送？
     back: 执行 `git branch -u origin/main`。这时不能用 `git push -u`，因为落后时推送会被拒绝，而 `-u` 只在推送成功时才生效。设置之后，`git status` 会显示落后了几个提交。
+- post: Git-Chapter8-Fetch-Pull
+  cards:
+  - front: '`origin/main` 保存在哪里？它什么时候会移动？'
+    back: 它是远程跟踪分支，保存在本地的 `.git` 里（clone 时写进 `.git/packed-refs`），并不在 GitHub 上。它记录的是上一次和远程通信时远程 main 的位置，只有 fetch、pull、push 这些和远程通信的命令才会移动它，本地提交不会移动它。
+  - front: '`git branch`、`git branch -r`、`git branch -a` 分别列出什么？'
+    back: '`git branch` 只列本地分支；`-r` 只列远程跟踪分支（`origin/...`）；`-a` 把两种都列出来。'
+  - front: '`git switch origin/draft` 和 `git checkout origin/draft` 分别会怎样？'
+    back: switch 只接受本地分支，会报 `a branch is expected, got remote branch 'origin/draft'`，退出码 128。checkout 会进入分离头指针状态，可以查看文件，但是新的提交不属于任何分支，origin/draft 也不会跟着移动。
+  - front: 本地没有 draft 分支，为什么 `git switch draft` 不报错？
+    back: 因为 switch 默认带着 `--guess` 选项。如果本地找不到这个分支，而恰好有一个远程仓库里有同名分支，那么它等同于 `git switch -c draft --track origin/draft`，照着 origin/draft 新建本地分支并设置上游。`git checkout draft` 的效果一样。
+  - front: 合作者推送了新提交之后，为什么本地的 `git status` 仍然说 `up to date` 或者只领先？
+    back: git status 不联网，它比较的是本地分支和本地的 `origin/<分支>`。合作者推送之后，本地的 origin/* 要等到下一次 fetch、pull 或 push 时才会更新，在那之前 status 的判断都是过时的。
+  - front: '`git fetch` 改变了什么？没有改变什么？'
+    back: 它把远程的新提交拿进本地仓库，移动对应的 `origin/*`，远程新出现的分支会新建一条 `origin/<分支>`。本地分支、暂存区和工作区都不变，所以任何时候执行 fetch 都是安全的。
+  - front: 'fetch 输出里的 `8c565ad..7169997  main -> origin/main` 怎么读？'
+    back: 箭头左边是远程仓库里的 main，右边是本地记录它的 origin/main，`8c565ad..7169997` 是 origin/main 移动前后的位置。如果是远程新出现的分支，这一行会写成 `* [new branch]`。
+  - front: fetch 之后，怎样查看拿回来、还没有合并的提交？
+    back: '`git log --oneline main..origin/main` 列出在 origin/main 上、不在 main 上的提交，`git show --stat origin/main` 看最新那个提交改了什么。想直接看文件，可以 `git checkout origin/main`，看完再 `git switch main`。'
+  - front: '`git fetch origin review` 和不带参数的 `git fetch` 有什么区别？'
+    back: 它只拿远程的 review 一条分支，输出里多一行 `* branch review -> FETCH_HEAD`，同时也会更新 origin/review。其他分支的新提交这一次不拿，对应的 origin/* 保持不变。
+  - front: '`git pull` 和 `git fetch` 是什么关系？'
+    back: pull 先用同样的参数执行一次 fetch，再根据配置调用 merge 或 rebase，把拿到的提交合并进当前分支。所以 pull 的输出前半段是 fetch 的 From 那几行，后半段是合并的输出。
+  - front: 本地分支没有自己的新提交时，`git pull` 会怎样合并？
+    back: 直接快进，输出是 `Updating 旧..新` 和 `Fast-forward`，和第三章的快进一样，不会生成合并提交，也不需要任何配置。
+  - front: 在 git 2.34 上，两边都有新提交时执行 `git pull` 为什么报 `Need to specify how to reconcile divergent branches`？
+    back: 分叉时 pull 要求先说明怎样合并。`git config pull.rebase false` 用合并（fetch + merge），`pull.rebase true` 用变基，`pull.ff only` 只允许快进；加 `--global` 对所有仓库生效。也可以在命令行上临时加 `--no-rebase`、`--rebase` 或 `--ff-only`。
+  - front: pull 合并成功之后，为什么 `git status` 说领先了 2 个提交？
+    back: 领先的是本地原来的提交和新生成的合并提交，它们都还没有推送。origin/main 停在合作者的那个提交上，要 push 之后才会跟过来；这时推送不会被拒绝，因为合并提交的父提交里已经有远程的那个提交。
+  - front: '`git pull` 发生冲突之后，要做哪几步？'
+    back: 打开文件解决冲突、删掉冲突标记，然后 `git add` 标记已解决，`git commit` 生成合并提交，最后别忘了 `git push`，因为合并提交只在本地。想放弃这次合并就执行 `git merge --abort`，fetch 拿到的提交仍然留在 origin/* 上。
+  - front: pull 产生的冲突里，`>>>>>>>` 后面为什么是一串提交号而不是分支名？
+    back: 因为 pull 合并的是 fetch 拿到的那个提交（记录在 FETCH_HEAD 里），而不是一条本地分支，所以标记上写的是它的提交号。
+  - front: 不带参数的 `git pull` 怎么知道拉取哪一条分支？远程有同名分支就够了吗？
+    back: 它读当前分支在 `.git/config` 里的上游配置（`remote` 和 `merge` 两行），不会按名字去找同名的远程分支。没有上游时会报 `There is no tracking information for the current branch`。可以用 `git branch -u origin/<分支>` 补上上游，或者写成 `git pull origin <分支>`。
+  - front: '`git pull origin main` 会把远程的 main 合并到哪里？'
+    back: 合并进当前所在的分支，而不一定是本地的 main。如果当时在别的分支上，远程 main 的提交就会被合并进那条分支，所以带参数 pull 之前先确认当前分支。`git branch -vv` 可以列出每条分支的上游。

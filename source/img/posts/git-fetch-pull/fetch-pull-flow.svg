@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 372" width="880" height="372" font-family="system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+<rect x="0.5" y="0.5" width="879" height="371" rx="14" fill="#ffffff" stroke="#e8e4ea" stroke-width="1"/>
+<defs><marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c98a2b"/></marker><marker id="mb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4d7fc4"/></marker><marker id="mg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3f9e79"/></marker><marker id="mp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ee5d7b"/></marker><marker id="mi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7b7280"/></marker><marker id="md" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c0b9c8"/></marker></defs>
+<text x="28" y="34" font-size="17" fill="#2f2a33" font-weight="700">从工作区到远程仓库，以及反方向的 fetch 和 pull</text>
+<text x="28" y="58" font-size="13" fill="#7b7280">fetch 只把提交拿进本地仓库、更新 origin/*；pull 在 fetch 之后再合并，本地分支和工作区里的文件才会变</text>
+<rect x="30" y="124" width="160" height="96" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.4"/>
+<text x="46" y="148" font-size="14" fill="#2f2a33" font-weight="700">工作区</text>
+<text x="96" y="148" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">working tree</text>
+<rect x="240" y="124" width="150" height="96" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.4"/>
+<text x="256" y="148" font-size="14" fill="#2f2a33" font-weight="700">暂存区</text>
+<text x="306" y="148" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">index</text>
+<rect x="440" y="124" width="210" height="96" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.4"/>
+<text x="456" y="148" font-size="14" fill="#2f2a33" font-weight="700">本地仓库</text>
+<text x="520" y="148" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">.git</text>
+<rect x="700" y="124" width="150" height="96" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.4"/>
+<text x="716" y="148" font-size="14" fill="#2f2a33" font-weight="700">远程仓库</text>
+<text x="780" y="148" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">GitHub</text>
+<text x="46" y="178" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">README.md</text>
+<text x="46" y="198" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">ssh.md …</text>
+<text x="256" y="178" font-size="12" fill="#7b7280">下一次提交的内容</text>
+<rect x="469.6" y="169" width="44.8" height="22" rx="11" fill="#ee5d7b" fill-opacity="0.1" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.2"/><text x="492" y="184.5" font-size="12" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">main</text>
+<rect x="532.4" y="169" width="95.2" height="22" rx="11" fill="#4d7fc4" fill-opacity="0.1" stroke="#4d7fc4" stroke-opacity="0.6" stroke-width="1.2" stroke-dasharray="4 3"/><text x="580" y="184.5" font-size="12" fill="#4d7fc4" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">origin/main</text>
+<text x="456" y="208" font-size="11" fill="#7b7280">本地分支</text>
+<text x="544" y="208" font-size="11" fill="#7b7280">远程跟踪分支</text>
+<rect x="752.6" y="169" width="44.8" height="22" rx="11" fill="#3f9e79" fill-opacity="0.1" stroke="#3f9e79" stroke-opacity="0.6" stroke-width="1.2"/><text x="775" y="184.5" font-size="12" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">main</text>
+<text x="716" y="208" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">github/notes.git</text>
+<path d="M 130.0 124 L 130.0 98 L 295.0 98 L 295.0 122" fill="none" stroke="#c98a2b" stroke-width="2" marker-end="url(#ma)"/>
+<rect x="177.2" y="87" width="70.6" height="22" rx="4" fill="#ffffff"/>
+<text x="212.5" y="102.5" font-size="13" fill="#c98a2b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">git add</text>
+<path d="M 335.0 124 L 335.0 98 L 525.0 98 L 525.0 122" fill="none" stroke="#c98a2b" stroke-width="2" marker-end="url(#ma)"/>
+<rect x="383.0" y="87" width="94.0" height="22" rx="4" fill="#ffffff"/>
+<text x="430.0" y="102.5" font-size="13" fill="#c98a2b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">git commit</text>
+<path d="M 565.0 124 L 565.0 98 L 755.0 98 L 755.0 122" fill="none" stroke="#3f9e79" stroke-width="2" marker-end="url(#mg)"/>
+<rect x="620.8" y="87" width="78.4" height="22" rx="4" fill="#ffffff"/>
+<text x="660.0" y="102.5" font-size="13" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">git push</text>
+<path d="M 755 220 L 755 260 L 585.0 260 L 585.0 222" fill="none" stroke="#4d7fc4" stroke-width="2" marker-end="url(#mb)"/>
+<text x="670.0" y="282" font-size="13" fill="#4d7fc4" font-weight="700" text-anchor="middle">git fetch：只更新 origin/*</text>
+<path d="M 805 220 L 805 316 L 110.0 316 L 110.0 222" fill="none" stroke="#ee5d7b" stroke-width="2" marker-end="url(#mp)"/>
+<text x="457.5" y="338" font-size="13" fill="#ee5d7b" font-weight="700" text-anchor="middle">git pull = git fetch + git merge：本地分支、暂存区和工作区都更新</text>
+</svg>

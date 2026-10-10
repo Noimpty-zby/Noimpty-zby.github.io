@@ -36,20 +36,20 @@
     ]
   },
   "/2026/08/09/UE5-ActionRoguelike-Assignment1/": {
-    "hash": "42efa21c5ace8ae8",
+    "hash": "291dd9dc49d6ec4d",
     "title": "UE5 C++ 作业一复盘：角色跳跃与爆炸桶，从需求到状态机再到代码",
     "notes": [
       {
-        "anchor": "写成 Triggered 也能运行，而且完全正常，这是因为 ",
-        "text": "Triggered + 已按下触发器能跑，但依赖资产配置；换个人改资产就崩，1.3 的坑就在这。"
+        "anchor": "真正的执行发生在别处。ACharacter::CheckJu",
+        "text": "前提：CheckJumpInput 只在有 PlayerController 的本地角色上跑，模拟代理不执行这段。"
+      },
+      {
+        "anchor": "Jump() 内部只是重复地设置同一个 true，它是幂等的",
+        "text": "「只有别人改资产才触发」这点值得展开：本质是输入事件类型与逻辑幂等性不匹配。"
       },
       {
         "anchor": "这样做的后果是，UBT 能够编译它（因为它是合法的 C++ ",
-        "text": "UHT 静默失败这点值得单独强调：编译通过≠生效，UPROPERTY 全丢也不会报错。"
-      },
-      {
-        "anchor": "有一个容易漏掉的地方，即使不写 UStaticMeshCom",
-        "text": "传递包含带来的假安全感，换个 include 顺序或引擎版本就可能突然报错。"
+        "text": "补充坑：UHT 静默失败时 UPROPERTY 仍能编译，但序列化和 GC 引用也一并失效，不只是蓝图不可见。"
       }
     ]
   },
@@ -270,20 +270,20 @@
     ]
   },
   "/2026/08/20/UE5-ActionRoguelike-Assignment2/": {
-    "hash": "b00d2a765224113b",
+    "hash": "ff4b277d2ef6a548",
     "title": "UE5 C++ 作业二复盘：黑洞弹与传送弹，从旧账清理到弹丸基类",
     "notes": [
       {
         "anchor": "本次作业未使用地形，因此在使用 TeleportTo 时，地",
-        "text": "前提没交代：只有用了 Landscape 才会生成 StreamingProxy，普通关卡没这问题。"
+        "text": "前提是没地形；有地形时 TeleportTo 会走碰撞检测，结论可能相反。"
       },
       {
         "anchor": "ensure 默认在整个进程里只触发一次（ensureAlw",
-        "text": "ensure 默认只报一次这点容易记反，ensureAlways 才是每次都报。"
+        "text": "ensure 只在开发构建生效，Shipping 里同样被编译掉，别当运行时守卫。"
       },
       {
         "anchor": "黑洞类上就有一个拼写错误，TEXT(\"RadiaForceC",
-        "text": "组件名是蓝图覆盖的挂载键，改字符串等于把覆盖值全扔了——这坑我也踩过。"
+        "text": "组件名是蓝图覆盖的挂载键，改名即丢配置，这条经验比作业本身值钱。"
       }
     ]
   },
@@ -774,20 +774,20 @@
     ]
   },
   "/2026/10/06/Git-Chapter7-GitHub/": {
-    "hash": "dd092a9b753df789",
+    "hash": "6ce63302b746ce45",
     "title": "Git 第七章：remote 记下地址，push 推的是本地分支",
     "notes": [
       {
         "anchor": "这三条命令的输出，对应着 clone 顺手完成的三件事。第一",
-        "text": "这里默认分支写的是 master，但 GitHub 新建仓库默认是 main，两边不一致时后面第14段才补上。"
-      },
-      {
-        "anchor": "为了让每一步的输出都能在本机上复现，下面用一个本地的裸仓库（",
-        "text": "裸仓库只是替代方案，本地路径和 GitHub 地址在权限、提示输出上并不完全等价。"
+        "text": "clone 建本地分支靠的是远程 HEAD 指向，不是默认分支名，远程 HEAD 异常时本地分支名会出意外。"
       },
       {
         "anchor": "因为它只是写配置，并不会去连接远程仓库，所以即使地址写错了，",
-        "text": "地址写错时 add 不报错，但 clone 会立刻失败，这个对比原文没点明。"
+        "text": "地址写错时 add 静默成功，但之后 git remote -v 能立刻看出问题，不必等推送。"
+      },
+      {
+        "anchor": "需要注意的是，git status 并不会联网去查询远程仓库",
+        "text": "所以 status 的「一致」只是上次通信的快照，别人推了新提交它照样说一致，别当成实时状态。"
       }
     ]
   },
@@ -824,6 +824,24 @@
       {
         "anchor": "Ubuntu 22.04 自带的 tr（GNU coreut",
         "text": "GNU tr 的字节语义在 coreutils 9.x 仍是默认，除非用 `tr -c` 配合 locale，别指望它变"
+      }
+    ]
+  },
+  "/2026/10/09/Git-Chapter8-Fetch-Pull/": {
+    "hash": "0ee4b1347362977e",
+    "title": "Git 第八章：fetch 只更新 origin/*，pull 还要再合并一次",
+    "notes": [
+      {
+        "anchor": "上一章推送之后，origin/main 是 .git/ref",
+        "text": "前提是 Git 版本较新，旧版本 origin/* 是散文件，别以为两种存法一直共存。"
+      },
+      {
+        "anchor": "status 说领先 1 个提交，这个判断其实已经过时了。上",
+        "text": "坑：status 不联网，看到「领先」别急着 push，先 fetch 再判断。"
+      },
+      {
+        "anchor": "带参数的写法有一点需要注意。git pull origin ",
+        "text": "易误解：pull origin main 是并入当前分支，不是并进本地 main。"
       }
     ]
   }

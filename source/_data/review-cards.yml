@@ -732,3 +732,39 @@ git:
     back: 它读当前分支在 `.git/config` 里的上游配置（`remote` 和 `merge` 两行），不会按名字去找同名的远程分支。没有上游时会报 `There is no tracking information for the current branch`。可以用 `git branch -u origin/<分支>` 补上上游，或者写成 `git pull origin <分支>`。
   - front: '`git pull origin main` 会把远程的 main 合并到哪里？'
     back: 合并进当前所在的分支，而不一定是本地的 main。如果当时在别的分支上，远程 main 的提交就会被合并进那条分支，所以带参数 pull 之前先确认当前分支。`git branch -vv` 可以列出每条分支的上游。
+- post: Git-Chapter9-README-Gist-Pages
+  cards:
+  - front: 公开仓库和私有仓库分别谁能看到？建好之后在哪里改可见性？
+    back: 公开仓库所有人都能看到，不登录也能浏览和 clone；私有仓库只有拥有者和被邀请的合作者能看到。改可见性在仓库 Settings 的 General 页最下面，Danger Zone 里的 Change repository visibility，GitHub 会先列出后果，确认之后才生效。
+  - front: 把仓库从公开改成私有，会发生什么？已经公开过的内容能收回来吗？
+    back: star 和 watcher 会被清空；别人 fork 出去的副本仍然是公开的，只是和原仓库断开了联系；免费账号已经发布的 Pages 网站会被撤下。已经 fork 和 clone 出去的副本都收不回来，所以改回私有管不住已经公开过的内容。
+  - front: 私有仓库里有一个写着令牌的文件，后来提交了一次把它删掉，现在改成公开安全吗？
+    back: 不安全。公开的是包括全部历史的整个仓库，删除只是新提交里没有这个文件，旧提交仍然保存着它，任何人 clone 之后用 `git show HEAD~1:<文件>` 这类命令就能看到。公开前先用 `git log --all --stat` 检查历史；令牌进过历史就当作已经泄露，去发放的地方作废并重新生成。
+  - front: 怎样把别人加为个人仓库的合作者？
+    back: 打开仓库的 Settings，点击左侧栏 Access 一组里的 Collaborators（早些时候叫 Manage access），点 Add people，输入对方的用户名或邮箱并确认。对方会收到邀请邮件，接受之后才成为合作者。
+  - front: 个人仓库的合作者能做什么？不能做什么？
+    back: 合作者可以 pull 和 push，也就是读和写；邀请合作者、修改可见性、删除仓库这些和设置有关的操作只有拥有者能做。私有仓库不能给合作者只读权限，需要更细的分工要把仓库建在组织下面。移除合作者之后，对方已经 clone 到本地的仓库仍然留在对方手里。
+  - front: README 是什么？GitHub 会在哪几个地方找它？
+    back: README 是仓库的说明文件，一般是 README.md，GitHub 把它渲染出来显示在仓库首页的文件列表下面。GitHub 会在 `.github` 目录、根目录和 `docs` 目录里找，几个地方都有时按 `.github`、根目录、`docs` 的顺序，先找到哪个显示哪个。
+  - front: 在 GitHub 网页上直接编辑了 README，本地接下来要注意什么？
+    back: 网页上保存会在远程仓库里生成一个提交，本地还没有这个提交。所以下一次在本地推送之前，要先 pull（或 fetch 再合并）把它拿下来，否则 push 会因为 `fetch first` 被拒绝。
+  - front: Markdown 里 `>`、一对反引号、`~~ ~~` 分别表示什么？
+    back: '`>` 开头是引用块，左边有一条竖线，文字显示成灰色；一对反引号围起来的是行内代码，用等宽字体、浅灰色背景显示；`~~删除线~~` 是删除线，这是 GitHub 在标准 Markdown 之外加上的写法。'
+  - front: 代码块开头的三个反引号后面写的名字有什么用？
+    back: 那是语言的名字，GitHub 根据它决定怎样高亮，比如 bash、py、js、c。写一个不认识的名字，代码块照样显示，只是没有高亮。
+  - front: '`#没有空格` 和 `! [logo](logo.png)` 在 GitHub 上会显示成什么？'
+    back: 前者不是标题，`#` 后面必须有空格，否则原样显示这几个字符。后者不是图片，因为感叹号和方括号之间多了空格，结果是一个普通的感叹号加上一个叫 logo 的链接；图片要写成 `![logo](logo.png)`。
+  - front: 在 README.md 里只按一次回车，两行会分开显示吗？怎样才能换行？
+    back: 不会。两行被放进同一个 `<p>` 段落，换行符对浏览器来说就是空白，所以接在一起显示。空一行是开始新段落；只想换行就在行尾加两个空格或一个反斜杠，它们会变成 `<br>`。issue 和 pull request 的评论框不一样，每次回车都会显示成换行。
+  - front: 为什么 `这是**加粗。**后面` 在 GitHub 上显示的是星号？
+    back: 结尾的 `**` 前面是标点、后面紧跟汉字，按照 Markdown 的规则它不能当作粗体的结束标记，于是星号原样显示。把标点挪到外面，写成 `这是**加粗**。后面` 就正常了。
+  - front: Gist 和 Git 仓库是什么关系？
+    back: 每一个 Gist 都是一个 Git 仓库，可以 clone、fork，也可以在本地提交后 push 回自己的 Gist。在网页上每编辑一次就多一个提交（网页上没有填写提交信息的地方，所以提交信息是空的），Revisions 标签列出的就是这些提交。
+  - front: secret Gist 是私有的吗？
+    back: 不是。secret Gist 只是不出现在发现页、也搜不到，但任何人拿到网址就能看到内容。公开的 Gist 不能改成 secret，secret 可以改成公开。真正不能给人看的代码应该放进私有仓库。
+  - front: 从分支发布 GitHub Pages 要选什么？入口文件是哪个？
+    back: 在 Settings 的 Pages 页，Source 选 Deploy from a branch，再选一条分支和一个目录（只能是根目录 `/` 或 `/docs`）。之后每次推送到这条分支都会重新发布。Pages 在发布的目录里找 index.html、index.md 或 README.md 当入口文件。
+  - front: 仓库里只有 README.md、没有任何 .html 文件，为什么也能发布成 Pages 网站？
+    back: 因为从分支发布时 Pages 默认先用 Jekyll 构建一遍，Jekyll 会把 Markdown 转换成 HTML。不想让 Jekyll 处理就在发布目录里放一个空的 `.nojekyll` 文件；想用别的生成器，Source 可以改成 GitHub Actions。
+  - front: 项目网站和用户网站的地址有什么区别？免费账号能从私有仓库发布 Pages 吗？
+    back: 项目网站是 `https://<用户名>.github.io/<仓库名>/`，每个仓库一个；仓库名正好是 `<用户名>.github.io` 时发布的是用户网站 `https://<用户名>.github.io/`，每个账号一个。免费账号只能给公开仓库开 Pages；付费账号能从私有仓库发布，但网站本身仍然是公开的。

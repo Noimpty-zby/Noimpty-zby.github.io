@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 440" width="880" height="440" font-family="system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+<rect x="0.5" y="0.5" width="879" height="439" rx="14" fill="#ffffff" stroke="#e8e4ea" stroke-width="1"/>
+<defs><marker id="mg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3f9e79"/></marker><marker id="mb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4d7fc4"/></marker></defs>
+<text x="28" y="34" font-size="17" fill="#2f2a33" font-weight="700">从分支发布到 GitHub Pages</text>
+<text x="28" y="58" font-size="13" fill="#7b7280">在 Settings 的 Pages 页选好分支和目录，以后每次推送到这条分支，Pages 都会重新构建并发布这个目录</text>
+<rect x="28" y="84" width="248" height="216" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.4"/>
+<text x="44" y="108" font-size="14" fill="#2f2a33" font-weight="700" xml:space="preserve">仓库 notes</text>
+<text x="126" y="108" font-size="12" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace" xml:space="preserve">main 分支</text>
+<text x="52" y="140" font-size="13" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" xml:space="preserve">README.md</text>
+<text x="52" y="164" font-size="13" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" xml:space="preserve">ssh.md</text>
+<text x="52" y="188" font-size="13" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" xml:space="preserve">docs/</text>
+<text x="74" y="212" font-size="13" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" xml:space="preserve">index.md</text>
+<text x="74" y="236" font-size="13" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" xml:space="preserve">style.css</text>
+<rect x="44" y="171" width="216" height="76" rx="7" fill="#3f9e79" fill-opacity="0.07" stroke="#3f9e79" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text x="44" y="278" font-size="12" fill="#3f9e79" font-weight="700" xml:space="preserve">发布源：main 分支的 /docs</text>
+<rect x="326" y="120" width="234" height="144" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.4"/>
+<text x="342" y="144" font-size="14" fill="#2f2a33" font-weight="700" xml:space="preserve">Pages 构建</text>
+<text x="342" y="166" font-size="12" fill="#7b7280" xml:space="preserve">默认用 Jekyll</text>
+<text x="342" y="196" font-size="13" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" xml:space="preserve">index.md</text>
+<text x="424" y="196" font-size="13" fill="#7b7280" xml:space="preserve">→</text>
+<text x="442" y="196" font-size="13" fill="#4d7fc4" font-family="ui-monospace,Menlo,Consolas,monospace" xml:space="preserve">index.html</text>
+<text x="342" y="222" font-size="13" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" xml:space="preserve">style.css</text>
+<text x="424" y="222" font-size="13" fill="#7b7280" xml:space="preserve">→</text>
+<text x="442" y="222" font-size="13" fill="#4d7fc4" font-family="ui-monospace,Menlo,Consolas,monospace" xml:space="preserve">style.css</text>
+<text x="342" y="248" font-size="12" fill="#7b7280" xml:space="preserve">Markdown 转成 HTML，其余原样</text>
+<rect x="602" y="120" width="250" height="144" rx="10" fill="#ffffff" stroke="#e8e4ea" stroke-width="1.4"/>
+<line x1="602" y1="150" x2="852" y2="150" stroke="#e8e4ea" stroke-width="1.2"/>
+<circle cx="616" cy="135" r="4" fill="#ee5d7b" fill-opacity="0.75"/>
+<circle cx="629" cy="135" r="4" fill="#c98a2b" fill-opacity="0.75"/>
+<circle cx="642" cy="135" r="4" fill="#3f9e79" fill-opacity="0.75"/>
+<rect x="658" y="126" width="188" height="18" rx="9" fill="#f3f1f5"/>
+<text x="665" y="139" font-size="11" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" xml:space="preserve">&lt;用户名&gt;.github.io/notes/</text>
+<rect x="618" y="166" width="120" height="13" rx="3" fill="#2f2a33" fill-opacity="0.8"/>
+<rect x="618" y="192" width="210" height="7" rx="3" fill="#e8e4ea"/>
+<rect x="618" y="208" width="186" height="7" rx="3" fill="#e8e4ea"/>
+<rect x="618" y="224" width="200" height="7" rx="3" fill="#e8e4ea"/>
+<rect x="618" y="240" width="134" height="7" rx="3" fill="#e8e4ea"/>
+<path d="M 276 192 L 322 192" fill="none" stroke="#3f9e79" stroke-width="2" marker-end="url(#mg)"/>
+<text x="299" y="182" font-size="12" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle" xml:space="preserve">push</text>
+<path d="M 560 192 L 598 192" fill="none" stroke="#4d7fc4" stroke-width="2" marker-end="url(#mb)"/>
+<text x="579" y="182" font-size="12" fill="#4d7fc4" font-weight="700" text-anchor="middle" xml:space="preserve">发布</text>
+<line x1="28" y1="326" x2="852" y2="326" stroke="#e8e4ea" stroke-width="1"/>
+<text x="28" y="352" font-size="13" fill="#2f2a33" font-weight="700" xml:space="preserve">网站的地址有两种</text>
+<text x="28" y="380" font-size="13" fill="#c98a2b" font-weight="700" xml:space="preserve">项目网站</text>
+<text x="98" y="380" font-size="12" fill="#7b7280" xml:space="preserve">任意仓库都可以，每个仓库一个</text>
+<text x="852" y="380" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="end" xml:space="preserve">https://&lt;用户名&gt;.github.io/&lt;仓库名&gt;/</text>
+<text x="28" y="410" font-size="13" fill="#c98a2b" font-weight="700" xml:space="preserve">用户网站</text>
+<text x="98" y="410" font-size="12" fill="#7b7280" xml:space="preserve">仓库名必须是 &lt;用户名&gt;.github.io，每个账号一个</text>
+<text x="852" y="410" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="end" xml:space="preserve">https://&lt;用户名&gt;.github.io/</text>
+</svg>

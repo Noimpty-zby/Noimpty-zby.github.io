@@ -54,56 +54,56 @@
     ]
   },
   "/2026/07/31/UE5-ActionRoguelike-Chapter1/": {
-    "hash": "3161a4896727f77a",
+    "hash": "f3d83492c1ade4d4",
     "title": "UE5 C++ 第一章复盘：从零创建 ActionRoguelike 到可移动、可观察、带动画的第三人称角色",
     "notes": [
       {
-        "anchor": "Unreal 的资源之间保存的是资产引用。如果直接通过 Wi",
-        "text": "Redirector 不是自动清理的，重命名多了会攒一堆，得手动 Fix Up。"
+        "anchor": "所以安装了 Rider，并不代表系统里已经有了完整的 C++",
+        "text": "补坑：Rider 自带的是后端，Windows 上还得装 VS 的 MSVC 工具链，否则 UBT 找不到编译器。"
       },
       {
-        "anchor": "所以这并不是说 Move 和 Look 在功能上必须使用不同",
-        "text": "两种签名对应不同场景：无参适合简单触发，带 Instance 才能读持续时间和触发状态。"
+        "anchor": "VisibleAnywhere 限制的是 CameraCom",
+        "text": "容易误解：VisibleAnywhere 只锁成员指针，组件内部属性仍可在 Details 里改。"
       },
       {
-        "anchor": "项目原本已有的 Core、CoreUObject、Engin",
-        "text": "删依赖后编译报错往往指向别的模块，不一定指向被删的那行。"
+        "anchor": "左右旋转能看到效果，说明已经有某些对象在使用 Yaw；但是如",
+        "text": "补前提：Spring Arm 的 Use Pawn Control Rotation 若没勾，Pitch/Yaw 都不会"
       }
     ]
   },
   "/2026/08/07/UE5-ActionRoguelike-Chapter2/": {
-    "hash": "66487b0910306151",
+    "hash": "9033ddf184660ed6",
     "title": "UE5 C++ 第二章复盘：从一次点击到一发法球的完整远程攻击链路",
     "notes": [
       {
-        "anchor": "为什么要加上这个标记呢？因为 ARogueProjectil",
-        "text": "前提是蓝图子类真填了资产；若蓝图也空，Abstract 只是把崩溃换成静默不发射。"
+        "anchor": "GENERATED_BODY() 是 UHT（UnrealH",
+        "text": "generated.h 必须是最后一个 include，否则 UHT 生成的代码位置错乱，报错往往指向别处。"
       },
       {
-        "anchor": "如果根组件是一个空的 SceneComponent，那么投射",
-        "text": "补充：即便根是空 SceneComponent，把 UpdatedComponent 手动指向碰撞体也能救，只是要自己配"
+        "anchor": "半径 16 是一个凭手感调出来的值，它同时决定了两件事情。一",
+        "text": "半径 16 还隐含一个前提：它和胶囊体半径的比值决定了出膛即自爆的临界距离。"
       },
       {
-        "anchor": "参数不匹配时，编译错误非常难读（通常是几十行模板展开的错误信",
-        "text": "我上次批注也提过：直接翻引擎头文件复制签名，比对着报错猜快十倍。"
+        "anchor": "括号里留空并不代表这个宏没有生效。即使 UFUNCTION(",
+        "text": "补一句：空 UFUNCTION() 仍进反射，但没 BlueprintCallable 就不进蓝图节点菜单。"
       }
     ]
   },
   "/2026/08/11/UE5-ActionRoguelike-Chapter3/": {
-    "hash": "fa78c33e5c4e0713",
+    "hash": "bc7168843a6d5a7b",
     "title": "UE5 C++ 第三章复盘：从每帧筛选目标到接口解耦的完整交互系统",
     "notes": [
       {
         "anchor": "这样做的代价是，PC 自己并没有世界位置（它并不在关卡里），",
-        "text": "补充前提：UActorComponent 无变换，所以组件自身坐标不可用，必须借宿主 Actor 的位置。"
+        "text": "前提是 PC 必须已 Possess 了 Pawn，否则 GetPawn() 返回 nullptr，这里会直接崩。"
       },
       {
-        "anchor": "接下来是关键的一点，APlayerController 不能",
-        "text": "这里结论依赖「PC 不会被放进关卡」这个前提，若换成可放置的 Actor，Anywhere 与 DefaultsOnly"
+        "anchor": "这里使用 GetSafeNormal()，而不是 GetNo",
+        "text": "GetSafeNormal 默认容差也是 1e-4 量级，长度小于它才归零，不是只有精确零向量才触发。"
       },
       {
-        "anchor": "DrawDebugString 有一个特殊之处，它并不是直接",
-        "text": "注意：没 HUD 时 DrawDebugString 会静默不显示，排查时容易误判成代码没跑。"
+        "anchor": "FInterpConstantTo 的含义是「每秒匀速前进 ",
+        "text": "前提是 InterpSpeed 不为 0，否则 FInterpConstantTo 会一直停在起点，永远到不了 Targ"
       }
     ]
   },
@@ -842,6 +842,24 @@
       {
         "anchor": "带参数的写法有一点需要注意。git pull origin ",
         "text": "易误解：pull origin main 是并入当前分支，不是并进本地 main。"
+      }
+    ]
+  },
+  "/2026/10/10/Git-Chapter9-README-Gist-Pages/": {
+    "hash": "9e56f216b999d85c",
+    "title": "Git 第九章：README、Gist 和 Pages，背后都是一个 Git 仓库",
+    "notes": [
+      {
+        "anchor": "工作区里已经没有 deploy.env 了，但是第一个提交 ",
+        "text": "`git log --all --stat` 只看文件名，不显示内容；确认令牌得靠 `git log -p` 或 `gi"
+      },
+      {
+        "anchor": "README 不一定要放在根目录。GitHub 会在三个地方",
+        "text": "优先级顺序是 `.github` > 根目录 > `docs`，容易记反，原文这句建议加粗。"
+      },
+      {
+        "anchor": "第一行和第二行之间只隔着一个换行符，所以它们被放进了同一个段",
+        "text": "行尾两空格在多数编辑器里会被自动删掉，靠它换行不稳，反斜杠更可靠。"
       }
     ]
   }

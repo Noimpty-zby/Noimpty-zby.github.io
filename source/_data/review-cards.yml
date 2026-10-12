@@ -830,3 +830,31 @@ git:
     back: '`-f` 不管远程是什么情况，直接覆盖。`--force-with-lease` 先检查远程分支是否还在本地 origin/<分支> 记录的位置，如果上次 fetch 之后有人推送过，就拒绝并报告 stale info。不过它比较的是本地的记录，先 fetch 再推送它就拦不住了。'
   - front: '`git pull --rebase` 做了什么？它违反 rebase 的规矩吗？'
     back: 先 fetch，再把当前分支 rebase 到上游（比如 origin/main）上，本地还没推送的提交会接到远程新提交的后面，不会生成 Merge branch 'main' of … 这样的合并提交。被 rebase 的只是本地才有的提交，所以不违反规矩。`git config pull.rebase true` 可以让 pull 默认这样做。
+- post: Git-Chapter12-Interactive-Rebase
+  cards:
+  - front: '`git rebase -i HEAD~5` 会列出哪些提交？HEAD~5 本身在列表里吗？'
+    back: 列出最近的 5 个提交。HEAD~5 是从 HEAD 往回数 5 个的那个提交，它是这次 rebase 的基，不会被复制，所以不在列表里。注释第一行的 Rebase f79c075..1904d9b onto f79c075 说明新的基和原来的基是同一个提交。
+  - front: 交互式 rebase 的列表顺序和 git log 有什么不同？
+    back: 正好相反。git log 把最新的提交放在最上面，列表的第一行却是最早的提交，最后一行才是最新的。因为列表是从上往下执行的，所以最早的提交要排在最前面。
+  - front: 要修改的提交里最早的那个，在 `git log --oneline` 里从上往下数是第 3 个，HEAD~ 后面写几？
+    back: 写 3，也就是 `git rebase -i HEAD~3`，这样列表里正好是从它开始到最新的 3 个提交。
+  - front: pick、reword 和 edit 分别是什么意思？
+    back: pick 原样保留这个提交；reword 保留改动，执行到这一行时打开编辑器修改提交信息；edit 执行完这个提交就停下来，让人用 `git commit --amend` 修改它，改完再执行 `git rebase --continue`。
+  - front: squash 和 fixup 有什么区别？
+    back: 两者都把这个提交并进上一行的提交。squash 会打开编辑器，里面是两个提交的信息（This is a combination of 2 commits），可以重新写；fixup 只保留上一行的提交信息，这个提交的信息直接丢掉，也不打开编辑器。
+  - front: squash 和 fixup 能写在列表的第一行吗？
+    back: 不能，它们要并进上一行的提交，而第一行上面没有提交。这时 rebase 会报 cannot 'squash' without a previous commit，可以用 `git rebase --edit-todo` 改正列表之后再 continue，或者执行 `git rebase --abort`。
+  - front: drop 一个提交，会把它改过的文件整个删掉吗？
+    back: 不会。drop 删掉的是这个提交带来的改动。如果它新建了 debug.txt，那么 drop 之后 debug.txt 就不存在；如果它只是给一个已有的文件加了一行，那么只有这一行会消失，文件本身和其他提交写进去的内容都还在。删掉列表里的整行，效果和 drop 一样。
+  - front: 交互式 rebase 之后，哪些提交的提交号会变，哪些不变？
+    back: 从列表里第一个被改动的提交开始，它和后面的每个提交都会换成新的提交号。fixup 和 squash 要并进上一行，所以上一行即使写的是 pick 也会变。排在第一个改动之前的 pick 原样保留，提交号不变，列表外的基也不变。
+  - front: 用 edit 停下来以后，怎样修改这个提交的内容？
+    back: 这时 HEAD 就是这个提交，工作区里也是它当时的样子。改好文件之后 `git add`，再执行 `git commit --amend`（加 `--no-edit` 沿用原来的提交信息），最后 `git rebase --continue`，rebase 会把后面的提交接到修改过的提交上。
+  - front: 调换列表里两行的顺序会怎样？
+    back: 这两个提交在结果里的顺序也会调换，因为列表是从上往下执行的，注释里写着 These lines can be re-ordered; they are executed from top to bottom。排在调换位置之前的提交保持不变。
+  - front: drop 了一个后面的提交还在依赖的提交，会发生什么？
+    back: 后面的提交会因为找不到它依赖的内容而冲突。比如 drop 了新建 rebase-i.md 的提交，下一个修改 rebase-i.md 的提交就会报 CONFLICT (modify/delete)。问题出在列表本身时，用 `git rebase --abort` 放弃更合适。
+  - front: 交互式 rebase 出了问题，有哪两条退路？
+    back: rebase 还没有结束时，用 `git rebase --abort` 回到开始之前；已经结束了才发现不对，用 `git reset --hard ORIG_HEAD`。ORIG_HEAD 只记录最近一次 rebase、reset 或合并之前的位置，所以要尽快撤回。
+  - front: 交互式 rebase 能用来整理已经推送的提交吗？
+    back: 和上一章的 rebase 一样，只用来整理还没有推送、或者只有自己在用的提交，因为它会把第一个改动之后的提交全部换掉。比较常见的用法是在推送或者开 pull request 之前先整理一遍，把改错字、临时调试这类提交清理掉。

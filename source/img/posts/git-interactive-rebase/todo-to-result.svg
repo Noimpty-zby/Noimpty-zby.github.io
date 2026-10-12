@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 404" width="880" height="404" font-family="system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+<rect x="0.5" y="0.5" width="879" height="403" rx="14" fill="#ffffff" stroke="#e8e4ea" stroke-width="1"/>
+<defs><marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c98a2b"/></marker><marker id="mb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4d7fc4"/></marker><marker id="mg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3f9e79"/></marker><marker id="mp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ee5d7b"/></marker><marker id="mi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7b7280"/></marker><marker id="md" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c0b9c8"/></marker></defs>
+<text x="28" y="34" font-size="17" fill="#2f2a33" font-weight="700">待办列表里的五行，变成了三个新提交</text>
+<text x="28" y="58" font-size="13" fill="#7b7280">列表从上往下由旧到新执行；右边的提交也按从旧到新排列，基 f79c075 不在列表里，保持不变</text>
+<rect x="30" y="80" width="400" height="300" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="48" y="108" font-size="13" fill="#2f2a33" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">git-rebase-todo</text>
+<rect x="44" y="131" width="372" height="30" rx="6" fill="#2f2a33" fill-opacity="0.06"/>
+<text x="56" y="151" font-size="13" fill="#2f2a33" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">pick</text>
+<text x="124" y="151" font-size="13" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">e1ee1ed</text>
+<text x="196" y="151" font-size="13" fill="#2f2a33">交互式 rebase 的笔记</text>
+<rect x="44" y="179" width="372" height="30" rx="6" fill="#c98a2b" fill-opacity="0.06"/>
+<text x="56" y="199" font-size="13" fill="#c98a2b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">fixup</text>
+<text x="124" y="199" font-size="13" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">0b61a0a</text>
+<text x="196" y="199" font-size="13" fill="#2f2a33">改个错字</text>
+<rect x="44" y="227" width="372" height="30" rx="6" fill="#ee5d7b" fill-opacity="0.06"/>
+<text x="56" y="247" font-size="13" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">drop</text>
+<text x="124" y="247" font-size="13" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">f4154c8</text>
+<text x="196" y="247" font-size="13" fill="#2f2a33">临时调试</text>
+<rect x="44" y="275" width="372" height="30" rx="6" fill="#4d7fc4" fill-opacity="0.06"/>
+<text x="56" y="295" font-size="13" fill="#4d7fc4" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">reword</text>
+<text x="124" y="295" font-size="13" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">f4dea5d</text>
+<text x="196" y="295" font-size="13" fill="#2f2a33">pik 和 reword</text>
+<rect x="44" y="323" width="372" height="30" rx="6" fill="#2f2a33" fill-opacity="0.06"/>
+<text x="56" y="343" font-size="13" fill="#2f2a33" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">pick</text>
+<text x="124" y="343" font-size="13" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">1904d9b</text>
+<text x="196" y="343" font-size="13" fill="#2f2a33">fixup 和 drop</text>
+<rect x="590" y="80" width="260" height="300" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="608" y="108" font-size="13" fill="#2f2a33" font-weight="700">结果（git log 倒过来看）</text>
+<rect x="613" y="159" width="74" height="26" rx="13" fill="#ffffff" stroke="#3f9e79" stroke-opacity="0.75" stroke-width="1.8"/><text x="650" y="176.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">39e1f26</text>
+<text x="696" y="176" font-size="12" fill="#2f2a33">交互式 rebase 的笔记</text>
+<rect x="613" y="279" width="74" height="26" rx="13" fill="#ffffff" stroke="#3f9e79" stroke-opacity="0.75" stroke-width="1.8"/><text x="650" y="296.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">4b03475</text>
+<text x="696" y="296" font-size="12" fill="#2f2a33">pick 和 reword</text>
+<rect x="613" y="327" width="74" height="26" rx="13" fill="#ffffff" stroke="#3f9e79" stroke-opacity="0.75" stroke-width="1.8"/><text x="650" y="344.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">fc76d7a</text>
+<text x="696" y="344" font-size="12" fill="#2f2a33">fixup 和 drop</text>
+<line x1="650" y1="185" x2="650" y2="279" stroke="#c0b9c8" stroke-width="2"/>
+<line x1="650" y1="305" x2="650" y2="327" stroke="#c0b9c8" stroke-width="2"/>
+<path d="M 418 148 L 470 148 L 470 172 L 607 172" fill="none" stroke="#3f9e79" stroke-width="1.8" marker-end="url(#mg)"/>
+<path d="M 418 196 L 470 196 L 470 172" fill="none" stroke="#c98a2b" stroke-width="1.8"/>
+<text x="484" y="162" font-size="12" fill="#3f9e79" font-weight="700">合成一个</text>
+<text x="484" y="214" font-size="11" fill="#c98a2b">fixup：并进上一行</text>
+<text x="440" y="248" font-size="12" fill="#ee5d7b" font-weight="700">✗ 删掉，debug.txt 消失</text>
+<path d="M 418 292 L 607 292" fill="none" stroke="#4d7fc4" stroke-width="1.8" marker-end="url(#mb)"/>
+<text x="474" y="284" font-size="12" fill="#4d7fc4" font-weight="700">只改提交信息</text>
+<path d="M 418 340 L 607 340" fill="none" stroke="#3f9e79" stroke-width="1.8" marker-end="url(#mg)"/>
+<text x="474" y="332" font-size="12" fill="#3f9e79">原样复制</text>
+<text x="608" y="372" font-size="11" fill="#7b7280">三个提交号全都变了</text>
+</svg>

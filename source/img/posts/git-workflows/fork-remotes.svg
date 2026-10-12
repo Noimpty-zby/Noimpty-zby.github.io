@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 540" width="880" height="540" font-family="system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+<rect x="0.5" y="0.5" width="879" height="539" rx="14" fill="#ffffff" stroke="#e8e4ea" stroke-width="1"/>
+<defs><marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c98a2b"/></marker><marker id="mb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4d7fc4"/></marker><marker id="mg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3f9e79"/></marker><marker id="mp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ee5d7b"/></marker><marker id="mi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7b7280"/></marker><marker id="md" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c0b9c8"/></marker></defs>
+<text x="28" y="34" font-size="17" fill="#2f2a33" font-weight="700">fork 之后的三个仓库</text>
+<text x="28" y="58" font-size="13" fill="#7b7280">本地仓库有两个远程：origin 是自己的 fork，upstream 是原仓库</text>
+<rect x="40" y="84" width="300" height="120" rx="12" fill="#fdfcfd" stroke="#4d7fc4" stroke-opacity="0.55" stroke-width="1.6"/>
+<text x="58" y="112" font-size="14" fill="#2f2a33" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">maintainer/cheatsheet</text>
+<text x="58" y="134" font-size="12" fill="#7b7280">原仓库，在 GitHub 上</text>
+<text x="58" y="158" font-size="12" fill="#2f2a33">只有维护者能推送</text>
+<text x="58" y="177" font-size="12" fill="#2f2a33">main：b8e2f18</text>
+<rect x="540" y="84" width="300" height="120" rx="12" fill="#fdfcfd" stroke="#3f9e79" stroke-opacity="0.55" stroke-width="1.6"/>
+<text x="558" y="112" font-size="14" fill="#2f2a33" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">noimpty/cheatsheet</text>
+<text x="558" y="134" font-size="12" fill="#7b7280">自己的 fork，在 GitHub 上</text>
+<text x="558" y="158" font-size="12" fill="#2f2a33">属于自己，可以推送</text>
+<text x="558" y="177" font-size="12" fill="#2f2a33">main、rebase-entry</text>
+<rect x="270" y="382" width="340" height="120" rx="12" fill="#fdfcfd" stroke="#2f2a33" stroke-opacity="0.55" stroke-width="1.6"/>
+<text x="288" y="410" font-size="14" fill="#2f2a33" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">本地仓库 cheatsheet</text>
+<text x="288" y="432" font-size="12" fill="#7b7280">在自己的电脑上</text>
+<text x="288" y="456" font-size="12" fill="#2f2a33">远程：origin、upstream</text>
+<text x="288" y="475" font-size="12" fill="#2f2a33">分支：main、rebase-entry</text>
+<path d="M 340 120 L 538 120" fill="none" stroke="#c0b9c8" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#md)"/>
+<text x="440" y="110" font-size="12" fill="#7b7280" text-anchor="middle">Fork（在 GitHub 上复制）</text>
+<path d="M 540 172 L 342 172" fill="none" stroke="#c98a2b" stroke-width="2" marker-end="url(#ma)"/>
+<text x="440" y="194" font-size="13" fill="#c98a2b" font-weight="700" text-anchor="middle">pull request</text>
+<path d="M 120 204 L 120 430 L 268 430" fill="none" stroke="#4d7fc4" stroke-width="2" marker-end="url(#mb)"/>
+<text x="132" y="310" font-size="12" fill="#4d7fc4" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">git fetch upstream</text>
+<text x="132" y="330" font-size="12" fill="#4d7fc4">只读，拿原仓库的</text>
+<text x="132" y="350" font-size="12" fill="#4d7fc4">新提交</text>
+<path d="M 300 380 L 300 260 L 230 260 L 230 206" fill="none" stroke="#ee5d7b" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#mp)"/>
+<text x="242" y="244" font-size="18" fill="#ee5d7b" font-weight="700">✗</text>
+<text x="312" y="340" font-size="12" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">git push upstream</text>
+<text x="312" y="360" font-size="12" fill="#ee5d7b">没有写权限，被拒绝</text>
+<path d="M 810 204 L 810 430 L 612 430" fill="none" stroke="#3f9e79" stroke-width="2" marker-end="url(#mg)"/>
+<path d="M 580 380 L 580 260 L 650 260 L 650 206" fill="none" stroke="#3f9e79" stroke-width="2" marker-end="url(#mg)"/>
+<text x="664" y="300" font-size="12" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">git push</text>
+<text x="664" y="320" font-size="12" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">git fetch / pull</text>
+<text x="664" y="340" font-size="12" fill="#3f9e79">origin，能读能写</text>
+</svg>

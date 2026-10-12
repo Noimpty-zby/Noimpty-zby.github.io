@@ -768,3 +768,35 @@ git:
     back: 因为从分支发布时 Pages 默认先用 Jekyll 构建一遍，Jekyll 会把 Markdown 转换成 HTML。不想让 Jekyll 处理就在发布目录里放一个空的 `.nojekyll` 文件；想用别的生成器，Source 可以改成 GitHub Actions。
   - front: 项目网站和用户网站的地址有什么区别？免费账号能从私有仓库发布 Pages 吗？
     back: 项目网站是 `https://<用户名>.github.io/<仓库名>/`，每个仓库一个；仓库名正好是 `<用户名>.github.io` 时发布的是用户网站 `https://<用户名>.github.io/`，每个账号一个。免费账号只能给公开仓库开 Pages；付费账号能从私有仓库发布，但网站本身仍然是公开的。
+- post: Git-Chapter10-Collaboration-Workflows
+  cards:
+  - front: 所有人都在 main 上提交（集中式工作流）有哪些问题？
+    back: 别人先推送了，自己的推送就会被拒绝，要先 pull，有冲突还要先解决冲突。一个功能往往要提交好几次，没写完的改动会直接进入 main，别人 pull 下来的可能是跑不起来的代码。改动一推送就已经在 main 上了，没有地方让别人先审阅。
+  - front: 功能分支工作流是怎样约定的？它解决了什么问题？
+    back: 每做一个功能，就从 main 新建一条分支，这个功能的所有提交都放在这条分支上并推送到远程，做完以后再合并进 main，main 上只放已经完成的功能。因为两个人推送的是不同的分支，所以谁先推送都不会让对方被拒绝，没写完的提交也不会影响 main。
+  - front: 合作者推送了一条新分支，本地执行 fetch 之后有什么变化？
+    back: 本地只多了一条远程跟踪分支，比如 `* [new branch] fork-notes -> origin/fork-notes`。当前分支和工作区里的文件都不会变，想看就切换过去，不关心就可以完全不理它。
+  - front: pull request 是什么？它是 Git 的命令吗？
+    back: pull request 是 GitHub 网站提供的功能，不是 Git 的命令。它请求把一条分支合并进另一条分支，合并之前可以在上面讨论、逐行审阅 diff、运行自动检查。
+  - front: 在 GitHub 上怎样为 workflow 分支开一个 pull request？
+    back: 先把 workflow 推送到 GitHub，在仓库首页文件列表上方的黄色提示里点击 Compare & pull request。base 选要合并进去的 main，compare 选做出改动的 workflow，填写标题和说明之后点击 Create pull request。
+  - front: 审阅的人对 pull request 提了修改意见，作者要怎样更新？
+    back: 在本地的同一条分支上继续提交，然后推送就可以了。pull request 关联的是这条分支，而不是某几个提交，所以新推送的提交会自动出现在这个 pull request 里。
+  - front: Merge pull request 有哪三种合并方式？默认的那种有什么特点？
+    back: 'Create a merge commit（默认）、Squash and merge 和 Rebase and merge。默认方式使用 `--no-ff`，即使能快进也一定生成合并提交，提交信息的第一行是 `Merge pull request #<编号> from <用户名>/<分支>`，空一行之后是 pull request 的标题。合并 pull request 需要写权限。'
+  - front: 在 GitHub 上合并了 pull request 之后，本地还要做什么？
+    back: 合并是在 GitHub 上完成的，本地并不知道，所以要执行 `git switch main` 和 `git pull`，把合并后的 main 拿下来。这条功能分支已经没有用了，可以在 pull request 页面上删掉。
+  - front: 为什么要先在功能分支上合并 main，再在 main 上合并功能分支？
+    back: 第一步是同步，把 main 上别人的改动拿到自己的分支上，冲突在自己的分支上解决，可以慢慢检查、运行测试，改坏了也不影响 main。第二步是交付，这时分支已经包含了 main 的所有提交，只要 main 在这期间没有再变，合并就不会有冲突，在本地甚至可以直接快进。
+  - front: 在功能分支上执行 `git merge main`，结果是 Already up to date，可是合作者的改动明明已经进了 main，为什么？
+    back: 合并的是本地的 main，它从克隆以后就没有更新过，早就包含在功能分支里了，合作者的合并只发生在远程仓库。应该先 fetch 再执行 `git merge origin/main`，或者先切换到 main 执行 pull，更新本地的 main 之后再回来合并。
+  - front: pull request 页面上的 Update branch 和 Resolve conflicts 做的是什么？
+    back: 两者都是把整个 base 分支合并进 compare 分支，也就是「先在分支上合并 main」这一步。Update branch 只在分支落后、而且没有冲突时出现；Resolve conflicts 只能处理两边改了同一行这类简单的冲突，复杂的冲突要在本地合并、解决之后再推送。
+  - front: fork 是什么？什么情况下需要它？
+    back: fork 是在 GitHub 服务器上把别人的仓库复制一份，作为新仓库放到自己的账号下面，原来的仓库叫作 upstream 仓库，GitHub 会一直记着两者的联系。没有推送权限的项目（推送会报 Permission to … denied）可以先 fork，在自己的仓库里修改，再从 fork 向原仓库提 pull request。
+  - front: 克隆自己的 fork 之后，为什么还要执行 `git remote add upstream <原仓库地址>`？
+    back: clone 只记下了 origin，也就是自己的 fork。原仓库以后有了新提交，GitHub 不会自动同步到 fork 里，所以要再添加一个指向原仓库的远程，按照惯例叫作 upstream。它只是远程的名字，和第七章分支的上游配置不是一回事，main 的上游仍然是 origin/main。
+  - front: 原仓库有了新提交，在 fork 的本地克隆里执行 git pull 为什么拿不到？应该怎样同步？
+    back: 不带参数的 pull 按照上游配置拉取 origin/main，也就是自己的 fork，而 fork 并没有变。要执行 `git fetch upstream` 再 `git merge upstream/main`（或者合成一条 `git pull upstream main`），然后 `git push` 更新自己的 fork。也可以在 GitHub 上点 Sync fork 再 Update branch。
+  - front: 怎样从自己的 fork 向原仓库提 pull request？
+    back: 在本地新建一条分支提交，用 `git push -u origin <分支>` 推送到自己的 fork。然后打开原仓库的页面点击 Compare & pull request，再点 compare across forks，base 选原仓库的 main，head fork 选自己的 fork，compare 选这条分支。不在 main 上直接提交，是为了让 main 一直和原仓库相同，同步时总是快进。

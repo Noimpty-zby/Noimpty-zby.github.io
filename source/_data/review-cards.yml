@@ -800,3 +800,33 @@ git:
     back: 不带参数的 pull 按照上游配置拉取 origin/main，也就是自己的 fork，而 fork 并没有变。要执行 `git fetch upstream` 再 `git merge upstream/main`（或者合成一条 `git pull upstream main`），然后 `git push` 更新自己的 fork。也可以在 GitHub 上点 Sync fork 再 Update branch。
   - front: 怎样从自己的 fork 向原仓库提 pull request？
     back: 在本地新建一条分支提交，用 `git push -u origin <分支>` 推送到自己的 fork。然后打开原仓库的页面点击 Compare & pull request，再点 compare across forks，base 选原仓库的 main，head fork 选自己的 fork，compare 选这条分支。不在 main 上直接提交，是为了让 main 一直和原仓库相同，同步时总是快进。
+- post: Git-Chapter11-Rebase
+  cards:
+  - front: 功能分支反复合并 main 有什么副作用？
+    back: 每合并一次就多一个合并提交，它们只记录了「这时同步了一次 main」，并没有做新的工作。分支存在得越久，合并提交就越多，最后合并进 main 时，这些合并提交也会一起进入 main 的历史。
+  - front: 在 rebase-notes 上执行 `git rebase main`，Git 依次做了哪几步？
+    back: 先找出在 rebase-notes 上、但是不在 main 上的提交，也就是 `git log main..HEAD` 列出的那些；再把当前分支移到 main 所在的提交上，效果和 `git reset --hard main` 一样；最后把找出来的提交按原来的顺序，一个一个重新应用上去。
+  - front: rebase 之后，分支上的提交号为什么都变了？
+    back: rebase 是照着原来的提交复制出一组新提交。新提交的父提交换成了 main 最新的提交，提交时间变成了执行 rebase 的时间（作者时间保留），而提交号是根据这些内容算出来的，所以变了。后一个提交的父提交又是新的，所以也跟着变。
+  - front: rebase 之后原来的提交去哪了？怎样撤回这次 rebase？
+    back: 原来的提交还在仓库里，只是没有分支再指向它们。rebase 会把移动之前的位置记在 ORIG_HEAD 里，`git log ORIG_HEAD` 能看到旧的提交，`git reset --hard ORIG_HEAD` 能让分支回到 rebase 之前。
+  - front: rebase 之后再把分支合并进 main，会是哪种合并？
+    back: 快进。分支上的提交已经接在 main 的最后，main 只需要往前挪，历史是一条直线，没有合并提交。
+  - front: 一条分支已经合并过好几次 main，再 rebase 到 main 上会怎样？
+    back: 合并提交会被丢掉，只复制普通的提交，结果仍然是一条直线。手册的原话是 By default, a rebase will simply drop merge commits from the todo list。合并提交带进来的是 main 上的改动，rebase 之后这些改动本来就在新的基里，所以不会丢内容。
+  - front: rebase 遇到冲突停下来以后，有哪三条路可以走？
+    back: 解决冲突、用 `git add` 标记之后执行 `git rebase --continue`；执行 `git rebase --skip` 跳过当前这个提交，它的改动不会出现在结果里；执行 `git rebase --abort` 放弃整个 rebase，分支和工作区回到 rebase 之前。
+  - front: rebase 冲突时，冲突标记里 HEAD 一侧是谁的版本？
+    back: 是 main 的版本，另一侧才是自己分支上正在复制的提交，和 merge 时正好相反。因为 rebase 先把分支移到 main 上，再逐个复制提交，所以 HEAD 是已经接好的那部分。手册的说法是 the sides are swapped。
+  - front: 解决了 rebase 的冲突之后，最后一步执行什么？
+    back: 先 `git add` 标记冲突已经解决，然后执行 `git rebase --continue`。它会打开编辑器确认这个提交的提交信息，生成新提交之后继续复制剩下的提交。如果有几个提交都冲突，rebase 会在每一个上面停一次。
+  - front: 命令里没有写 `-i`，rebase 冲突时 git status 却显示 interactive rebase in progress，为什么？
+    back: rebase 在内部是按照一张命令列表逐条处理提交的，每个要复制的提交对应一条 pick，status 里列出了已经执行和还剩下的命令。git 2.34 的 rebase 默认就用这套机制执行，交互式 rebase 则是把这张列表打开给人编辑。
+  - front: rebase 有一条一定要遵守的规矩，是什么？为什么？
+    back: 别人手里已经有的提交不要 rebase，比如 main 这类大家共用的分支，或者别人已经在上面工作的分支。rebase 会换掉提交，推送时要强制覆盖；合作者 pull 时旧提交和新提交会同时进入历史，同一个改动出现两次，还可能遇到 add/add 冲突，只能手动整理。
+  - front: rebase 了一条已经推送的分支，git push 因为 non-fast-forward 被拒绝，能照提示先 pull 再推送吗？
+    back: 不能。远程的分支仍然指向旧提交，pull 会把旧提交合并回来，rebase 就白做了，同一个改动还会在历史里出现两次。确定要用新提交替换时，用 `git push --force-with-lease` 强制推送，输出里是 `+ 旧提交...新提交` 和 forced update。
+  - front: '`git push --force-with-lease` 和 `git push -f` 有什么区别？'
+    back: '`-f` 不管远程是什么情况，直接覆盖。`--force-with-lease` 先检查远程分支是否还在本地 origin/<分支> 记录的位置，如果上次 fetch 之后有人推送过，就拒绝并报告 stale info。不过它比较的是本地的记录，先 fetch 再推送它就拦不住了。'
+  - front: '`git pull --rebase` 做了什么？它违反 rebase 的规矩吗？'
+    back: 先 fetch，再把当前分支 rebase 到上游（比如 origin/main）上，本地还没推送的提交会接到远程新提交的后面，不会生成 Merge branch 'main' of … 这样的合并提交。被 rebase 的只是本地才有的提交，所以不违反规矩。`git config pull.rebase true` 可以让 pull 默认这样做。

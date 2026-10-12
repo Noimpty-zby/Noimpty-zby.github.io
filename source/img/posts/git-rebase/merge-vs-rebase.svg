@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 512" width="880" height="512" font-family="system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+<rect x="0.5" y="0.5" width="879" height="511" rx="14" fill="#ffffff" stroke="#e8e4ea" stroke-width="1"/>
+<defs><marker id="ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c98a2b"/></marker><marker id="mb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4d7fc4"/></marker><marker id="mg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3f9e79"/></marker><marker id="mp" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ee5d7b"/></marker><marker id="mi" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7b7280"/></marker><marker id="md" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c0b9c8"/></marker></defs>
+<text x="28" y="34" font-size="17" fill="#2f2a33" font-weight="700">同样是把 main 同步到 rebase-notes 上</text>
+<text x="28" y="58" font-size="13" fill="#7b7280">左边是两条分支的共同起点 67f3f36；浅黄底的是合并提交，灰色虚线是不再有分支指向的旧提交</text>
+<rect x="30" y="78" width="820" height="196" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="48" y="108" font-size="14" fill="#2f2a33" font-weight="700">① 合并两次 main（代码 2）</text>
+<line x1="147" y1="160" x2="193" y2="160" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="267" y1="160" x2="313" y2="160" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="387" y1="160" x2="433" y2="160" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="507" y1="160" x2="553" y2="160" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="140" y1="168" x2="193" y2="206" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="267" y1="212" x2="433" y2="212" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="260" y1="204" x2="320" y2="169" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="500" y1="204" x2="560" y2="169" stroke="#c0b9c8" stroke-width="2.4"/>
+<rect x="73" y="147" width="74" height="26" rx="13" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.75" stroke-width="1.8"/><text x="110" y="164.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">67f3f36</text>
+<rect x="193" y="147" width="74" height="26" rx="13" fill="#ffffff" stroke="#3f9e79" stroke-opacity="0.75" stroke-width="1.8"/><text x="230" y="164.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">9201e00</text>
+<rect x="313" y="147" width="74" height="26" rx="13" fill="#fff7ea" stroke="#3f9e79" stroke-opacity="0.75" stroke-width="1.8"/><text x="350" y="164.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">fbae2d7</text>
+<rect x="433" y="147" width="74" height="26" rx="13" fill="#ffffff" stroke="#3f9e79" stroke-opacity="0.75" stroke-width="1.8"/><text x="470" y="164.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">4b7385a</text>
+<rect x="553" y="147" width="74" height="26" rx="13" fill="#fff7ea" stroke="#3f9e79" stroke-opacity="0.75" stroke-width="1.8"/><text x="590" y="164.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">ef80711</text>
+<rect x="193" y="199" width="74" height="26" rx="13" fill="#ffffff" stroke="#ee5d7b" stroke-opacity="0.75" stroke-width="1.8"/><text x="230" y="216.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">05f3930</text>
+<rect x="433" y="199" width="74" height="26" rx="13" fill="#ffffff" stroke="#ee5d7b" stroke-opacity="0.75" stroke-width="1.8"/><text x="470" y="216.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">7f22180</text>
+<rect x="538.8" y="109" width="102.4" height="22" rx="11" fill="#3f9e79" fill-opacity="0.1" stroke="#3f9e79" stroke-opacity="0.6" stroke-width="1.2"/><text x="590" y="124.5" font-size="12" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">rebase-notes</text><line x1="590" y1="131" x2="590" y2="145" stroke="#3f9e79" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mg)"/>
+<rect x="447.6" y="241" width="44.8" height="22" rx="11" fill="#ee5d7b" fill-opacity="0.1" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.2"/><text x="470" y="256.5" font-size="12" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">main</text><line x1="470" y1="241" x2="470" y2="227" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mp)"/>
+<text x="690" y="154" font-size="12" fill="#7b7280">四个提交里</text>
+<text x="690" y="174" font-size="12" fill="#7b7280">两个是合并提交</text>
+<rect x="30" y="290" width="820" height="196" rx="10" fill="#fdfcfd" stroke="#e8e4ea" stroke-width="1.2"/>
+<text x="48" y="320" font-size="14" fill="#2f2a33" font-weight="700">② git rebase main（代码 4）</text>
+<line x1="147" y1="372" x2="193" y2="372" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="267" y1="372" x2="313" y2="372" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="387" y1="372" x2="433" y2="372" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="507" y1="372" x2="553" y2="372" stroke="#c0b9c8" stroke-width="2.4"/>
+<line x1="140" y1="380" x2="193" y2="420" stroke="#c0b9c8" stroke-width="2.4" stroke-dasharray="4 3"/>
+<line x1="267" y1="426" x2="313" y2="426" stroke="#c0b9c8" stroke-width="2.4" stroke-dasharray="4 3"/>
+<rect x="73" y="359" width="74" height="26" rx="13" fill="#ffffff" stroke="#2f2a33" stroke-opacity="0.75" stroke-width="1.8"/><text x="110" y="376.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">67f3f36</text>
+<rect x="193" y="359" width="74" height="26" rx="13" fill="#ffffff" stroke="#ee5d7b" stroke-opacity="0.75" stroke-width="1.8"/><text x="230" y="376.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">05f3930</text>
+<rect x="313" y="359" width="74" height="26" rx="13" fill="#ffffff" stroke="#ee5d7b" stroke-opacity="0.75" stroke-width="1.8"/><text x="350" y="376.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">7f22180</text>
+<rect x="433" y="359" width="74" height="26" rx="13" fill="#ffffff" stroke="#3f9e79" stroke-opacity="0.75" stroke-width="1.8"/><text x="470" y="376.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">68bf5ee</text>
+<rect x="553" y="359" width="74" height="26" rx="13" fill="#ffffff" stroke="#3f9e79" stroke-opacity="0.75" stroke-width="1.8"/><text x="590" y="376.5" font-size="12" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">cebe45e</text>
+<rect x="193" y="413" width="74" height="26" rx="13" fill="#ffffff" stroke="#c0b9c8" stroke-width="1.6" stroke-dasharray="4 3"/><text x="230" y="430.5" font-size="12" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">9201e00</text>
+<rect x="313" y="413" width="74" height="26" rx="13" fill="#ffffff" stroke="#c0b9c8" stroke-width="1.6" stroke-dasharray="4 3"/><text x="350" y="430.5" font-size="12" fill="#c0b9c8" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">0108cb1</text>
+<rect x="422" y="350" width="216" height="44" rx="22" fill="none" stroke="#c98a2b" stroke-opacity="0.7" stroke-width="1.4" stroke-dasharray="5 4"/>
+<rect x="182" y="404" width="216" height="44" rx="22" fill="none" stroke="#c0b9c8" stroke-width="1.4" stroke-dasharray="5 4"/>
+<path d="M 398 426 C 450 426, 490 416, 510 396" fill="none" stroke="#c98a2b" stroke-width="1.8" marker-end="url(#ma)"/>
+<text x="442" y="444" font-size="12" fill="#c98a2b" font-weight="700">照着复制一份</text>
+<rect x="538.8" y="321" width="102.4" height="22" rx="11" fill="#3f9e79" fill-opacity="0.1" stroke="#3f9e79" stroke-opacity="0.6" stroke-width="1.2"/><text x="590" y="336.5" font-size="12" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">rebase-notes</text><line x1="590" y1="343" x2="590" y2="357" stroke="#3f9e79" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mg)"/>
+<rect x="327.6" y="321" width="44.8" height="22" rx="11" fill="#ee5d7b" fill-opacity="0.1" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.2"/><text x="350" y="336.5" font-size="12" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="middle">main</text><line x1="350" y1="343" x2="350" y2="357" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.4" marker-end="url(#mp)"/>
+<text x="290.0" y="466" font-size="12" fill="#7b7280" text-anchor="middle">ORIG_HEAD 指向 0108cb1</text>
+<text x="690" y="366" font-size="12" fill="#7b7280">提交号全变了，</text>
+<text x="690" y="386" font-size="12" fill="#7b7280">历史是一条直线</text>
+</svg>

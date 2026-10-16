@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 500" width="880" height="500" font-family="system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+<rect x="0.5" y="0.5" width="879" height="499" rx="14" fill="#ffffff" stroke="#e8e4ea" stroke-width="1"/>
+<defs><marker id="m4d7fc4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4d7fc4"/></marker><marker id="mee5d7b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ee5d7b"/></marker><marker id="m3f9e79" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3f9e79"/></marker><marker id="mc98a2b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c98a2b"/></marker><marker id="m7b7280" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7b7280"/></marker></defs>
+<text x="28" y="34" font-size="17" fill="#2f2a33" font-weight="700">pycalc 第一个提交里的 9 个对象，以及指向它们的 HEAD 和 main</text>
+<text x="28" y="58" font-size="13" fill="#7b7280">tree 的每一行记着对象的类型、编号和名字（这里省略了权限一栏），blob 里只有文件的内容</text>
+<rect x="24" y="92" width="160" height="58" rx="8" fill="#ee5d7b" fill-opacity="0.06" stroke="#ee5d7b" stroke-opacity="0.7" stroke-width="1.5"/>
+<text x="38" y="116" font-size="12.5" fill="#2f2a33" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">.git/HEAD</text>
+<text x="38" y="136" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">ref: refs/heads/main</text>
+<path d="M 184 121 L 211 121" fill="none" stroke="#ee5d7b" stroke-width="1.6" marker-end="url(#mee5d7b)"/>
+<rect x="214" y="92" width="140" height="58" rx="8" fill="#ee5d7b" fill-opacity="0.06" stroke="#ee5d7b" stroke-opacity="0.7" stroke-width="1.5"/>
+<text x="228" y="116" font-size="12" fill="#2f2a33" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">refs/heads/main</text>
+<text x="228" y="136" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">5f63edb…</text>
+<path d="M 354 121 L 381 121" fill="none" stroke="#ee5d7b" stroke-width="1.6" marker-end="url(#mee5d7b)"/>
+<rect x="384" y="84" width="200" height="112" rx="8" fill="#3f9e79" fill-opacity="0.07" stroke="#3f9e79" stroke-opacity="0.7" stroke-width="1.5"/>
+<text x="398" y="106" font-size="13" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">commit 5f63edb</text>
+<text x="398" y="128" font-size="11" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">tree 1b27cd2</text>
+<text x="398" y="146" font-size="11" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">author Noimpty-zby</text>
+<text x="398" y="164" font-size="11" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">committer Noimpty-zby</text>
+<text x="398" y="185" font-size="11.5" fill="#2f2a33">加法和减法</text>
+<path d="M 584 124 L 615 124" fill="none" stroke="#3f9e79" stroke-width="1.6" marker-end="url(#m3f9e79)"/>
+<rect x="618" y="84" width="238" height="112" rx="8" fill="#c98a2b" fill-opacity="0.06" stroke="#c98a2b" stroke-opacity="0.7" stroke-width="1.5"/>
+<text x="632" y="106" font-size="13" fill="#c98a2b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">tree 1b27cd2</text>
+<text x="632" y="128" font-size="11" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">blob d818af4  README.md</text>
+<text x="632" y="146" font-size="11" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">tree f40b367  calc</text>
+<text x="632" y="164" font-size="11" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">blob 9af920c  run.sh</text>
+<text x="632" y="182" font-size="11" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">tree 82e9896  tests</text>
+<path d="M 737.0 196 L 737.0 232" fill="none" stroke="#c98a2b" stroke-width="1.6"/>
+<path d="M 119.0 232 L 761.0 232" fill="none" stroke="#c98a2b" stroke-width="1.6"/>
+<path d="M 119.0 232 L 119.0 259" fill="none" stroke="#c98a2b" stroke-width="1.6" marker-end="url(#mc98a2b)"/>
+<path d="M 333.0 232 L 333.0 259" fill="none" stroke="#c98a2b" stroke-width="1.6" marker-end="url(#mc98a2b)"/>
+<path d="M 547.0 232 L 547.0 259" fill="none" stroke="#c98a2b" stroke-width="1.6" marker-end="url(#mc98a2b)"/>
+<path d="M 761.0 232 L 761.0 259" fill="none" stroke="#c98a2b" stroke-width="1.6" marker-end="url(#mc98a2b)"/>
+<rect x="24" y="262" width="190" height="52" rx="8" fill="#4d7fc4" fill-opacity="0.06" stroke="#4d7fc4" stroke-opacity="0.7" stroke-width="1.5"/>
+<text x="38" y="284" font-size="12.5" fill="#4d7fc4" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">blob d818af4</text>
+<text x="38" y="303" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace"># pycalc …</text>
+<rect x="238" y="262" width="190" height="70" rx="8" fill="#c98a2b" fill-opacity="0.06" stroke="#c98a2b" stroke-opacity="0.7" stroke-width="1.5"/>
+<text x="252" y="284" font-size="12.5" fill="#c98a2b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">tree f40b367</text>
+<text x="252" y="304" font-size="11" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">blob e69de29  __init__.py</text>
+<text x="252" y="322" font-size="11" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">blob 4c2d043  ops.py</text>
+<rect x="452" y="262" width="190" height="52" rx="8" fill="#4d7fc4" fill-opacity="0.06" stroke="#4d7fc4" stroke-opacity="0.7" stroke-width="1.5"/>
+<text x="466" y="284" font-size="12.5" fill="#4d7fc4" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">blob 9af920c</text>
+<text x="466" y="303" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">#!/bin/sh …</text>
+<rect x="666" y="262" width="190" height="70" rx="8" fill="#c98a2b" fill-opacity="0.06" stroke="#c98a2b" stroke-opacity="0.7" stroke-width="1.5"/>
+<text x="680" y="284" font-size="12.5" fill="#c98a2b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">tree 82e9896</text>
+<text x="680" y="304" font-size="11" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">blob e69de29  __init__.py</text>
+<text x="680" y="322" font-size="11" fill="#2f2a33" font-family="ui-monospace,Menlo,Consolas,monospace">blob 8f30312  test_ops.py</text>
+<path d="M 333.0 332 L 333.0 407" fill="none" stroke="#c98a2b" stroke-width="1.6" marker-end="url(#mc98a2b)"/>
+<path d="M 333.0 380 L 517.0 380 L 517.0 407" fill="none" stroke="#c98a2b" stroke-width="1.6" marker-end="url(#mc98a2b)"/>
+<path d="M 761.0 332 L 761.0 407" fill="none" stroke="#c98a2b" stroke-width="1.6" marker-end="url(#mc98a2b)"/>
+<path d="M 761.0 380 L 577.0 380 L 577.0 407" fill="none" stroke="#c98a2b" stroke-width="1.6" marker-end="url(#mc98a2b)"/>
+<rect x="238" y="410" width="190" height="52" rx="8" fill="#4d7fc4" fill-opacity="0.06" stroke="#4d7fc4" stroke-opacity="0.7" stroke-width="1.5"/>
+<text x="252" y="432" font-size="12.5" fill="#4d7fc4" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">blob 4c2d043</text>
+<text x="252" y="451" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">def add(a, b): …</text>
+<rect x="452" y="410" width="190" height="52" rx="8" fill="#4d7fc4" fill-opacity="0.06" stroke="#4d7fc4" stroke-opacity="0.7" stroke-width="1.5"/>
+<text x="466" y="432" font-size="12.5" fill="#4d7fc4" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">blob e69de29</text>
+<text x="466" y="451" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">（空文件）</text>
+<rect x="666" y="410" width="190" height="52" rx="8" fill="#4d7fc4" fill-opacity="0.06" stroke="#4d7fc4" stroke-opacity="0.7" stroke-width="1.5"/>
+<text x="680" y="432" font-size="12.5" fill="#4d7fc4" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace">blob 8f30312</text>
+<text x="680" y="451" font-size="11" fill="#7b7280" font-family="ui-monospace,Menlo,Consolas,monospace">import unittest …</text>
+<text x="38" y="432" font-size="12" fill="#7b7280">两个 __init__.py</text>
+<text x="38" y="451" font-size="12" fill="#7b7280">共用同一个空 blob</text>
+</svg>

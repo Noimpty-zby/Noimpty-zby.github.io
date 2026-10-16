@@ -888,3 +888,35 @@ git:
     back: 不会，-d 只影响本地仓库。删除远程仓库里的标签要用 `git push origin --delete v2.0.1` 这样的写法。
   - front: 已经推送的标签用 -f 移到别的提交上再推送，会发生什么？
     back: 推送会以 already exists 被拒绝，加上 -f 才能强制覆盖远程。但是合作者的 git fetch 和 git pull 都不会更新他手里已有的标签，也没有提示，明确执行 `git fetch origin tag v2.0.0` 还会以 would clobber existing tag 被拒绝，于是同一个标签名在两个人手里指向不同的提交。所以已经推送的标签不要再改，修正之后发布一个新的版本号。
+- post: Git-Chapter14-Internals
+  cards:
+  - front: '`git config --local` 和 `--global` 的设置分别写在哪里？两处都设置了同一项时用哪一个？'
+    back: '`--local` 写进当前仓库的 .git/config，只对这个仓库生效；`--global` 写进家目录的 ~/.gitconfig，对所有仓库生效。两处都有时，仓库自己的配置优先。`git config --show-origin user.email` 可以显示最终生效的值来自哪个文件。'
+  - front: Git 对象的编号是怎样算出来的？为什么 `echo 'hi' | sha1sum` 和 `git hash-object` 算出的不一样？
+    back: Git 先在内容前面加上头部，写明对象类型和内容的字节数，再用一个空字符隔开，然后对整串计算 SHA-1。hi 加上 echo 的换行符是 3 个字节，所以 Git 算的是 `blob 3\0hi\n`，结果是 45b983b；sha1sum 只算了 `hi\n`，得到的是另一个编号。
+  - front: '`git hash-object hi` 为什么报错？想算一段文字的编号应该怎么写？'
+    back: hash-object 的参数是文件路径，当前目录里没有名叫 hi 的文件，所以报 could not open 'hi' for reading。算一段文字要用管道传进去，并加上 `--stdin`，比如 `echo 'hi' | git hash-object --stdin`。
+  - front: '`git hash-object` 会把内容存进仓库吗？'
+    back: 默认不会，它只计算编号。加上 `-w` 之后，内容才会写进 .git/objects，存成以编号命名的文件，编号的前两位是目录名，剩下的 38 位是文件名。
+  - front: '`git cat-file` 的 -t、-s、-p 分别显示什么？'
+    back: -t 显示对象的类型（blob、tree、commit 或 tag），-s 显示内容的字节数，-p 按可读的格式打印内容。编号只写前几位也可以，只要仓库里没有别的对象以同样的几位开头。
+  - front: 为什么不能直接用 cat 查看 .git/objects 下的文件？
+    back: 因为 Git 用 zlib 压缩过这些文件。解压之后可以看到文件里保存的是「类型 字节数\0内容」，比如 `blob 3\x00hi\n`，cat-file 取内容时会自动解压并去掉头部。
+  - front: blob 里保存了什么？两个内容相同、名字不同的文件会存成几个 blob？
+    back: blob 只保存文件的内容，不保存文件名和路径。内容相同，编号就相同，所以只存一个 blob。比如两个空的 __init__.py 都是空内容的编号 e69de29，文件名记在暂存区和 tree 里。
+  - front: git add 的时候，仓库里会多出什么？
+    back: 文件内容会立刻作为 blob 写进 .git/objects，暂存区 .git/index 记下每个文件的权限、blob 编号和路径，可以用 `git ls-files --stage` 查看。tree 和 commit 要等到提交时才生成。
+  - front: tree 对象的每一行记着什么？`git cat-file -p main^{tree}` 会列出所有文件吗？
+    back: 每一行依次是类型和权限（100644 普通文件、100755 可执行文件、040000 目录）、对象类型、编号和名字。`main^{tree}` 只是根目录这一层，子目录只显示为一行 tree，要用 `main:calc` 打开子目录，或者用 `git ls-tree -r main` 递归列出所有文件。
+  - front: 提交对象里记录了哪些内容？
+    back: 根目录 tree 的编号、上一个提交的编号（parent，第一个提交没有，合并提交有两个）、作者和提交者的名字、邮箱和时间，空一行之后是提交信息。
+  - front: 为什么修改一个旧提交之后，它后面所有提交的编号都会变？
+    back: 提交号是从提交对象的内容算出来的，内容里有 parent 的编号。旧提交换成了新编号，下一个提交的 parent 就变了，它的编号也跟着变，这样一路传到最后一个提交。amend 和 rebase 会产生新的提交号也是这个原因。
+  - front: .git/refs 下面的 heads、tags、remotes 分别是什么？文件里记的是什么？
+    back: heads 下每个文件是一个分支，记着分支最新提交的编号；tags 下是标签，轻量标签记提交号，带注释的标签记标签对象的编号；remotes 下是远程跟踪分支，记着上一次通信时远程分支指向的提交。远程仓库的地址不在 refs 里，而是在 .git/config 的 [remote "origin"] 一节。
+  - front: .git/HEAD 里写的是什么？checkout 一个带注释的标签之后呢？
+    back: '平时写的是 `ref: refs/heads/main` 这样的分支名。切换到标签或提交号时进入分离头指针状态，HEAD 里直接写提交号。即使是带注释的标签，HEAD 里也是它指向的提交号，而不是标签对象的编号。'
+  - front: 克隆下来的仓库里，.git/refs/tags 为什么是空的？
+    back: 克隆时 Git 把远程跟踪分支和标签打包写进了 .git/packed-refs 这一个文件，每行一个编号和一个名字，git gc 也会这样打包。所以要列出所有引用应该用 `git show-ref`，而不是去翻 refs 目录。
+  - front: 第二次提交只改了一个文件，仓库里会多出哪些对象？
+    back: 只多出这个文件的新 blob、从它到根目录这一路上每个目录的新 tree，以及新的提交。没有变化的文件和目录直接复用原来的对象。比如 pycalc 只改了 calc/ops.py，就多了 ops.py 的 blob、calc 和根目录的 tree、提交，一共 4 个对象。

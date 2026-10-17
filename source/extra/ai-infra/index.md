@@ -37,7 +37,7 @@ description: 现在在走的方向：Linux、Git、Go、MySQL 打底，外加 Do
     <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii git %}</span>
     <h3>Git &amp; GitHub</h3>
     <span class="noimpty-track-card__by">Colt Steele · The Git &amp; Github Bootcamp</span>
-    <span class="noimpty-track-card__stat">{% section_stat Git %}</span>
+    <span class="noimpty-track-card__stat">{% section_stat Git %} · 已学完</span>
   </a>
   <a class="noimpty-track-card noimpty-track-card--go" href="/extra/ai-infra/go/">
     <span class="noimpty-track-card__index">03</span>

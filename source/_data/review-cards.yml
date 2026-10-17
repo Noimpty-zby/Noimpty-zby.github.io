@@ -920,3 +920,37 @@ git:
     back: 克隆时 Git 把远程跟踪分支和标签打包写进了 .git/packed-refs 这一个文件，每行一个编号和一个名字，git gc 也会这样打包。所以要列出所有引用应该用 `git show-ref`，而不是去翻 refs 目录。
   - front: 第二次提交只改了一个文件，仓库里会多出哪些对象？
     back: 只多出这个文件的新 blob、从它到根目录这一路上每个目录的新 tree，以及新的提交。没有变化的文件和目录直接复用原来的对象。比如 pycalc 只改了 calc/ops.py，就多了 ops.py 的 blob、calc 和根目录的 tree、提交，一共 4 个对象。
+- post: Git-Chapter15-Reflog
+  cards:
+  - front: reflog 保存在哪里？每一行记着什么？
+    back: '保存在 .git/logs 目录里，HEAD 对应 .git/logs/HEAD，每个分支对应 .git/logs/refs/heads 下的同名文件。引用每变化一次，文件末尾就追加一行，依次是变化前的提交号、变化后的提交号、操作的人、时间，以及用制表符隔开的说明，比如 `commit: 乘法`、`reset: moving to HEAD~1`。'
+  - front: 为什么用 git init --bare 创建的仓库没有 reflog？
+    back: 打开 reflog 的是 core.logAllRefUpdates 这一项，带工作区的仓库默认是 true，git init 还会把它写进 .git/config；裸仓库默认是 false，所以不记录 reflog，推送上去之后裸仓库里也没有 logs 目录。
+  - front: 在 docs 分支上提交一次再切换回 main，HEAD 的 reflog 和 main 的 reflog 各多了几行？
+    back: HEAD 的 reflog 多了三行，两次切换分支加上一次提交；main 的 reflog 一行也没有多，因为 main 一直没有移动。分支的 reflog 只记自己的移动，HEAD 的 reflog 还会记下每次切换，所以它是最全的。用 git switch 切换时，记下的类型也是 checkout。
+  - front: git log 和 git reflog 列出的东西有什么不同？
+    back: git log 从当前提交顺着 parent 往回走，列出项目的历史，别的分支上的提交不会出现。git reflog 按时间列出 HEAD 在这台电脑上先后指向过哪些提交，同一个提交可以出现好几次，被 reset 撤销的提交也在里面。
+  - front: 刚克隆下来的仓库，git reflog 有几行？
+    back: '只有一行 `clone: from …`。reflog 只记录本地的操作，项目里的提交都是别人做的，在这台电脑上 HEAD 只变化过克隆这一次，所以 reflog 的行数不一定比 git log 多。'
+  - front: HEAD@{1}、main@{1} 和 @{1} 分别指什么？
+    back: HEAD@{1} 是 HEAD 上一次所在的位置，main@{1} 是 main 上一次所在的位置，两者来自两本不同的记录，常常不是同一个提交。@ 前面不写引用时表示当前分支，所以在 main 上时 @{1} 等于 main@{1}，而不是 HEAD@{1}。
+  - front: 为什么不能照搬之前记下的 HEAD@{n}？
+    back: n 表示往前数第几次，HEAD 每移动一次，旧记录的序号都会加一。比如两次切换之后，原来的 HEAD@{2} 就变成了 HEAD@{4}，这和 stash@{n} 的序号会变是同一个道理。所以用之前先执行一次 git reflog。
+  - front: git checkout HEAD@{1} 之后处在什么状态？
+    back: 'HEAD@{1} 表示一个提交而不是分支，所以会进入分离头指针状态，.git/HEAD 里直接写着提交号。reflog 里这一行的说明是 `checkout: moving from main to HEAD@{1}`，记下的是命令里写的参数。'
+  - front: HEAD@{yesterday} 指的是什么？和「昨天的提交」有什么区别？
+    back: 它指 24 小时之前 HEAD 在本地指向哪个提交，查的是 reflog 的时间，而不是提交的时间。刚克隆下来的仓库，提交可能是很多年前的，但 reflog 从克隆时才开始记录，所以只会得到一个警告。想找某段时间里做的提交，要用 git log 的 `--since` 和 `--until`。
+  - front: 写成 git show HEAD{2.days.ago} 会怎样？带空格的时间应该怎么写？
+    back: 大括号前面少了 @，Git 把它当成一个不存在的名字，报 `unknown revision`，退出码 128。时间里的点用来代替空格，比如 2.days.ago；如果直接写空格或者具体的日期时间，要给整个参数加引号，比如 `'HEAD@{5 hours ago}'`。
+  - front: 要查的时间比最早的 reflog 还早时，会发生什么？
+    back: 'Git 先打印 `warning: log for ''HEAD'' only goes back to …`。git show 会退回到最早的那一条记录，git reflog show 则除了警告什么也不列出。'
+  - front: 连续执行了两次 git reset --hard HEAD~1，为什么 ORIG_HEAD 只能找回一个提交？应该怎么全部找回？
+    back: ORIG_HEAD 只有一个，第二次 reset 时它已经被改成第二次移动之前的位置。main 的 reflog 记着每一步，`git reflog show main` 里两行 reset 下面的 main@{2} 就是两次 reset 之前的位置，执行 `git reset --hard main@{2}` 就能全部找回。
+  - front: 交互式 rebase 之后后悔了，main 的 reflog 和 HEAD 的 reflog 各记了什么？
+    back: rebase 过程中 Git 在分离的 HEAD 上逐个生成新提交，最后才移动 main，所以 main 的 reflog 只多了一行 `rebase (finish)`，main@{1} 就是 rebase 之前的位置，用 `git reset --hard main@{1}` 撤回。HEAD 的 reflog 则记下了 start、每次 fixup 和 finish 的每一步。
+  - front: reflog 能找回哪些东西，找不回哪些？
+    back: 能找回提交过、并且还在 reflog 里的提交，比如被 reset 撤销的提交、rebase 之前的旧提交。找不回从来没有提交过的改动，因为 reflog 只记录引用的移动，不保存工作区的文件；也找不回别人电脑上的操作，因为 reflog 不会随着克隆和推送传递。
+  - front: 删除分支之后，还能用 git reflog show 查看它的记录吗？
+    back: 不能，分支自己的 reflog 会随着分支一起删除，再执行 git reflog show docs 会报错。不过 HEAD 的 reflog 里还记着在这个分支上做过的提交，可以从中找到提交号，再用 `git branch docs <提交号>` 把分支建回来。
+  - front: reflog 会保留多久？过期之后会怎样？
+    back: git gc 会顺带执行 git reflog expire，默认删掉 90 天以前的记录，不在当前分支历史上的记录则是 30 天（gc.reflogExpire、gc.reflogExpireUnreachable）。记录过期之后，没有分支和标签指向的提交就失去了最后一个引用，git gc 会把它们从仓库里删掉，所以误操作之后要尽快找回。

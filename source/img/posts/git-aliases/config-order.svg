@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 420" width="880" height="420" font-family="system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif">
+<rect x="0.5" y="0.5" width="879" height="419" rx="14" fill="#ffffff" stroke="#e8e4ea" stroke-width="1"/>
+<defs><marker id="m4d7fc4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4d7fc4"/></marker><marker id="mee5d7b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ee5d7b"/></marker><marker id="m3f9e79" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3f9e79"/></marker><marker id="mc98a2b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c98a2b"/></marker><marker id="m7b7280" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7b7280"/></marker></defs>
+<text x="28" y="34" font-size="17" fill="#2f2a33" font-weight="700">Git 按从左到右的顺序读配置，同一项后读到的值生效</text>
+<text x="28" y="58" font-size="13" fill="#7b7280">[include] 引入的文件在它所在的位置读入，所以它和 [alias] 谁在前面，决定了重名的别名用哪一个</text>
+<rect x="24" y="86" width="220" height="250" rx="10" fill="#7b7280" fill-opacity="0.05" stroke="#7b7280" stroke-opacity="0.7" stroke-width="1.5"/>
+<text x="40" y="114" font-size="14" fill="#7b7280" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="start">/etc/gitconfig</text>
+<text x="40" y="136" font-size="12" fill="#7b7280" text-anchor="start">系统级 --system</text>
+<text x="40" y="160" font-size="12" fill="#2f2a33" text-anchor="start">这台电脑上的所有用户</text>
+<text x="40" y="180" font-size="12" fill="#2f2a33" text-anchor="start">这台电脑上没有这个文件</text>
+<rect x="270" y="86" width="340" height="250" rx="10" fill="#4d7fc4" fill-opacity="0.05" stroke="#4d7fc4" stroke-opacity="0.7" stroke-width="1.5"/>
+<text x="286" y="114" font-size="14" fill="#4d7fc4" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="start">~/.gitconfig</text>
+<text x="286" y="136" font-size="12" fill="#7b7280" text-anchor="start">全局 --global</text>
+<text x="286" y="160" font-size="12" fill="#2f2a33" text-anchor="start">当前用户的所有仓库</text>
+<rect x="636" y="86" width="220" height="250" rx="10" fill="#3f9e79" fill-opacity="0.05" stroke="#3f9e79" stroke-opacity="0.7" stroke-width="1.5"/>
+<text x="652" y="114" font-size="14" fill="#3f9e79" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="start">.git/config</text>
+<text x="652" y="136" font-size="12" fill="#7b7280" text-anchor="start">仓库 --local</text>
+<text x="652" y="160" font-size="12" fill="#2f2a33" text-anchor="start">只有这一个仓库</text>
+<text x="652" y="180" font-size="12" fill="#2f2a33" text-anchor="start">第十四章：它优先于全局</text>
+<rect x="286" y="178" width="308" height="40" rx="6" fill="#7b7280" fill-opacity="0.07" stroke="#7b7280" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="296" y="195" font-size="11.5" fill="#2f2a33" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="start">[user] [init]</text>
+<text x="296" y="211" font-size="11" fill="#7b7280" text-anchor="start">名字、邮箱、默认分支</text>
+<path d="M 440.0 219 L 440.0 225" fill="none" stroke="#7b7280" stroke-width="1.4" marker-end="url(#m7b7280)"/>
+<rect x="286" y="228" width="308" height="40" rx="6" fill="#c98a2b" fill-opacity="0.07" stroke="#c98a2b" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="296" y="245" font-size="11.5" fill="#c98a2b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="start">[include] path = ~/.gitalias</text>
+<text x="296" y="261" font-size="11" fill="#7b7280" text-anchor="start">在这里读入 325 个别名，含 lg = log --graph</text>
+<path d="M 440.0 269 L 440.0 275" fill="none" stroke="#7b7280" stroke-width="1.4" marker-end="url(#m7b7280)"/>
+<rect x="286" y="278" width="308" height="40" rx="6" fill="#ee5d7b" fill-opacity="0.07" stroke="#ee5d7b" stroke-opacity="0.6" stroke-width="1.2"/>
+<text x="296" y="295" font-size="11.5" fill="#ee5d7b" font-weight="700" font-family="ui-monospace,Menlo,Consolas,monospace" text-anchor="start">[alias] lg = log --oneline --graph</text>
+<text x="296" y="311" font-size="11" fill="#7b7280" text-anchor="start">后读到，所以 git lg 用的是这一个</text>
+<path d="M 60 370 L 820 370" fill="none" stroke="#7b7280" stroke-width="1.6" marker-end="url(#m7b7280)"/>
+<rect x="330" y="358" width="220" height="24" fill="#ffffff"/>
+<text x="440" y="374.5" font-size="12.5" fill="#2f2a33" text-anchor="middle">读取的顺序，后面的覆盖前面的</text>
+</svg>

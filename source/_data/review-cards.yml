@@ -954,3 +954,29 @@ git:
     back: 不能，分支自己的 reflog 会随着分支一起删除，再执行 git reflog show docs 会报错。不过 HEAD 的 reflog 里还记着在这个分支上做过的提交，可以从中找到提交号，再用 `git branch docs <提交号>` 把分支建回来。
   - front: reflog 会保留多久？过期之后会怎样？
     back: git gc 会顺带执行 git reflog expire，默认删掉 90 天以前的记录，不在当前分支历史上的记录则是 30 天（gc.reflogExpire、gc.reflogExpireUnreachable）。记录过期之后，没有分支和标签指向的提交就失去了最后一个引用，git gc 会把它们从仓库里删掉，所以误操作之后要尽快找回。
+- post: Git-Chapter16-Aliases
+  cards:
+  - front: git config --global 写在哪个文件里？它和 .git/config 是什么关系？
+    back: 写在家目录的 ~/.gitconfig，对当前用户的所有仓库生效；.git/config 是仓库自己的配置，只对这个仓库生效。两个文件格式相同，都是 [节] 加上「名字 = 值」，可以直接编辑，也可以用 `git config --global --edit` 打开。
+  - front: Git 从哪几个文件读配置？同一项在几个文件里都有时用哪个？
+    back: 依次读系统级的 /etc/gitconfig（`--system`）、全局的 ~/.gitconfig（`--global`）和仓库的 .git/config（`--local`），同一项以最后读到的为准，所以仓库的设置会覆盖全局的设置。/etc/gitconfig 不一定存在，不存在时 `git config --system --list` 会报错，退出码 128。
+  - front: 怎样看一项配置来自哪一层？
+    back: '`git config --list --show-scope` 在每一项前面标出 global、local 这样的层级，`--show-origin` 则显示具体的文件路径。列出来的名字都是小写，因为配置项的名字不区分大小写。'
+  - front: 在 ~/.gitconfig 的 [alias] 里写 `l = log` 之后，`git l --oneline -3` 执行的是什么？
+    back: 执行 `git log --oneline -3`。Git 遇到不认识的子命令时，会去配置里找同名的别名，把名字换成别名的值，后面的参数原样接在后面。写在 ~/.gitconfig 里的别名在这个用户的每个仓库里都能用。
+  - front: 怎样查看一个别名代表什么命令？怎样列出所有别名？
+    back: '`git help s` 会输出 `''s'' is aliased to ''status''`，不会打开手册。`git config --get-regexp alias` 列出名字含有 alias 的所有配置项。'
+  - front: 怎样不打开编辑器添加一个别名？加不加 --global 有什么区别？
+    back: 用 `git config --global alias.b branch`，别名在配置里的名字是 alias 加一个点再加别名。加 `--global` 写进 ~/.gitconfig，所有仓库都能用；不加就写进当前仓库的 .git/config，离开这个仓库就是「not a git command」。
+  - front: 执行 `git config --global alias.lg log --oneline` 会怎样？
+    back: 不报错，退出码是 0，但存下的值只有 log。Shell 把 log 和 --oneline 拆成了两个参数，git config 设置一项时只接受名字和值，第三个参数被当成了匹配条件。值有几个词时要整个加引号，写成 `alias.lg 'log --oneline --graph'`；如果不加引号又多一个词，git config 会打印用法说明，退出码 129。
+  - front: 怎样删除一个别名？删除之后再执行会看到什么？
+    back: '`git config --global --unset alias.b`。之后执行 `git b` 会报 `git: ''b'' is not a git command`，退出码 1，并列出几个最相似的命令和别名。'
+  - front: 把 status 定义成别名 `status --short`，能让 git status 默认输出简短格式吗？
+    back: 不能。Git 只有遇到不认识的子命令时才去找别名，status 是 Git 自己的命令，所以这个别名会被忽略，git config 也不会报错。手册的解释是为了避免混乱、不影响脚本。想要带参数的 status 要换个名字，比如 `st = status --short`。
+  - front: 别名的值以感叹号开头表示什么？
+    back: 表示把整个值交给 Shell 执行，而不是当成 Git 的子命令，所以别名里可以用管道组合几条命令。这种别名在仓库的根目录下执行，不一定是当前所在的目录。比如 GitAlias 的 `aliases` 就是 `!git config --get-regexp '^alias\.' | cut -c 7- | sed 's/ / = /'`。
+  - front: GitAlias 是什么？怎样用？
+    back: 一个收集别名的仓库，内容都在 gitalias.txt 里，写法和 ~/.gitconfig 一样，2026 年 8 月的版本有 325 个别名。用法是下载这个文件，再用 `git config --global include.path '~/.gitalias'` 把它引入 ~/.gitconfig；也可以只把需要的几行抄进自己的 [alias]。
+  - front: 引入 gitalias.txt 之后，自己定义的 `lg = log --oneline --graph` 为什么失效了？怎样修正？
+    back: gitalias.txt 里也有 `lg = log --graph`。git config 把 [include] 加在了文件末尾，引入的文件在 [include] 的位置读入，比自己的 [alias] 晚，同一项以最后读到的为准，所以被覆盖了。用 `git config --get-all --show-origin alias.lg` 可以看到两个值。把 [include] 挪到 [alias] 前面就恢复了。

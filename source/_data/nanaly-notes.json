@@ -988,5 +988,41 @@
         "text": "index 是二进制文件，别用文本编辑器改；序号 1、2、3 只在冲突未解决时出现。"
       }
     ]
+  },
+  "/2026/10/17/Git-Chapter15-Reflog/": {
+    "hash": "a34160166f1dd0b8",
+    "title": "Git 第十五章：用 reflog 找回被 reset 和 rebase 丢掉的提交",
+    "notes": [
+      {
+        "anchor": "上一章代码 2 里的 .git/config 有一项 log",
+        "text": "裸仓库默认无 reflog，但推送到裸仓库后本地 origin/main 会有，别把两边搞混。"
+      },
+      {
+        "anchor": "这两次切换同样写进了 HEAD 的 reflog，于是原来的",
+        "text": "HEAD@{n} 的 n 会随新操作整体位移，脚本里硬编码序号迟早出事。"
+      },
+      {
+        "anchor": "如果还记得提交号，那么直接写提交号也可以，reflog 的作",
+        "text": "--hard 抹掉未提交改动后 reflog 救不回，这个坑比 reset 本身更常见。"
+      }
+    ]
+  },
+  "/2026/10/17/Git-Chapter16-Aliases/": {
+    "hash": "5e9b9bbbce8ae6b8",
+    "title": "Git 第十六章：在 ~/.gitconfig 里给常用命令起别名",
+    "notes": [
+      {
+        "anchor": "Git 读配置的顺序是系统级、全局、仓库，如果同一项在几个文",
+        "text": "注意 --system 那层也参与覆盖，别以为全局就一定压过系统级。"
+      },
+      {
+        "anchor": "如果别名代表的命令有好几个词，比如想让 git lg 等于 ",
+        "text": "坑在于不报错却只存第一个词，改完最好用 git config --get 核对一下。"
+      },
+      {
+        "anchor": "另外，如果别名的值以感叹号开头，那么 Git 不会把它当成 ",
+        "text": "感叹号别名在仓库根目录执行，脚本里用相对路径会踩坑。"
+      }
+    ]
   }
 }

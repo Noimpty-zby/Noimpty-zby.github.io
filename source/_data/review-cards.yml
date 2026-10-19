@@ -475,6 +475,42 @@ linux:
     back: 分号是 Shell 分隔命令的符号，不加反斜杠或引号就会被 Shell 拿走，`find` 报 missing argument to `-exec`。`\;` 每个文件执行一次命令，`+` 把路径攒在一起执行。
   - front: '`find . -name ''*.png'' | xargs ls` 在没有找到文件时会怎样？带空格的文件名呢？'
     back: GNU `xargs` 输入为空时仍会执行一次不带参数的 `ls`，列出当前目录，加 `-r` 可以避免。`xargs` 按空格拆分，带空格的文件名会被拆开，要用 `find -print0` 配合 `xargs -0`。
+- post: Linux-Command-Line-Chapter12
+  cards:
+  - front: '`grep word words.txt` 打印的是什么？会找到 words 和 password 吗？'
+    back: 打印含有 word 的整行，而不是只打印这个词。`grep` 只看这几个字符是不是连续出现，所以 words、sword、password 所在的行都会被打印。默认区分大小写，Word 不算。
+  - front: 终端里 `grep` 匹配到的部分为什么是红色的？输出进了管道还有颜色吗？
+    back: Ubuntu 的 ~/.bashrc 里有 `alias grep='grep --color=auto'`。`auto` 只在输出到终端时加颜色，进了管道或者重定向到文件就不加。
+  - front: '`-w` 怎样判断完整的单词？`grep -w word` 能匹配 a word. 和 sword 吗？'
+    back: 匹配到的内容前后必须是行首、行尾，或者不属于单词的字符。属于单词的字符是字母、数字和下划线，句号是边界，所以 a word. 能匹配，sword 不能。
+  - front: '`grep` 的 `-i` 和 `-n` 分别是什么意思？'
+    back: '`-i` 不区分大小写，`-n` 在每一行前面加上行号，行号和内容之间是冒号。'
+  - front: 一行里有两处 word，`grep -c word` 算几次？怎样数出现的次数？
+    back: 算 1，因为 `-c` 数的是匹配的行数。要数次数，用 `grep -o word 文件 | wc -l`，`-o` 让每一处匹配单独占一行。
+  - front: '`grep -m1 ERROR app.log` 做了什么？`grep -c -m2` 最多数出几？'
+    back: 找到第一个匹配的行就停止读取文件，只打印这一行。`-m` 也按行计算，和 `-c` 一起用时，数出来的行数不会超过 2。
+  - front: '`-A2`、`-B2`、`-C2` 分别是什么意思？输出里的 `--` 是什么？'
+    back: '`-A2` 带上匹配行后面两行，`-B2` 带上前面两行，`-C2` 前后各两行。几段内容不连续时，`grep` 在两段之间打印一行 `--`；如果两段正好挨着，就连成一段。'
+  - front: '`grep -n -C1` 的输出里，`4:` 和 `5-` 有什么区别？'
+    back: 行号后面是冒号的是真正匹配的行，是减号的是补充出来的前后行。
+  - front: '`grep gress docs` 为什么报错？怎样在目录里查找？'
+    back: '`grep` 默认只读取文件，写目录会报 Is a directory。加上 `-r` 会递归查找下面的每一个文件，`-r` 后面不写目录时从当前目录开始；`-l` 只打印含有匹配的文件名。'
+  - front: 正则表达式 `w...` 能匹配 wn y 吗？要匹配真正的点怎么写？
+    back: 能，`.` 匹配任意一个字符，空格和标点也算。真正的点要写成 `\.`，比如 `grep '\.'` 只找含有句号的行。
+  - front: '`^` 在 `''^I''` 和 `''gr[^e]y''` 里分别是什么意思？'
+    back: 在方括号外面表示行首；在方括号里的第一个位置表示「不是这些字符」。`[^e]` 是除 e 以外的任意一个字符，但它仍然要占一个字符，所以 `gr[^e]y` 不匹配 gry。
+  - front: '`gr[ae]y` 和 `[a-e]` 分别能匹配什么？'
+    back: '`gr[ae]y` 匹配 gray 或 grey，方括号整体只匹配一个字符，所以不匹配 graey。`[a-e]` 是 a 到 e 之间的任意一个字符，和 `[abcde]` 相同。'
+  - front: 正则里的 `*` 和通配符的 `*` 有什么不同？为什么 `grep 'x*'` 会匹配每一行？
+    back: 正则的 `*` 表示前一项重复零次或多次，任意一串字符要写成 `.*`。`x*` 可以匹配零个 x，也就是空字符串，而每一行都能找到空字符串，所以每一行都匹配。
+  - front: 为什么 `grep 'colou?r'` 什么都找不到？
+    back: 基本正则表达式里 `?` 只是普通字符。加上 `-E` 改用扩展正则表达式，`?` 才表示前一项出现零次或一次；GNU 的 `grep` 也可以写成 `'colou\?r'`。
+  - front: '`grep -E ''o{2-3}''` 和 `grep -E ''o{2,3}''` 有什么区别？'
+    back: 区间中间要写逗号，`o{2,3}` 匹配 2 到 3 个连续的 o。`o{2-3}` 不会报错，而是被当作普通文字，去找 o{2-3} 这六个字符，所以什么都找不到。
+  - front: '`grep -E a{2,3} words.txt` 为什么报 a3: No such file or directory？'
+    back: 模式没有加引号，Shell 先做了花括号展开，命令变成 `grep -E a2 a3 words.txt`，a3 被当成了文件。模式要放进单引号。
+  - front: '`find . -name ''*.txt'' | grep gress` 和用 `-exec grep -l gress {} \;` 有什么区别？'
+    back: 管道交给 `grep` 的是路径文字，所以它在路径里找 gress；`-exec` 把路径作为参数交给 `grep`，才是在文件内容里找。用 `\;` 时 `grep` 每次只收到一个文件，不会打印文件名，所以要加 `-l`、`-H` 或者改用 `+`。
 git:
 - post: Git-Chapter0-Command-Line
   cards:

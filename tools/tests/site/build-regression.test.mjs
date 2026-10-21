@@ -93,6 +93,8 @@ await test('invalid annotations cannot take down an otherwise valid page', () =>
       extend: { filter: { register: (n, fn) => { filters[n] = fn } } } })
     const result = filters.after_post_render({ path: 'post/', content: '<p>这段文字足够长，用于测试坏批注</p>' })
     assert.match(result.content, /&lt;unsafe&gt;/)
+    // 一篇好几条批注时，<aside> 默认的区域角色会变成一串同名区域（axe landmark-unique）
+    assert.match(result.content, /<aside class="nanaly-note" role="note"/)
   } finally { rmSync(dir, { recursive: true, force: true }) }
 })
 

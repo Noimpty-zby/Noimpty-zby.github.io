@@ -452,6 +452,9 @@ a {
 
 /* 对比度（axe color-contrast，9-29 看过对比图后定的）：只调深浅，不换色相，全部 ≥ 4.5:1 */
 html[data-theme='dark'] #article-container :not(pre) > code { color: #ec7690; }
+/* 主题在深色模式下把代码行号设成 40% 的白，叠在 #171717 上只有 3.83:1（10-21 晚上查出来的）。
+   换成 50%（#8b8b8b，5.27:1）。浅色模式用的是 darker 配色，本来就有 5.1:1，不动。 */
+html[data-theme='dark'] { --hlnumber-color: rgba(255, 255, 255, .5); }
 html:not([data-theme='dark']) .sakura-greeting { color: #c2385a; }
 html:not([data-theme='dark']).noimpty-home-hub #page-header #site-subtitle { color: #75666f; }
 /* 浅色主题下首页左列底色是浅的，原来的近白日期几乎看不见 */

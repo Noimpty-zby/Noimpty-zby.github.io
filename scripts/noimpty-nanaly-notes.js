@@ -49,7 +49,9 @@ const escapeHtml = s => String(s == null ? '' : s)
 
 const normalizePath = p => ('/' + String(p || '').replace(/^\/+/, '')).replace(/index\.html$/, '')
 
-const renderNote = text => '<aside class="nanaly-note" aria-label="娜娜莉的批注">'
+// role="note"：<aside> 默认是页面区域标记，一篇有好几条批注时就是一串同名区域，
+// 按区域跳转会被它们塞满（axe landmark-unique）。批注其实是给旁边段落的注释，不是区域。
+const renderNote = text => '<aside class="nanaly-note" role="note" aria-label="娜娜莉的批注">'
   + '<span class="nanaly-note__paw" aria-hidden="true"><i class="fas fa-cat"></i></span>'
   + `<span class="nanaly-note__text">${escapeHtml(text)}</span>`
   + '</aside>'

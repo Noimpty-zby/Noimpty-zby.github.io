@@ -2,7 +2,9 @@
  *
  * - 文章底部的分享按钮只有图标（share.js 运行时生成，不支持写文字），读屏只会念「链接」；
  * - 顶部导航、上一篇/下一篇、搜索框顶部都是 <nav>，没有名字就分不清哪个是哪个；
- * - 手机侧边菜单不在任何区域标记里，按区域跳转时会被漏掉。
+ * - 手机侧边菜单不在任何区域标记里，按区域跳转时会被漏掉；
+ * - 代码块太宽时是里面的 <table> 在横向滚动，可它里面没有能聚焦的东西，只用键盘就滚不动。
+ *   只给真的溢出了的那几块加 tabindex，不然每个代码块都要多按一次 Tab。
  *
  * PJAX 换页后主题会重新生成分享按钮和翻页导航，所以换页后再补一次。 */
 (() => {
@@ -29,6 +31,11 @@
       if (link.hasAttribute('aria-label')) continue
       const site = [...link.classList].find(name => name.startsWith('icon-'))?.slice(5)
       if (site && NAMES[site]) link.setAttribute('aria-label', NAMES[site])
+    }
+    for (const table of document.querySelectorAll('figure.highlight > table')) {
+      if (table.hasAttribute('tabindex') || !(table.scrollWidth > table.clientWidth)) continue
+      table.setAttribute('tabindex', '0')
+      table.setAttribute('aria-label', '代码，可以左右滚动')
     }
   }
   // share.js 自己也挂在 DOMContentLoaded 上，顺序不定，等它跑完再补。

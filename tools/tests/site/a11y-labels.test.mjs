@@ -1,4 +1,5 @@
-/* 无障碍补名字：分享按钮只补认识的站点、不覆盖已有的名字、PJAX 换页后重补、重复加载不重复挂监听；导航区各有名字。 */
+/* 无障碍补名字：分享按钮只补认识的站点、不覆盖已有的名字、PJAX 换页后重补、重复加载不重复挂监听；导航区各有名字；
+ * 横向溢出的代码块能用 Tab 聚焦，没溢出的不加。 */
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -13,9 +14,10 @@ const element = () => {
   const attrs = new Map()
   return { hasAttribute: n => attrs.has(n), setAttribute: (n, v) => attrs.set(n, v), getAttribute: n => attrs.get(n) ?? null }
 }
-const boot = (links, regions = {}) => {
+const table = (scrollWidth, clientWidth) => Object.assign(element(), { scrollWidth, clientWidth })
+const boot = (links, regions = {}, tables = []) => {
   const listeners = [], timers = []
-  const doc = { readyState: 'complete', querySelectorAll: () => links, querySelector: selector => regions[selector] || null, addEventListener: (type, fn) => listeners.push(['document', type, fn]) }
+  const doc = { readyState: 'complete', querySelectorAll: selector => selector.includes('figure.highlight') ? tables : links, querySelector: selector => regions[selector] || null, addEventListener: (type, fn) => listeners.push(['document', type, fn]) }
   const win = { addEventListener: (type, fn) => listeners.push(['window', type, fn]) }
   const context = vm.createContext({ window: win, document: doc, setTimeout: fn => timers.push(fn) })
   vm.runInContext(source, context)
@@ -56,4 +58,15 @@ test('theme navigation landmarks get distinct names and the sidebar becomes a na
   assert.equal(regions['#pagination'].getAttribute('aria-label'), '已有名字')
   assert.equal(regions['#sidebar-menus'].getAttribute('role'), 'navigation')
   assert.equal(regions['#sidebar-menus'].getAttribute('aria-label'), '侧边菜单')
+})
+
+test('only code blocks that actually scroll sideways become keyboard-focusable', () => {
+  const wide = table(900, 600), fits = table(600, 600), kept = table(900, 600)
+  kept.setAttribute('tabindex', '-1')
+  const h = boot([], {}, [wide, fits, kept])
+  h.run()
+  assert.equal(wide.getAttribute('tabindex'), '0')
+  assert.equal(wide.getAttribute('aria-label'), '代码，可以左右滚动')
+  assert.equal(fits.getAttribute('tabindex'), null, '没溢出的代码块不该多一个 Tab 停顿')
+  assert.equal(kept.getAttribute('tabindex'), '-1', '别人设过的 tabindex 不能覆盖')
 })

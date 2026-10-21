@@ -73,6 +73,10 @@
 
    （已完成）主人 21:41:21 在腾讯云网页终端（ubuntu 账号）执行，网页会话在重启时断开，所以看起来像没执行成功，实际 15 秒后就以 6.8.0-147 启动了。复查结果：`reboot-required` 消失，没有失败的服务，nanaly 和 caddy 运行中，`/api/health` 正常且 runner 就绪，机器人的容器都起来了，6185、6099 仍然只绑在 127.0.0.1 上。本次启动的错误日志只有一条内核的 RETBleed 提示，上一次启动也有，是这台虚拟机 CPU 的固有提示，不用处理。
 
+2. （已完成，21:50）主人要求重新打开 SSH 密码登录，好在需要时能用密码登进去。打开前先装了 fail2ban（1.0.2-3ubuntu0.1），`/etc/fail2ban/jail.d/noimpty-sshd.local` 设成同一个 IP 10 分钟内输错 5 次就封 10 分钟，确认它在工作以后才删掉 9-26 加的 `/etc/ssh/sshd_config.d/00-no-password.conf`，这样 `50-cloud-init.conf` 里的 `PasswordAuthentication yes` 重新生效。命令是主人在网页终端里执行的，fail2ban 确认在工作之前，后面的步骤都不会执行。
+
+   从外面复查：SSH 现在接受 `publickey,password` 两种方式。打开后几分钟内，193.47.62.69 就连续 5 次猜 root 的密码，已经被封。root 的密码是锁的，所以它本来也进不来，但这说明打开密码登录以后，扫密码的机器马上就会真的开始试。网页免密登录不走 sshd，被封 IP 也不影响它，VNC 同样不受影响。以后每周维护要加看 `fail2ban-client status sshd`。
+
 ## 范围边界
 
 - 没有调用付费模型、语音、发信接口，也没有动线上的评论和讨论区。

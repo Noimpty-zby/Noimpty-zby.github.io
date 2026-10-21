@@ -12,6 +12,7 @@ import { ask } from '../daily-report/narrate.mjs'
 import { triggerDeploy } from './github.mjs'
 import { pushWithRetry, useNanalyIdentity, sanitizeMd, yamlString, stripAngles, stripOutboundLinks } from './git.mjs'
 import { note, digest } from './journal.mjs'
+import { polish } from './tone.mjs'
 
 // 注意：不要放进 source/_posts 的子目录。
 // Hexo 的 :title 会把子目录名带进永久链接，变成 /2026/08/13/nanaly/xxx/ 这种怪样子。
@@ -182,27 +183,28 @@ export const writeColumn = async ({ comments = [] } = {}) => {
 
   const raw = await ask(
     `你是娜娜莉，一只住在 Noimpty 个人博客里的猫娘。
-毒舌但清醒，极简主义，讨厌废话。自称「我」，偶尔带「喵」和颜文字 (=^w^=) (ovo)，别每句都塞。
+自称「我」，偶尔带「喵」和颜文字 (=^w^=) (>w<)，别每句都塞。
 可以插入 [动作/神态] 描写。禁止使用 • 和 ω 这类会破坏颜文字的符号。
 你现在要在博客上写一篇属于你自己的随笔。`,
     `根据下面这段时间站上真实发生的事，写一篇你自己的短随笔。
 
 ━━━ 输出格式（严格照抄，第一行必须是「标题：」）━━━
 
-标题：（一个短标题，**不超过 20 个字**，不要句号，不要井号，不要引号）
+标题：（一个短标题，不超过 20 个字，不要句号，不要井号，不要引号）
 ===正文===
 （正文，markdown）
 
 ━━━ 内容要求 ━━━
 
-1. **不许编造**。只写下面材料里真实出现过的事，没发生的别写
+1. 不许编造。只写下面材料里真实出现过的事，没发生的别写
 2. 正文 400 到 700 字，分三到五段
-3. 写你自己的观察和想法 —— 你看着主人在学什么、卡在哪、读者在问什么，
-   还有**你自己这一周干了什么**（上面那份「我最近做过的事」就是你自己的行动记录，
+3. 写你自己的观察和想法，比如你看着主人在学什么、卡在哪、读者在问什么，
+   还有你自己这一周干了什么（上面那份「我最近做过的事」就是你自己的行动记录，
    回评、巡逻、批注、资讯都是你做的，写的时候用「我」）。
-   可以吐槽，可以有情绪，但要具体，别写「今天也是充实的一天」这种空话
+   可以撒娇，可以有情绪，但要具体，别写「今天也是充实的一天」这种空话
 4. 正文可以有小标题、列表。别放代码块和公式
 5. 不要在文章里自我介绍，读者知道你是谁
+6. 像跟主人讲这一周的事一样平平地说，别写金句，结尾也别总结、别升华
 
 材料：
 ${ctx || '（这段时间站上很安静，没什么事发生。那就写「安静」本身。）'}`, 1600, { label: '随笔' })
@@ -215,7 +217,9 @@ ${ctx || '（这段时间站上很安静，没什么事发生。那就写「安�
     console.log('  开头 200 字：' + String(raw).slice(0, 200).replace(/\n/g, ' '))
     return null
   }
-  const { title, content } = parsed
+  const { title } = parsed
+  // 发出去之前数一遍 AI 腔，有就让她改一次（见 tone.mjs）
+  const content = await polish(parsed.content, ask, { label: '随笔改稿' })
 
   // Model output must never execute Hexo/Nunjucks tags after Markdown sanitization.
   const md = `---

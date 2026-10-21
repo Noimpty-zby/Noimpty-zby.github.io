@@ -15,6 +15,7 @@ import { ask, whyNoModel } from '../daily-report/narrate.mjs'
 import { triggerDeploy } from './github.mjs'
 import { pushWithRetry, useNanalyIdentity, sanitizeMd, stripAngles } from './git.mjs'
 import { note } from './journal.mjs'
+import { polish } from './tone.mjs'
 import { listPosts, countByLeaf, POSTS_DIR } from './posts.mjs'
 
 const DIR = 'source/news'
@@ -350,10 +351,12 @@ export const issueFailure = (modelFailed, searchFailed) =>
  * 规矩见 narrate.mjs 里 reviewPrompt 上面那段：固定的排前面，变量排后面。 */
 // Only fixed, anonymous technology labels may leave the private profile.
 // No free text, names, contact details or personal circumstances enter a public draft.
+const itemNumbers = text => (String(text).match(/^\s*[-*+]\s*[[［【]\s*\d+/gm) || []).map(m => m.replace(/\D/g, '')).join(',')
+
 export const profileInterests = profile => ['Linux', 'Git', 'Go', 'MySQL', 'Docker', 'AI Infra', '后端']
   .filter(topic => new RegExp(topic === 'Go' ? '\\bGo\\b' : topic, 'i').test(String(profile || '')))
 export const newsSystem = profile => `你是娜娜莉，住在 Noimpty 个人博客里的猫娘。
-毒舌但清醒，极简，讨厌废话。自称「我」，偶尔带「喵」和颜文字 (=^w^=) (ovo)，别每句都塞。
+自称「我」，偶尔带「喵」和颜文字 (=^w^=) (>w<)，别每句都塞。
 禁止使用 • 和 ω 这类会破坏颜文字的符号。
 你在整理可公开发布的技术资讯简报。只根据公开素材写作，不猜测或披露个人背景。
 读者关注的技术主题：${profileInterests(profile).join('、') || '软件工程'}。`
@@ -362,32 +365,32 @@ export const newsSystem = profile => `你是娜娜莉，住在 Noimpty 个人博
 export const newsPrompt = (t, listed, recent = '') => `【这一栏：${t.title}】
 ${t.angle || ''}
 
-下面是刚搜到的素材，每条前面有个编号。挑出**最多 ${t.want} 条**真正值得他知道的，写成简报。
+下面是刚搜到的素材，每条前面有个编号。挑出最多 ${t.want} 条真正值得他知道的，写成简报。
 
-**格式（严格照抄）：**
-\`- [编号] **一句话标题** —— 正文\`
-例如：\`- [3] **某公司裁了整个引擎组** —— ……\`
-**不要自己写网址，不要写「来源」两个字**，链接我这边会自动挂上去。
+格式（严格照抄）：
+\`- [编号] **一句话标题**。正文\`
+例如：\`- [3] **某公司裁了整个引擎组**。……\`
+标题后面接一个句号，然后直接写正文，不要用破折号。
+不要自己写网址，不要写「来源」两个字，链接我这边会自动挂上去。
 编号必须是素材里真实存在的那个数字，不许编。
 
-**每一条的正文要包含这三层，缺一层都算不合格：**
-1. **发生了什么** —— 具体的事实：谁、什么时候、多少人、什么版本、什么数字。
-   只写素材里有的，素材没写的就说「没说」，不许补你自己知道的背景，不许推测后续
-2. **对他意味着什么** —— 这是最重要的一层。结合上面列出的技术主题，
-   说清楚这条消息改变了什么：该投哪家、该准备什么、该怎么调整判断。
-   如果诚实地说「这条对他其实没什么直接影响」，那就别选这一条
-3. **我的看法** —— 一句你自己的判断，要说得具体，并且**明确标出这是你的看法**
-   （用「我觉得」开头）。不许写「值得关注」「值得学习」这种谁都能说的话
+每一条的正文要讲清楚下面三件事，缺一件都不合格。
+1. 发生了什么。写具体的事实，比如谁、什么时候、多少人、什么版本、什么数字。
+   只写素材里有的，素材没写的就说「没说」，不许补你自己知道的背景，也不许推测后续
+2. 对他有什么用。这一层最重要。结合上面列出的技术主题，说清楚这条消息改变了什么，
+   比如该投哪家、该准备什么、该怎么调整判断。如果老实说这条对他没什么直接影响，那就别选这一条
+3. 你的看法。用「我觉得」开头，说一句你自己的判断，要说得具体。
+   不许写「值得关注」「值得学习」这种谁都能说的话
 
-**篇幅：每条正文至少 ${t.minWords} 字。** 写不到这个长度，说明你没想清楚，
-那就别选这一条 —— 少写一条永远好过写一条废话。
+每条正文至少 ${t.minWords} 字。如果写不到这个长度，说明你还没想清楚，
+那就别选这一条，少写一条也比写一条废话好。
 
-**宁缺毋滥。** 纯宣传稿、标题党、蹭热点、和他方向不沾边的，一条都别留。
-实在没有值得写的就只输出「（这几天没什么值得说的）」，那也是合格的输出。
+宁缺毋滥。纯宣传稿、标题党、蹭热点、和他方向不沾边的，一条都别留。
+实在没有值得写的，就只输出「（这几天没什么值得说的）」，这也是合格的输出。
 
 别写导语和总结，直接列条目。只输出 markdown 列表本身。
 ${recent ? `
-【你最近干过的事】（你自己做的，写「我的看法」时可以自然带上，比如你刚给某篇写过批注）
+【你最近干过的事】（你自己做的，写「你的看法」时可以自然带上，比如你刚给某篇写过批注）
 ${recent}` : ''}
 素材：
 ${listed}`
@@ -446,8 +449,11 @@ export const buildNews = async () => {
     const listed = pool.map((h, i) =>
       `[${i}] ${h.title}\n    来源：${h.url}\n    ${h.date ? '日期：' + h.date + '\n    ' : ''}${h.excerpt}`).join('\n\n')
 
-    const out = await ask(SYSTEM, newsPrompt(t, listed), t.deep ? 8000 : 1600,
+    const raw = await ask(SYSTEM, newsPrompt(t, listed), t.deep ? 8000 : 1600,
       { deep: !!t.deep, retries: 1, label: t.key })
+    // 写完数一遍 AI 腔，有就让她改一次（见 tone.mjs）。条目编号是 attachSources 回查来源用的，
+    // 改稿时编号变了就不用改稿，照发原稿。
+    const out = raw && await polish(raw.trim(), ask, { label: t.key + '/改稿', keep: draft => itemNumbers(draft) === itemNumbers(raw) })
 
     const body = out ? attachSources(out.trim(), pool) : ''
     switch (outcomeOf(out, body)) {
@@ -477,7 +483,7 @@ export const buildNews = async () => {
 
   const intro = await ask(
     '你是娜娜莉，猫娘助手。自称「我」，简短，禁止使用 • 和 ω。',
-    `给这期资讯写一句开场白，一句话就够，别超过 40 字。这期包含这些板块：${sections.map(s => s.title).join('、')}。`, 200, { label: '资讯开场白' })
+    `给这期资讯写一句开场白，一句话就够，别超过 40 字，不要用破折号。这期包含这些板块：${sections.map(s => s.title).join('、')}。`, 200, { label: '资讯开场白' })
 
   // 注意：**绝对不要给这里加 layout: post**。
   // 这是 Hexo 的 page 不是 post，而 Butterfly 的 post 头部模板会去读
@@ -496,7 +502,7 @@ description: 娜娜莉整理的三日资讯：${sections.map(s => s.title).join(
 
 > ${sanitizeMd((intro || '我把这三天值得看的都捞过来了喵。').trim())}
 >
-> **这一期由娜娜莉自动搜集整理，不是主人写的。** 每条都挂了来源，看到感兴趣的请点进原文核对 —— 转述难免有偏差。
+> **这一期由娜娜莉自动搜集整理，不是主人写的。** 每条都挂了来源，看到感兴趣的请点进原文核对，因为转述难免有偏差。
 
 ${sections.map(s => `## ${s.title}\n\n${s.body}`).join('\n\n')}
 

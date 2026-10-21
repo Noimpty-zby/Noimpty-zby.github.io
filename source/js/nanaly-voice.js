@@ -463,7 +463,7 @@
     drawer.setAttribute('aria-label', '声音与朗读设置')
     const title = document.createElement('h3'); title.textContent = '听听娜娜莉的声音'
     const close = document.createElement('button'); close.type = 'button'; close.className = 'nanaly-voice-close'; close.textContent = '×'; close.setAttribute('aria-label', '关闭声音设置')
-    const intro = document.createElement('p'); intro.textContent = 'AI 合成女声 · 清甜一点，嘴硬心软一点。'
+    const intro = document.createElement('p'); intro.textContent = 'AI 合成女声 · 清甜一点，软一点。'
     const label = (text, control) => { const wrap = document.createElement('label'); const span = document.createElement('span'); span.textContent = text; wrap.append(span, control); return wrap }
     const style = document.createElement('select'); style.setAttribute('aria-label', '娜娜莉的声线')
     Object.entries(STYLES).forEach(([value, item]) => { const option = document.createElement('option'); option.value = value; option.textContent = item.name; style.append(option) })
@@ -485,7 +485,7 @@
     const update = () => { controller.configure({ style: style.value, speed: Number(speed.value), autoplay: auto.checked, effects: effects.checked, emotion: emotion.checked }); sync() }
     ;[style, speed, auto, effects, emotion].forEach(control => control.addEventListener('change', update))
     speed.addEventListener('input', () => { speedValue.textContent = Number(speed.value).toFixed(2) + '×' })
-    preview.onclick = () => controller.speak('哼，终于想起我啦？把难题交给我吧。才、才不是特地在等你呢，喵。', { id: 'voice-preview' })
+    preview.onclick = () => controller.speak('主人终于来啦，我等你好久了喵。有难题就交给我吧。', { id: 'voice-preview' })
     controller.subscribe(state => { preview.textContent = state?.id === 'voice-preview' ? (state.phase === 'planning' ? '理解语气… · 点击停止' : state.phase === 'loading' ? '生成中 · 点击停止' : '停止试听') : '试听一下' })
     sync()
     return { close: hide, refresh: () => { button.disabled = !isChat(); if (!isChat() || !panel.classList.contains('is-open')) hide() } }

@@ -9,7 +9,7 @@ const knowledge = require('../../../source/js/nanaly-knowledge.js')
 const identity = require('../../../source/js/nanaly-identity.js')
 
 await test('knowledge is public, traceable and the six rubrics cover actual reported weaknesses', async () => {
-  assert.equal(identity.version, 3)
+  assert.equal(identity.version, 4)
   assert.deepEqual(knowledge.cases.map(c => c.id), ['natural', 'reference', 'counterexample', 'source', 'execution', 'attachment'])
   assert.equal(knowledge.intent('矩阵转置为什么成立').reasoning, true)
   assert.equal(knowledge.intent('你好').inventory, false)

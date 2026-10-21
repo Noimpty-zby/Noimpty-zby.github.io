@@ -511,6 +511,40 @@ linux:
     back: 模式没有加引号，Shell 先做了花括号展开，命令变成 `grep -E a2 a3 words.txt`，a3 被当成了文件。模式要放进单引号。
   - front: '`find . -name ''*.txt'' | grep gress` 和用 `-exec grep -l gress {} \;` 有什么区别？'
     back: 管道交给 `grep` 的是路径文字，所以它在路径里找 gress；`-exec` 把路径作为参数交给 `grep`，才是在文件内容里找。用 `\;` 时 `grep` 每次只收到一个文件，不会打印文件名，所以要加 `-l`、`-H` 或者改用 `+`。
+- post: Linux-Command-Line-Chapter13
+  cards:
+  - front: '`ls -l` 输出里，属主和属组分别是第几列？第二列是什么？'
+    back: 第三列是属主，第四列是属组。第二列是硬链接数。
+  - front: '`id` 输出的 uid、gid 和 groups 分别是什么？'
+    back: uid 是用户号，gid 是主组的组号，groups 是这个用户所属的全部组。系统内部用数字区分用户和组，括号里的名字只是方便人看。Ubuntu 建用户时会同时建一个同名的组作为主组。
+  - front: '`ls -l` 第一个字符的 `-`、`d`、`l`、`c`、`b` 分别表示什么？'
+    back: 普通文件、目录、符号链接、字符设备文件、块设备文件。另外还有 `p`（命名管道）和 `s`（套接字）。
+  - front: 块设备文件（`b`）是一个数据块吗？它和字符设备有什么区别？
+    back: 不是。设备文件里不存数据，代表的是一个设备。字符设备按字节顺序读写，比如终端和 /dev/null；块设备以固定大小的块为单位读写，可以跳到任意位置，比如硬盘 /dev/sda。
+  - front: '`-rw-rw-r--` 后面九个字符怎样分组？'
+    back: 每三个一组，依次是属主、属组和其他人（others，也叫 world）。每组的位置固定是 r、w、x，是字母就有这项权限，是 `-` 就没有。这里属主和属组可以读写，其他人只能读。
+  - front: 系统检查权限时，三组 rwx 是怎样用的？
+    back: 只挑一组。是属主就只看第一组；不是属主但在属组里，就只看第二组；两者都不是才看第三组。三组不会叠加。
+  - front: notes.txt 是 `--w-r--r--`，属主能读它吗？
+    back: 不能。属主只看第一组 `-w-`，没有 r，所以 `cat` 报 Permission denied，即使属组和其他人都能读。
+  - front: /etc/shadow 和 /var/log/syslog.1 都是 `rw-r-----`，为什么 zby 能读后者、读不了前者？
+    back: 两个文件的属主都不是 zby。syslog.1 的属组是 adm，zby 在 adm 组里，检查第二组 `r--`；/etc/shadow 的属组是 shadow，zby 不在里面，检查第三组 `---`。
+  - front: '`chmod u-r`、`chmod a-w`、`chmod u+x` 分别是什么意思？'
+    back: u 属主、g 属组、o 其他人、a 所有人；`-` 去掉、`+` 加上；最后的字母是权限。所以依次是去掉属主的读、去掉所有人的写、给属主加上执行。
+  - front: hello.sh 没有 x 权限时，`./hello.sh` 和 `bash hello.sh` 能运行吗？
+    back: '`./hello.sh` 报 Permission denied，因为它要把文件当作程序运行，需要 x。`bash hello.sh` 运行的是 bash，hello.sh 只是交给它读取的参数，有 r 就够了。'
+  - front: 目录的 r、w、x 分别表示什么？
+    back: 目录是一张名字到 inode 的对照表。r 读这张表，即列出名字；w 改这张表，即新建、删除、改名；x 按名字查找，进入目录和访问里面的文件都需要它。`man chmod` 里写的是 search for directories。
+  - front: 目录只有 r 没有 x 时，`ls`、`ls -l`、`cd`、`cat docs/a.txt` 会怎样？
+    back: 名字能列出来；带颜色的 `ls` 会先对每个文件报 Permission denied。`ls -l` 除名字外都是问号。`cd` 和 `cat docs/a.txt` 都失败。
+  - front: 目录只有 x 没有 r 时，能读取里面已知名字的文件吗？
+    back: 能。`ls docs` 报 cannot open directory，但 `cat docs/a.txt` 和 `cd docs` 都成功。x 是按名字查找，r 是读出整张表，两件事不同。
+  - front: 只读文件（`-r--r--r--`）放在可写的目录里，能删除吗？
+    back: 能。删除改的是目录的对照表，检查的是目录的 w，不是文件的 w。`rm` 会先问 remove write-protected regular file? 回答 y 就删了，加 `-f` 则不问。
+  - front: 目录去掉 w 以后，里面的文件还能修改内容吗？只有 w 没有 x 的目录能新建文件吗？
+    back: 能修改已有文件的内容，但不能新建、删除和改名。只有 w 没有 x 也不能新建，因为 w 要和 x 一起才起作用。
+  - front: 为什么在 Ubuntu 22.04 上，其他普通用户进不了 /home/zby？
+    back: 家目录是 `drwxr-x---`，其他人一组是 `---`。Ubuntu 21.04 起新用户的家目录默认就是这样；在这之前是 `rwxr-xr-x`，别的用户可以进去读文件，但不能修改。
 git:
 - post: Git-Chapter0-Command-Line
   cards:

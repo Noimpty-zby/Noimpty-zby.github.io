@@ -2,33 +2,18 @@
 title: UE5 C++ · Tom Looman
 date: 2026-08-18 10:02:00
 type: noimpty-track
-aside: false
-comments: false
-top_img: false
+track: UE5-Looman
 privacy: protected
 private_section: 课外
 sitemap: false
 description: Tom Looman《Professional Game Development in C++ and Unreal Engine》的章节复盘与作业复盘。
+lead: "Professional Game Development in C++ and Unreal Engine"
+course:
+  - ["讲师", "Tom Looman · 前 Epic Games"]
+  - ["项目", "ActionRoguelike（第三人称动作 Roguelike）"]
+  - ["课程主页", "<a href=\"https://courses.tomlooman.com/p/unrealengine-cpp\" target=\"_blank\" rel=\"noopener\">courses.tomlooman.com</a>"]
+progress: "第一至第六章 + 作业一、作业二"
+about_title: "关于这门课"
 ---
 
-<header class="noimpty-hero noimpty-hero--ue5">
-  <div class="noimpty-hero__text">
-    <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/gamedev/">游戏开发</a></nav>
-    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">UE5 C++ · Tom Looman</span></h1>
-    <p class="noimpty-hero__lead">Professional Game Development in C++ and Unreal Engine</p>
-    <div class="noimpty-course-meta">
-      <div><b>讲师</b><span>Tom Looman · 前 Epic Games</span></div>
-      <div><b>项目</b><span>ActionRoguelike（第三人称动作 Roguelike）</span></div>
-      <div><b>课程主页</b><span><a href="https://courses.tomlooman.com/p/unrealengine-cpp" target="_blank" rel="noopener">courses.tomlooman.com</a></span></div>
-      <div><b>进度</b><span>第一至第六章 + 作业一、作业二 · 告一段落 · {% section_progress UE5-Looman %}</span></div>
-    </div>
-  </div>
-  <figure class="noimpty-scene noimpty-scene--one" data-lines="蓝色的我是 UE5 的手柄～|Tom Looman 的课，用 C++ 写游戏！">{% kawaii gamepad-blue stage %}</figure>
-</header>
-
-{% section_posts UE5-Looman %}
-
-<details class="noimpty-fold">
-  <summary>关于这门课</summary>
-  <p>Tom Looman。用 C++ 从零搭一个第三人称 Action Roguelike —— Gameplay 框架、组件化、投射物与伤害链、接口解耦、蓝图与 C++ 的分工边界。这里收每章复盘和每次作业复盘。</p>
-</details>
+<p>Tom Looman。用 C++ 从零搭一个第三人称 Action Roguelike —— Gameplay 框架、组件化、投射物与伤害链、接口解耦、蓝图与 C++ 的分工边界。这里收每章复盘和每次作业复盘。</p>

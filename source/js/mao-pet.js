@@ -778,16 +778,17 @@
   const progressLines = () => {
     if (!pageAllowed()) return []
     try {
-      const cards = Array.from(document.querySelectorAll('.noimpty-track-card'))
+      // .track / .rows--chapters 是 2026-10 新主题的写法，旧的类名留着兼容
+      const cards = Array.from(document.querySelectorAll('.noimpty-track-card, .tracks .track'))
       const lines = cards.map(card => {
-        const title = card.querySelector('h3')?.textContent?.trim()
-        const stat = card.querySelector('.noimpty-track-card__stat')?.textContent || ''
+        const title = card.querySelector('h3, .track__name')?.textContent?.trim()
+        const stat = card.querySelector('.noimpty-track-card__stat, .track__meta')?.textContent || ''
         const count = stat.match(/已写\s*(\d+)\s*篇/)
         return title && count ? [`${title.slice(0, 40)}已经记录 ${count[1]} 篇笔记喵。`, '笑'] : null
       }).filter(Boolean)
       if (lines.length) return lines
-      const list = document.querySelector('.noimpty-post-list[data-section]')
-      if (list) return [[`这一栏目前有 ${list.querySelectorAll('.noimpty-post-card').length} 篇笔记，可以挑一篇继续看。`, '平静']]
+      const list = document.querySelector('.noimpty-post-list[data-section], .rows--chapters')
+      if (list) return [[`这一栏目前有 ${list.querySelectorAll('.noimpty-post-card, .row').length} 篇笔记，可以挑一篇继续看。`, '平静']]
     } catch (_) {}
     return []
   }

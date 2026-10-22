@@ -1,0 +1,91 @@
+extends includes/layout.pug
+include includes/mixins.pug
+
+block content
+  - var lists = theme.home && theme.home.lists
+  - var all = lists ? nm_public_posts() : []
+  - var series = lists ? nm_public_series() : []
+  .home
+    section.hero(data-intro)
+      span.hero__wm(aria-hidden="true") NOIMPTY
+      .hero__avatar
+        span.hero__band(aria-hidden="true")
+        img(src=url_for(theme.avatar.square) alt="Noimpty 的头像" width="148" height="148" decoding="async")
+      .hero__text
+        p.hero__hi
+          span.hero__tag PROXY
+          | NOW PLAYING
+        h1.hero__name Noimpty
+        p.hero__bio= theme.home.intro
+        .hero__links
+          each item in theme.social || []
+            a(href=item.url rel="noopener" target="_blank")= item.name
+          a(href=url_for('/about/') data-avatar data-title="关于") 关于我
+      if lists && all.length
+        dl.hero__stats
+          div
+            dt 文章
+            dd= all.length
+          div
+            dt 系列
+            dd= series.length
+          div
+            dt 最近更新
+            dd= date(all[0].date, 'MM-DD')
+
+    if lists && series.length
+      section.block.series
+        .block__head
+          h2 系列
+          span.block__en SELECT A TRACK
+          span.block__hint ↑ ↓ 选择，Enter 进入
+        .select(data-select)
+          ol.select__list(role="listbox" aria-label="系列")
+            each s, i in series
+              li.select__item(role="option" tabindex="0" data-i=i aria-selected=String(i === 0) style=`--sc:${s.color}`)
+                span.select__no= String(i + 1).padStart(2, '0')
+                span.select__name= s.name
+                span.select__lv
+                  | #{s.count}
+                  small 篇
+          .select__detail
+            each s, i in series
+              section.select__panel(data-i=i hidden=i > 0 data-intro=i === 0 ? '' : undefined style=`--sc:${s.color}`)
+                +agent(s, i + 1)
+                .select__info
+                  .select__en= s.en
+                  h3= s.name
+                  p= s.by || s.area
+                  dl
+                    div
+                      dt 篇数
+                      dd= s.count
+                    div
+                      dt 状态
+                      dd= s.status || '连载中'
+                    div
+                      dt 栏目
+                      dd= s.area
+                  p.select__latest 最近一篇：#{s.latest.title}
+                  a.select__go(href=url_for(s.path) data-title=s.name data-sc=s.color data-code=s.code) 进入系列
+                    kbd Enter
+
+      section.block.recent
+        .block__head
+          h2 最近更新
+          span.block__en RECENT PLAYS
+        ol.rows.rows--timeline
+          each post in all.slice(0, 7)
+            +postRow(post)
+    else
+      section.block.doors
+        .block__head
+          h2 入口
+          span.block__en ENTRANCE
+        .doors__grid
+          each path in ['/in-class/', '/extra/']
+            - var hub = theme.hubs[path]
+            a.door(href=url_for(path) data-title=hub.name data-sc=hub.color data-code=hub.code style=`--sc:${hub.color}`)
+              span.door__code= hub.code
+              span.door__name= hub.name
+              span.door__en= hub.en

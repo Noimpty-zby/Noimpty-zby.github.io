@@ -2,27 +2,12 @@
 title: 关于
 date: 2026-07-14 00:00:00
 type: about
-comments: false
+description: Noimpty 的个人博客，记录课内的数据结构，以及课外自学的 AI Infra 后端和游戏开发。
 ---
-
-<header class="noimpty-hero noimpty-hero--about">
-  <div class="noimpty-hero__text">
-    <p class="noimpty-hero__tape">ABOUT · 关于</p>
-    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">关于这里</span></h1>
-    <p class="noimpty-hero__lead">Noimpty 的个人空间</p>
-    <p class="noimpty-hero__sub"><span>站长</span><span>小站</span></p>
-  </div>
-  <figure class="noimpty-scene" data-lines="云朵：我在这儿飘了好久啦|爱心气球送给来看的你 ♡">
-    <figcaption class="noimpty-scene__bubble">想认识这个小站和站长？往下看就对啦～ <span class="noimpty-kaomoji">ヾ(≧▽≦*)o</span></figcaption>
-    {% kawaii about %}
-  </figure>
-</header>
-
-<div class="noimpty-sheet">
 
 ## 你好，这里是 Noimpty
 
-这里是我的个人博客，用来记录自学的过程，也保存平时冒出来的想法与生活中的琐事。
+这里是我的个人博客，用来记录自学的过程和平时冒出来的想法。
 
 ## 学习与实践
 
@@ -34,12 +19,7 @@ comments: false
 
 遇到值得复盘的问题时，我会尽量写清楚分析过程、尝试过的方法和最后采用的解决方案，方便以后回顾，也希望能给遇到相似问题的人一点参考。
 
-## 生活
-
-这一部分用来存放日常里的生活琐事：偶尔的感受、值得记住的小事，以及那些不一定需要得出结论的生活片段。
-
 ## 找到我
 
 - [GitHub](https://github.com/noimpty-zby)
 
-</div>

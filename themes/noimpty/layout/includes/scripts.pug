@@ -1,0 +1,4 @@
+script(src=url_for('/pluginsSrc/pjax/pjax.min.js'))
+script(src=url_for('/js/noimpty-theme.js'))
+each line in (theme.inject && theme.inject.bottom) || []
+  != line

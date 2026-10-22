@@ -1,0 +1,28 @@
+//- 换页转场：六条轨道按节拍落下盖满，黑色斜带带着目的地的角色卡切进来；新页面到了再收回去
+.tx(aria-hidden="true")
+  .tx__stage
+    each k in [0, 3, 1, 4, 2, 5]
+      .tx__lane(style=`--k:${k}`)
+    .tx__judge
+    .tx__cut
+      .tx__cut-edge
+      .tx__cut-band
+        span.tx__cut-speed
+      .tx__cut-card
+        img.tx__cut-img(src=url_for(theme.avatar.card) alt="" decoding="async")
+        b.tx__cut-code
+      .tx__cut-text
+        b.tx__big NOW LOADING
+        span.tx__title
+
+.search-dialog#local-search(hidden role="dialog" aria-modal="true" aria-label="搜索")
+  .search-dialog__panel
+    .search-dialog__head
+      span.search-dialog__tag SEARCH
+      #local-search-input
+        input(type="text" placeholder="搜索文章标题和正文" autocomplete="off" aria-label="搜索关键词")
+      button.search-dialog__close(type="button" aria-label="关闭搜索") ESC
+    #local-search-results.search-dialog__results(role="list")
+    #loading-database.search-dialog__status(role="status" aria-live="polite")
+
+.toast(role="status" aria-live="polite")

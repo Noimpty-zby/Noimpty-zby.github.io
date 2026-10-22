@@ -57,10 +57,15 @@ check('★★ track 页「进度」里的篇数，全部来自 {% section_progre
 })
 
 check('★ 每个 track 页都有进度那一格（别整个删掉来糊弄上面两条）', () => {
+  /* 2026-10 换成新主题以后，track 页的页头由主题按 front-matter 渲染：
+   * 篇数由主题现数（靠 track: 认出分类叶子），progress: 里只写「学到哪了」。 */
   const tracks = pages.filter(p => /^type:\s*noimpty-track/m.test(p.raw))
   assert.ok(tracks.length >= 10, `只找到 ${tracks.length} 个 track 页，是不是路径变了`)
-  const missing = tracks.filter(p => !/<b>进度<\/b>/.test(p.raw)).map(p => p.f)
-  assert.deepEqual(missing, [])
+  const noLeaf = tracks.filter(p => !/^track:\s*\S/m.test(p.raw) && !/\{%\s*section_posts/.test(p.raw)).map(p => p.f)
+  assert.deepEqual(noLeaf, [], '这几页没写 track:，主题数不出篇数')
+  const handwritten = tracks.filter(p => /^progress:.*\d+\s*篇/m.test(p.raw)).map(p => p.f)
+  assert.deepEqual(handwritten, [], 'progress: 里又手写了篇数')
+  assert.match(readFileSync('themes/noimpty/layout/includes/place.pug', 'utf8'), /dt 进度/, '主题的 track 页模板里没有进度那一格')
 })
 
 console.log('\n栏目篇数 · 数得对不对')

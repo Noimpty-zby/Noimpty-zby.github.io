@@ -1,0 +1,33 @@
+/* 给私人功能（娜娜莉、Mao、音乐、日程、练习台、复习卡……）用的变量。
+ * 它们原来写在 Butterfly 的主题上，读的是 Butterfly 和旧首页定义的这些变量；
+ * 换主题以后由这里提供同名变量，值照旧（浅色那一套），它们的样子保持不变。 */
+:root {
+  --noimpty-accent: #e95978;
+  --noimpty-accent-soft: #ff91a8;
+  --noimpty-border: rgba(119, 76, 92, .14);
+  --noimpty-shadow: 0 18px 50px rgba(75, 43, 56, .1);
+  --sakura-accent: var(--noimpty-accent);
+  --text-highlight-color: #2f2830;
+  --btn-bg: #f6e7eb;
+  --btn-color: #7f3f52;
+  --card-meta: #93858e;
+  --font-color: #4f4650;
+  --global-bg: #f8f4f6;
+  --card-bg: rgba(255, 252, 253, .9);
+  --code-font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+}
+
+/* 娜娜莉的文章批注只给主人看 */
+html:not(.nm-owner) .nanaly-note { display: none }
+
+/* 练习台（learning-lab.js）：「边学边练」按钮插在正文前面，给它在网格里留一格，目录照旧在右边 */
+.post-body > .learning-launch { grid-column: 1; justify-self: start; margin: 0 0 14px; border: 2px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink); font-weight: 700; box-shadow: 3px 3px 0 var(--ink) }
+.post-body > .prose { grid-column: 1 }
+.post-body > .post-toc { grid-column: 2; grid-row: 1 / span 2 }
+/* 分栏打开以后：页头的角色卡、目录、进度线、文末、页脚都让出来，只留正文 */
+html.learning-is-open .site-foot, html.learning-is-open .progress, html.learning-is-open .post-agent,
+html.learning-is-open .post-toc, html.learning-is-open .post-end { display: none !important }
+html.learning-is-open #content-inner.layout { height: calc(100dvh - var(--head-h)) }
+html.learning-is-open .post-head { display: block }
+html.learning-is-open .post-body { display: block; margin-top: 16px }
+html.learning-is-open .post .prose { padding: 0; border: 0; box-shadow: none; background: none }

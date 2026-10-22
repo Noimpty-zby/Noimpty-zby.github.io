@@ -2,46 +2,12 @@
 title: Linux
 date: 2026-08-28 10:04:00
 type: noimpty-hub
-aside: false
-comments: false
-top_img: false
 privacy: protected
 private_section: 课外
 sitemap: false
 description: 拆成两部分——入门管命令怎么用，深入管为什么这么设计。
+lead: "命令行与系统 · 入门 + 深入"
+about_title: "关于这一栏"
 ---
 
-<header class="noimpty-hero noimpty-hero--linux">
-  <div class="noimpty-hero__text">
-    <nav class="noimpty-hero__crumbs" aria-label="所在位置"><a href="/extra/">extra</a><a href="/extra/ai-infra/">AI Infra</a></nav>
-    <h1 class="noimpty-hero__title"><span class="noimpty-hero__name">Linux</span></h1>
-    <p class="noimpty-hero__lead">命令行与系统 · 入门 + 深入</p>
-    <p class="noimpty-hero__sub"><span>2 门课</span><span>{% section_stat Linux入门|Linux深入 %}</span></p>
-  </div>
-  <figure class="noimpty-scene" data-lines="企鹅：学到的命令去代码小屋的终端里敲一敲，马上就能验证！|终端：$ echo 你好 (｡･ω･)ﾉ">
-    <figcaption class="noimpty-scene__bubble">Linux 分入门和深入两段，先把命令行玩熟～ <span class="noimpty-kaomoji">(・∀・)ノ</span></figcaption>
-    {% kawaii linux %}
-  </figure>
-</header>
-
-<div class="noimpty-track-grid noimpty-track-grid--two">
-  <a class="noimpty-track-card noimpty-track-card--linux-intro" href="/extra/ai-infra/linux/intro/">
-    <span class="noimpty-track-card__index">01</span>
-    <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii penguin %}</span>
-    <h3>Linux 入门</h3>
-    <span class="noimpty-track-card__by">Colt Steele · Beginner To Power User</span>
-    <span class="noimpty-track-card__stat">{% section_stat Linux入门 %}</span>
-  </a>
-  <a class="noimpty-track-card noimpty-track-card--linux-advanced" href="/extra/ai-infra/linux/advanced/">
-    <span class="noimpty-track-card__index">02</span>
-    <span class="noimpty-track-card__icon" aria-hidden="true">{% kawaii penguin-glasses %}</span>
-    <h3>Linux 深入</h3>
-    <span class="noimpty-track-card__by">具体资料还没定</span>
-    <span class="noimpty-track-card__stat">{% section_stat Linux深入 %}</span>
-  </a>
-</div>
-
-<details class="noimpty-fold">
-  <summary>关于这一栏</summary>
-  <p>服务器上没有图形界面，命令行是唯一的界面，所以这门排在 AI Infra 最前面。分两部分：<b>入门</b>是能把命令用熟、把日常操作跑顺；<b>深入</b>是命令背后的东西——进程、内存、系统调用、性能排查。先有入门的手感，深入才不会是空中楼阁。</p>
-</details>
+<p>服务器上没有图形界面，命令行是唯一的界面，所以这门排在 AI Infra 最前面。分两部分：<b>入门</b>是能把命令用熟、把日常操作跑顺；<b>深入</b>是命令背后的东西——进程、内存、系统调用、性能排查。先有入门的手感，深入才不会是空中楼阁。</p>

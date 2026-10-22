@@ -1,0 +1,46 @@
+# Noimpty 主题（2026-10 改版）：判定线 × 街区，暖纸 + 墨色。
+# 这里放主题自己的默认值；跟这个站点有关的（注入的私人功能、各系列的角色色）写在根目录的 _config.noimpty.yml。
+
+# 顶栏。private 里的几项只有解锁以后才显示（私人页面本来就在暗号后面）。
+menu:
+  - { name: 首页, en: HOME, path: / }
+  - { name: 课内, en: CORE, path: /in-class/ }
+  - { name: 课外, en: EXTRA, path: /extra/ }
+  - { name: 归档, en: ARCHIVE, path: /archives/ }
+  - { name: 关于, en: ABOUT, path: /about/ }
+private_menu: []
+
+avatar:
+  square: /img/avatar/noimpty.webp
+  card: /img/avatar/noimpty-card.webp
+
+favicon: /img/favicon.svg
+
+social: []
+
+home:
+  # 首页是唯一不上锁的页面，它的源码等于对全世界公开。
+  # 开放之前保持 false：首页只有头像和自我介绍，不列系列和文章。
+  lists: false
+  intro: ''
+
+# 系列（分类叶子）→ 角色色、代号、英文名。系列页、换页切入的角色卡、文章页头都用它。
+series: {}
+
+# 板块（hub 页）→ 代号和颜色。
+hubs: {}
+
+# 从 node_modules 复制到 /pluginsSrc/<包名>/<文件> 的第三方文件。dirs 是要整个复制的目录。
+vendor:
+  - { name: pjax, file: pjax.min.js }
+  - { name: katex, file: dist/katex.min.css, dirs: [dist/fonts] }
+  - { name: '@fortawesome/fontawesome-free', file: css/all.min.css, dirs: [webfonts] }
+  - { name: '@fancyapps/ui', file: dist/fancybox/fancybox.umd.js }
+  - { name: '@fancyapps/ui', file: dist/fancybox/fancybox.css }
+
+# 正文里比这还高的代码块先折起来，点「展开」再看全部
+code_height_limit: 460
+
+inject:
+  head: []
+  bottom: []

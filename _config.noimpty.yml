@@ -1,0 +1,107 @@
+# 站点自己的主题配置，会盖在 themes/noimpty/_config.yml 上面。
+
+private_menu:
+  - { name: Life, path: /life/ }
+  - { name: 资讯, path: /news/ }
+  - { name: 日程, path: /schedule/ }
+  - { name: 练习台, path: /learn/ }
+  - { name: 复习, path: /review/ }
+  - { name: 时间线, path: /timeline/ }
+  - { name: 分类, path: /categories/ }
+  - { name: 标签, path: /tags/ }
+
+social:
+  - { name: GitHub, url: https://github.com/noimpty-zby }
+
+home:
+  lists: false
+  intro: 在读学生，现在主攻 AI Infra 后端。这里放课内的数据结构，以及课外自学的 Linux、Git 和游戏开发笔记。
+
+# 每个系列一个「角色色」：只当色块用，上面压黑字（对比度都在 5 以上），不拿来当浅底上的文字色。
+# key 是分类叶子名，和文章 front-matter 的 categories 一致。
+series:
+  DSA: { name: 数据结构与算法, en: DATA STRUCTURES, code: C, color: '#22c3e6', path: /in-class/dsa/, area: 课内, by: Abdul Bari · C / C++ · 约 53 小时, status: 连载中 }
+  CSAPP: { name: CSAPP, en: COMPUTER SYSTEMS, code: CS, color: '#ff7b6b', path: /in-class/csapp/, area: 课内, by: Carnegie Mellon University · 约 150 小时 }
+  Linux入门: { name: Linux 命令行, en: LINUX CLI, code: SH, color: '#c6f432', path: /extra/ai-infra/linux/intro/, area: 课外, by: Colt Steele · Beginner To Power User, status: 连载中 }
+  Linux深入: { name: Linux 深入, en: LINUX INTERNALS, code: OS, color: '#7fd858', path: /extra/ai-infra/linux/advanced/, area: 课外, by: 资料还没定 }
+  Git: { name: Git, en: GIT, code: GIT, color: '#ff7a2f', path: /extra/ai-infra/git/, area: 课外, by: Colt Steele · The Git & Github Bootcamp, status: 已学完 }
+  Go: { name: Go, en: GO, code: GO, color: '#2fd6c0', path: /extra/ai-infra/go/, area: 课外, by: "Stephen Grider · The Complete Developer's Guide" }
+  MySQL: { name: MySQL, en: MYSQL, code: SQL, color: '#6aa8ff', path: /extra/ai-infra/mysql/, area: 课外, by: Colt Steele · SQL Beginner to Expert }
+  Docker: { name: Docker, en: DOCKER, code: DKR, color: '#8c9bff', path: /extra/ai-infra/docker/, area: 课外, by: 资料还没定 }
+  Python: { name: Python, en: PYTHON, code: PY, color: '#ffd84d', path: /extra/ai-infra/python/, area: 课外, by: 资料还没定 }
+  Transformer 推理机制: { name: Transformer 推理机制, en: TRANSFORMER, code: TF, color: '#9ef0c8', path: /extra/ai-infra/transformer/, area: 课外, by: 资料还没定 }
+  GAMES101: { name: GAMES101 图形学, en: GAMES101, code: GFX, color: '#b18cff', path: /extra/gamedev/games101/, area: 课外, by: 闫令琪 · UC Santa Barbara, status: 告一段落 }
+  UE5-Looman: { name: UE5 C++ 游戏开发, en: UNREAL ENGINE 5, code: UE5, color: '#f0508a', path: /extra/gamedev/ue5-looman/, area: 课外, by: Tom Looman · Professional Game Development in C++ and Unreal Engine, status: 告一段落 }
+  Life: { name: Life, en: LIFE, code: LIFE, color: '#ffb0c4', path: /life/, area: Life }
+
+# 板块落地页。children 是下一级（系列的 key 或别的板块路径），顺序就是页面上的顺序。
+hubs:
+  /in-class/: { name: 课内, en: CORE, code: CORE, color: '#22c3e6', children: [DSA, CSAPP] }
+  /extra/: { name: 课外, en: EXTRA, code: EXTRA, color: '#f0508a', children: [/extra/ai-infra/, /extra/gamedev/] }
+  /extra/ai-infra/: { name: AI Infra 后端开发, en: AI INFRA, code: AI, color: '#c6f432', by: Linux · Git · Go · MySQL · Docker · Python · Transformer, children: [/extra/ai-infra/linux/, Git, Go, MySQL, Docker, Python, Transformer 推理机制] }
+  /extra/ai-infra/linux/: { name: Linux, en: LINUX, code: SH, color: '#c6f432', by: 入门 + 深入, children: [Linux入门, Linux深入] }
+  /extra/gamedev/: { name: 游戏开发, en: GAME DEV, code: GAME, color: '#b18cff', by: GAMES101 · UE5 C++, status: 告一段落, children: [GAMES101, UE5-Looman] }
+
+# 私人功能（娜娜莉、Mao、音乐、日程、练习台、复习卡……）。顺序有讲究：
+# protected-manifest 给出锁清单，privacy-gate 立刻据此打遮罩，noimpty-search 依赖 gate 存下的暗号才能解密索引。
+inject:
+  head:
+    - <script src="/js/nanaly-backup-entry.js"></script>
+    - <link rel="stylesheet" href="/css/music-player.css">
+    - <link rel="stylesheet" href="/css/noimpty-ai.css">
+    - <link rel="stylesheet" href="/css/nanaly-notes.css">
+    - <link rel="stylesheet" href="/css/schedule.css">
+    - <link rel="stylesheet" href="/css/nanaly-workspace.css">
+    - <link rel="stylesheet" href="/css/nanaly-delight.css">
+    - <link rel="stylesheet" href="/css/music-stage.css">
+    - <link rel="stylesheet" href="/css/nanaly-shell.css">
+    - <link rel="stylesheet" href="/css/nanaly-voice.css">
+    - <link rel="stylesheet" href="/css/mao-pet.css">
+    - <link rel="stylesheet" href="/css/mao-controls.css">
+    - <link rel="stylesheet" href="/css/mao-play.css">
+    - <link rel="stylesheet" href="/css/nanaly-agent.css">
+    - <link rel="stylesheet" href="/css/learning-lab.css">
+    - <link rel="stylesheet" href="/css/noimpty-cast.css">
+    - <link rel="stylesheet" href="/css/review.css">
+    - <link rel="stylesheet" href="/css/study-timeline.css">
+    - <link rel="stylesheet" href="/css/learning-history.css">
+    - <script src="/js/protected-manifest.js"></script>
+    - <script src="/js/privacy-gate.js"></script>
+    - <script src="/js/noimpty-search.js"></script>
+    # GoatCounter 访问统计的站点代号。这不是密钥，它本来就会出现在网页源码里。
+    - <script>window.NOIMPTY_GC_CODE = 'noimpty'</script>
+    - <script src="/js/analytics.js"></script>
+  bottom:
+    - <script src="/js/music-player.js"></script>
+    # 娜娜莉：API Key 不写在代码里，由使用者在面板中输入并存在本机 localStorage
+    - <script src="/js/nanaly-provider.js"></script>
+    - <script src="/js/nanaly-identity.js"></script>
+    - <script src="/js/nanaly-knowledge.js"></script>
+    - <script src="/js/learning-history.js"></script>
+    - <script src="/js/nanaly-agent.js"></script>
+    - <script src="/js/nanaly-vision.js"></script>
+    - <script src="/js/nanaly-files.js"></script>
+    - <script src="/js/nanaly-workspace.js"></script>
+    - <script src="/js/nanaly-research.js"></script>
+    - <script src="/js/nanaly-tasks.js"></script>
+    - <script src="/js/nanaly-shell.js"></script>
+    - <script src="/js/nanaly-audio.js"></script>
+    - <script src="/js/nanaly-prosody.js"></script>
+    - <script src="/js/nanaly-voice.js"></script>
+    - <script src="/js/noimpty-ai.js"></script>
+    - <script src="/js/nanaly-agent-ui.js"></script>
+    # CodeMirror loads when the studio opens; ordinary reading does not download it.
+    - <script type="text/plain" id="learning-editor-src" src="/js/learning-editor.js"></script>
+    - <script src="/js/learning-lab.js"></script>
+    - <script src="/js/learning-history-ui.js"></script>
+    # Terminal recordings ({% cast %}): loads asciinema-player only on pages that have one.
+    - <script src="/js/noimpty-cast.js"></script>
+    # Review cards (/review/): the ts-fsrs scheduler loads only there, from this tag's fingerprinted src.
+    - <script type="text/plain" id="review-fsrs-src" src="/js/review-fsrs.js"></script>
+    - <script src="/js/review.js"></script>
+    # xterm.js for the code studio terminal: learning-lab.js loads it on first use from this tag's src.
+    - <script type="text/plain" id="learning-terminal-src" src="/js/learning-terminal.js"></script>
+    - <script src="/js/schedule.js"></script>
+    - <script src="/js/mao-controls.js"></script>
+    - <script src="/js/mao-play.js"></script>
+    - <script src="/js/mao-pet.js"></script>

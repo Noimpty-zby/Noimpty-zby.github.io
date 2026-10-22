@@ -1,6 +1,6 @@
 'use strict'
 
-const { postDesc } = require('hexo-theme-butterfly/scripts/common/postDesc')
+// 文章底部「相关文章」：按共同标签打分，越少见的标签分量越重。只在同为公开或同一私密板块的文章之间推荐。
 
 const STRUCTURAL_TAGS = new Set(['study', 'ideas', 'life'])
 
@@ -53,11 +53,8 @@ const registerRelatedPostsHelper = () => {
           item = {
             title: post.title,
             path: post.path,
-            cover: post.cover,
-            cover_type: post.cover_type,
-            updated: post.updated,
+            categories: toArray(post.categories).map(c => String(c.name || c)),
             created: post.date,
-            postDesc: post.postDesc || postDesc(post, hexo),
             score: 0,
             sharedTags: []
           }
@@ -71,11 +68,8 @@ const registerRelatedPostsHelper = () => {
 
     if (relatedPosts.size === 0) return ''
 
-    const config = hexo.theme.config
-    const limitNum = config.related_post.limit || 6
-    const dateType = config.related_post.date_type || 'created'
-    const headlineLang = this._p('post.recommend')
-
+    const seriesTable = hexo.theme.config.series || {}
+    const limitNum = 4
     const relatedPostsList = Array.from(relatedPosts.values())
       .map(item => {
         item.sharedTags.sort((left, right) => right.weight - left.weight || left.name.localeCompare(right.name, 'zh-CN'))
@@ -90,39 +84,19 @@ const registerRelatedPostsHelper = () => {
         return String(left.title).localeCompare(String(right.title), 'zh-CN')
       })
 
-    let result = '<div class="relatedPosts" data-recommendation-rule="shared-tags">'
-    result += `<div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>${headlineLang}</span></div>`
-    result += '<div class="relatedPosts-list">'
-
-    for (let i = 0; i < Math.min(relatedPostsList.length, limitNum); i++) {
-      let { cover, title, path, cover_type: coverType, created, updated, postDesc: description, score, sharedTags } = relatedPostsList[i]
-      const { escape_html: escapeHtml, url_for: urlFor, date } = this
-      const sharedTagNames = sharedTags.map(tag => tag.name)
-      const tagLabel = escapeHtml(sharedTagNames.join(' · '))
-
-      cover = cover || 'var(--default-bg-color)'
-      title = escapeHtml(title)
-      const className = description ? 'pagination-related' : 'pagination-related no-desc'
-      result += `<a class="${className}" href="${urlFor(path)}" title="推荐依据：共同标签 ${tagLabel}" data-related-score="${score.toFixed(6)}" data-shared-tags="${tagLabel}">`
-
-      if (coverType === 'img') {
-        result += `<img class="cover" src="${urlFor(cover)}" alt="cover">`
-      } else {
-        result += `<div class="cover" style="background: ${cover}"></div>`
-      }
-
-      const shownDate = dateType === 'created' ? created : updated
-      result += `<div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="fas fa-tags fa-fw"></i> 共同标签：${tagLabel}</div>`
-      result += `<div class="info-item-2">${title}</div><div class="noimpty-related-date">${date(shownDate, hexo.config.date_format)}</div></div>`
-
-      if (description) {
-        result += `<div class="info-2"><div class="info-item-1">${description}</div></div>`
-      }
-
-      result += '</div></a>'
+    const { escape_html: escapeHtml, url_for: urlFor } = this
+    let result = '<section class="related" data-recommendation-rule="shared-tags"><h2 class="related__head">相关文章<span>RELATED</span></h2><ul class="related__list">'
+    for (const item of relatedPostsList.slice(0, limitNum)) {
+      const tagLabel = escapeHtml(item.sharedTags.map(tag => tag.name).join(' · '))
+      const key = item.categories.find(name => seriesTable[name])
+      const series = key ? seriesTable[key] : null
+      const tx = series ? ` style="--sc:${escapeHtml(series.color)}" data-sc="${escapeHtml(series.color)}" data-code="${escapeHtml(series.code)}"` : ''
+      result += `<li><a href="${urlFor(item.path)}" title="推荐依据：共同标签 ${tagLabel}" data-related-score="${item.score.toFixed(6)}" data-shared-tags="${tagLabel}" data-title="${escapeHtml(item.title)}"${tx}>` +
+        `<span class="related__series">${series ? escapeHtml(series.name) : ''}</span>` +
+        `<span class="related__title">${escapeHtml(item.title)}</span>` +
+        `<span class="related__tags">共同标签：${tagLabel}</span></a></li>`
     }
-
-    result += '</div></div>'
+    result += '</ul></section>'
     return result
   })
 }

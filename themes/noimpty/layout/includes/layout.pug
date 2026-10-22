@@ -1,0 +1,17 @@
+- var kind = nm_kind(page, is_home())
+- var place = kind === 'place' ? nm_place_of(page) : null
+- var postSeries = kind === 'post' ? nm_series_of(page) : null
+- var sc = (postSeries && postSeries.color) || (place && place.color) || '#22c3e6'
+doctype html
+html(lang=config.language data-theme="light" data-code-limit=theme.code_height_limit)
+  head
+    include ./head.pug
+  body
+    //- 换页时只替换 #body-wrap；音乐、Mao、娜娜莉这些挂在 body 末尾的东西不会被打断
+    #body-wrap(class=`kind-${kind}` style=`--sc:${sc}` data-kind=kind)
+      include ./header.pug
+      main#content-inner.layout
+        block content
+      include ./footer.pug
+    include ./overlay.pug
+    include ./scripts.pug

@@ -36,11 +36,13 @@ const hashOf = rel => {
   if (rel === 'js/protected-manifest.js') return hexo.__noimptyPrivacyVersion || ''
   if (cache.has(rel)) return cache.get(rel)
   let h = ''
-  try {
-    h = crypto.createHash('sha1')
-      .update(fs.readFileSync(path.join(hexo.source_dir, rel)))
-      .digest('hex').slice(0, 8)
-  } catch (_) { /* source 里没有这个文件 —— 主题的或生成的，不管 */ }
+  // 先找站点 source/，再找主题的 source/（主题自己的 noimpty.css、noimpty-theme.js 在那里）
+  for (const dir of [hexo.source_dir, hexo.theme_dir && path.join(hexo.theme_dir, 'source')].filter(Boolean)) {
+    try {
+      h = crypto.createHash('sha1').update(fs.readFileSync(path.join(dir, rel))).digest('hex').slice(0, 8)
+      break
+    } catch (_) { /* 这里没有这个文件，换下一个目录 */ }
+  }
   cache.set(rel, h)
   return h
 }

@@ -51,7 +51,7 @@ block content
         if type === 'about'
           .page-head__avatar
             img(src=url_for(theme.avatar.card) alt="Noimpty 的头像" width="200" height="250" decoding="async")
-        p.page-head__en= type === 'about' ? 'ABOUT' : 'PAGE'
+        p.page-head__en= type === 'about' ? 'ABOUT' : type === 'news' ? 'NEWS' : 'PAGE'
         h1.page-title= page.title
         if page.description
           p.post-lead= nm_lead(page.description)

@@ -13,10 +13,6 @@ description: 娜娜莉三天一更的行业资讯速览。
     <p class="noimpty-hero__lead">AI Infra 与后端求职 · 每三天一期</p>
     <p class="noimpty-hero__sub"><span>共 <!-- NEWS_COUNT --> 期</span><span>娜娜莉整理</span></p>
   </div>
-  <figure class="noimpty-scene" data-lines="最上面那期是最新的，带着「最新」小标签哦|信封里装的是下一期，过几天就到！">
-    <figcaption class="noimpty-scene__bubble">每三天捞一期新消息：岗位动态、面试干货、踩坑经验，都整理好啦～ <span class="noimpty-kaomoji">(ﾟ∀ﾟ)ﾉ</span></figcaption>
-    {% kawaii news %}
-  </figure>
 </header>
 
 <!-- NEWS_LIST -->

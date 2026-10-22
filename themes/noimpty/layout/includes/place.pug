@@ -65,7 +65,7 @@
   else
     section.block
       .block__head
-        h2 章节
+        h2= place && place.key === 'Life' ? '文章' : '章节'
         span.block__en= posts.length ? posts.length + ' FILES' : 'EMPTY'
       if posts.length
         ol.rows.rows--chapters

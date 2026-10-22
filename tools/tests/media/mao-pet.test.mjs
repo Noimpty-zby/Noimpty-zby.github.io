@@ -1207,13 +1207,13 @@ console.log('\n左下角那一摞按钮')
 /* 三个按钮分别住在三个 css 文件里，以前各写各的坐标 —— 音乐那个有窄屏规则
  * （挪到 left:12px / 48px），猫爪那个自己写了 left:14px / 48px，Mao 那个一条
  * 窄屏规则都没有，于是手机上三个按钮左边缘差 2px、大小差一圈、纵向间距也对不上。
- * 现在统一从 custom.css 那几个变量算，这一节守着「谁都别再自己写坐标」。 */
+ * 现在统一从 widgets.css（原 custom.css）那几个变量算，这一节守着「谁都别再自己写坐标」。 */
 
-await test('★★ custom.css 里得有那几个共用变量，三个按钮全靠它们对齐', () => {
-  const css = cssOf('custom.css')
+await test('★★ widgets.css 里得有那几个共用变量，三个按钮全靠它们对齐', () => {
+  const css = cssOf('widgets.css')
   for (const v of ['--corner-size', '--corner-gap', '--corner-left', '--corner-bottom',
                    '--corner-slot-0', '--corner-slot-1', '--corner-slot-2'])
-    assert.ok(css.includes(v + ':'), `custom.css 里没定义 ${v}`)
+    assert.ok(css.includes(v + ':'), `widgets.css 里没定义 ${v}`)
   assert.ok(/--corner-bottom:\s*max\([^)]*env\(safe-area-inset-bottom\)/.test(css),
     '最底下那一格没兜住刘海屏的安全区')
 })
@@ -1245,9 +1245,9 @@ await test('★★ 三个按钮谁都不许自己写 left / bottom，只能读�
 
 await test('★ 窄屏只缩变量，不许单独缩其中一个按钮', () => {
   /* 只把猫爪缩成 48px、另外两个留 54px，就是他看到的那种参差。 */
-  const css = cssOf('custom.css')
+  const css = cssOf('widgets.css')
   const narrow = css.match(/@media\s*\(max-width:\s*520px\)\s*\{([\s\S]*?)\n\}/)
-  assert.ok(narrow, 'custom.css 里没有窄屏那段')
+  assert.ok(narrow, 'widgets.css 里没有窄屏那段')
   assert.ok(narrow[1].includes('--corner-size'), '窄屏没有统一改 --corner-size')
   for (const [file, id] of [['noimpty-ai.css', '#nanaly-launcher'], ['mao-pet.css', '#mao-toggle']])
     for (const body of blocksFor(cssOf(file), id))
@@ -1262,9 +1262,9 @@ await test('★★ 音乐面板一展开，整摞按钮要一起让位 —— �
   /* 实测：手机上音乐面板展开后从 bottom:12 长到 236，而帽子钉在 bottom:136，
    * 正好落在面板身上；帽子 z-index 9003 比播放器 9000 高，于是压着面板内容画。
    * 抬的时候三个要一起抬，间距才不乱。 */
-  const css = cssOf('sakura-components.css')
+  const css = cssOf('widgets.css')
   const lift = css.match(/body:has\(#noimpty-music-player:not\(\.is-collapsed\)\)\s*:is\(([^)]*)\)\s*\{([^}]*)\}/)
-  assert.ok(lift, 'sakura-components.css 里找不到「为展开的播放器让位」那条')
+  assert.ok(lift, 'widgets.css 里找不到「为展开的播放器让位」那条')
   for (const id of ['#nanaly-launcher', '#mao-toggle'])
     assert.ok(lift[1].includes(id), `让位那条里没带上 ${id}`)
   assert.ok(/translate:\s*0\s+-\d+px/.test(lift[2]), '让位没用 translate：' + lift[2].trim())

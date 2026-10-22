@@ -30,7 +30,8 @@
 | 功能 | 入口与协作模块 |
 |---|---|
 | 文章渲染、数学公式、任务清单 | scripts/noimpty-markdown.js、tools/markdown-renderer.cjs |
-| 栏目与学习进度 | scripts/noimpty-sections.js、noimpty-study.js、source/js/section-hub.js |
+| 主题（页面布局、换页转场、目录、搜索框） | themes/noimpty：layout/*.pug、source/css/noimpty.css、source/js/noimpty-theme.js、scripts/helpers.js；站点配置在 _config.noimpty.yml |
+| 栏目与学习进度 | scripts/noimpty-sections.js、noimpty-study.js；栏目页由主题的 layout/includes/place.pug 按 front-matter 渲染 |
 | 系列上下篇、相关文章、旧链接 | scripts/noimpty-pagination.js、noimpty-related-posts.js、noimpty-redirects.js |
 | 暗号门与加密搜索 | scripts/noimpty-lockdown.js、source/js/privacy-gate.js、noimpty-search.js |
 | 日程与三方合并 | source/js/schedule.js、server/lib/private-content.mjs、tools/daily-report/schedule-auto.mjs |
@@ -42,7 +43,7 @@
 | OJ 与边读边练 | source/learn、source/js/learning-lab.js、source/css/learning-lab.css、server |
 | 娜娜莉工作室、共享记忆与目标 | source/js/nanaly-agent.js、nanaly-agent-ui.js、nanaly-identity.js、tools/nanaly/agent-client.mjs；使用说明见 [工作室](features/nanaly-agent.md) |
 | Mao 看板娘 | source/js/mao-pet.js、mao-controls.js、mao-play.js、source/css/mao-*.css、source/live2d/mao；Mao 是显示与互动组件，娜娜莉负责对话 |
-| 音乐与页面动态 | source/js/music-player.js、sakura-motion.js、site-clock.js、toc-sync.js |
+| 音乐与私人组件的共用样式 | source/js/music-player.js、source/css/widgets.css（左下角那一摞按钮的坐标、组件圆角动效） |
 | 访问统计 | source/js/analytics.js；区分访客浏览与主人心跳 |
 | 后台自动生成内容 | tools/nanaly；在构建前产生 Markdown 或 _data 数据 |
 | 部署质量门禁 | npm run check、.github/workflows/pages.yml |

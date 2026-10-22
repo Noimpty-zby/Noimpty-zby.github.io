@@ -66,7 +66,7 @@ hexo.extend.filter.register('template_locals', locals => {
   if (i === -1) return locals
 
   // 与 Hexo 语义保持一致：next = 时间上更新的一篇，prev = 更旧的一篇。
-  // 配合 _config.butterfly.yml 里的 post_pagination: 2，
+  // 主题文章页底部的「上一篇 / 下一篇」读的就是这两个值，
   // 页面上「下一篇」就会指向系列的下一章，而不是更旧的文章。
   page.prev = i > 0 ? list[i - 1] : null
   page.next = i < list.length - 1 ? list[i + 1] : null

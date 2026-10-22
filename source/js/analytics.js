@@ -15,7 +15,7 @@
  *
  * 认定为主人后，这次访问只发一条 owner-heartbeat 事件，不发正常的页面浏览。
  *
- * 站点代号在 _config.butterfly.yml 的 inject.head 里配置，留空则整个脚本不工作。
+ * 站点代号在 _config.noimpty.yml 的 inject.head 里配置，留空则整个脚本不工作。
  */
 (() => {
   'use strict'

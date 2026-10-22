@@ -16,6 +16,8 @@ social:
 home:
   lists: false
   intro: 在读学生，现在主攻 AI Infra 后端。这里放课内的数据结构，以及课外自学的 Linux、Git 和游戏开发笔记。
+  # 开放之前（lists: false）首页用这一句：首页是公开的，不能写出站里有哪些课
+  intro_locked: 把问题写清楚，也把学习的过程慢慢记下来。
 
 # 每个系列一个「角色色」：只当色块用，上面压黑字（对比度都在 5 以上），不拿来当浅底上的文字色。
 # key 是分类叶子名，和文章 front-matter 的 categories 一致。
@@ -47,6 +49,7 @@ hubs:
 inject:
   head:
     - <script src="/js/nanaly-backup-entry.js"></script>
+    - <link rel="stylesheet" href="/css/widgets.css">
     - <link rel="stylesheet" href="/css/music-player.css">
     - <link rel="stylesheet" href="/css/noimpty-ai.css">
     - <link rel="stylesheet" href="/css/nanaly-notes.css">

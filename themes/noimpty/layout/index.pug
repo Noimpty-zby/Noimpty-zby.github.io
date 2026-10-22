@@ -16,7 +16,8 @@ block content
           span.hero__tag PROXY
           | NOW PLAYING
         h1.hero__name Noimpty
-        p.hero__bio= theme.home.intro
+        //- 开放之前首页上不能透露站里写了什么（tools/checks/leakcheck.mjs 会查），用另一句
+        p.hero__bio= lists ? theme.home.intro : (theme.home.intro_locked || theme.home.intro)
         .hero__links
           each item in theme.social || []
             a(href=item.url rel="noopener" target="_blank")= item.name

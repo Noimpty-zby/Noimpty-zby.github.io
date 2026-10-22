@@ -57,7 +57,7 @@ check('标题里的 HTML 特殊字符被转义', () => {
 check('没有学习文章时给出一句提示，页面和菜单都接好了', () => {
   assert.match(render([{ title: 'x', date: '2026-01-01', series: '', url: '/' }]), /还没有学习笔记/)
   assert.match(readFileSync('source/timeline/index.md', 'utf8'), /\{% study_timeline %\}/)
-  assert.match(readFileSync('_config.butterfly.yml', 'utf8'), /时间线: \/timeline\/ \|\| fas fa-timeline/)
+  assert.match(readFileSync('_config.noimpty.yml', 'utf8'), /\{ name: 时间线, path: \/timeline\/ \}/)
 })
 
 console.log(`\n${pass} study timeline checks passed`)

@@ -13,7 +13,7 @@
 /schedule/      日程
 ```
 
-文章主要位于 `source/_posts/`，资讯位于 `source/news/`，栏目页位于对应的 `source/` 子目录。首页只有三个公开分区入口，不展示文章标题或具体学习内容；详细介绍放在锁后的栏目页。
+文章主要位于 `source/_posts/`，资讯位于 `source/news/`，栏目页位于对应的 `source/` 子目录。开放之前首页只有头像、一句中性的介绍和课内、课外两个入口，不展示文章标题或具体学习内容（主题配置 `home.lists: false`，`leakcheck` 会查）；开放时把它改成 `true`，首页才列出系列和最近更新。
 
 ## 新文章的 front-matter
 
@@ -67,54 +67,42 @@ private_section: 课外
 - 多个不带标签的叶子名求和。
 - `section_progress` 还显示最近一篇的日期。
 
-多项用 `|` 分隔，不用空格，因为 `Transformer 推理机制` 等叶子名本身包含空格。章节与阶段仍由作者维护，例如：
-
-```html
-<span>递归 · {% section_progress DSA %}</span>
-```
+多项用 `|` 分隔，不用空格，因为 `Transformer 推理机制` 等叶子名本身包含空格。这几个标签留给正文里需要的地方；栏目页的篇数由主题直接数，章节与阶段写在系列页 front-matter 的 `progress:` 里（见下面「栏目页与页面样式」）。
 
 「已写几篇」不能代替「学完几章」。后台读取 profile 时会追加实际文章清单，不需要再维护一份篇数。[section-stats.test.mjs](../tools/tests/site/section-stats.test.mjs) 检查这些约束。
 
-## 内页角色与页面样式
+## 栏目页与页面样式
 
-课程卡片和页头的小角色是 [tools/kawaii-art.cjs](../tools/kawaii-art.cjs) 中的手写 SVG，由 [noimpty-kawaii.js](../scripts/noimpty-kawaii.js) 注册的标签生成：
+栏目页由主题按 front-matter 渲染，页面文件里不写页头 HTML。板块和系列的名字、英文名、代号、角色色、出处写在 [_config.noimpty.yml](../_config.noimpty.yml) 的 `hubs` / `series` 里；系列页的 front-matter 只写这门课自己的信息：
 
-```text
-{% kawaii core %}          页头场景，可选 core、extra、life、news 等
-{% kawaii penguin stage %} 单个角色与小彩虹
-{% kawaii penguin %}       课程卡片图标
+```yaml
+type: noimpty-track
+track: DSA                       # 分类叶子名，主题和学习总览都靠它数篇数
+lead: Mastering Data Structures & Algorithms using C and C++
+course:
+  - [讲师, Abdul Bari]
+  - [时长, 约 53 小时视频]
+progress: 字符串                  # 学到哪了；篇数和最近一篇由主题现数，不要写进来
+about_title: 关于这门课
 ```
 
-页头场景包在 `<figure class="noimpty-scene" data-lines="第二句|第三句">` 中，第一句写在 `<figcaption class="noimpty-scene__bubble">` 中。点击角色，或 `Tab` 聚焦后按 `Enter` / 空格，可以切换台词；保留键盘焦点与状态播报。手机课程页的气泡显示在角色下方，避免被页头裁切。
-
-新增课程可参考同级页面，从 `kawaii-art.cjs` 的 `SINGLE` 选择角色；新增角色沿用低位小脸、粉彩填色和深梅色描边。构建还会生成 `/img/kawaii/<名字>.svg`，供归档、分类和标签页头使用。
-
-主要样式与交互入口：
+正文就是页面底部「关于这门课」那一段。板块页（`type: noimpty-hub`）只写 `lead` 和 `about_title`，下一级有哪些课由 `hubs.<路径>.children` 决定。新增一门课要改三处：`category_map`、`_config.noimpty.yml` 的 `series`（以及上一级板块的 `children`）、新建系列页。
 
 | 位置 | 用途 |
 | --- | --- |
-| `source/css/custom.css` | 全局颜色与基础适配 |
-| `source/css/sakura.css`、`sakura-components.css` | 首页与卡片布局 |
-| `source/js/sakura-motion.js` | 页面入场、卡片与首屏环境动效 |
-| `source/js/interior-deco.js` | 内页角色台词、视线与装饰 |
-| `source/js/toc-sync.js` | 文章目录同步 |
+| `themes/noimpty/source/css/noimpty.css` | 主题的全部样式：暖纸 + 墨色配色、正文排版、代码高亮、角色卡、转场 |
+| `themes/noimpty/source/js/noimpty-theme.js` | 无刷新换页与转场、目录高亮、阅读进度、首页选曲、搜索框 |
+| `themes/noimpty/source/css/noimpty-compat.css` | 主题和私人功能接头的地方（练习台分栏、娜娜莉批注只给主人看） |
+| `source/css/widgets.css` | 私人组件共用的变量和左下角按钮坐标 |
 | `source/css/nanaly-delight.css`、`music-stage.css` | 聊天表情与音乐频谱样式 |
 
-装饰不应拦截页面操作或进入无障碍朗读。保留减少动态、后台和省流量模式下的降级，以及首屏离开视口后的环境动画暂停；详细聊天和 Mao 行为由各自的功能文档维护。
+各系列的角色色只当色块用，上面压黑字（对比度都在 5 以上），不拿来当浅底上的文字色。转场遵守减少动态效果的设置；转场盖满之前不换内容，新页面不会从没盖住的地方露出来。
 
 ## 素材维护与署名
 
-### 首页分区图片
+### 头像
 
-三张分区背景图片来自 Pixiv，维护或再分发时保留作者信息，并确认相应用途已获授权：
-
-| 分区 | 作者 |
-| --- | --- |
-| 自学课内 | KirinMusic |
-| 自学课外 | Matchacora |
-| Life | 安哈娜 |
-
-文件位于 `source/img/sections/`，卡片引用由 `source/js/section-hub.js` 维护。署名不是授权证明，替换素材时一起核对来源与许可。
+`source/img/avatar/noimpty.webp`（方形，首页圆形头像）和 `noimpty-card.webp`（竖版，换页时的角色卡、关于页）是从主人给的立绘里裁出的头部和上半身。
 
 ### 背景音乐
 

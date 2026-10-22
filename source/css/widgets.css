@@ -1,14 +1,55 @@
+/* 私人组件（娜娜莉、音乐、Mao、日程）的共用层。
+ * 2026-10 换主题时从旧的 custom.css 和 sakura-components.css 里拆出来：
+ * 只留组件自己的变量、左下角那一摞按钮的坐标和组件的圆角动效，
+ * 页面布局、搜索框、暗号门这些已经交给新主题。 */
+:root {
+  --noimpty-accent: #e95978;
+  --noimpty-accent-soft: #ff91a8;
+  --noimpty-border: rgba(119, 76, 92, .14);
+  --noimpty-shadow: 0 18px 50px rgba(75, 43, 56, .1);
+  --sakura-accent: var(--noimpty-accent);
+  --text-highlight-color: #2f2830;
+  --btn-bg: #f6e7eb;
+  --btn-color: #7f3f52;
+  --card-meta: #93858e;
+  --font-color: #4f4650;
+  --global-bg: #f8f4f6;
+  --card-bg: rgba(255, 252, 253, .9);
+  --code-font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+
+  /* ── 左下角那一摞按钮 ──
+   * 从下往上：音乐（第 0 格）、娜娜莉的猫爪（第 1 格）、Mao 的帽子（第 2 格）。
+   * 三个按钮分别定义在 music-player.css / noimpty-ai.css / mao-pet.css 里，
+   * 以前各写各的坐标 —— 结果音乐那个有窄屏规则（挪到 left:12px），另外两个没有，
+   * 手机上就排不成一条竖线了。现在三家都从这几个变量算位置，想错位都难。
+   * 加一格：bottom 用 --corner-slot-N，N 是从下往上数的格号。 */
+  --corner-size: 54px;
+  --corner-gap: 14px;
+  --corner-left: 20px;
+  /* 刘海屏的小横条会压住最底下那一格，safe-area 兜住它 */
+  --corner-bottom: max(20px, env(safe-area-inset-bottom));
+  --corner-slot-0: var(--corner-bottom);
+  --corner-slot-1: calc(var(--corner-bottom) + (var(--corner-size) + var(--corner-gap)));
+  --corner-slot-2: calc(var(--corner-bottom) + (var(--corner-size) + var(--corner-gap)) * 2);
+}
+
+/* 窄屏整摞往边上靠一点，给正文让位。只改这里，三个按钮一起跟着动 */
+@media (max-width: 520px) {
+  :root {
+    /* 三个一起缩。只缩一个的话就会出现「48px 的挨着 54px 的」那种参差 */
+    --corner-size: 48px;
+    --corner-left: 12px;
+    --corner-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}
+
+
 /* 只增强圆角、布局和动效；颜色由原有组件样式管理。 */
-:where(#nanaly-panel, #nanaly-launcher, #nanaly-poke, #nanaly-selbtn,
-  #noimpty-music-player, .noimpty-gate, #noimpty-schedule,
-  .search-dialog, #card-toc, #sidebar-menus, .nanaly-note) {
+:where(#nanaly-panel, #nanaly-launcher, #nanaly-poke, #nanaly-selbtn, #noimpty-music-player, #noimpty-schedule, .nanaly-note) {
   --sc-ease: cubic-bezier(.22, .75, .24, 1);
 }
 #nanaly-panel,
-#noimpty-music-player .noimpty-music-panel,
-.noimpty-gate__panel,
-#local-search .search-dialog,
-#aside-content #card-toc {
+#noimpty-music-player .noimpty-music-panel {
   border-width: 1px;
   border-style: solid;
   border-radius: 26px;
@@ -91,7 +132,9 @@
    （实测手机上从 bottom:12 一直长到 236），帽子还钉在 bottom:136 —— 正好落在
    面板身上，而它 z-index 9003 比播放器的 9000 高，于是压着面板内容画。
    三个按钮是一摞，让位要整摞让。 */
-#nanaly-launcher, #nanaly-poke, #mao-toggle { translate: 0 0; }
+#nanaly-launcher,
+#nanaly-poke,
+#mao-toggle { translate: 0 0; }
 body:has(#noimpty-music-player:not(.is-collapsed)) :is(#nanaly-launcher, #nanaly-poke, #mao-toggle) {
   translate: 0 -180px;
 }
@@ -125,58 +168,16 @@ body:has(#noimpty-music-player:not(.is-collapsed)) #nanaly-panel .nanaly-body { 
 .noimpty-music-controls button { border-radius: 50%; }
 
 /* 暗号输入保留醒目的前景，错误与成功不会只靠装饰传达。 */
-.noimpty-gate__panel { transition: transform .26s var(--sc-ease); }
-.noimpty-gate.is-leaving .noimpty-gate__panel { transform: translate3d(0, 8px, 0) scale(.98); }
-.noimpty-gate__input {
-  border-radius: 16px;
-  transition: none;
-}
-.noimpty-gate__input::placeholder { opacity: 1; }
-.noimpty-gate__button { border-radius: 16px; }
+
 
 /* 只替换搜索的动画外观，仍由主题显示面板并接收 animationend。 */
-#local-search .search-dialog[style*='titleScale'] {
-  animation-name: sakura-search-in !important;
-  animation-duration: .28s !important;
-  animation-timing-function: var(--sc-ease) !important;
-}
-#local-search .search-dialog[style*='search_close'] {
-  animation-name: sakura-search-out !important;
-  animation-duration: .2s !important;
-  animation-timing-function: ease-in !important;
-}
-#local-search .search-dialog .search-close-button { transition: transform .2s var(--sc-ease), opacity .18s ease; }
-#local-search .search-dialog .local-search-input input {
-  border-width: 1px;
-  border-style: solid;
-  border-radius: 18px;
-}
-#local-search .search-dialog .local-search-input input::placeholder { opacity: 1; }
-#local-search .search-dialog .local-search-hit-item { border-radius: 12px; transition: transform .2s var(--sc-ease), opacity .18s ease; }
-#local-search .search-dialog .ais-Pagination-link { border-radius: 10px; transition: transform .2s var(--sc-ease), opacity .18s ease; }
+
 
 /* 手机目录沿用 .open 状态，细小的淡入代替突然缩放。 */
-#aside-content #card-toc .toc-content .toc-link { border-radius: 10px; transition: transform .2s var(--sc-ease), opacity .18s ease; }
+
 
 /* 手机抽屉沿用原来的 .open 与 transform，只换纸面和按钮反馈。 */
-#sidebar #sidebar-menus {
-  border-left-width: 1px;
-  border-left-style: solid;
-  transition: transform .32s var(--sc-ease), opacity .2s ease;
-}
-#sidebar #sidebar-menus .menus_items {
-  border-width: 1px;
-  border-style: solid;
-  border-radius: 22px;
-}
-#sidebar #sidebar-menus .menus_items .site-page {
-  border-radius: 12px;
-  transition: transform .2s var(--sc-ease), opacity .18s ease;
-}
-#sidebar #sidebar-menus :is(a, button, .site-page):focus-visible {
-  outline: 2px solid var(--noimpty-accent);
-  outline-offset: 3px;
-}
+
 #noimpty-schedule :is(.sch-review, .sch-cal, .sch-course, .sch-next, .sch-panel, .sch-seed, .sch-condform) {
   border-radius: 18px;
 }
@@ -202,36 +203,30 @@ body:has(#noimpty-music-player:not(.is-collapsed)) #nanaly-panel .nanaly-body { 
 .nanaly-msg pre,
 .nanaly-send,
 .noimpty-music-disc,
-#sidebar #sidebar-menus .menus_items,
 #noimpty-schedule .sch-add button,
 #noimpty-schedule .sch-savebar,
 #noimpty-schedule .sch-savebar button { border-color: transparent; }
-#sidebar #sidebar-menus { border-left-color: transparent; }
 
 /* 反馈只动画 transform / opacity；不反复重排输入区或消息内容。 */
 #nanaly-panel button,
 #noimpty-music-player :is(button, .noimpty-music-launcher),
-.noimpty-gate__button,
 #noimpty-schedule :is(button, .sch-course) {
   transition: transform .2s var(--sc-ease), opacity .18s ease;
 }
 #nanaly-panel button:disabled,
 #noimpty-music-player button:disabled,
-#noimpty-schedule button:disabled,
-.noimpty-gate__button:disabled { transform: none; }
+#noimpty-schedule button:disabled { transform: none; }
 
 @media (hover: hover) and (pointer: fine) {
   #nanaly-launcher:hover { transform: translate3d(0, -3px, 0) rotate(-4deg); }
   #noimpty-music-player.is-collapsed .noimpty-music-launcher:hover { transform: translate3d(0, -2px, 0) rotate(4deg); }
-  #nanaly-panel :is(.nanaly-quick button, .nanaly-choices button, .nanaly-setup__actions button):not(:disabled):hover,
-  .noimpty-gate__button:not(:disabled):hover { transform: translate3d(0, -2px, 0); }
+  #nanaly-panel :is(.nanaly-quick button, .nanaly-choices button, .nanaly-setup__actions button):not(:disabled):hover { transform: translate3d(0, -2px, 0); }
   .nanaly-head__btn:not(:disabled):hover { transform: translate3d(0, -1px, 0); }
 }
 #nanaly-launcher:active,
 #noimpty-music-player.is-collapsed .noimpty-music-launcher:active,
 #nanaly-panel button:not(:disabled):active,
 #noimpty-music-player .noimpty-music-controls button:not(:disabled):active,
-.noimpty-gate__button:not(:disabled):active,
 #noimpty-schedule button:not(:disabled):active { transform: scale(.95); }
 
 #nanaly-panel :is(button, summary, input, textarea):focus-visible,
@@ -239,10 +234,7 @@ body:has(#noimpty-music-player:not(.is-collapsed)) #nanaly-panel .nanaly-body { 
 #nanaly-poke:focus-visible,
 #nanaly-selbtn:focus-visible,
 #noimpty-music-player :is(button, input):focus-visible,
-.noimpty-gate :is(button, input, a):focus-visible,
-#noimpty-schedule :is(button, input, select, summary, a):focus-visible,
-#local-search .search-dialog :is(button, input, a):focus-visible,
-#aside-content #card-toc a:focus-visible {
+#noimpty-schedule :is(button, input, select, summary, a):focus-visible {
   outline: 2px solid var(--noimpty-accent);
   outline-offset: 3px;
 }
@@ -255,14 +247,6 @@ body:has(#noimpty-music-player:not(.is-collapsed)) #nanaly-panel .nanaly-body { 
 @keyframes sakura-search-out {
   from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
   to { opacity: 0; transform: translate3d(0, 6px, 0) scale(.985); }
-}
-
-@media (max-width: 900px) {
-  #aside-content #card-toc { opacity: 0; transform: translate3d(0, 8px, 0) scale(0); transition: transform .24s var(--sc-ease), opacity .18s ease; }
-  #aside-content #card-toc.open { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
-}
-@media (max-width: 768px) {
-  #local-search .search-dialog { border-radius: 0; }
 }
 @media (max-width: 560px) {
   #nanaly-panel { border-radius: 22px; }
@@ -291,24 +275,20 @@ body:has(#noimpty-music-player:not(.is-collapsed)) #nanaly-panel .nanaly-body { 
   #noimpty-music-player .noimpty-music-panel { width: calc(100vw - 24px); border-radius: 22px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  #nanaly-launcher, #nanaly-panel, #nanaly-panel *, #nanaly-poke, #nanaly-selbtn,
-  #noimpty-music-player *, #noimpty-music-player *::after,
-  .noimpty-gate, .noimpty-gate *, #noimpty-schedule *, #aside-content #card-toc,
-  #aside-content #card-toc *, #local-search .search-dialog *,
-  #sidebar #sidebar-menus, #sidebar #sidebar-menus * {
+  #nanaly-launcher,
+#nanaly-panel,
+#nanaly-panel *,
+#nanaly-poke,
+#nanaly-selbtn,
+#noimpty-music-player *,
+#noimpty-music-player *::after,
+#noimpty-schedule * {
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
   }
-  #nanaly-launcher, #nanaly-panel button, #noimpty-music-player button,
-  .noimpty-gate__button, #noimpty-schedule button { transform: none !important; }
-  /* Butterfly 用 animationend 清理搜索遮罩，保留一次极短动画。 */
-  #local-search .search-dialog,
-  #local-search .search-dialog[style*='titleScale'],
-  #local-search .search-dialog[style*='search_close'], #search-mask, #sidebar #menu-mask {
-    animation-duration: .001ms !important;
-    animation-iteration-count: 1 !important;
-    animation-delay: 0s !important;
-    transition: none !important;
-  }
+  #nanaly-launcher,
+#nanaly-panel button,
+#noimpty-music-player button,
+#noimpty-schedule button { transform: none !important; }
 }

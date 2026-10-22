@@ -2,7 +2,7 @@
  *
  * 2026-09-17 踩到：日程页改坏了又修好、部署也成功了，主人刷新看到的还是坏的 ——
  * 浏览器手上那份 /js/schedule.js 是缓存里的旧文件。主题自己的资源本来就带
- * ?v=5.7.0，而 _config.butterfly.yml 里我们手写的那十六行一个都没有。
+ * ?v=5.7.0，而当时 _config.butterfly.yml 里我们手写的那十六行一个都没有。
  *
  * GitHub Pages 给的是 max-age=600，而 PJAX 换页压根不会重新取脚本 ——
  * 一个开着的标签页可以抱着旧代码很久。这种事没法靠盯着解决，只能让 URL 变。
@@ -22,7 +22,8 @@ const check = async (name, fn) => {
   catch (e) { console.log('  ✗ ' + name + '\n      ' + (e.message || e)); process.exitCode = 1 }
 }
 
-const CFG = readFileSync('_config.butterfly.yml', 'utf8')
+// 注入的私人功能写在 _config.noimpty.yml（2026-10 以前在 _config.butterfly.yml）
+const CFG = readFileSync('_config.noimpty.yml', 'utf8')
 const SRC = readFileSync('scripts/noimpty-asset-version.js', 'utf8')
 // The migration page deliberately excludes normal writers and loads its own assets.
 const ASSET_PAGES = CFG + '\n' + readFileSync('source/backup/index.html', 'utf8')

@@ -545,6 +545,40 @@ linux:
     back: 能修改已有文件的内容，但不能新建、删除和改名。只有 w 没有 x 也不能新建，因为 w 要和 x 一起才起作用。
   - front: 为什么在 Ubuntu 22.04 上，其他普通用户进不了 /home/zby？
     back: 家目录是 `drwxr-x---`，其他人一组是 `---`。Ubuntu 21.04 起新用户的家目录默认就是这样；在这之前是 `rwxr-xr-x`，别的用户可以进去读文件，但不能修改。
+- post: Linux-Command-Line-Chapter14
+  cards:
+  - front: '`chmod` 符号写法的三部分分别是什么？'
+    back: 依次是改哪几组、怎么改和改哪几个权限。u 属主、g 属组、o 其他人、a 所有人；`+` 加上、`-` 去掉、`=` 设为；最后是 r、w、x 中的一个或者几个。
+  - front: '`chmod go+x hello.sh` 和 `chmod g-x,o-rx hello.sh` 分别做了什么？'
+    back: 前者给属组和其他人都加上 x。后者用逗号连起两段写法，去掉属组的 x，同时去掉其他人的 r 和 x。逗号前后不能有空格，否则 Shell 把它拆成两个参数，chmod 报 invalid mode。
+  - front: '`+`、`-` 和 `=` 有什么区别？从 `rw-rw----` 出发，`chmod g=x` 的结果是什么？'
+    back: '`+` 和 `-` 只改动写出来的位；`=` 把指定的组设为恰好这几个权限，这一组里没写的位被去掉，没指定的组不变。所以结果是 `rw---x---`。`chmod o=` 则把其他人的三个权限全部去掉。'
+  - front: 数字写法里 r、w、x 分别记作几？`rwxr-xr-x` 写成数字是多少？
+    back: r 是 4，w 是 2，x 是 1，每组把有的权限相加。三个权限正好是三个二进制位，所以每组是一个 0 到 7 的八进制数字。rwx 是 7，r-x 是 5，合起来是 755。
+  - front: 什么时候用符号写法，什么时候用数字写法？
+    back: 只想在原来的基础上改一位（比如给属组加 w）时用符号写法，它不需要知道其余八位是什么。想设成一个确定的值时用数字写法，它每次重新设定全部九位，`chmod 755` 和 `chmod u=rwx,go=rx` 效果相同。
+  - front: 644、755、600 分别是什么权限？常用在哪里？
+    back: 644 是 `rw-r--r--`，用于普通文件；755 是 `rwxr-xr-x`，用于脚本和目录；600 是 `rw-------`，只给属主，比如 SSH 私钥。私钥改成 644 以后，SSH 报 UNPROTECTED PRIVATE KEY FILE，拒绝使用它。
+  - front: zby 能修改 /etc/shadow 的权限吗？Ubuntu 上为什么不能用密码登录 root？
+    back: 不能，`chmod o+r /etc/shadow` 报 Operation not permitted，只有属主和 root 能修改文件的权限。Ubuntu 安装时不给 root 设密码，root 的密码是锁定的（`sudo passwd -S root` 第二列是 L），需要 root 权限时用 sudo。
+  - front: '`sudo` 问的是谁的密码？`su alice` 呢？'
+    back: sudo 问的是当前用户自己的密码，输入时屏幕上什么都不显示，同一个终端里 15 分钟之内不再询问。`su alice` 问的是目标用户 alice 的密码。
+  - front: '`%sudo ALL=(ALL:ALL) ALL` 是什么意思？怎样查看自己能用 sudo 做什么？'
+    back: 这是 /etc/sudoers 里 Ubuntu 默认的规则，表示 sudo 组的所有成员，在任何主机上，可以以任何用户和任何组的身份运行任何命令。`sudo -l` 列出当前用户能用 sudo 运行的命令。
+  - front: 为什么 `apt update` 要加 sudo？
+    back: 它要锁住并写入 /var/lib/apt/lists，这个目录属于 root，普通用户运行会报 Could not open lock file，然后停下来。
+  - front: '`su alice` 和 `su - alice` 有什么区别？'
+    back: 不带减号时只换用户，当前目录不变，环境变量只设置 HOME、SHELL、USER 和 LOGNAME，其余沿用原来用户的。带减号会启动登录 Shell，清空环境变量、进入 alice 的家目录，退出时打印 logout。`man su` 建议总是以登录方式切换，并推荐写成 `--login`。
+  - front: zby 能用 `chown` 把自己的文件交给 alice 吗？交出去以后呢？
+    back: 不能，修改属主只有 root 能做，要写 `sudo chown alice notes.txt`。交出去以后 zby 只是属组里的成员，`rw-r--r--` 时只能读不能写，而且自己也改不回来，还要用 sudo。
+  - front: '`chown :adm notes.txt` 需要 sudo 吗？'
+    back: 不需要。冒号前面空着表示只改属组，属主可以把属组改成自己所在的任意一个组；改成自己不在的组（比如 shadow）会被拒绝。`chgrp adm notes.txt` 的效果相同，`chown alice:devs` 则同时修改属主和属组。
+  - front: '`groups` 打印的是系统里的所有组吗？所有组记在哪里？'
+    back: 不是，它打印的是当前进程所在的组，写了用户名时查的是那个用户的记录。所有组记在 /etc/group，每行依次是组名、x、组号和成员；成员一段只列出把它当作附加组的用户，用户的主组记在 /etc/passwd 里。
+  - front: '`adduser alice` 和 `adduser alice devs` 有什么不同？'
+    back: 一个参数时新建用户 alice，同时建同名的组和家目录 /home/alice，并要求设置密码。两个参数时把已有的用户 alice 加进已有的组 devs。新建组用 `addgroup devs`，删除用 `deluser --remove-home` 和 `delgroup`。
+  - front: 刚把 zby 加进 devs 组，为什么 `chown :devs notes.txt` 仍然被拒绝？
+    back: 一个进程属于哪些组是登录时确定的，修改 /etc/group 不影响已经在运行的 Shell。所以 `groups zby` 里已经有 devs，`groups` 里还没有。重新登录，或者用 `sg devs -c "命令"`、`newgrp devs`，才能用上新的组。
 git:
 - post: Git-Chapter0-Command-Line
   cards:

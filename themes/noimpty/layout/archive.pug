@@ -1,0 +1,41 @@
+extends includes/layout.pug
+include includes/mixins.pug
+
+block content
+  //- 归档和标签页只列公开的文章（课内、课外）；Life 这种整栏私密的分类页照常列出（它本身在暗号后面）
+  - var all = page.posts ? page.posts.toArray() : []
+  - var pub = all.filter(function (p) { return nm_is_public(p) })
+  - var list = pub.length ? pub : all
+  - var years = []
+  each post in list
+    - var y = date(post.date, 'YYYY')
+    - if (!years.length || years[years.length - 1].year !== y) years.push({ year: y, posts: [] })
+    - years[years.length - 1].posts.push(post)
+  .page.page--list
+    header.page-head(data-intro)
+      p.page-head__en ARCHIVE
+      h1.page-title
+        if page.category
+          | 分类 · #{page.category}
+        else if page.tag
+          | 标签 · ##{page.tag}
+        else if page.year
+          | 归档 · #{page.year}#{page.month ? ' 年 ' + page.month + ' 月' : ''}
+        else
+          | 归档
+      p.post-lead 一共 #{list.length} 篇
+    each group in years
+      section.block.year-group
+        .block__head
+          h2= group.year
+          span.block__en= group.posts.length + ' FILES'
+        ol.rows
+          each post in group.posts
+            +postRow(post, { short: true })
+    if page.total > 1
+      nav.pager.pager--pages(aria-label="翻页")
+        if page.prev
+          a(href=url_for(page.prev_link)) 上一页
+        span #{page.current} / #{page.total}
+        if page.next
+          a(href=url_for(page.next_link)) 下一页

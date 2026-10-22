@@ -1,0 +1,19 @@
+/* 主题和私人功能接头的地方。组件自己的变量和左下角按钮的坐标在站点的 source/css/widgets.css。 */
+
+/* 娜娜莉的文章批注只给主人看 */
+html:not(.nm-owner) .nanaly-note { display: none }
+
+/* 代码小屋那一页自带标题栏，主题的页头让出来 */
+html.learning-page .page--app > .page-head { display: none }
+
+/* 练习台（learning-lab.js）：「边学边练」按钮插在正文前面，给它在网格里留一格，目录照旧在右边 */
+.post-body > .learning-launch { grid-column: 1; justify-self: start; margin: 0 0 14px; border: 2px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink); font-weight: 700; box-shadow: 3px 3px 0 var(--ink) }
+.post-body > .prose { grid-column: 1 }
+.post-body > .post-toc { grid-column: 2; grid-row: 1 / span 2 }
+/* 分栏打开以后：页头的角色卡、目录、进度线、文末、页脚都让出来，只留正文 */
+html.learning-is-open .site-foot, html.learning-is-open .progress, html.learning-is-open .post-agent,
+html.learning-is-open .post-toc, html.learning-is-open .post-end { display: none !important }
+html.learning-is-open #content-inner.layout { height: calc(100dvh - var(--head-h)) }
+html.learning-is-open .post-head { display: block }
+html.learning-is-open .post-body { display: block; margin-top: 16px }
+html.learning-is-open .post .prose { padding: 0; border: 0; box-shadow: none; background: none }

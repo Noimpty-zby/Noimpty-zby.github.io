@@ -82,7 +82,7 @@ test('reading a page loads neither bundle; opening the editor fetches its finger
   app.scripts[0].onload()
   assert.equal(await editor, app.window.NOIMPTY_CODE_EDITOR)
   assert.equal(app.timers.size, 0)
-  const config = readFileSync(new URL('../../../_config.butterfly.yml', import.meta.url), 'utf8')
+  const config = readFileSync(new URL('../../../_config.noimpty.yml', import.meta.url), 'utf8')
   assert.match(config, /<script type="text\/plain" id="learning-editor-src" src="\/js\/learning-editor\.js"><\/script>/)
   assert.doesNotMatch(config, /<script src="\/js\/learning-editor\.js"><\/script>/)
 })

@@ -136,7 +136,7 @@
     gate.innerHTML = `
       <div class="noimpty-gate__panel" role="dialog" aria-modal="true" aria-labelledby="noimpty-gate-title">
         <p class="noimpty-gate__eyebrow"></p>
-        <h1 id="noimpty-gate-title">请输入暗号(*^▽^*)</h1>
+        <h1 id="noimpty-gate-title">这一页需要暗号</h1>
         <p class="noimpty-gate__hint">这里是私人记录。输入正确后，本次浏览期间整站都可以访问。</p>
         <form class="noimpty-gate__form" novalidate>
           <input class="noimpty-gate__input" type="password" name="passphrase" autocomplete="current-password" aria-label="暗号" placeholder="在这里输入暗号" required>
@@ -180,7 +180,7 @@
           return
         }
 
-        error.textContent = '输入错误┭┮﹏┭┮'
+        error.textContent = '输入错误，再试一次。'
         panel.classList.remove('is-error')
         void panel.offsetWidth
         panel.classList.add('is-error')

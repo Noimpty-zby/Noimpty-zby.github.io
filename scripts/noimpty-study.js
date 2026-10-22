@@ -55,9 +55,12 @@ const chaptersOf = raw => {
   return []
 }
 
-/** {% section_posts Go %} 里那个分类叶子名 */
+/** 分类叶子名：front-matter 里的 track:（2026-10 新主题的写法），旧页面里的 {% section_posts Go %} 也认 */
 const leafOf = raw => {
-  const m = raw.match(/\{%\s*section_posts\s+(.+?)\s*%\}/)
+  const fm = String(raw).match(/^---\n([\s\S]*?)\n---/)
+  const track = fm && fm[1].match(/^track:\s*(.+?)\s*$/m)
+  if (track) return track[1].replace(/^(['"])(.*)\1$/, '$2').trim()
+  const m = String(raw).match(/\{%\s*section_posts\s+(.+?)\s*%\}/)
   return m ? m[1].trim() : ''
 }
 

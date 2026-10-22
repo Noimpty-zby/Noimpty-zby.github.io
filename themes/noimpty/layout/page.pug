@@ -1,0 +1,58 @@
+extends includes/layout.pug
+include includes/mixins.pug
+
+block content
+  - var type = String(page.type || '')
+  - var kind = nm_kind(page, false)
+  if kind === 'place'
+    include includes/place.pug
+  else if type === '404'
+    .page.page--404
+      .lost(data-intro)
+        +agent({ en: 'NOT FOUND', code: '404', color: '#f0508a' }, 0)
+        .lost__text
+          p.lost__en ERROR 404
+          h1.page-title 找不到这一页
+          p 地址可能写错了，或者这一页已经搬走了。
+          p
+            a.btn(href=url_for('/') data-avatar data-title="Noimpty") 回到首页
+  else if type === 'categories'
+    .page.page--app
+      header.page-head
+        p.page-head__en CATEGORIES
+        h1.page-title= page.title || '分类'
+      ul.taxonomy
+        each cat in site.categories.sort('name').toArray()
+          li
+            a(href=url_for(cat.path))
+              span= cat.name
+              small= cat.length
+  else if type === 'tags'
+    .page.page--app
+      header.page-head
+        p.page-head__en TAGS
+        h1.page-title= page.title || '标签'
+      ul.taxonomy.taxonomy--tags
+        each tag in site.tags.sort('name').toArray()
+          li
+            a(href=url_for(tag.path))
+              span= '#' + tag.name
+              small= tag.length
+  else if kind === 'app'
+    //- 日程、复习、练习台、资讯这些自带界面的页面：不套纸张，给满宽度
+    .page.page--app
+      if !/class="noimpty-hero/.test(page.content)
+        header.page-head
+          h1.page-title= page.title
+      .page-app!= page.content
+  else
+    .page(class=type ? `page--${type}` : '')
+      header.page-head(data-intro)
+        if type === 'about'
+          .page-head__avatar
+            img(src=url_for(theme.avatar.card) alt="Noimpty 的头像" width="200" height="250" decoding="async")
+        p.page-head__en= type === 'about' ? 'ABOUT' : type === 'news' ? 'NEWS' : 'PAGE'
+        h1.page-title= page.title
+        if page.description
+          p.post-lead= nm_lead(page.description)
+      article#article-container.prose!= page.content

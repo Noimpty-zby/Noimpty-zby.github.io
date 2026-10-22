@@ -1,0 +1,19 @@
+- var pageTitle = is_home() ? config.title : (page.title ? page.title + ' · ' + 'Noimpty' : config.title)
+- var desc = page.description || config.description
+meta(charset="utf-8")
+meta(name="viewport" content="width=device-width, initial-scale=1")
+title= pageTitle
+meta(name="description" content=strip_html(String(desc || '')).slice(0, 160))
+meta(name="author" content=config.author)
+meta(name="theme-color" content="#e7e5de")
+link(rel="icon" href=url_for(theme.favicon))
+link(rel="preload" href=url_for('/fonts/barlow-condensed-800i.woff2') as="font" type="font/woff2" crossorigin)
+link(rel="stylesheet" href=url_for('/pluginsSrc/@fortawesome/fontawesome-free/css/all.min.css'))
+link(rel="stylesheet" href=url_for('/pluginsSrc/katex/dist/katex.min.css'))
+link(rel="stylesheet" href=url_for('/css/noimpty.css'))
+link(rel="stylesheet" href=url_for('/css/noimpty-compat.css'))
+//- 解锁过的人一进来就显示私人菜单，不等脚本跑完再闪出来
+script.
+  try { if (sessionStorage.getItem('noimpty-private-unlocked') === 'true') document.documentElement.classList.add('nm-owner') } catch (_) {}
+each line in (theme.inject && theme.inject.head) || []
+  != line

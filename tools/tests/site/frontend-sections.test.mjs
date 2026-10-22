@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
-import postcss from 'postcss'
 
 const read = path => readFileSync(new URL('../../../' + path, import.meta.url), 'utf8')
 let passed = 0
@@ -105,39 +104,6 @@ check('封面路径里的单引号和换行先转义 CSS 字符串再转义 HTML
   const html = sectionHtml("/img/it's\ncover.png")
   assert.ok(html.includes('it\\&#39;s\\a cover.png'))
   assert.ok(!html.includes("it's\ncover"))
-})
-
-// Resolve the actual stylesheet cascade for the course grid at several widths.
-// PostCSS is already included by the Hexo CSS renderer.
-// 课程网格在 2026-09-26 内页改版时从 sections.css 搬到了 interior.css
-const css = postcss.parse(read('source/css/interior.css'))
-const gridAt = width => {
-  const classes = new Set(['noimpty-track-grid', 'noimpty-track-grid--seven'])
-  let result, specificity = -1
-  css.walkRules(rule => {
-    for (let parent = rule.parent; parent; parent = parent.parent) {
-      if (parent.type !== 'atrule' || parent.name !== 'media') continue
-      const max = parent.params.match(/max-width:\s*(\d+)px/)
-      const min = parent.params.match(/min-width:\s*(\d+)px/)
-      if (max && width > Number(max[1])) return
-      if (min && width < Number(min[1])) return
-      if (!max && !min) return
-    }
-    const matches = rule.selectors.filter(selector => /^\.[\w-]+(?:\.[\w-]+)*$/.test(selector) &&
-      selector.slice(1).split('.').every(name => classes.has(name)))
-    if (!matches.length) return
-    const weight = Math.max(...matches.map(selector => selector.split('.').length - 1))
-    rule.walkDecls('grid-template-columns', declaration => {
-      if (weight >= specificity) { specificity = weight; result = declaration.value }
-    })
-  })
-  return result
-}
-
-check('七门课程网格在桌面四列、平板两列、手机一列', () => {
-  assert.equal(gridAt(1200), 'repeat(4, minmax(0, 1fr))')
-  assert.equal(gridAt(850), 'repeat(2, minmax(0, 1fr))')
-  assert.equal(gridAt(375), 'minmax(0, 1fr)')
 })
 
 console.log('\n' + passed + ' additional frontend checks passed')

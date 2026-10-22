@@ -1,0 +1,84 @@
+//- 板块页（hub）和系列页（track）。数据来自 _config.noimpty.yml 的 hubs / series 和页面 front-matter。
+- var place = nm_place_of(page)
+- var isHub = place && place.kind === 'hub'
+- var children = isHub ? nm_hub_children(place.path) : []
+- var posts = place && !isHub ? nm_posts_of(place.key) : []
+- var total = isHub ? children.reduce(function (n, c) { return n + c.count }, 0) : posts.length
+- var latest = isHub ? children.map(function (c) { return c.latest }).filter(Boolean).sort(function (a, b) { return b.date - a.date })[0] : posts[posts.length - 1]
+- var crumbs = place ? nm_crumbs(place.path || nm_web_path(page.path)) : []
+.place(style=place ? `--sc:${place.color}` : undefined)
+  header.place-head(data-intro)
+    if place
+      .post-agent
+        +agent(place, 0, null, isHub ? 'HUB' : 'TRACK')
+    nav.crumbs(aria-label="所在位置")
+      each c in crumbs
+        - var h = theme.hubs[c]
+        if h
+          a(href=url_for(c) data-title=h.name data-sc=h.color data-code=h.code)= h.name
+      span= place ? place.en : ''
+    h1.page-title= place ? place.name : page.title
+    if page.lead
+      p.post-lead= page.lead
+    else if page.description
+      p.post-lead= nm_lead(page.description)
+    dl.place-meta
+      each item in page.course || []
+        div
+          dt= item[0]
+          dd!= item[1]
+      div
+        dt 进度
+        dd
+          if page.progress
+            | #{page.progress} ·
+          if total
+            | 已写 #{total} 篇#{latest ? '，最近一篇 ' + date(latest.date, 'MM-DD') : ''}
+          else
+            | 还没开始
+      if place && place.status
+        div
+          dt 状态
+          dd= place.status
+
+  if isHub
+    section.block
+      .block__head
+        h2= place.kind === 'hub' && children.some(function (c) { return c.kind === 'hub' }) ? '方向' : '课程'
+        span.block__en SELECT A TRACK
+      ol.tracks
+        each c, i in children
+          li(style=`--sc:${c.color}`)
+            a.track(href=url_for(c.path) data-title=c.name data-sc=c.color data-code=c.code class=c.count ? '' : 'is-empty')
+              span.track__code= c.code
+              span.track__body
+                span.track__en= c.en
+                span.track__name= c.name
+                if c.by
+                  span.track__by= c.by
+                span.track__meta
+                  if c.count
+                    | 已写 #{c.count} 篇 · 最近 #{date(c.latest.date, 'YYYY-MM-DD')}#{c.status ? ' · ' + c.status : ''}
+                  else
+                    | 还没开始
+              span.track__no= String(i + 1).padStart(2, '0')
+  else
+    section.block
+      .block__head
+        h2= place && place.key === 'Life' ? '文章' : '章节'
+        span.block__en= posts.length ? posts.length + ' FILES' : 'EMPTY'
+      if posts.length
+        ol.rows.rows--chapters
+          each post, i in posts
+            +postRow(post, { no: i + 1, hideSeries: true })
+      else
+        .empty-state
+          p.empty-state__en NO ENTRY YET
+          p= page.empty || '这一栏还没有文章。'
+
+  if page.content && page.content.trim()
+    section.block.place-about
+      .block__head
+        h2= page.about_title || (isHub ? '关于这一栏' : '关于这门课')
+        span.block__en ABOUT
+      article.prose!= page.content

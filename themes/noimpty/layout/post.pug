@@ -1,0 +1,91 @@
+extends includes/layout.pug
+include includes/mixins.pug
+
+block content
+  - var s = nm_series_of(page)
+  - var siblings = s ? nm_posts_of(s.key) : []
+  - var index = siblings.findIndex(function (p) { return p.path === page.path })
+  - var words = nm_count_words(page.content)
+  - var minutes = Math.max(1, Math.round(words / 400))
+  - var h2count = (String(page.content).match(/<h2[\s>]/g) || []).length
+  - var area = s && s.area === '课内' ? '/in-class/' : s && s.area === '课外' ? '/extra/' : null
+  .progress(aria-hidden="true")
+    span.progress__bar
+    span.progress__note
+  #post.post
+    header.post-head(data-intro)
+      if s
+        .post-agent
+          +agent(s, index + 1)
+      nav.crumbs(aria-label="所在位置")
+        if area
+          a(href=url_for(area) data-title=theme.hubs[area].name data-sc=theme.hubs[area].color data-code=theme.hubs[area].code)= theme.hubs[area].name
+        if s
+          a(href=url_for(s.path) data-title=s.name data-sc=s.color data-code=s.code)= s.name
+          span 第 #{index + 1} 篇
+      h1.post-title= page.title
+      if page.description
+        p.post-lead= nm_lead(page.description)
+      #post-info.post-meta
+        time(datetime=date_xml(page.date))= date(page.date, 'YYYY-MM-DD')
+        span 约 #{words >= 10000 ? (words / 10000).toFixed(1) + ' 万' : words} 字
+        span 阅读 #{minutes} 分钟
+        span.post-meta__cats
+          each cat in page.categories ? page.categories.toArray() : []
+            a.post-meta-categories(href=url_for(cat.path))= cat.name
+        if page.tags && page.tags.length
+          span.tags
+            each tag in page.tags.toArray()
+              a(href=url_for(tag.path))= '#' + tag.name
+    .post-body
+      article#article-container.prose!= page.content
+      - var tocHtml = toc(page.content, { list_number: false, max_depth: 3, min_depth: 2 })
+      if tocHtml
+        aside.post-toc(aria-label="目录")
+          .toc__head 目录
+            span CHART
+          != tocHtml
+    section.post-end
+      .result(hidden style=s ? `--sc:${s.color}` : undefined)
+        .result__en READ COMPLETE
+        dl
+          div
+            dt 本篇
+            dd #{h2count} 节
+          div
+            dt 字数
+            dd= words >= 10000 ? (words / 10000).toFixed(1) + ' 万' : words
+          div
+            dt 停留
+            dd.result__time --:--
+      if page.prev || page.next
+        nav.pager(aria-label="上一篇与下一篇")
+          if page.prev
+            a.pager__prev(href=url_for(page.prev.path) data-title=page.prev.title data-sc=s ? s.color : undefined data-code=s ? s.code : undefined)
+              small 上一篇
+              | #{page.prev.title}
+          else
+            span.pager__prev.is-empty
+              small 上一篇
+              | 这是第一篇
+          if page.next
+            a.pager__next(href=url_for(page.next.path) data-title=page.next.title data-sc=s ? s.color : undefined data-code=s ? s.code : undefined)
+              small 下一篇
+              | #{page.next.title}
+          else
+            span.pager__next.is-empty
+              small 下一篇
+              | 还在写
+      if s && siblings.length > 1
+        .series-box
+          .series-box__head
+            a(href=url_for(s.path) data-title=s.name data-sc=s.color data-code=s.code)= s.name
+            span #{siblings.length} 篇
+          ol.rows
+            each p, i in siblings
+              li(aria-current=p.path === page.path ? 'true' : undefined)
+                a.row(href=url_for(p.path) data-title=p.title data-sc=s.color data-code=s.code)
+                  span.row__no= String(i + 1).padStart(2, '0')
+                  span.row__title= p.title
+      != related_posts(page)
+      p.post-license 本文采用 #[a(href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="noopener" target="_blank") CC BY-NC-SA 4.0] 许可，转载请注明出处。

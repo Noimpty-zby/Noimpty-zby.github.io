@@ -64,9 +64,18 @@ prismjs:
 # Home page setting
 #
 # per_page: 0 —— 首页不再列文章。
-# 全站上锁之后，首页只留 hero + 三个板块入口（见 source/js/section-hub.js）。
+# 全站上锁之后，首页只留头像、自我介绍和两个板块入口（见 themes/noimpty/layout/index.pug）。
 # 列文章等于把标题、摘要、封面直接摆在未解锁的页面上，
 # 那正是「从哪里也不能访问内部文章」要堵的口子。
+archive_generator:
+  per_page: 0
+  yearly: true
+  monthly: true
+category_generator:
+  per_page: 0
+tag_generator:
+  per_page: 0
+
 index_generator:
   path: ''
   per_page: 0
@@ -168,7 +177,7 @@ markdown:
         enabled: false
         label: false
   # 还原 marked 原本的标题锚点：<a class="headerlink" href="#xxx"></a>
-  # Butterfly 的目录跳转和 toc-sync.js 都依赖它
+  # 主题的目录（Hexo 的 toc 助手）和目录高亮都依赖它
   anchors:
     level: 1
     collisionSuffix: ''
@@ -184,7 +193,7 @@ markdown:
 # Extensions
 ## Plugins: https://hexo.io/plugins/
 ## Themes: https://hexo.io/themes/
-theme: butterfly
+theme: noimpty
 
 # Deployment
 ## Docs: https://hexo.io/docs/one-command-deployment

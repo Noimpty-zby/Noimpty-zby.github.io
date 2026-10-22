@@ -168,7 +168,8 @@ hexo.extend.generator.register('noimpty-privacy-manifest', locals => {
  *
  * 所以这里直接把首页这条路由顶掉，用同一套模板、但传一个空的文章列表。
  * scripts/ 里的生成器比 node_modules 里的晚跑，同名路径后写的赢，
- * 于是渲染出来的就是「大图 + 空列表」，三个板块入口由 section-hub.js 补上。
+ * 于是渲染出来的就是「大图 + 空列表」。首页上的内容由主题的 index.pug 决定，
+ * 开放之前它只放头像、自我介绍和两个板块入口（主题配置 home.lists: false）。
  *
  * 为什么不靠 CSS 或 JS 藏起来：藏起来的东西还在 HTML 里。
  * 首页是唯一一个不上锁的页面，它的源码等于对全世界公开。

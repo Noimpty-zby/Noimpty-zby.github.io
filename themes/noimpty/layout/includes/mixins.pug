@@ -1,0 +1,26 @@
+//- 角色区：巨大的描边名字 + 角色色斜带 + 速度线 + 倾斜的网点立绘卡。切入动画由 .is-enter 触发
+mixin agent(info, no, avatar, label)
+  - var codeLen = String(info.code || '').length
+  .agent(aria-hidden="true" style=`--sc:${info.color}`)
+    span.agent__wm= info.en
+    span.agent__band
+    span.agent__speed
+    span.agent__card(class=avatar ? 'agent__card--img' : '')
+      if avatar
+        img(src=url_for(avatar) alt="" loading="lazy" decoding="async")
+      else
+        b(class=codeLen >= 5 ? 'is-xlong' : codeLen >= 4 ? 'is-long' : undefined)= info.code
+      i= no ? 'NO.' + String(no).padStart(2, '0') : (label || info.en)
+
+//- 文章列表的一行（最近更新、归档、系列页都用它）
+mixin postRow(post, opts)
+  - var s = nm_series_of(post)
+  - opts = opts || {}
+  li(style=s ? `--sc:${s.color}` : undefined)
+    a.row(href=url_for(post.path) data-title=post.title data-sc=s ? s.color : undefined data-code=s ? s.code : undefined)
+      if opts.no
+        span.row__no= String(opts.no).padStart(2, '0')
+      time.row__date(datetime=date_xml(post.date))= date(post.date, opts.short ? 'MM-DD' : 'YYYY-MM-DD')
+      span.row__title= post.title
+      if !opts.hideSeries && s
+        span.row__series= s.name

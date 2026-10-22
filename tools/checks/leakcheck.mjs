@@ -110,7 +110,7 @@ console.log('')
 if (bad) {
   console.log(`✗ ${bad} 个公开页面泄漏了内部信息。`)
   console.log('  提醒：被 CSS 藏起来的东西也算泄漏 —— 源码里有就是有。')
-  console.log('  常见来源：主题配置里的公告 / 站点描述 / 副标题，以及 section-hub.js 里的卡片文案。')
+  console.log('  常见来源：主题配置里的公告 / 站点描述 / 副标题，以及 主题首页模板（themes/noimpty/layout/index.pug）里的文案。')
   process.exit(1)
 }
 console.log('✓ 公开页面没有泄漏内部信息')

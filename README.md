@@ -1,6 +1,6 @@
 # Noimpty 的个人空间
 
-基于 Hexo 8 与 Butterfly 5 的个人博客，包含学习记录、资讯、日程、娜娜莉聊天与工作室、代码小屋和 Mao 看板娘。
+基于 Hexo 8 和自己写的 noimpty 主题（`themes/noimpty`，2026-10 起替换 Butterfly）的个人博客，包含学习记录、资讯、日程、娜娜莉聊天与工作室、代码小屋和 Mao 看板娘。
 
 - 博客：[noimpty-zby.cn](https://noimpty-zby.cn)，由 GitHub Pages 发布。
 - 私有后端：保存私密资料、记忆与练习工作区，提供 Docker 隔离执行；与静态前端分别部署。

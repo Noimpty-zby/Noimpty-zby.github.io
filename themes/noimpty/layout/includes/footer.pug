@@ -1,0 +1,7 @@
+footer.site-foot
+  .site-foot__in
+    span © #{new Date().getFullYear()} #{config.author}
+    span.site-foot__links
+      each item in theme.social || []
+        a(href=item.url rel="noopener" target="_blank")= item.name
+      a(href=url_for('/about/') data-avatar data-title="关于") 关于

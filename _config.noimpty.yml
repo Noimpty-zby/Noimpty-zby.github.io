@@ -63,6 +63,7 @@ inject:
     - <link rel="stylesheet" href="/css/mao-controls.css">
     - <link rel="stylesheet" href="/css/mao-play.css">
     - <link rel="stylesheet" href="/css/nanaly-agent.css">
+    - <link rel="stylesheet" href="/css/widget-skin.css">
     - <link rel="stylesheet" href="/css/learning-lab.css">
     - <link rel="stylesheet" href="/css/noimpty-cast.css">
     - <link rel="stylesheet" href="/css/review.css">

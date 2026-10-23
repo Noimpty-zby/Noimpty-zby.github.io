@@ -1,0 +1,454 @@
+/* 左下角三个按钮、它们弹出来的面板和娜娜莉聊天窗的外观，跟新主题对齐（2026-10-23）。
+ *
+ * 新主题是暖纸 + 墨线：纸色底、2px 墨线、硬阴影，角色色只当色块用，上面压黑字。
+ * 这里只改外观（颜色、边框、阴影、圆角），位置、尺寸、动效和交互都还在各组件自己的文件里，
+ * 所以这个文件要排在它们后面加载（_config.noimpty.yml 的 inject）。
+ *
+ * 三个按钮各有一个角色色：Mao 青、娜娜莉粉、音乐黄绿。平时是纸色方块，
+ * 右下角一个角色色的折角；打开或正在播放时整块填上角色色。 */
+
+:is(#mao-toggle, #nanaly-launcher, #noimpty-music-player, .mao-controls-trigger, .mao-controls-panel, #nanaly-panel, #nanaly-poke, #nanaly-selbtn) {
+  --skin-ink: var(--ink, #141519);
+  --skin-paper: var(--paper, #f2f0ea);
+  --skin-desk: var(--bg, #e7e5de);
+  --skin-wash: #e9e6de;
+  --skin-line: var(--line, #d3cfc4);
+  --skin-line-strong: var(--line-strong, #8f8b80);
+  --skin-text: var(--text, #1f2126);
+  --skin-muted: var(--muted, #4c5058);
+  --skin-pink: var(--pink, #f0508a);
+  --skin-cyan: var(--cyan, #22c3e6);
+  --skin-lime: #c6f432;
+  --skin-teal: var(--accent, #0a5c72);
+}
+
+/* ── 左下角的三个方块 ── */
+
+#mao-toggle { --role: var(--skin-cyan); }
+#nanaly-launcher { --role: var(--skin-pink); }
+#noimpty-music-player { --role: var(--skin-lime); }
+
+#mao-toggle,
+#nanaly-launcher,
+#noimpty-music-player .noimpty-music-launcher {
+  border: 2px solid var(--skin-ink);
+  border-radius: 0;
+  background: linear-gradient(135deg, transparent 72%, var(--skin-ink) 72%, var(--skin-ink) calc(72% + 2px), var(--role) calc(72% + 2px)) var(--skin-paper);
+  box-shadow: 3px 3px 0 var(--skin-ink);
+  color: var(--skin-ink);
+}
+#mao-toggle:hover,
+#nanaly-launcher:hover,
+#noimpty-music-player .noimpty-music-launcher:hover {
+  background: var(--role);
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0 var(--skin-ink);
+}
+#mao-toggle:active,
+#nanaly-launcher:active,
+#noimpty-music-player .noimpty-music-launcher:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--skin-ink);
+}
+:is(#mao-toggle, #nanaly-launcher, #noimpty-music-player .noimpty-music-launcher):focus-visible {
+  outline: 3px solid var(--skin-teal);
+  outline-offset: 3px;
+}
+
+/* 打开着、正在播放：整块填上角色色 */
+#nanaly-launcher[aria-expanded='true'],
+#noimpty-music-player.is-playing .noimpty-music-launcher { background: var(--role); }
+
+/* Mao 关着的时候退成桌面色，帽子变淡，折角也收起来 */
+#mao-toggle[aria-pressed='false'] {
+  background: var(--skin-desk);
+  color: var(--skin-line-strong);
+  filter: none;
+  opacity: 1;
+  box-shadow: 3px 3px 0 var(--skin-line-strong);
+  border-color: var(--skin-line-strong);
+}
+#mao-toggle[aria-pressed='false']:hover { background: var(--skin-paper); color: var(--skin-ink); border-color: var(--skin-ink); box-shadow: 5px 5px 0 var(--skin-ink); }
+#mao-toggle svg { stroke-width: 2; }
+#mao-toggle[data-holding]::before { border-radius: 0; border-top-color: var(--skin-ink); }
+#mao-toggle[data-status='error'] { outline: 3px solid var(--skin-pink); outline-offset: 2px; }
+
+#noimpty-music-player .noimpty-music-launcher { font-size: 1.15rem; }
+/* 原来右上角叠着一个白色小爱心，折角已经标出了角色色，这里不再要它 */
+#noimpty-music-player .noimpty-music-launcher::after { content: none; }
+
+/* 有新回复：右上角一个粉色小方块 */
+#nanaly-launcher.has-news::after {
+  top: -6px;
+  right: -6px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--skin-ink);
+  border-radius: 0;
+  background: var(--skin-pink);
+}
+
+/* 娜娜莉的猫：纸色的脸、墨线、粉色的耳朵和蝴蝶结 */
+#nanaly-launcher,
+#nanaly-panel .nanaly-head__avatar {
+  --cat-fur: #fbf9f4;
+  --cat-line: var(--skin-ink);
+  --cat-ear: var(--skin-pink);
+  --cat-eye: var(--skin-ink);
+  --cat-blush: var(--skin-pink);
+  --cat-bow: var(--skin-pink);
+  --cat-star: var(--skin-ink);
+}
+:is(#nanaly-launcher, #nanaly-panel .nanaly-head__avatar) :is(.nanaly-cat__ear, .nanaly-cat__fur) { stroke-width: 2.6; }
+:is(#nanaly-launcher, #nanaly-panel .nanaly-head__avatar) .nanaly-cat__bow { stroke-width: 1.6; }
+:is(#nanaly-launcher, #nanaly-panel .nanaly-head__avatar) .nanaly-cat__bow-knot { fill: var(--skin-ink); }
+:is(#nanaly-launcher, #nanaly-panel .nanaly-head__avatar) .nanaly-cat__whisker { opacity: .75; }
+:is(#nanaly-launcher, #nanaly-panel .nanaly-head__avatar) .nanaly-cat__cheek { opacity: .5; }
+#nanaly-launcher .nanaly-cat { width: 42px; height: 42px; }
+
+/* Mao 的小齿轮：贴在帽子右上角的小方块 */
+.mao-controls-trigger {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--skin-ink);
+  border-radius: 0;
+  background: var(--skin-paper);
+  color: var(--skin-ink);
+  box-shadow: 2px 2px 0 var(--skin-ink);
+  font-size: 16px;
+}
+.mao-controls-trigger::before { border-radius: 0; }
+.mao-controls-trigger:hover,
+.mao-controls-trigger[aria-expanded='true'] { background: var(--skin-cyan); }
+
+/* ── Mao 的设置卡 ── */
+
+.mao-controls-panel {
+  border: 2px solid var(--skin-ink);
+  border-radius: 0;
+  background: var(--skin-paper);
+  color: var(--skin-text);
+  box-shadow: 5px 5px 0 var(--skin-ink);
+  font-family: var(--sans, system-ui, sans-serif);
+}
+.mao-controls-title { font-weight: 700; }
+.mao-controls-close { border-radius: 0; background: transparent; color: var(--skin-ink); }
+.mao-controls-close:hover { background: var(--skin-cyan); }
+.mao-controls-status,
+.mao-controls-action small,
+.mao-controls-value,
+.mao-controls-panel .mao-controls-hint,
+.mao-controls-panel .mao-controls-help { color: var(--skin-muted); }
+.mao-controls-status[data-phase='error'] { color: #a3123f; }
+.mao-controls-retry { border: 2px solid var(--skin-ink); border-radius: 0; background: var(--skin-paper); color: var(--skin-ink); }
+.mao-controls-action {
+  border: 2px solid var(--skin-ink);
+  border-radius: 0;
+  background: var(--skin-paper);
+  color: var(--skin-ink);
+  box-shadow: 3px 3px 0 var(--skin-ink);
+  transition: transform .12s, box-shadow .12s, background .12s;
+}
+.mao-controls-action:hover { border-color: var(--skin-ink); background: var(--skin-cyan); transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--skin-ink); }
+.mao-controls-panel .mao-controls-notice { border-left: 4px solid var(--skin-cyan); border-radius: 0; background: var(--skin-wash); color: var(--skin-text); }
+.mao-controls-settings-toggle { border-top: 2px solid var(--skin-ink); color: var(--skin-ink); font-weight: 600; }
+.mao-controls-field select { border: 2px solid var(--skin-ink); border-radius: 0; background-color: #fbfaf6; color: var(--skin-ink); }
+.mao-controls-field input { accent-color: var(--skin-teal); }
+.mao-controls-panel :is(button, input, select):focus-visible,
+.mao-controls-trigger:focus-visible { outline: 3px solid var(--skin-teal); outline-offset: 2px; }
+
+/* ── 音乐卡 ── */
+
+#noimpty-music-player { --music-accent: var(--skin-ink); }
+#noimpty-music-player .noimpty-music-panel {
+  border: 2px solid var(--skin-ink);
+  border-radius: 0;
+  background: var(--skin-paper);
+  box-shadow: 5px 5px 0 var(--skin-ink);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  color: var(--skin-text);
+}
+#noimpty-music-player .noimpty-music-kicker {
+  display: inline-block;
+  justify-self: start;
+  width: fit-content;
+  padding: 1px 8px;
+  background: var(--skin-lime);
+  color: var(--skin-ink);
+  font: italic 800 12px/1.4 var(--cond, sans-serif);
+  letter-spacing: .08em;
+  transform: skewX(-10deg);
+}
+#noimpty-music-player .noimpty-music-title { color: var(--skin-ink); font-weight: 700; }
+#noimpty-music-player :is(.noimpty-music-artist, .noimpty-music-progress-row, .noimpty-music-volume, .noimpty-music-status) { color: var(--skin-muted); }
+#noimpty-music-player :is(.noimpty-music-collapse, .noimpty-music-controls button) { border-radius: 0; color: var(--skin-ink); }
+#noimpty-music-player :is(.noimpty-music-collapse, .noimpty-music-controls button):hover { background: var(--skin-lime); color: var(--skin-ink); }
+#noimpty-music-player .noimpty-music-controls button.is-active { background: var(--skin-ink); color: var(--skin-lime); }
+#noimpty-music-player .noimpty-music-controls .noimpty-music-play,
+#noimpty-music-player .noimpty-music-controls .noimpty-music-play:hover {
+  border: 2px solid var(--skin-ink);
+  background: var(--skin-lime);
+  color: var(--skin-ink);
+  box-shadow: 3px 3px 0 var(--skin-ink);
+}
+#noimpty-music-player .noimpty-music-controls .noimpty-music-play:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--skin-ink); }
+#noimpty-music-player .noimpty-music-progress,
+#noimpty-music-player .noimpty-music-volume input { accent-color: var(--skin-ink); }
+#noimpty-music-player .noimpty-music-disc,
+#noimpty-music-player .noimpty-music-stage { border: 2px solid var(--skin-ink); border-radius: 0; background: var(--skin-lime); box-shadow: none; }
+#noimpty-music-player .noimpty-music-disc::after { border: 2px solid var(--skin-ink); border-radius: 0; background: var(--skin-paper); color: var(--skin-ink); }
+#noimpty-music-player .noimpty-music-stage::before { border-color: var(--skin-ink); opacity: 1; }
+#noimpty-music-player .noimpty-music-stage::after { box-shadow: none; }
+#noimpty-music-player .noimpty-music-stage__bar { border-radius: 0; background: var(--skin-ink); opacity: 1; }
+#noimpty-music-player .noimpty-music-stage__note--two { color: var(--skin-ink); }
+#noimpty-music-player .noimpty-music-stage__bar:nth-child(3n) { background: var(--skin-pink); }
+#noimpty-music-player .noimpty-music-stage__bars::before,
+#noimpty-music-player .noimpty-music-stage__bars::after { border-radius: 0; background: var(--skin-ink); }
+
+/* ── 娜娜莉的气泡和划词按钮 ── */
+
+#nanaly-poke {
+  border: 2px solid var(--skin-ink);
+  border-radius: 0;
+  background: var(--skin-paper);
+  color: var(--skin-text);
+  box-shadow: 4px 4px 0 var(--skin-ink);
+}
+#nanaly-selbtn {
+  border: 2px solid var(--skin-ink);
+  border-radius: 0;
+  background: var(--skin-ink);
+  color: #fff;
+  box-shadow: 3px 3px 0 var(--skin-pink);
+}
+#nanaly-selbtn:hover { box-shadow: 4px 4px 0 var(--skin-pink); }
+
+/* ── 娜娜莉的聊天窗 ── */
+
+#nanaly-panel.nanaly-shell {
+  --nanaly-shell-surface: var(--skin-paper);
+  --nanaly-shell-canvas: var(--skin-desk);
+  --card-bg: var(--skin-paper);
+  --nanaly-shell-line: var(--skin-line);
+  --nanaly-shell-ink: var(--skin-text);
+  --nanaly-shell-wash: var(--skin-wash);
+  --card-meta: var(--skin-muted);
+  --font-color: var(--skin-text);
+  --text-highlight-color: var(--skin-ink);
+  --noimpty-accent: var(--skin-teal);
+  --noimpty-border: var(--skin-line);
+  border: 2px solid var(--skin-ink);
+  border-radius: 0;
+  box-shadow: 6px 6px 0 var(--skin-ink);
+  font-family: var(--sans, sans-serif);
+}
+
+/* 头部：墨色的一条，名字压在上面，底下一道粉色 */
+#nanaly-panel.nanaly-shell .nanaly-head,
+#nanaly-panel.nanaly-shell .nanaly-shell-toolbar {
+  background: var(--skin-ink);
+  color: #fff;
+}
+#nanaly-panel.nanaly-shell .nanaly-head { border-radius: 0; }
+#nanaly-panel.nanaly-shell .nanaly-head::after { content: none; }
+#nanaly-panel.nanaly-shell .nanaly-shell-toolbar { border-bottom: 4px solid var(--skin-pink); }
+#nanaly-panel.nanaly-shell .nanaly-head__avatar {
+  border: 2px solid #fff;
+  border-radius: 0;
+  background: var(--skin-pink);
+  box-shadow: 3px 3px 0 var(--skin-pink);
+}
+#nanaly-panel.nanaly-shell .nanaly-head__name { color: #fff; font-weight: 800; letter-spacing: .08em; }
+#nanaly-panel.nanaly-shell .nanaly-head__sub { color: #c9c5bb; }
+#nanaly-panel.nanaly-shell .nanaly-head__btn { border-radius: 0; color: #e2ded4; background: transparent; }
+#nanaly-panel.nanaly-shell .nanaly-head__btn:hover { background: var(--skin-pink); color: var(--skin-ink); }
+#nanaly-panel.nanaly-shell .nanaly-head__btn[data-act='close'] { order: 9; border: 2px solid #fff; background: transparent; color: #fff; }
+#nanaly-panel.nanaly-shell .nanaly-head__btn[data-act='close']:hover { background: #fff; color: var(--skin-ink); }
+#nanaly-panel.nanaly-shell .nanaly-head__btn.nanaly-backup-entry { width: auto; padding: 0 8px; white-space: nowrap; font-size: 12px; }
+#nanaly-panel.nanaly-shell .nanaly-head__btn[data-act='think'][aria-pressed='true'],
+#nanaly-panel.nanaly-shell .nanaly-head__btn.is-on { background: var(--skin-pink); color: var(--skin-ink); }
+
+.nanaly-shell-modes { border: 2px solid #fff; border-radius: 0; background: transparent; gap: 0; padding: 0; }
+#nanaly-panel .nanaly-shell-mode { border-radius: 0; color: #e2ded4; font-weight: 600; }
+#nanaly-panel .nanaly-shell-mode:hover { color: #fff; }
+#nanaly-panel .nanaly-shell-mode[aria-pressed='true'] { background: var(--skin-pink); color: var(--skin-ink); box-shadow: none; }
+.nanaly-shell-hint { color: #b9b5aa; }
+#nanaly-panel .nanaly-shell-actions button { border: 2px solid #fff; border-radius: 0; background: transparent; color: #fff; font-weight: 600; }
+#nanaly-panel .nanaly-shell-actions button:hover { background: #fff; color: var(--skin-ink); }
+
+/* 话题栏：纸上一行，底下一道墨线 */
+#nanaly-panel.nanaly-shell .nanaly-workspace-bar { background: var(--skin-paper); border-bottom: 2px solid var(--skin-ink); }
+#nanaly-panel.nanaly-shell .nanaly-workspace-title { color: var(--skin-ink); font-weight: 700; }
+#nanaly-panel.nanaly-shell .nanaly-workspace-bar button { border-radius: 0; color: var(--skin-muted); font-weight: 500; }
+#nanaly-panel.nanaly-shell .nanaly-workspace-bar button:hover,
+#nanaly-panel.nanaly-shell .nanaly-workspace-bar button[aria-expanded='true'] { background: var(--skin-ink); color: #fff; border-color: var(--skin-ink); }
+
+/* 对话区：桌面色上一层淡网点 */
+#nanaly-panel.nanaly-shell .nanaly-body {
+  background-color: var(--skin-desk);
+  background-image: radial-gradient(circle, rgba(20, 21, 25, .1) .9px, transparent 1.1px);
+  background-size: 14px 14px;
+  scrollbar-color: rgba(20, 21, 25, .35) transparent;
+}
+#nanaly-panel.nanaly-shell .nanaly-msg { border-radius: 0; box-shadow: none; }
+#nanaly-panel.nanaly-shell .nanaly-msg--her {
+  border: 2px solid var(--skin-ink);
+  border-radius: 0;
+  background: var(--skin-paper);
+  color: var(--skin-text);
+  box-shadow: 4px 4px 0 #cdc9be;
+}
+#nanaly-panel.nanaly-shell .nanaly-msg--me {
+  border: 2px solid var(--skin-ink);
+  border-radius: 0;
+  background: var(--skin-ink);
+  color: #fff;
+  box-shadow: 4px 4px 0 var(--skin-pink);
+}
+#nanaly-panel.nanaly-shell .nanaly-msg--sys { border: 2px dashed var(--skin-line-strong); border-radius: 0; background: var(--skin-wash); color: var(--skin-muted); }
+#nanaly-panel.nanaly-shell .nanaly-msg pre { border: 0; border-radius: 0; background: #1b1d22; color: #ece9e1; }
+#nanaly-panel.nanaly-shell .nanaly-msg :not(pre) > code { border-radius: 0; background: #e3e0d6; color: #b01f55; }
+#nanaly-panel.nanaly-shell .nanaly-msg--me :not(pre) > code { background: rgba(255, 255, 255, .16); color: #fff; }
+#nanaly-panel.nanaly-shell .nanaly-msg--her a { color: var(--skin-teal); text-decoration-thickness: 2px; }
+#nanaly-panel.nanaly-shell .nanaly-msg--me a { color: #fff; }
+#nanaly-panel.nanaly-shell .nanaly-msg :is(th, td) { border-color: var(--skin-line-strong); }
+#nanaly-panel.nanaly-shell .nanaly-message-tools { border-top: 1px dashed var(--skin-line-strong); }
+#nanaly-panel.nanaly-shell .nanaly-message-tools button { color: var(--skin-muted); font-weight: 500; }
+#nanaly-panel.nanaly-shell .nanaly-message-tools button:hover { color: var(--skin-ink); text-decoration: underline; text-decoration-thickness: 2px; }
+#nanaly-panel.nanaly-shell .nanaly-msg--me .nanaly-message-tools { border-top-color: rgba(255, 255, 255, .3); }
+#nanaly-panel.nanaly-shell .nanaly-msg--me .nanaly-message-tools button { color: #e2ded4; }
+#nanaly-panel .nanaly-copy { border-radius: 0; }
+#nanaly-panel .nanaly-think { border-left: 4px solid var(--skin-pink); border-radius: 0; background: var(--skin-wash); }
+
+/* 快捷问题：斜切的小纸片 */
+#nanaly-panel.nanaly-shell .nanaly-quick { background: var(--skin-paper); border-top: 2px solid var(--skin-ink); padding-top: 12px; padding-bottom: 8px; }
+#nanaly-panel.nanaly-shell .nanaly-quick button {
+  border: 2px solid var(--skin-ink);
+  border-radius: 0;
+  background: var(--skin-paper);
+  color: var(--skin-ink);
+  font-weight: 600;
+  transform: skewX(-10deg);
+  transition: background .12s, box-shadow .12s;
+}
+#nanaly-panel.nanaly-shell .nanaly-quick button:hover { background: var(--skin-pink); box-shadow: 2px 2px 0 var(--skin-ink); }
+#nanaly-panel :is(.nanaly-choices button) { border: 2px solid var(--skin-ink); border-radius: 0; background: var(--skin-paper); color: var(--skin-ink); }
+#nanaly-panel :is(.nanaly-choices button):hover { background: var(--skin-pink); }
+
+/* 输入区 */
+#nanaly-panel.nanaly-shell .nanaly-foot { background: var(--skin-paper); }
+#nanaly-panel.nanaly-shell .nanaly-quick + .nanaly-foot,
+#nanaly-panel.nanaly-shell :is(.nanaly-image-tray, .nanaly-file-tray) + .nanaly-foot { border-top: 0; }
+#nanaly-panel.nanaly-shell .nanaly-foot textarea {
+  border: 2px solid var(--skin-ink);
+  border-radius: 0;
+  background: #fbfaf6;
+  color: var(--skin-text);
+  box-shadow: none;
+}
+#nanaly-panel.nanaly-shell .nanaly-foot textarea::placeholder { color: #6c6f76; }
+#nanaly-panel.nanaly-shell .nanaly-foot textarea:focus { outline: none; border-color: var(--skin-ink); box-shadow: 4px 4px 0 var(--skin-pink); }
+#nanaly-panel.nanaly-shell .nanaly-send {
+  border: 2px solid var(--skin-ink);
+  border-radius: 0;
+  background: var(--skin-pink);
+  color: var(--skin-ink);
+  box-shadow: 3px 3px 0 var(--skin-ink);
+}
+#nanaly-panel.nanaly-shell .nanaly-send:hover:not(:disabled) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--skin-ink); }
+#nanaly-panel.nanaly-shell .nanaly-send.is-stop { background: var(--skin-ink); color: #fff; box-shadow: 3px 3px 0 var(--skin-pink); }
+#nanaly-panel.nanaly-shell :is(.nanaly-attach, .nanaly-file-attach) {
+  border: 2px solid var(--skin-ink);
+  border-radius: 0;
+  background: var(--skin-paper);
+  color: var(--skin-ink);
+  font-weight: 700;
+}
+#nanaly-panel.nanaly-shell :is(.nanaly-attach, .nanaly-file-attach):hover { background: var(--skin-pink); }
+/* 附加文件的按钮原本是 📎 表情，在这套配色里太跳；字藏起来，换成墨线回形针 */
+#nanaly-panel.nanaly-shell .nanaly-file-attach {
+  font-size: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23141519' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 11.5 12.4 19a5 5 0 0 1-7.1-7.1l7.9-7.8a3.3 3.3 0 0 1 4.7 4.7l-7.9 7.8a1.7 1.7 0 0 1-2.4-2.4l7.3-7.2'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 19px;
+}
+#nanaly-panel.nanaly-shell :is(.nanaly-file-chip, .nanaly-file-card, .nanaly-file-history > span) { border: 2px solid var(--skin-ink); border-radius: 0; background: var(--skin-paper); }
+#nanaly-panel.nanaly-shell .nanaly-file-chip > button { border-radius: 0; }
+
+/* 第一次打开时的设置（填 key 和密码）。只换外观，输入框和按钮的行为不动 */
+#nanaly-panel.nanaly-shell .nanaly-setup { border: 2px solid var(--skin-ink); border-radius: 0; background: var(--skin-paper); box-shadow: 5px 5px 0 #cdc9be; }
+#nanaly-panel.nanaly-shell .nanaly-setup h4 { color: var(--skin-ink); font-weight: 800; }
+#nanaly-panel .nanaly-setup .nanaly-tip { border-left: 4px solid var(--skin-pink); border-radius: 0; background: var(--skin-wash); color: var(--skin-text); }
+#nanaly-panel.nanaly-shell .nanaly-setup :is(input, select) { border: 2px solid var(--skin-ink); border-radius: 0; background: #fbfaf6; color: var(--skin-text); }
+#nanaly-panel.nanaly-shell .nanaly-setup :is(input, select):focus { outline: none; box-shadow: 3px 3px 0 var(--skin-pink); }
+#nanaly-panel .nanaly-setup__actions button { border: 2px solid var(--skin-ink); border-radius: 0; background: var(--skin-paper); color: var(--skin-ink); box-shadow: 3px 3px 0 var(--skin-ink); font-weight: 600; }
+#nanaly-panel .nanaly-setup__actions button.primary { background: var(--skin-pink); color: var(--skin-ink); }
+#nanaly-panel .nanaly-setup__actions button:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--skin-ink); }
+
+/* 话题、记忆抽屉和声音设置 */
+#nanaly-panel.nanaly-shell .nanaly-workspace-drawer { border: 2px solid var(--skin-ink); border-radius: 0; box-shadow: 5px 5px 0 var(--skin-ink); }
+#nanaly-panel .nanaly-shell-drawer-heading { border-radius: 0; border-bottom: 2px solid var(--skin-ink); color: var(--skin-ink); font-weight: 700; }
+#nanaly-panel .nanaly-shell-drawer-close { border: 2px solid var(--skin-ink); border-radius: 0; background: var(--skin-paper); color: var(--skin-ink); }
+#nanaly-panel .nanaly-shell-scrim { background: rgba(20, 21, 25, .32); }
+#nanaly-panel.nanaly-shell button.nanaly-session { border: 2px solid transparent; border-radius: 0; background: var(--skin-wash); }
+#nanaly-panel.nanaly-shell button.nanaly-session:hover { border-color: var(--skin-ink); }
+#nanaly-panel.nanaly-shell .nanaly-session-actions > summary { border-radius: 0; }
+#nanaly-panel.nanaly-shell .nanaly-session-menu { border: 2px solid var(--skin-ink); border-radius: 0; box-shadow: 3px 3px 0 var(--skin-ink); }
+#nanaly-panel.nanaly-shell .nanaly-voice-settings { border: 2px solid var(--skin-ink); border-radius: 0; box-shadow: 5px 5px 0 var(--skin-ink); }
+#nanaly-panel.nanaly-shell .nanaly-voice-settings :is(input:not([type='checkbox']), select) { border: 2px solid var(--skin-ink); border-radius: 0; background: #fbfaf6; }
+.nanaly-shell-resize::after { border-radius: 0; background: var(--skin-ink); }
+
+/* 抽屉、记忆、任务卡这些子组件还在用旧主题的按钮变量，在聊天窗里改指向纸色 */
+#nanaly-panel {
+  --btn-bg: var(--skin-paper);
+  --btn-color: var(--skin-ink);
+  --global-bg: #fbfaf6;
+  --noimpty-accent-soft: var(--skin-pink);
+}
+#nanaly-panel .nanaly-workspace-drawer :is(input, textarea, select) { border: 2px solid var(--skin-ink); border-radius: 0; background: #fbfaf6; }
+#nanaly-panel .nanaly-workspace-drawer :is(input, textarea, select):focus { outline: none; box-shadow: 3px 3px 0 var(--skin-pink); }
+#nanaly-panel :is(.nanaly-workspace-drawer, .nanaly-workspace-recovery, .nanaly-workspace-undo) button { border: 2px solid var(--skin-ink); border-radius: 0; }
+#nanaly-panel :is(.nanaly-workspace-drawer, .nanaly-workspace-recovery, .nanaly-workspace-undo) button:hover { background: var(--skin-pink); }
+#nanaly-panel :is(.nanaly-memory-item, .nanaly-task-card) { border: 2px solid var(--skin-ink); border-radius: 0; background: var(--skin-paper); }
+#nanaly-panel :is(.nanaly-image-tray img, .nanaly-image-history img) { border: 2px solid var(--skin-ink); border-radius: 0; }
+#nanaly-panel .nanaly-image-tray button { border-radius: 0; }
+#nanaly-panel .nanaly-voice-settings .nanaly-voice-close { border-radius: 0; background: transparent; color: var(--skin-ink); }
+#nanaly-panel .nanaly-voice-settings .nanaly-voice-close:hover { background: var(--skin-pink); }
+#nanaly-panel .nanaly-voice-settings h3 { color: var(--skin-ink); font-weight: 800; }
+#nanaly-panel .nanaly-voice-preview {
+  border: 2px solid var(--skin-ink);
+  border-radius: 0;
+  background: var(--skin-pink);
+  color: var(--skin-ink);
+  font-weight: 700;
+  box-shadow: 3px 3px 0 var(--skin-ink);
+}
+#nanaly-panel .nanaly-voice-preview:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--skin-ink); }
+
+/* 工作室是单独弹出的对话框，不在聊天窗里面 */
+.nanaly-studio {
+  border: 2px solid var(--ink, #141519);
+  border-radius: 0;
+  background: var(--paper, #f2f0ea);
+  color: var(--text, #1f2126);
+  box-shadow: 8px 8px 0 var(--ink, #141519);
+}
+.nanaly-studio::backdrop { background: rgba(20, 21, 25, .45); backdrop-filter: none; }
+.nanaly-studio .studio-status { border-radius: 0; background: #e9e6de; }
+.nanaly-studio details { border: 2px solid var(--ink, #141519); border-radius: 0; background: #fbfaf6; }
+.nanaly-studio :is(input:not([type=checkbox]), textarea, select) { border: 2px solid var(--ink, #141519); border-radius: 0; background: #fff; }
+.nanaly-studio button { border: 2px solid var(--ink, #141519); border-radius: 0; background: var(--paper, #f2f0ea); color: var(--ink, #141519); font-weight: 600; box-shadow: 2px 2px 0 var(--ink, #141519); }
+.nanaly-studio button:hover:not(:disabled) { background: var(--pink, #f0508a); }
+.nanaly-studio :focus-visible { outline-color: var(--accent, #0a5c72); }
+.nanaly-studio article { border-top: 2px solid var(--line, #d3cfc4); }
+.studio-status[data-connection='connected'] { border-radius: 0; }
+
+/* 手机上聊天窗占满整屏，帽子、齿轮和音乐按钮原来浮在它上面，挡住对话；打开时让它们先藏起来 */
+@media (max-width: 640px) {
+  body:has(#nanaly-panel.is-open) :is(#mao-toggle, .mao-controls-trigger, #noimpty-music-player) {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}

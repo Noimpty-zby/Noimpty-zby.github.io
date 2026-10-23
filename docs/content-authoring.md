@@ -94,6 +94,7 @@ about_title: 关于这门课
 | `themes/noimpty/source/js/noimpty-theme.js` | 无刷新换页与转场、目录高亮、阅读进度、首页选曲、搜索框 |
 | `themes/noimpty/source/css/noimpty-compat.css` | 主题和私人功能接头的地方（练习台分栏、娜娜莉批注只给主人看） |
 | `source/css/widgets.css` | 私人组件共用的变量和左下角按钮坐标 |
+| `source/css/widget-skin.css` | 左下角三个按钮、音乐卡、Mao 设置卡和娜娜莉聊天窗的外观（纸色、墨线、硬阴影），排在各组件样式之后加载，只管外观 |
 | `source/css/nanaly-delight.css`、`music-stage.css` | 聊天表情与音乐频谱样式 |
 
 各系列的角色色只当色块用，上面压黑字（对比度都在 5 以上），不拿来当浅底上的文字色。转场遵守减少动态效果的设置；转场盖满之前不换内容，新页面不会从没盖住的地方露出来。

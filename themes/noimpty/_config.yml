@@ -14,7 +14,7 @@ avatar:
   square: /img/avatar/noimpty.webp
   card: /img/avatar/noimpty-card.webp
 
-favicon: /img/favicon.svg
+favicon: /img/favicon.svg?v=2
 
 social: []
 

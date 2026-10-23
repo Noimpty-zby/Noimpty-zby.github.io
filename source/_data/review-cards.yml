@@ -579,6 +579,40 @@ linux:
     back: 一个参数时新建用户 alice，同时建同名的组和家目录 /home/alice，并要求设置密码。两个参数时把已有的用户 alice 加进已有的组 devs。新建组用 `addgroup devs`，删除用 `deluser --remove-home` 和 `delgroup`。
   - front: 刚把 zby 加进 devs 组，为什么 `chown :devs notes.txt` 仍然被拒绝？
     back: 一个进程属于哪些组是登录时确定的，修改 /etc/group 不影响已经在运行的 Shell。所以 `groups zby` 里已经有 devs，`groups` 里还没有。重新登录，或者用 `sg devs -c "命令"`、`newgrp devs`，才能用上新的组。
+- post: Linux-Command-Line-Chapter15
+  cards:
+  - front: printenv 打印的是什么？每一行是什么格式？
+    back: 打印的是环境变量，也就是程序启动时从父进程那里得到的一组字符串，每行都是「名字=值」形式的键值对。变量太多时用 `printenv | less` 翻看；写上变量名时（`printenv HOME`）只打印值，变量不存在时什么都不打印，退出状态码是 1。
+  - front: '`echo $USER` 里的 `$USER` 是谁替换的？变量不存在时会怎样？'
+    back: 是 Shell 在运行 echo 之前替换的，这叫参数展开，echo 收到的只是 zby 这个字符串。双引号里的 $ 照样会被替换，单引号里的不会；不存在的变量被替换成空字符串，所以 `echo $nosuch` 只打印一个空行。
+  - front: '`animal = cat` 为什么报 command not found？'
+    back: 因为 Shell 按空格切分命令，animal 被当成了命令名，= 和 cat 成了它的参数，而系统里没有叫 animal 的命令。定义变量时等号两边不能有空格，要写成 `animal=cat`。
+  - front: 用 `animal=cat` 定义变量以后，`printenv animal` 为什么什么都不打印？
+    back: 这样定义的是 Shell 变量，只存在于当前的 Shell 里，不在环境变量当中。printenv 是 /usr/bin 下的独立程序，作为子进程运行，只能拿到父进程的环境变量。`declare -p animal` 打印 `declare -- animal="cat"`，`--` 表示没有导出属性。
+  - front: 定义了 animal=cat 以后输入 `bash`，新的 bash 里 `echo $animal` 打印什么？
+    back: 打印一个空行。新的 bash 是子进程，Shell 变量不会传给子进程；`exit` 回到原来的 Shell 以后，animal 仍然是 cat。所以 Shell 变量有点像局部变量，只在定义它的那个 Shell 里有效。
+  - front: export 做了什么？怎样看出一个变量已经导出了？
+    back: 它给变量加上导出属性。bash 启动子进程时，会把带这个属性的变量复制一份作为子进程的环境，所以导出的变量就成了环境变量。`declare -p animal` 打印 `declare -x animal="cat"`，`-x` 就是导出属性。`export animal=cat` 可以一步完成定义和导出。
+  - front: 在子进程 bash 里把导出的 animal 改成 dog，`exit` 以后父进程里的 animal 是什么？
+    back: 仍然是 cat。复制只会从父进程到子进程，子进程拿到的是一份副本，在子进程里修改只改了它自己的那一份，不会传回父进程。
+  - front: export 过的变量，在新打开的终端里还有吗？
+    back: 没有。新的终端窗口不是当前 Shell 的子进程，它的环境是在登录时重新建立的。关掉终端以后，这个 Shell 里的变量不管有没有导出都会消失，所以要长期有效就得写进 ~/.bashrc。不再需要的变量可以用 `unset animal` 删除。
+  - front: /etc/bash.bashrc 和 ~/.bashrc 有什么区别？
+    back: 每个交互式的 bash 启动时都会依次读取这两个文件。/etc/bash.bashrc 属于 root，这台机器上的所有用户共用，修改它需要 sudo；~/.bashrc 在用户自己的家目录里，只对这个用户起作用，是新建用户时从 /etc/skel/.bashrc 复制来的。平时要改的是 ~/.bashrc。
+  - front: 改完 ~/.bashrc，当前的终端里为什么还没有新的变量？能用 `bash ~/.bashrc` 让它生效吗？
+    back: 因为 ~/.bashrc 只在 bash 启动时读取一次。要用 `source ~/.bashrc`（或者 `. ~/.bashrc`）在当前的 Shell 里重新执行一遍，或者打开一个新的终端。`bash ~/.bashrc` 是在子进程里运行的，变量随子进程结束而消失，而且会报 return 只能用在函数或被 source 的文件里。
+  - front: 在 ~/.bashrc 里写 `color=red`（不加 export）和写 `export animal=cat`，有什么区别？
+    back: 两个变量在每个新终端里都有，因为每个交互式的 bash 都会重新执行这两行。但是 color 只是 Shell 变量，`printenv color` 打印不出来，`bash -c` 和 Shell 脚本这些不读 ~/.bashrc 的程序也看不到它，实测 `bash -c 'echo "color=$color animal=$animal"'` 打印的是 `color= animal=cat`。要给其他程序使用的变量必须 export。
+  - front: 登录 Shell 读哪些文件？为什么它最后也能读到 ~/.bashrc？
+    back: 先读 /etc/profile，再读 ~/.profile（家目录里有 ~/.bash_profile 时改读它）。Ubuntu 的 /etc/profile 会读入 /etc/bash.bashrc，~/.profile 里有一段代码在运行 bash 时读入 ~/.bashrc，所以最后都会读到。SSH 登录、`su -` 和 WSL 的终端都是登录 Shell，可以用 `shopt login_shell` 查看。
+  - front: 终端里运行的是 zsh 时，改 ~/.bashrc 有用吗？
+    back: 没有用。zsh 读的是自己的配置文件 ~/.zshrc，bash 的配置文件对它不起作用。`echo $0` 可以看到当前运行的是哪个 Shell。
+  - front: Ubuntu 上的 `ll` 是什么？怎样查看和定义别名？
+    back: 它是默认的 ~/.bashrc 定义的别名，相当于 `ls -alF`（同时定义的还有 la 和 l）。不带参数的 `alias` 列出全部别名，`alias ll` 只显示这一个；定义时写成 `alias ll='ls -la'`，等号两边不能有空格，值里有空格就要加引号。`unalias ll` 删除别名。
+  - front: 在终端里定义的别名，子进程 bash 里还有吗？
+    back: 没有。别名和 Shell 变量一样只属于当前的 Shell，而且别名没有导出的办法。子进程 bash 里的 ll 是 `ls -alF`，那是它启动时读 ~/.bashrc 重新定义的默认值。
+  - front: ~/.bash_aliases 为什么能生效？里面的 ll 为什么能覆盖默认的 ll？
+    back: 它不是 bash 规定的文件，是 Ubuntu 默认的 ~/.bashrc 第 104 到 106 行在它存在时用 `.` 读入的。默认的 `alias ll='ls -alF'` 在第 91 行，读入 ~/.bash_aliases 发生在它后面，后定义的同名别名会覆盖先定义的。
 git:
 - post: Git-Chapter0-Command-Line
   cards:

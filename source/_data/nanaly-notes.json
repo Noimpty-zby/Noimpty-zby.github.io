@@ -1080,20 +1080,38 @@
     ]
   },
   "/2026/10/21/Linux-Command-Line-Chapter14/": {
-    "hash": "cac1077099906608",
+    "hash": "7345fd13af170c2f",
     "title": "Linux 命令行第十四章：chmod、sudo、su 和 chown —— 属主自己能改权限，改属主要靠 root",
     "notes": [
       {
         "anchor": "逗号的前后不能有空格。如果写成 chmod g-x, o-r",
-        "text": "逗号后多一个空格就整条失败，这个坑我第一次也踩过，写脚本时尤其容易多敲。"
+        "text": "这个报错只在模式被拆成两个参数时才出现，写成 `chmod g-x,o-rx` 一般没事，但引号最保险。"
       },
       {
-        "anchor": "报错里的 0644 前面多了一个 0，这是因为数字写法最多可",
-        "text": "这里说的第一位是特殊权限位，setuid、setgid、sticky 各占一位，跟普通读写执行不是一回事。"
+        "anchor": "sudo 要求输入的是当前用户 zby 自己的密码，而不是 ",
+        "text": "15 分钟按终端算，开第二个终端还得重新输密码，这点容易以为全局生效。"
       },
       {
-        "anchor": "su 要求输入的是目标用户 alice 的密码，这一点和 s",
-        "text": "su 过去后环境变量还是原来的，PATH 可能指向旧用户目录，加减号才是完整登录。"
+        "anchor": "报错说 alice 还有一个进程在运行。用 journalc",
+        "text": "deluser 已经删了家目录却留下用户，删用户前先确认没有残留会话会省事很多。"
+      }
+    ]
+  },
+  "/2026/10/22/Linux-Command-Line-Chapter15/": {
+    "hash": "d3d7569a1493f957",
+    "title": "Linux 命令行第十五章：环境变量、export 和 ~/.bashrc —— 子进程只继承导出的变量",
+    "notes": [
+      {
+        "anchor": "HOME 是当前用户的家目录，USER 是用户名，LANG ",
+        "text": "PATH 的查找顺序是从前到后，前面的目录里有同名命令就会先被执行，这个坑后面装软件时会遇到。"
+      },
+      {
+        "anchor": "图 1 把导出前后的两种情况放在了一起。这里的子进程指的是从",
+        "text": "这里容易混：另开的终端虽不是子进程，但同样会继承登录时的环境，只是没有你后来定义的 animal。"
+      },
+      {
+        "anchor": "/.bashrc 开头的几行会检查当前的 Shell 是不是",
+        "text": "这个报错只出现在非交互式运行 ~/.bashrc 时，用 source 就不会，因为 source 不换 Shell。"
       }
     ]
   }

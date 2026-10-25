@@ -613,6 +613,42 @@ linux:
     back: 没有。别名和 Shell 变量一样只属于当前的 Shell，而且别名没有导出的办法。子进程 bash 里的 ll 是 `ls -alF`，那是它启动时读 ~/.bashrc 重新定义的默认值。
   - front: ~/.bash_aliases 为什么能生效？里面的 ll 为什么能覆盖默认的 ll？
     back: 它不是 bash 规定的文件，是 Ubuntu 默认的 ~/.bashrc 第 104 到 106 行在它存在时用 `.` 读入的。默认的 `alias ll='ls -alF'` 在第 91 行，读入 ~/.bash_aliases 发生在它后面，后定义的同名别名会覆盖先定义的。
+- post: Linux-Command-Line-Chapter16
+  cards:
+  - front: '`bash hi` 和直接输入 `hi`，运行的程序各是什么？各需要什么权限？'
+    back: '`bash hi` 运行的是 bash，hi 只是交给 bash 读取的参数，所以 hi 只要有 r 权限。直接输入 `hi` 要先在 PATH 里找到它，再由内核按第一行的 `#!/bin/bash` 启动 bash 来运行，所以 hi 既要有 x 权限，也要有 r 权限。'
+  - front: hi 就在当前目录里，为什么输入 `hi` 报 command not found？
+    back: 因为 bash 不会到当前目录里找命令。一个名字不是别名、函数和内建命令时，bash 只按 PATH 里的目录从左到右查找，当前目录不在 PATH 里。要运行当前目录里的程序就写成 `./hi`，名字里含有斜杠时 bash 不查 PATH，直接运行这个路径。
+  - front: PATH 的值是什么样的？bash 怎样用它查找命令？
+    back: 是一串用冒号隔开的目录，比如 /usr/local/bin:/usr/bin:/bin。bash 按从左到右的顺序在这些目录里查找同名的可执行文件，找到第一个就运行它，后面的目录不再查。查找是 Shell 自己做的，`which` 用的也是同一个顺序。
+  - front: 退出状态码 127 和 126 有什么区别？
+    back: '127 表示找不到命令，PATH 里的目录都没有这个名字。126 表示找到了文件但是不能运行，比如 ~/bin/hi 没有 x 权限时报 `bash: /home/zby/bin/hi: Permission denied`，错误信息里已经有完整的路径。'
+  - front: 为什么不能把自己的脚本命名为 test？起名前怎样检查？
+    back: test 是 Shell 的内建命令，bash 先查内建命令，查不到才去 PATH 里找，所以名叫 test 的脚本永远不会被执行。起名前用 `type 名字` 查一下，打印 not found 才说明这个名字没有被占用。
+  - front: Ubuntu 的 ~/.profile 是怎样把 ~/bin 加进 PATH 的？
+    back: 第 19 到 22 行用 `[ -d "$HOME/bin" ]` 检查 ~/bin 是否存在，存在就执行 `PATH="$HOME/bin:$PATH"`，把它加到最前面。加进 PATH 的是目录，所以放进 ~/bin 的每个脚本都能直接用名字运行。
+  - front: 刚执行完 `mkdir ~/bin` 并把 hi 移进去，为什么 hi 仍然找不到？
+    back: 因为 ~/.profile 只在登录时读取一次，当时 ~/bin 还不存在，条件不成立。要 `source ~/.profile` 在当前 Shell 里重新执行一遍，或者重新打开一个终端（WSL 的终端是登录 Shell）。桌面版 Ubuntu 要注销后重新登录；zsh 不读 ~/.profile，要在 ~/.zshrc 里自己写 export。
+  - front: ~/.profile 里修改 PATH 的那一行没写 export，为什么其他程序也能用到新的 PATH？
+    back: 因为 PATH 在登录时就已经是环境变量了，给已经导出的变量重新赋值，导出属性仍然保留，`declare -p PATH` 打印的开头仍然是 `declare -x`。
+  - front: '`chmod a+x ~/bin/hi` 以后，别的用户能运行 hi 吗？'
+    back: 实际上不能。Ubuntu 的家目录是 `rwxr-x---`，其他用户进不了 /home/zby，他们的 PATH 里也没有 /home/zby/bin。只给自己用的脚本写 `chmod u+x` 就够了。
+  - front: 内核遇到以 `#!` 开头的文件会怎样？输入 hi 时实际运行的是什么？
+    back: 内核把第一行剩下的部分当作解释器，运行 `interpreter [optional-arg] pathname arg...`。所以输入 `hi a b`，实际运行的是 `/bin/bash /home/zby/bin/hi a b`。`#!` 必须是文件最开头的两个字符，bash 读脚本时把这一行当作注释跳过。
+  - front: 给 hi 去掉 r 只留 x，运行时报什么？说明了什么？
+    back: '报 `/bin/bash: /home/zby/bin/hi: Permission denied`，开头是 /bin/bash。说明内核已经按第一行启动了 bash，是 bash 读不了脚本的内容。所以运行脚本既要 x 也要 r。'
+  - front: '`which bash` 打印 /usr/bin/bash，第一行写 `#!/bin/bash` 还对吗？'
+    back: 对。/bin 是指向 usr/bin 的符号链接，两个路径是同一个文件，`which` 打印 /usr/bin/bash 只是因为 PATH 里 /usr/bin 排在 /bin 前面（`which -a bash` 两个都会列出）。也常见 `#!/usr/bin/env bash`，让 env 按 PATH 查找 bash。
+  - front: 没有 shebang 的脚本，从 bash、env 和 Python 里运行分别会怎样？
+    back: '内核不认识它的格式，返回 Exec format error。bash 遇到这个错误会自己开一个子 Shell 执行，能正常运行；env 改用 /bin/sh，也就是 dash，`echo {1..3}` 原样打印 {1..3}；Python 直接报 OSError: [Errno 8] Exec format error。所以一定要写第一行。'
+  - front: 运行 `args -l /tmp` 时，`$1` 和 `$2` 是什么？Shell 区分选项和参数吗？
+    back: '`$1` 是 -l，`$2` 是 /tmp。Shell 不区分选项和参数，它们都只是命令行上的词，算不算选项由程序自己决定，ls 看到以减号开头的参数才当作选项处理。'
+  - front: '`args "hello world" again`、`args one`、`args a b c` 里的 `$1`、`$2` 各是什么？'
+    back: 第一条 `$1` 是 hello world（引号里的空格不拆分），`$2` 是 again；第二条 `$2` 是空的，缺少的位置参数被替换成空字符串；第三条 `$1`、`$2` 是 a 和 b，c 也传进了脚本，只是 `$3` 没被用到。
+  - front: '`$0` 和 `$#` 是什么？用 `args a b c` 运行时各是多少？'
+    back: '`$0` 是脚本的路径，通过 PATH 运行时是 /home/zby/bin/args，因为内核运行的是 `/bin/bash /home/zby/bin/args a b c`。`$#` 是参数的个数，不包括 `$0`，这里是 3。'
+  - front: '`case` 语句怎样选择分支？`;;`、`esac`、`|`、`*` 各是什么意思？'
+    back: 拿 `case` 后面的值从上往下和每个模式比较，执行第一个匹配的分支，执行到 `;;` 为止，然后跳到 `esac` 后面。`esac` 是 case 倒过来写，表示语句结束；`-h | --help)` 用 `|` 匹配多种写法；`*` 匹配任意字符串，放在最后当默认分支，放在最前面会让后面的分支永远执行不到。漏写 `;;` 报 syntax error near unexpected token，漏写 esac 报 unexpected end of file。
 git:
 - post: Git-Chapter0-Command-Line
   cards:

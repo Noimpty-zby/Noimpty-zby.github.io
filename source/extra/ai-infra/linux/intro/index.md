@@ -12,7 +12,7 @@ course:
   - ["讲师", "Colt Steele"]
   - ["平台", "Udemy · 英文授课"]
   - ["环境", "Bash · 任意发行版"]
-progress: "第十六章已完成"
+progress: "从终端和 Shell 一直学到 cron 定时任务"
 chapters:
   - "文件系统"
   - "增删改查"
@@ -22,4 +22,5 @@ chapters:
   - "搜索"
   - "编辑器"
   - "Shell 脚本"
+  - "定时任务"
 ---

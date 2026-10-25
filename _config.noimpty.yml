@@ -27,7 +27,7 @@ home:
 series:
   DSA: { name: 数据结构与算法, en: DATA STRUCTURES, code: C, color: '#22c3e6', path: /in-class/dsa/, area: 课内, by: Abdul Bari · C / C++ · 约 53 小时, status: 连载中 }
   CSAPP: { name: CSAPP, en: COMPUTER SYSTEMS, code: CS, color: '#ff7b6b', path: /in-class/csapp/, area: 课内, by: Carnegie Mellon University · 约 150 小时 }
-  Linux入门: { name: Linux 命令行, en: LINUX CLI, code: SH, color: '#c6f432', path: /extra/ai-infra/linux/intro/, area: 课外, by: Colt Steele · Beginner To Power User, status: 连载中 }
+  Linux入门: { name: Linux 命令行, en: LINUX CLI, code: SH, color: '#c6f432', path: /extra/ai-infra/linux/intro/, area: 课外, by: Colt Steele · Beginner To Power User, status: 已学完 }
   Linux深入: { name: Linux 深入, en: LINUX INTERNALS, code: OS, color: '#7fd858', path: /extra/ai-infra/linux/advanced/, area: 课外, by: 资料还没定 }
   Git: { name: Git, en: GIT, code: GIT, color: '#ff7a2f', path: /extra/ai-infra/git/, area: 课外, by: Colt Steele · The Git & Github Bootcamp, status: 已学完 }
   Go: { name: Go, en: GO, code: GO, color: '#2fd6c0', path: /extra/ai-infra/go/, area: 课外, by: "Stephen Grider · The Complete Developer's Guide" }

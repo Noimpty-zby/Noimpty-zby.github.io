@@ -649,6 +649,40 @@ linux:
     back: '`$0` 是脚本的路径，通过 PATH 运行时是 /home/zby/bin/args，因为内核运行的是 `/bin/bash /home/zby/bin/args a b c`。`$#` 是参数的个数，不包括 `$0`，这里是 3。'
   - front: '`case` 语句怎样选择分支？`;;`、`esac`、`|`、`*` 各是什么意思？'
     back: 拿 `case` 后面的值从上往下和每个模式比较，执行第一个匹配的分支，执行到 `;;` 为止，然后跳到 `esac` 后面。`esac` 是 case 倒过来写，表示语句结束；`-h | --help)` 用 `|` 匹配多种写法；`*` 匹配任意字符串，放在最后当默认分支，放在最前面会让后面的分支永远执行不到。漏写 `;;` 报 syntax error near unexpected token，漏写 esac 报 unexpected end of file。
+- post: Linux-Command-Line-Chapter17
+  cards:
+  - front: cron 是什么？它多久检查一次 crontab？
+    back: cron 是随系统启动、一直在后台运行的守护进程，程序是 /usr/sbin/cron。它每分钟醒来一次，检查所有用户的 crontab，把这一分钟该运行的命令交给 /bin/sh 执行，命令以 crontab 主人的身份运行。`systemctl is-active cron` 打印 active 说明它在运行。
+  - front: 为什么不直接编辑 /var/spool/cron/crontabs 里的文件，而要用 `crontab -e`？
+    back: 普通用户没有这个目录的权限，连 `ls` 都报 Permission denied。/usr/bin/crontab 的属组是 crontab，权限里带 s（`-rwxr-sr-x`），运行时借用 crontab 组的身份才能写进去。`crontab -e` 编辑的是 /tmp 下的临时副本，退出编辑器后先检查语法，没有错误才安装，同时更新目录的修改时间，cron 下一分钟就会重新读入，不用重启。
+  - front: 第一次运行 `crontab -e` 时选的编辑器保存在哪里？以后怎样换？
+    back: 保存在 ~/.selected_editor 里，以后不再询问；想换编辑器就运行 `select-editor` 重新选。如果设置了环境变量 VISUAL 或 EDITOR，`crontab -e` 会直接用它们指定的编辑器，不出现菜单。
+  - front: 保存 crontab 时报 bad minute，问要不要 retry，回答 y 和 n 各会怎样？
+    back: 回答 y 会用编辑器重新打开刚才那份内容，改正后再保存；回答 n 放弃这次修改，原来的 crontab 不变，写的内容留在提示的 /tmp/crontab.XXXXXX/crontab 里。报错前那行 installing new crontab 并不代表装上了。
+  - front: crontab 一行的五个时间字段依次是什么？各自的取值范围是多少？
+    back: 分钟 0–59、小时 0–23、日 1–31、月 1–12（也可以写 jan 这样的缩写）、星期 0–7（0 和 7 都是星期日，也可以写 sun）。剩下的部分是命令，交给 /bin/sh 执行。超出范围会被拒绝，比如星期写 8 报 bad day-of-week，小时写 24 报 bad hour。
+  - front: '`30 * * * * command` 一天运行几次？想每天 9:30 运行一次应该怎么写？'
+    back: 24 次，在 0:30、1:30……23:30 各运行一次，因为小时字段是 `*`，每个小时都算。每天一次要把小时也写成具体的值，也就是 `30 9 * * *`。
+  - front: 时间字段里的逗号、短横线和斜杠各表示什么？
+    back: 逗号是列表，小时写 `8,12,18` 就是这三个整点；短横线是范围，两端都包括，`9-17` 是 9 点到 17 点的每个小时；斜杠是步长，跟在 `*` 或范围后面，`*/6` 是 0、6、12、18 点，`1-59/2` 是奇数分钟。列表的每一项也可以是范围，比如 `0-4,8-12`。
+  - front: 分钟字段写 `*/7`，是严格的每隔 7 分钟运行一次吗？
+    back: 不是。步长从范围的起点开始数，到终点就停，取的是 0、7、14……56 这几分钟，下一个小时又从 0 开始，所以 56 分到下一个 0 分只隔 4 分钟。只有能整除 60 的步长才是均匀的。
+  - front: '`30 4 1,15 * 5` 会在什么时候运行？'
+    back: 每个月 1 号和 15 号的 4:30，另外每个星期五的 4:30 也会运行。日和星期两个字段都写了具体的值时，只要有一个对得上就运行，而不是两个都要对上。
+  - front: '`@daily`、`@hourly` 和 `@reboot` 是什么意思？'
+    back: 它们整体代替前五个字段。`@daily` 等于 `0 0 * * *`，`@hourly` 等于 `0 * * * *`，`@weekly`、`@monthly` 也和名字的意思一样；`@reboot` 在 cron 启动时运行一次，通常就是开机的时候。
+  - front: cron 里运行命令的环境和终端里有什么不同？
+    back: 只有 HOME、LOGNAME、PATH、LANG、SHELL、PWD 这 6 个变量。SHELL 是 /bin/sh，在 Ubuntu 上是 dash，`{1..3}` 不会展开；不读 ~/.profile 和 ~/.bashrc，所以 PATH 里没有 ~/bin，别名也都没有；没有 USER 变量。命令在家目录里执行，`~` 照常展开成 /home/zby。
+  - front: 把放在 ~/bin 里的脚本 hi 直接写进 crontab 会怎样？应该怎么改？
+    back: '报 `/bin/sh: 1: hi: not found`，因为 cron 的 PATH 里没有 ~/bin。改成完整路径 /home/zby/bin/hi，或者在 crontab 开头写一行 `PATH=/home/zby/bin:/usr/bin:/bin`。crontab 里的赋值不展开变量，写 `PATH=$HOME/bin:$PATH` 不行。另外 hi 里的 `$USER` 在 cron 里是空的。'
+  - front: cron 任务的输出如果没有重定向，会到哪里去？
+    back: cron 会把输出用邮件发给 crontab 的主人。没有安装邮件程序（MTA）的机器上，输出直接被丢掉，系统日志里记一行 `(CRON) info (No MTA installed, discarding output)`。所以命令一般写成 `命令 >> 文件 2>&1`，把输出和错误信息都追加到文件里。
+  - front: 为什么 `* * * * * date +%H:%M >> ~/time.log` 不会生成 time.log？
+    back: crontab 的命令部分里，第一个 `%` 会被换成换行，后面的内容变成命令的标准输入。实际执行的只有 `date +`，系统日志里记的是 `CMD (date +)`，重定向也一起失效了。要写成 `date +\%H:\%M`。
+  - front: 怎样确认一个 cron 任务到底有没有被启动？
+    back: 查系统日志，`grep -a CRON /var/log/syslog | tail`。cron 每启动一条命令都会记一行 `(用户) CMD (命令)`，有这一行说明 cron 启动了它，问题出在命令本身；没有就检查时间字段写得对不对、cron 是否在运行。syslog 里混进空字节时，不加 `-a` 的 grep 只会打印 binary file matches。
+  - front: '`crontab -r` 危险在哪里？怎样防止误删？'
+    back: 它不做确认就删掉整张 crontab，而键盘上 r 和 e 挨着。加 `-i` 会先问一句再删。修改前先用 `crontab -l > ~/crontab.bak` 备份，删错了用 `crontab ~/crontab.bak` 装回来；只想删一个任务就用 `crontab -e` 删掉那一行。
 git:
 - post: Git-Chapter0-Command-Line
   cards:

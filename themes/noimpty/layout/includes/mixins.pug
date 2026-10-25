@@ -24,3 +24,32 @@ mixin postRow(post, opts)
       span.row__title= post.title
       if !opts.hideSeries && s
         span.row__series= s.name
+
+//- 首页的时间条：左边是访客本地的此刻，右边是建站到现在的时长，底下一条 24 小时的轨道，判定线停在现在。
+//- 数字由 noimpty-theme.js 每秒刷新，这里只放占位
+mixin clock(since)
+  .clock(data-clock data-intro data-since=since role="group" aria-label="此刻与建站时长")
+    .clock__now
+      span.clock__tag 此刻
+        i LOCAL TIME
+      time.clock__time
+        span.clock__hm --:--
+        span.clock__s --
+      span.clock__date &nbsp;
+    .clock__up
+      span.clock__tag 已运行
+        i UPTIME
+      p.clock__days
+        b.clock__d --
+        | 天
+      span.clock__hms --:--:--
+      span.clock__since SINCE #{since.slice(0, 10).replace(/-/g, '.')}
+    .clock__lane(aria-hidden="true")
+      .clock__track
+        span.clock__fill
+        span.clock__judge
+      span.clock__pct
+      span.clock__perfect PERFECT
+      ol.clock__hours
+        each h in ['00', '06', '12', '18', '24']
+          li= h

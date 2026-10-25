@@ -364,6 +364,89 @@
     document.addEventListener('keydown', selectKeys)
   }
 
+  /* ---------------- 手机上左下角那一摞：平时缩在边上 ---------------- */
+  // 音乐、娜娜莉、Mao 三个按钮叠在正文左边会挡字。手机上除了首页，进页面就缩进左边只露一条边（样式在 widgets.css），
+  // 往上滑、到了页底、点那条边才出来，再往下读又缩回去。有面板开着时不缩。
+  // 缩着的时候点那条边只是把它们叫出来，不会顺手打开什么。
+  const CORNER = '#noimpty-music-player, #nanaly-launcher, #nanaly-poke, #mao-toggle, .mao-controls-trigger'
+  const narrow = window.matchMedia ? matchMedia('(max-width: 760px)') : null
+  const tucked = () => root.classList.contains('nm-tuck')
+  const tuck = on => root.classList.toggle('nm-tuck', !!on)
+  const cornerBusy = () => !narrow || !narrow.matches || !!$('#noimpty-music-player:not(.is-collapsed), #nanaly-panel.is-open, .mao-controls-panel:not([hidden])')
+  let lastY = scrollY
+  let travel = 0
+  const settleCorner = () => {
+    lastY = scrollY
+    travel = 0
+    tuck(!cornerBusy() && !$('.home'))
+  }
+  addEventListener('scroll', () => {
+    const y = scrollY
+    const dy = y - lastY
+    lastY = y
+    if (cornerBusy()) {
+      travel = 0
+      if (tucked()) tuck(false)
+      return
+    }
+    // 只认同一个方向上连续滑过的距离，手指抖一下不算
+    travel = (dy > 0) === (travel > 0) ? travel + dy : dy
+    if (innerHeight + y >= root.scrollHeight - 80 || travel < -30) tuck(false)
+    else if (travel > 30) tuck(true)
+  }, { passive: true })
+  const wake = event => {
+    if (!tucked() || !event.target.closest || !event.target.closest(CORNER)) return
+    event.stopPropagation()
+    if (event.type === 'click') { event.preventDefault(); tuck(false) }
+  }
+  // 挂在 document 的捕获阶段，比按钮自己的监听先到（Mao 的帽子按住会切出声，也要一起拦下）
+  document.addEventListener('pointerdown', wake, true)
+  document.addEventListener('click', wake, true)
+  // 只认键盘切过来的焦点：手指按下时按钮也会先拿到焦点，那时候要留给上面的 click 去拦
+  document.addEventListener('focusin', event => {
+    const el = event.target
+    if (el.closest && el.closest(CORNER) && el.matches(':focus-visible')) tuck(false)
+  })
+
+  /* ---------------- 首页时间条：此刻、已运行、今天走到哪 ---------------- */
+  let clockTimer = null
+  const WEEK = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+  const mountClock = () => {
+    clearTimeout(clockTimer)
+    clockTimer = null
+    const box = $('[data-clock]')
+    if (!box) return
+    const since = Date.parse(box.dataset.since)
+    const pad = n => String(n).padStart(2, '0')
+    const put = (selector, text) => { const el = $(selector, box); if (el && el.textContent !== text) el.textContent = text }
+    const judge = $('.clock__judge', box)
+    let minute = -1
+    const tick = () => {
+      if (!document.body.contains(box)) return
+      const now = new Date()
+      const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds()
+      put('.clock__hm', `${pad(h)}:${pad(m)}`)
+      put('.clock__s', pad(s))
+      put('.clock__date', `${now.getFullYear()}.${pad(now.getMonth() + 1)}.${pad(now.getDate())}  ${WEEK[now.getDay()]} · 周${'日一二三四五六'[now.getDay()]}`)
+      const day = (h * 3600 + m * 60 + s) / 86400
+      box.style.setProperty('--day', day.toFixed(5))
+      put('.clock__pct', `${Math.floor(day * 100)}%`)
+      if (since) {
+        const up = Math.max(0, Math.floor((now - since) / 1000))
+        put('.clock__d', String(Math.floor(up / 86400)))
+        put('.clock__hms', `${pad(Math.floor(up % 86400 / 3600))}:${pad(Math.floor(up % 3600 / 60))}:${pad(up % 60)}`)
+      }
+      if (motionOK()) {
+        // 每秒判定线跳一下；换分钟时打一个 PERFECT
+        if (judge && judge.animate) judge.animate([{ transform: 'scaleY(1.7)', background: 'var(--cyan)' }, { transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.2, .9, .3, 1)' })
+        if (minute >= 0 && m !== minute) { box.classList.remove('is-hit'); void box.offsetWidth; box.classList.add('is-hit') }
+      }
+      minute = m
+      clockTimer = setTimeout(tick, 1005 - now.getMilliseconds())
+    }
+    tick()
+  }
+
   /* ---------------- 文章页：目录、进度、读完 ---------------- */
   let readCleanup = null
   const mountReading = () => {
@@ -427,11 +510,13 @@
   const mount = fromNavigation => {
     syncOwner()
     closeMenus()
+    settleCorner()
     $$('[data-intro]').forEach(el => {
       el.style.setProperty('--delay', fromNavigation && phase === 'cover' ? '.3s' : '.05s')
       if (motionOK()) replay(el)
     })
     mountSelect()
+    mountClock()
     mountReading()
     foldCode(document)
   }

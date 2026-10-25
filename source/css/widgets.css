@@ -43,6 +43,16 @@
   }
 }
 
+/* 手机上这一摞叠在正文左边会挡字（2026-10-25）。除了首页，平时整摞缩进左边，只露出右边一条（角色色的折角还看得见）；
+ * 往上滑、到了页底、点那条边再出来，往下读又缩回去。开关是 html.nm-tuck，由主题的 noimpty-theme.js 只在窄屏、
+ * 而且音乐/聊天/Mao 设置都收着的时候加上。用 translate 挪：音乐展开时三个按钮也靠 translate 让位，
+ * 但那时不会缩进，两边不打架。齿轮和娜娜莉的提示泡泡缩进去以后会挤到边上，直接藏起来。 */
+@media (max-width: 760px) {
+  #noimpty-music-player { transition: translate .3s cubic-bezier(.22, .75, .24, 1); }
+  html.nm-tuck :is(#noimpty-music-player, #nanaly-launcher, #mao-toggle) { translate: calc(10px - var(--corner-left) - var(--corner-size)) 0; }
+  html.nm-tuck :is(.mao-controls-trigger, #nanaly-poke) { opacity: 0; visibility: hidden; pointer-events: none; }
+}
+
 
 /* 只增强圆角、布局和动效；颜色由原有组件样式管理。 */
 :where(#nanaly-panel, #nanaly-launcher, #nanaly-poke, #nanaly-selbtn, #noimpty-music-player, #noimpty-schedule, .nanaly-note) {
@@ -178,24 +188,7 @@ body:has(#noimpty-music-player:not(.is-collapsed)) #nanaly-panel .nanaly-body { 
 
 /* 手机抽屉沿用原来的 .open 与 transform，只换纸面和按钮反馈。 */
 
-#noimpty-schedule :is(.sch-review, .sch-cal, .sch-course, .sch-next, .sch-panel, .sch-seed, .sch-condform) {
-  border-radius: 18px;
-}
-#noimpty-schedule .sch-cell { border-radius: 11px; transition: transform .2s var(--sc-ease), opacity .18s ease; }
-#noimpty-schedule .sch-chip { border-radius: 6px; }
-#noimpty-schedule :is(.sch-nav, .sch-today, .sch-save, .sch-mini, .sch-cond, .sch-condform button, .sch-tick) {
-  border-radius: 10px;
-}
-#noimpty-schedule .sch-tick { border-radius: 6px; }
-#noimpty-schedule :is(.sch-add input, .sch-edit, .sch-condform input, .sch-condform select, .sch-seed select) {
-  border-radius: 11px;
-}
-#noimpty-schedule :is(.sch-add button, .sch-save.is-dirty, .sch-condform button[type='submit'], .sch-savebar button) {
-  border-width: 1px;
-  border-style: solid;
-  border-radius: 11px;
-}
-#noimpty-schedule .sch-savebar { border-width: 1px; border-style: solid; border-radius: 16px; }
+/* 日程页的形状（直角、墨线）2026-10-25 起在 schedule.css 末尾，跟新主题一起管。 */
 
 /* Keep the current box sizes where the original component had no visible border. */
 .nanaly-head__avatar,
@@ -203,8 +196,6 @@ body:has(#noimpty-music-player:not(.is-collapsed)) #nanaly-panel .nanaly-body { 
 .nanaly-msg pre,
 .nanaly-send,
 .noimpty-music-disc,
-#noimpty-schedule .sch-add button,
-#noimpty-schedule .sch-savebar,
 #noimpty-schedule .sch-savebar button { border-color: transparent; }
 
 /* 反馈只动画 transform / opacity；不反复重排输入区或消息内容。 */

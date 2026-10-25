@@ -78,6 +78,8 @@ block content
         ol.rows.rows--timeline
           each post in all.slice(0, 7)
             +postRow(post)
+        if theme.home.since
+          +clock(theme.home.since)
     else
       section.block.doors
         .block__head
@@ -90,3 +92,5 @@ block content
               span.door__code= hub.code
               span.door__name= hub.name
               span.door__en= hub.en
+        if theme.home.since
+          +clock(theme.home.since)

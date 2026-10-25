@@ -125,7 +125,8 @@ img { max-width: 100%; height: auto }
 .row__no { font: italic 700 17px/1 var(--cond); color: var(--muted); min-width: 2ch }
 .row__date { font: italic 600 17px/1 var(--cond); letter-spacing: .03em; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap }
 .row__title { font-size: 16.5px; font-weight: 600; color: var(--ink); min-width: 0 }
-.row__series { font-size: 13px; font-weight: 500; color: var(--text2); white-space: nowrap }
+.row__series { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; color: var(--text2); white-space: nowrap }
+.row__series::before { content: ""; width: 12px; height: 10px; background: var(--sc); box-shadow: 0 0 0 1.5px var(--ink); transform: skewX(-18deg) }
 .rows--timeline { padding-left: 26px }
 .rows--timeline::before { content: ""; position: absolute; left: 6px; top: 8px; bottom: 8px; width: 2px; background: var(--line-strong) }
 .rows--timeline, .rows--chapters { position: relative }
@@ -238,6 +239,38 @@ img { max-width: 100%; height: auto }
 .door__code { font: italic 800 56px/.9 var(--cond) }
 .door__name { font-size: 20px; font-weight: 700 }
 .door__en { font: italic 700 13px/1 var(--cond); letter-spacing: .16em; color: var(--muted) }
+.doors__grid { max-width: 560px }
+
+/* 首页时间条：左边此刻用课内的青，右边已运行用课外的粉；底下 24 小时一条轨道，判定线停在现在，整分钟打一次 PERFECT */
+.clock { position: relative; overflow: hidden; isolation: isolate; display: grid; grid-template-columns: 1fr auto; gap: 26px 24px; max-width: 560px; margin-top: 30px; padding: 20px 34px 16px 30px; color: #fff; background: var(--ink); clip-path: polygon(0 0, 100% 0, calc(100% - 22px) 100%, 0 100%) }
+.clock::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 8px; background: linear-gradient(var(--cyan) 0 50%, var(--pink) 50%) }
+.clock::after { content: ""; position: absolute; z-index: -1; inset: 0; pointer-events: none; background: radial-gradient(rgba(240, 80, 138, .42) 1.2px, transparent 1.4px) 0 0 / 7px 7px; -webkit-mask: linear-gradient(90deg, transparent 50%, #000); mask: linear-gradient(90deg, transparent 50%, #000) }
+.clock.is-enter { animation: nm-result .42s calc(var(--delay) + .12s) cubic-bezier(.2, 1.3, .4, 1) both }
+.clock__tag { display: inline-flex; align-items: baseline; gap: 8px; padding: 3px 12px 2px 9px; font-size: 13px; font-weight: 700; line-height: 1.3; color: var(--ink); background: var(--cyan); clip-path: polygon(7px 0, 100% 0, calc(100% - 7px) 100%, 0 100%) }
+.clock__tag i { font: italic 700 12px/1 var(--cond); letter-spacing: .14em }
+.clock__up .clock__tag { background: var(--pink) }
+.clock__time { display: flex; align-items: baseline; margin-top: 12px; font: italic 800 66px/.86 var(--cond); letter-spacing: .01em; font-variant-numeric: tabular-nums; white-space: nowrap }
+.clock__hm { display: inline-block }
+.clock__s { margin-left: 6px; font-size: 30px; color: var(--cyan) }
+.clock__date { display: block; margin-top: 10px; font: italic 700 15px/1 var(--cond); letter-spacing: .12em; color: #b9bec8; white-space: nowrap }
+.clock__up { display: flex; flex-direction: column; align-items: flex-end }
+.clock__days { margin: 12px 0 0; font-size: 16px; font-weight: 700; line-height: .86; white-space: nowrap }
+.clock__d { margin-right: 4px; font: italic 800 66px/.86 var(--cond); color: var(--pink); font-variant-numeric: tabular-nums }
+.clock__hms { margin-top: 8px; font: italic 700 22px/1 var(--cond); letter-spacing: .04em; font-variant-numeric: tabular-nums }
+.clock__since { margin-top: 6px; font: italic 700 12px/1 var(--cond); letter-spacing: .14em; color: #b9bec8 }
+.clock__lane { --at: clamp(18px, calc(var(--day, 0) * 100%), calc(100% - 18px)); grid-column: 1 / -1; position: relative; padding-top: 22px }
+.clock__track { position: relative; height: 12px; transform: skewX(-18deg); background: repeating-linear-gradient(90deg, rgba(255, 255, 255, .34) 0 2px, transparent 2px calc(100% / 24)), rgba(255, 255, 255, .1) }
+.clock__fill { position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--day, 0) * 100%); background: repeating-linear-gradient(90deg, var(--cyan) 0 6px, color-mix(in srgb, var(--cyan) 45%, var(--ink)) 6px 9px) }
+.clock__judge { position: absolute; top: -7px; bottom: -7px; left: calc(var(--day, 0) * 100%); width: 4px; margin-left: -2px; background: #fff; box-shadow: 0 0 0 2px var(--ink), 0 0 10px 2px color-mix(in srgb, var(--cyan) 70%, transparent) }
+.clock__pct, .clock__perfect { position: absolute; top: 0; left: var(--at); transform: translateX(-50%); font: italic 800 14px/1 var(--cond); letter-spacing: .08em; white-space: nowrap; font-variant-numeric: tabular-nums }
+.clock__perfect { top: -6px; color: var(--cyan); letter-spacing: .16em; opacity: 0; pointer-events: none }
+.clock.is-hit .clock__pct { animation: nm-pct .9s both }
+.clock.is-hit .clock__perfect { animation: nm-perfect .9s cubic-bezier(.2, 1.4, .4, 1) both }
+.clock.is-hit .clock__hm { animation: nm-tick .32s cubic-bezier(.2, 1.3, .4, 1) both }
+@keyframes nm-perfect { 0% { opacity: 0; transform: translate(-50%, 8px) scale(.7) } 25% { opacity: 1; transform: translate(-50%, 0) scale(1.08) } 70% { opacity: 1 } 100% { opacity: 0; transform: translate(-50%, -6px) } }
+@keyframes nm-pct { 0%, 80% { opacity: 0 } 100% { opacity: 1 } }
+@keyframes nm-tick { from { transform: translateX(14px) skewX(-12deg); opacity: .35 } }
+.clock__hours { display: flex; justify-content: space-between; list-style: none; margin: 7px 0 0; padding: 0; font: italic 700 12px/1 var(--cond); letter-spacing: .08em; color: #8d939e }
 
 /* ---------- 文章页 ---------- */
 .post { padding-top: 56px; overflow-x: clip }
@@ -643,6 +676,10 @@ html.noimpty-private-locked #body-wrap { pointer-events: none; user-select: none
   .page-head__avatar { grid-column: 1; grid-row: auto; width: 120px; margin-bottom: 20px }
   .place-about .prose { padding: 20px 16px; margin: 0 -16px; border-width: 2px 0 }
   .rows--chapters { margin: 0 -16px; border-width: 2px 0 }
+  .clock { gap: 22px 12px; padding: 18px 28px 14px 22px }
+  .clock__time, .clock__d { font-size: 52px }
+  .clock__s { font-size: 24px }
+  .clock__date { font-size: 13px; letter-spacing: .08em }
   .tx__cut-card { left: 8vw }
   .tx__cut-text { left: 8vw; right: 8vw; top: auto; bottom: 8%; transform: none; color: var(--ink) }
   .tx__big, .tx__title { color: var(--ink) !important }
@@ -651,6 +688,10 @@ html.noimpty-private-locked #body-wrap { pointer-events: none; user-select: none
   .noimpty-gate__form { grid-template-columns: 1fr }
 }
 @keyframes nm-fade { from { opacity: 0 } to { opacity: 1 } }
+@media (max-width: 400px) {
+  .clock { grid-template-columns: 1fr }
+  .clock__up { align-items: flex-start }
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important }
 }

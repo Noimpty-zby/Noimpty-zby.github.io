@@ -1,7 +1,7 @@
 /* 学习总览的数据源。
  *
- * 章节清单是从 track 页的 HTML 里**现解析**的，不另外维护一份 ——
- * 好处是不用两头同步，代价是那几页的写法一改就可能静默解析出 0 章：
+ * 章节清单写在 track 页 front-matter 的 chapters: 里（2026-10-25 之前是从页面正文的列表里现解析，那一套仍留作兜底）。
+ * 哪一页漏写或者写法一改就可能静默解析出 0 章：
  * 页面上只是少一个「共几章」的分母和「从课程铺任务」的按钮，不报错、
  * 构建全绿，没人会发现。这个文件就是拦这个的。
  *
@@ -85,6 +85,12 @@ check('没有列表、格式不对、空串都不炸', () => {
   assert.deepEqual(chaptersOf('<p>一段话</p>'), [])
   assert.deepEqual(chaptersOf('<ul><li>没有 b 标签</li></ul>'), [])
   assert.equal(leafOf(''), '')
+})
+
+check('★ front-matter 里的 chapters: 优先，带引号、带冒号的名字都认', () => {
+  const raw = '---\ntitle: x\nchapters:\n  - "Lab 1：Data Lab"\n  - 数组\n  - \'哈希\'\nprogress: "字符串"\n---\n<ul><li><b>甲</b></li><li><b>乙</b></li><li><b>丙</b></li></ul>'
+  assert.deepEqual(chaptersOf(raw), ['Lab 1：Data Lab', '数组', '哈希'])
+  assert.deepEqual(chaptersOf('---\ntitle: x\n---\n<ul><li><b>甲</b></li><li><b>乙</b></li><li><b>丙</b></li></ul>'), ['甲', '乙', '丙'])
 })
 
 check('★ 叶子名里带空格的也要认（Transformer 推理机制）', () => {

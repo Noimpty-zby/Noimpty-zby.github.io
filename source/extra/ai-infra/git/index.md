@@ -13,20 +13,13 @@ course:
   - ["平台", "Udemy · 英文授课"]
   - ["配套", "GitHub 协作流程"]
 progress: "从命令行速成一直学到全局配置与别名"
-about_title: "关于这门课"
+chapters:
+  - "基本循环"
+  - "分支与合并"
+  - "比较与暂存"
+  - "撤销"
+  - "远程"
+  - "协作"
+  - "变基"
+  - "底层"
 ---
-
-<p>Colt Steele。<code>add</code> / <code>commit</code> / <code>push</code> 三条命令谁都会敲，这门课要解决的是另外那件事：<b>改崩了怎么回去。</b>它会把 Git 底层存了什么讲开，所以 <code>reset</code> 和 <code>revert</code> 的区别不再需要背。</p>
-<h3>课程覆盖</h3>
-<ul>
-  <li><b>基本循环</b> —— 工作区、暂存区、仓库三者的关系，以及一次提交到底发生了什么</li>
-  <li><b>分支与合并</b> —— 创建、切换、快进合并与三方合并、冲突怎么解</li>
-  <li><b>比较与暂存</b> —— <code>diff</code> 的几种用法、<code>stash</code></li>
-  <li><b>撤销</b> —— <code>checkout</code> / <code>restore</code> / <code>reset</code> / <code>revert</code> 各自撤销的是什么</li>
-  <li><b>远程</b> —— remote、<code>fetch</code> 与 <code>pull</code> 的差别、追踪分支</li>
-  <li><b>协作</b> —— 功能分支、Pull Request、Fork 与开源贡献流程</li>
-  <li><b>变基</b> —— <code>rebase</code> 与交互式变基，以及那条「不要对已推送的提交变基」的规矩</li>
-  <li><b>底层</b> —— refs、对象与 SHA、<code>reflog</code>（后悔药的后悔药）</li>
-</ul>
-<h3>这里会写什么</h3>
-<p>这个博客本身就是一个 Git 仓库，还有几个定时任务会自动往里提交 —— 所以「两边同时改同一个文件」这种事是每天都在发生的常态，不是教科书例题。这里会写<b>真撞上的冲突和它的解法</b>、<b>每一次「完了，写的东西没了」以及最后是怎么找回来的</b>，还有<b>为什么某条命令看起来对但用错了场合</b>。</p>

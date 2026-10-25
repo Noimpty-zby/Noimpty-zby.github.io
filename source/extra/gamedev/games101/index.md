@@ -13,7 +13,4 @@ course:
   - ["语言", "中文授课 · C++ 作业"]
   - ["课程主页", "<a href=\"https://sites.cs.ucsb.edu/~lingqi/teaching/games101.html\" target=\"_blank\" rel=\"noopener\">sites.cs.ucsb.edu</a>"]
 progress: "作业一至作业四已完成"
-about_title: "关于这门课"
 ---
-
-<p>闫令琪（UC Santa Barbara）。课程分四块：光栅化、几何、光线追踪、动画与模拟，配四次 C++ 编程作业。这里收课程笔记和作业复盘。</p>

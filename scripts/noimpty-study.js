@@ -9,9 +9,10 @@
  * 和当初把 /about/ 从白名单里收回去、以及娜娜莉的行动日志要加密，是同一条理由。
  * 内联在日程页里就没有这个问题：那一页本来就跟着全站一起上锁。
  *
- * 章节清单是从 track 页的「课程覆盖」那个列表里现解析的，不另外维护一份：
+ * 章节清单写在 track 页 front-matter 的 chapters: 里。2026-10-25 之前是从页面正文「课程覆盖」那个列表里现解析的：
  *   <h3>课程覆盖</h3><ul><li><b>数组与切片</b> —— 两者的差别…</li>…
- * 解析不出来（哪天那一页换了写法）就当这门课没有章节清单 ——
+ * 那天各 track 页的 about 正文整段删掉（等课程完结再重写），清单就挪进了 front-matter；正文里的写法仍然认，留作兜底。
+ * 两处都拿不到就当这门课没有章节清单 ——
  * 页面上只是少一个「共几章」的分母和「从课程铺任务」的按钮，不会坏。
  */
 
@@ -48,6 +49,16 @@ const sourceOf = page => {
  *
  * 结构是稳的：第一个由 <li><b>名字</b> 组成的 <ul>。 */
 const chaptersOf = raw => {
+  // front-matter 里的 chapters: 列表（每项一行 `  - "名字"`）
+  const fm = String(raw).match(/^---\n([\s\S]*?)\n---/)
+  const block = fm && fm[1].match(/^chapters:[ \t]*\n((?:[ \t]+-[^\n]*(?:\n|$))+)/m)
+  if (block) {
+    const items = [...block[1].matchAll(/^[ \t]+-[ \t]*(.+?)[ \t]*$/gm)].map(x => {
+      if (!x[1].startsWith('"')) return x[1].replace(/^'(.*)'$/, '$1')
+      try { return JSON.parse(x[1]) } catch (_) { return '' }
+    }).map(name => String(name).trim()).filter(Boolean)
+    if (items.length) return items
+  }
   for (const m of String(raw).matchAll(/<ul>([\s\S]*?)<\/ul>/g)) {
     const items = [...m[1].matchAll(/<li>\s*<b>([^<]+)<\/b>/g)].map(x => x[1].trim()).filter(Boolean)
     if (items.length >= 3) return items      // 三条以下多半不是章节清单
@@ -85,10 +96,13 @@ const build = () => {
       const leaf = leafOf(raw)
       if (!leaf) return null
       const mine = posts.filter(p => p.leaf === leaf)
+      // 系列的角色色（_config.noimpty.yml 的 series），日程页的进度条用它
+      const series = ((hexo.theme && hexo.theme.config && hexo.theme.config.series) || {})[leaf]
       return {
         leaf,
         title: String(pg.title || leaf),
         url: webPath(pg.path),
+        color: series && /^#[0-9a-f]{3,8}$/i.test(series.color) ? series.color : '',
         chapters: chaptersOf(raw),
         n: mine.length,
         latest: mine.length ? mine[mine.length - 1].day : '',

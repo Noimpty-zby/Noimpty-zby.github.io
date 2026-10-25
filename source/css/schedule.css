@@ -4,6 +4,17 @@
  * Hexo 会把它当成 front-matter 分隔符，整份 css 会被静默丢弃。
  */
 
+/* 2026-10-25 跟新主题对齐：暖纸 + 墨色、直角。下面各处引用的旧变量（widgets.css 里是粉色）在这一页换成主题色，
+ * 每门课的进度条用系列的角色色（--sc，scripts/noimpty-study.js 带过来）。形状的改动在文件末尾。 */
+#noimpty-schedule {
+  --noimpty-accent: #141519;
+  --noimpty-accent-soft: #0a5c72;
+  --noimpty-border: #d3cfc4;
+  --card-meta: #4c5058;
+  --card-bg: #f2f0ea;
+  --sch-tint: rgba(34, 195, 230, 0.2);
+}
+
 .sch-wrap { margin: 0 0 1.5em; }
 
 .sch-head {
@@ -24,7 +35,7 @@
 .sch-save {
   padding: 5px 12px;
   border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.26));
-  border-radius: 8px;
+  border-radius: 0;
   background: transparent;
   color: inherit;
   font-size: 0.86em;
@@ -35,7 +46,7 @@
 .sch-nav { padding: 3px 11px; font-size: 1.1em; line-height: 1.2; }
 
 .sch-nav:hover,
-.sch-today:hover { background: rgba(233, 89, 120, 0.12); }
+.sch-today:hover { background: var(--sch-tint); }
 
 .sch-tools { display: flex; align-items: center; gap: 10px; }
 
@@ -68,7 +79,7 @@
   min-height: 74px;
   padding: 5px 6px;
   border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.16));
-  border-radius: 9px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.03);
   cursor: pointer;
   overflow: hidden;
@@ -82,16 +93,16 @@
 .sch-cell.is-today .sch-d {
   color: #fff;
   background: var(--noimpty-accent, #e95978);
-  border-radius: 999px;
+  border-radius: 0;
   padding: 0 6px;
 }
 
 .sch-cell.is-picked {
   border-color: var(--noimpty-accent, #e95978);
-  background: rgba(233, 89, 120, 0.1);
+  background: var(--sch-tint);
 }
 
-.sch-cell.is-overdue { border-color: rgba(255, 107, 107, 0.5); }
+.sch-cell.is-overdue { border-color: rgba(179, 38, 30, 0.5); }
 
 .sch-d { font-size: 0.82em; display: inline-block; margin: 0 0 3px; }
 
@@ -100,8 +111,8 @@
   line-height: 1.5;
   padding: 1px 5px;
   margin: 2px 0 0;
-  border-radius: 5px;
-  background: rgba(233, 89, 120, 0.16);
+  border-radius: 0;
+  background: #e3e0d6;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -116,7 +127,7 @@
   margin: 16px 0 0;
   padding: 14px 16px;
   border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.22));
-  border-radius: 12px;
+  border-radius: 0;
   background: rgba(255, 255, 255, 0.03);
 }
 
@@ -146,7 +157,7 @@
   display: grid;
   place-items: center;
   border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.4));
-  border-radius: 5px;
+  border-radius: 0;
   background: transparent;
   color: var(--noimpty-accent, #e95978);
   font-size: 12px;
@@ -170,7 +181,7 @@
 }
 
 .sch-item:hover .sch-del { opacity: 1; }
-.sch-del:hover { color: #ff6b6b; }
+.sch-del:hover { color: #b3261e; }
 
 @media (hover: none) { .sch-del { opacity: 0.6; } }
 
@@ -183,7 +194,7 @@
   min-width: 0;
   padding: 7px 11px;
   border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.26));
-  border-radius: 8px;
+  border-radius: 0;
   background: rgba(0, 0, 0, 0.16);
   color: inherit;
   font-size: 0.9em;
@@ -194,7 +205,7 @@
 .sch-add button {
   padding: 7px 15px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--noimpty-accent, #e95978);
   color: #fff;
   font-size: 0.88em;
@@ -202,9 +213,9 @@
 }
 
 .sch-status { margin: 12px 0 0; font-size: 0.85em; min-height: 1.2em; }
-.sch-status.is-ok { color: #7fc99a; }
-.sch-status.is-warn { color: #e8b04b; }
-.sch-status.is-bad { color: #ff6b6b; }
+.sch-status.is-ok { color: #22652a; }
+.sch-status.is-warn { color: #834600; }
+.sch-status.is-bad { color: #b3261e; }
 
 .sch-tip {
   margin: 10px 0 0;
@@ -230,7 +241,7 @@
   margin: 3px 0 0 28px;
   padding: 1px 7px;
   border: 1px dashed var(--noimpty-border, rgba(233, 89, 120, 0.3));
-  border-radius: 6px;
+  border-radius: 0;
   background: transparent;
   color: var(--card-meta, #9b9098);
   font-size: 11.5px;
@@ -258,15 +269,15 @@
   margin: 6px 0 4px 28px;
   padding: 8px 10px;
   border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.28));
-  border-radius: 8px;
-  background: rgba(233, 89, 120, 0.07);
+  border-radius: 0;
+  background: var(--sch-tint);
 }
 
 .sch-condform select,
 .sch-condform input {
   padding: 4px 8px;
   border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.26));
-  border-radius: 6px;
+  border-radius: 0;
   background: rgba(0, 0, 0, 0.2);
   color: inherit;
   font-size: 12.5px;
@@ -278,7 +289,7 @@
 .sch-condform button {
   padding: 4px 10px;
   border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.3));
-  border-radius: 6px;
+  border-radius: 0;
   background: transparent;
   color: inherit;
   font-size: 12.5px;
@@ -301,7 +312,7 @@
 .sch-auto {
   margin: 2px 0 0 28px;
   font-size: 11.5px;
-  color: #7fc99a;
+  color: #22652a;
 }
 
 /* ================= 交互改进（第二轮） =================
@@ -324,11 +335,11 @@
   font-size: 0.92em;
   padding: 3px 8px;
   border: 1px solid var(--noimpty-accent, #e95978);
-  border-radius: 6px;
+  border-radius: 0;
   background: var(--card-bg, rgba(255, 255, 255, 0.04));
   color: inherit;
 }
-.sch-edit:focus { outline: none; box-shadow: 0 0 0 2px rgba(233, 89, 120, 0.18); }
+.sch-edit:focus { outline: none; box-shadow: 0 0 0 2px rgba(20, 21, 25, 0.18); }
 
 /* 推到明天 */
 .sch-push {
@@ -369,26 +380,26 @@
   border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.3));
   background: transparent;
   color: var(--noimpty-accent, #e95978);
-  border-radius: 999px;
+  border-radius: 0;
   font-size: 0.72em;
   padding: 2px 9px;
   cursor: pointer;
   white-space: nowrap;
 }
-.sch-mini:hover { background: rgba(233, 89, 120, 0.12); }
+.sch-mini:hover { background: var(--sch-tint); }
 
 /* 过期未完成 */
 .sch-overdue {
   margin-top: 14px;
   padding: 12px 14px;
-  border: 1px solid rgba(255, 160, 90, 0.32);
-  border-radius: 12px;
-  background: rgba(255, 160, 90, 0.07);
+  border: 1px solid rgba(214, 140, 20, 0.32);
+  border-radius: 0;
+  background: rgba(214, 140, 20, 0.07);
 }
 .sch-overdue__head {
   font-size: 0.85em;
   font-weight: 600;
-  color: #e6913f;
+  color: #834600;
   margin-bottom: 8px;
 }
 .sch-overdue__row {
@@ -402,14 +413,14 @@
 .sch-overdue__jump {
   flex: 0 0 auto;
   border: 0;
-  background: rgba(255, 160, 90, 0.18);
-  color: #e6913f;
-  border-radius: 6px;
+  background: rgba(214, 140, 20, 0.18);
+  color: #834600;
+  border-radius: 0;
   font-size: 0.82em;
   padding: 2px 7px;
   cursor: pointer;
 }
-.sch-overdue__jump:hover { background: rgba(255, 160, 90, 0.3); }
+.sch-overdue__jump:hover { background: rgba(214, 140, 20, 0.3); }
 .sch-overdue__more { font-size: 0.8em; color: var(--card-meta, #9b9098); margin-top: 4px; }
 
 /* 底部保存栏：改完东西不用抬眼去右上角找按钮 */
@@ -423,15 +434,15 @@
   gap: 12px;
   margin-top: 14px;
   padding: 10px 14px;
-  border-radius: 12px;
+  border-radius: 0;
   background: var(--noimpty-accent, #e95978);
   color: #fff;
   font-size: 0.86em;
-  box-shadow: 0 6px 20px rgba(233, 89, 120, 0.28);
+  box-shadow: 4px 4px 0 #22c3e6;
 }
 .sch-savebar button {
   border: 0;
-  border-radius: 999px;
+  border-radius: 0;
   background: #fff;
   color: var(--noimpty-accent, #e95978);
   font-size: 0.95em;
@@ -491,14 +502,14 @@
 .sch-heat__key i {
   width: 11px;
   height: 11px;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--noimpty-border, rgba(233, 89, 120, 0.14));
 }
 
 /* 发一篇文章算两分、勾一个任务算一分，所以最深的那一档是真的动过手 */
-.sch-heat__c[data-lv="1"], .sch-heat__key i[data-lv="1"] { background: rgba(233, 89, 120, 0.3); }
-.sch-heat__c[data-lv="2"], .sch-heat__key i[data-lv="2"] { background: rgba(233, 89, 120, 0.58); }
-.sch-heat__c[data-lv="3"], .sch-heat__key i[data-lv="3"] { background: var(--noimpty-accent, #e95978); }
+.sch-heat__c[data-lv="1"], .sch-heat__key i[data-lv="1"] { background: #a6e0ed; }
+.sch-heat__c[data-lv="2"], .sch-heat__key i[data-lv="2"] { background: #22c3e6; }
+.sch-heat__c[data-lv="3"], .sch-heat__key i[data-lv="3"] { background: #0a5c72; }
 
 .sch-heat__foot {
   display: flex;
@@ -523,7 +534,7 @@
   align-items: center;
   padding: 7px 10px;
   border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.14));
-  border-radius: 9px;
+  border-radius: 0;
   color: inherit;
   text-decoration: none;
   font-size: 0.86em;
@@ -531,7 +542,7 @@
 }
 
 .sch-course:hover {
-  background: rgba(233, 89, 120, 0.07);
+  background: var(--sch-tint);
   border-color: var(--noimpty-border, rgba(233, 89, 120, 0.3));
 }
 
@@ -540,7 +551,7 @@
 .sch-course__bar {
   display: block;
   height: 6px;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--noimpty-border, rgba(233, 89, 120, 0.14));
   overflow: hidden;
 }
@@ -548,8 +559,8 @@
 .sch-course__bar i {
   display: block;
   height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--noimpty-accent, #e95978), var(--noimpty-accent-soft, #ff91a8));
+  border-radius: 0;
+  background: var(--sc, #22c3e6);
 }
 
 .sch-course__n { font-variant-numeric: tabular-nums; color: var(--card-meta, #9b9098); }
@@ -563,7 +574,7 @@
 }
 
 /* 三周没碰过的那一栏要看得见 —— 这一页最该告诉你的就是这个 */
-.sch-course__last.is-stale { color: var(--noimpty-accent, #e95978); }
+.sch-course__last.is-stale { color: #b3261e; font-weight: 600; }
 
 /* ---------- 接下来 ---------- */
 
@@ -575,17 +586,17 @@
   gap: 9px;
   padding: 7px 10px;
   border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.14));
-  border-radius: 9px;
+  border-radius: 0;
   font-size: 0.88em;
 }
 
-.sch-next.is-late { border-color: var(--noimpty-accent, #e95978); }
+.sch-next.is-late { border-color: #b3261e; }
 
 .sch-next__day {
   flex: none;
   padding: 1px 7px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 0;
   background: var(--noimpty-border, rgba(233, 89, 120, 0.14));
   color: inherit;
   font-size: 0.86em;
@@ -593,7 +604,7 @@
   cursor: pointer;
 }
 
-.sch-next.is-late .sch-next__day { background: rgba(233, 89, 120, 0.24); }
+.sch-next.is-late .sch-next__day { background: rgba(179, 38, 30, 0.14); color: #8f1d16; }
 
 .sch-next__text { flex: 1 1 auto; min-width: 0; }
 
@@ -614,7 +625,7 @@
   margin: 0 0 12px;
   padding: 10px 12px;
   border: 1px solid var(--noimpty-border, rgba(233, 89, 120, 0.26));
-  border-radius: 10px;
+  border-radius: 0;
 }
 
 .sch-seed label { font-size: 0.86em; font-weight: 600; }
@@ -651,3 +662,24 @@
   .sch-course__last, .sch-course__cold { grid-area: last; text-align: left; }
   .sch-next__cond { display: none; }
 }
+
+/* ============================================================
+ * 新主题外观（2026-10-25）：按钮是 2px 墨框，课程进度放进一张纸里，行之间用虚线隔开，跟系列页的章节列表一样
+ * ============================================================ */
+#noimpty-schedule :is(.sch-nav, .sch-today, .sch-save, .sch-mini, .sch-add button, .sch-condform button, .sch-overdue__jump) { border: 2px solid #141519; color: #141519; font-weight: 600; }
+#noimpty-schedule .sch-save.is-dirty, #noimpty-schedule .sch-add button, #noimpty-schedule .sch-condform button[type="submit"] { background: #141519; color: #fff; box-shadow: 3px 3px 0 #22c3e6; }
+#noimpty-schedule .sch-h, #noimpty-schedule .sch-h--row h2 { font-weight: 700; color: #141519; }
+#noimpty-schedule .sch-courses { gap: 0; padding: 4px 14px; background: #f2f0ea; border: 2px solid #141519; box-shadow: 6px 6px 0 #cdc9be; }
+#noimpty-schedule .sch-course { position: relative; isolation: isolate; overflow: hidden; padding: 11px 4px; border: 0; border-bottom: 1px dashed #d3cfc4; color: #1f2126; font-size: 0.9em; }
+#noimpty-schedule .sch-course:last-child { border-bottom: 0; }
+#noimpty-schedule .sch-course::after { content: ""; position: absolute; z-index: -1; left: -12px; top: 6px; bottom: 6px; width: 62%; background: var(--sc, #22c3e6); opacity: 0.32; transform: skewX(-18deg) scaleX(0); transform-origin: left; transition: transform 0.22s cubic-bezier(0.2, 0.9, 0.3, 1); }
+#noimpty-schedule .sch-course:hover { background: none; }
+#noimpty-schedule .sch-course:hover::after { transform: skewX(-18deg) scaleX(1); }
+#noimpty-schedule .sch-course__name { color: #141519; }
+#noimpty-schedule .sch-course__bar { height: 10px; background: #e3e0d6; transform: skewX(-18deg); }
+#noimpty-schedule .sch-course__bar i { box-shadow: inset -2px 0 0 #141519; }
+#noimpty-schedule .sch-course__n { font: italic 700 1.05em/1 "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: 0.03em; color: #3a3d44; }
+#noimpty-schedule .sch-next { background: #f2f0ea; border-width: 2px; }
+#noimpty-schedule .sch-cell:not(.is-blank) { background: #f2f0ea; }
+#noimpty-schedule .sch-panel, #noimpty-schedule .sch-seed { background: #f2f0ea; border: 2px solid #141519; }
+#noimpty-schedule .sch-savebar { border: 2px solid #141519; }

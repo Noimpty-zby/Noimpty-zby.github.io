@@ -1,63 +1,64 @@
-/* Code Studio: opaque cream, blossom pink, and lavender surfaces. */
+/* 代码小屋：跟新主题一样是暖纸 + 墨色（2026-10-25 换掉了原来的奶油粉和淡紫）。
+ * 外框、标题栏、按钮的形状在文件末尾「新主题外观」一节。 */
 .learning-lab, .learning-article-holder, .learning-mobile-switch {
-  --lab-surface: #fffdfb;
-  --lab-editor: #fffdf9;
-  --lab-ink: #443449;
-  --lab-muted: #6e5d73;
-  --lab-accent: #ba547d;
-  --lab-accent-hover: #a73f69;
-  --lab-border: #ecdce6;
-  --lab-pink: #fbebf1;
-  --lab-lilac: #f1eafa;
-  --lab-gutter: #fbf5f6;
-  --lab-selection: #eedaf2;
-  --lab-error: #bd4256;
-  --lab-success: #4e806f;
-  --lab-warning: #956625;
+  --lab-surface: #f2f0ea;
+  --lab-editor: #f2f0ea;
+  --lab-ink: #1f2126;
+  --lab-muted: #4c5058;
+  --lab-accent: #0a5c72;
+  --lab-accent-hover: #141519;
+  --lab-border: #d3cfc4;
+  --lab-pink: #d4eef4;
+  --lab-lilac: #e7e5de;
+  --lab-gutter: #e9e6de;
+  --lab-selection: #bfeaf5;
+  --lab-error: #b3261e;
+  --lab-success: #22652a;
+  --lab-warning: #834600;
   --lab-editor-bg: var(--lab-editor);
-  --lab-editor-text: #46364f;
+  --lab-editor-text: #1f2126;
   --lab-editor-gutter: var(--lab-gutter);
-  --lab-editor-muted: #947c95;
+  --lab-editor-muted: #6a6e75;
   --lab-editor-border: var(--lab-border);
-  --lab-editor-line: #faf0f5;
+  --lab-editor-line: #e9e6de;
   --lab-editor-selection: var(--lab-selection);
-  --lab-editor-cursor: #b94779;
-  --lab-syntax-keyword: #ac438a;
-  --lab-syntax-string: #3b8167;
-  --lab-syntax-number: #ad5925;
-  --lab-syntax-comment: #826a89;
-  --lab-syntax-function: #616bac;
-  --lab-syntax-type: #357989;
-  --lab-syntax-operator: #a2597a;
+  --lab-editor-cursor: #141519;
+  --lab-syntax-keyword: #b01f55;
+  --lab-syntax-string: #22652a;
+  --lab-syntax-number: #0a5e98;
+  --lab-syntax-comment: #585c63;
+  --lab-syntax-function: #6a3bb8;
+  --lab-syntax-type: #834600;
+  --lab-syntax-operator: #0a6576;
   color: var(--lab-ink);
   color-scheme: light;
 }
 .learning-lab[data-editor-theme='dark'], [data-theme='dark'] .learning-article-holder, [data-theme='dark'] .learning-mobile-switch {
-  --lab-surface: #28212e;
-  --lab-editor: #231e29;
-  --lab-ink: #f1e5ee;
-  --lab-muted: #b5a1b7;
-  --lab-accent: #f0a4c1;
-  --lab-accent-hover: #ffc2d9;
-  --lab-border: #48364d;
-  --lab-pink: #3b293a;
-  --lab-lilac: #362b46;
-  --lab-gutter: #2a2231;
-  --lab-selection: #584267;
-  --lab-error: #ff9fab;
-  --lab-success: #9aceb8;
-  --lab-warning: #eac18e;
-  --lab-editor-text: #f0e0ed;
-  --lab-editor-muted: #a48bae;
-  --lab-editor-line: #33283b;
-  --lab-editor-cursor: #f8accf;
-  --lab-syntax-keyword: #eea3d0;
-  --lab-syntax-string: #a5d7b3;
-  --lab-syntax-number: #edb77f;
-  --lab-syntax-comment: #95819f;
-  --lab-syntax-function: #b9bcff;
-  --lab-syntax-type: #8ed2dc;
-  --lab-syntax-operator: #dea2c8;
+  --lab-surface: #1b1d22;
+  --lab-editor: #15171c;
+  --lab-ink: #ebe9e3;
+  --lab-muted: #a7adb7;
+  --lab-accent: #22c3e6;
+  --lab-accent-hover: #6fd8ef;
+  --lab-border: #3a3d44;
+  --lab-pink: #193840;
+  --lab-lilac: #111216;
+  --lab-gutter: #1b1d22;
+  --lab-selection: #1f4a57;
+  --lab-error: #ff8f86;
+  --lab-success: #8fd6a0;
+  --lab-warning: #f0c674;
+  --lab-editor-text: #ebe9e3;
+  --lab-editor-muted: #8d939e;
+  --lab-editor-line: #1f2127;
+  --lab-editor-cursor: #22c3e6;
+  --lab-syntax-keyword: #ff85b0;
+  --lab-syntax-string: #a6e08f;
+  --lab-syntax-number: #7cc8ff;
+  --lab-syntax-comment: #8d939e;
+  --lab-syntax-function: #c9adff;
+  --lab-syntax-type: #ffc27a;
+  --lab-syntax-operator: #6fd8ef;
   color-scheme: dark;
 }
 .learning-lab, .learning-lab *, .learning-article-holder, .learning-mobile-switch { box-sizing: border-box; }
@@ -348,4 +349,59 @@ html:is(.learning-page, .learning-is-open) :is(#noimpty-music-player, #mao-toggl
 .noimpty-private-locked .learning-article-holder, .noimpty-private-locked .learning-launch, .noimpty-private-locked #learning-lab, .noimpty-private-locked .learning-mobile-switch, .noimpty-private-locked .learning-divider { display: none !important; }
 @media (prefers-reduced-motion: reduce) {
   .learning-lab *, .learning-launch, .learning-mobile-switch *, html.learning-is-open #post { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}
+
+/* ============================================================
+ * 新主题外观（2026-10-25）
+ * 跟文章页一样：2px 墨线、直角、硬阴影；标题栏是一条黑底，像文末的结算条。
+ * 这一节只改形状和颜色，布局、尺寸、交互都还是上面那些规则。
+ * ============================================================ */
+.learning-lab { border: 2px solid #141519; border-radius: 0; box-shadow: 6px 6px 0 #cdc9be; font-family: -apple-system, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei UI", sans-serif; }
+.learning-lab :is(button, select, summary, .learning-menu, .learning-mode-switch, .learning-diagnostic),
+.learning-lab .learning-console-tab[aria-selected='true']::after, .learning-launch, .learning-mobile-switch, .learning-mobile-switch button { border-radius: 0; }
+.learning-lab :is(.learning-button, .learning-connect-button, .learning-close, .learning-stop, .learning-select, .learning-theme-select), .learning-more > summary { border-color: #8f8b80; }
+.learning-lab button:hover:not(:disabled), .learning-lab summary:hover, .learning-launch:hover { border-color: #141519; background: var(--lab-pink); color: #141519; }
+.learning-lab[data-editor-theme='dark'] button:hover:not(:disabled), .learning-lab[data-editor-theme='dark'] summary:hover { border-color: var(--lab-accent); color: var(--lab-ink); }
+.learning-lab :is(button, summary, select, textarea, a):focus-visible { outline-color: var(--lab-ink); }
+
+/* 标题栏：黑底白字，「代码小屋」前面是青色的小方块，CODE STUDIO 用主题的窄斜体 */
+.learning-lab .learning-heading { border-bottom: 2px solid #141519; background: #141519; color: #fff; }
+.learning-lab .learning-heading .learning-flower { border-radius: 0; background: #22c3e6; color: #141519; box-shadow: none; transform: skewX(-10deg); }
+.learning-lab .learning-brand small { font: italic 700 12px/1 "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: .16em; color: #b9bec8; }
+.learning-lab .learning-heading :is(.learning-select, .learning-connect-button) { border: 2px solid #f2f0ea; background-color: #f2f0ea; color: #141519; }
+.learning-lab .learning-heading .learning-connect-button:hover:not(:disabled) { border-color: #22c3e6; background: #22c3e6; }
+.learning-lab .learning-heading .learning-connect-button[data-state='connected'] { border-color: #8fd6a0; background: #e3f4e6; color: #17532a; }
+.learning-lab .learning-heading .learning-connect-button[data-state='connecting'] { border-color: #f0c674; background: #fbf0d6; color: #6b3a00; }
+.learning-lab .learning-heading .learning-connect-button[data-state='error'] { border-color: #ff8f86; background: #fbe4e1; color: #8f1d16; }
+
+/* 运行：墨色底、白字、青色硬阴影，跟首页「进入系列」一个样子 */
+.learning-lab .learning-run { border: 2px solid #141519; background: #141519; color: #fff; box-shadow: 3px 3px 0 #22c3e6; }
+.learning-lab .learning-run:hover:not(:disabled) { border-color: #141519; background: #141519; color: #fff; box-shadow: 4px 4px 0 #22c3e6; transform: translate(-1px, -1px); }
+.learning-lab[data-editor-theme='dark'] .learning-run, .learning-lab[data-editor-theme='dark'] .learning-run:hover:not(:disabled) { border-color: #22c3e6; background: #22c3e6; color: #141519; box-shadow: 3px 3px 0 #f2f0ea; }
+.learning-lab .learning-save { border-color: var(--lab-accent); }
+.learning-lab .learning-mode[aria-pressed='true'] { background: #141519; color: #fff; box-shadow: none; }
+.learning-lab[data-editor-theme='dark'] .learning-mode[aria-pressed='true'] { background: #22c3e6; color: #141519; }
+.learning-menu { border: 2px solid #141519; box-shadow: 5px 5px 0 #141519; }
+
+/* 下面的终端/输出/记录标签：选中的那个底下一条斜的墨线，跟顶栏导航一样 */
+.learning-lab:not([data-editor-theme='dark']) .learning-console-tab[aria-selected='true'] { color: #141519; }
+.learning-console-tab[aria-selected='true']::after { height: 3px; background: var(--lab-ink); transform: skewX(-20deg); }
+.learning-console-resizer:hover::after, .learning-console-resizer:focus-visible::after { background: var(--lab-ink); }
+.learning-lab .learning-terminal-overlay .learning-button { border: 2px solid #141519; background: #141519; color: #fff; box-shadow: 3px 3px 0 #22c3e6; }
+.learning-lab .learning-terminal-overlay .learning-button:hover:not(:disabled) { background: #141519; color: #fff; }
+.learning-connect-button[data-state='connected'] .learning-connection-dot, .learning-terminal-state[data-state='open']::before { background: #22652a; box-shadow: 0 0 0 3px #22652a26; }
+
+/* 文章里的「边学边练」分栏 */
+.learning-launch { border: 2px solid #141519; background: #f2f0ea; color: #141519; box-shadow: 3px 3px 0 #141519; }
+html.learning-is-open #content-inner.layout > #post { border: 2px solid #141519; border-radius: 0; background: #f2f0ea; scrollbar-color: #8f8b80 #f2f0ea; }
+html.learning-is-open #post > .learning-article-title { border-bottom: 2px solid #141519; }
+.learning-article-holder, .learning-article-holder .learning-lab { border-radius: 0; }
+.learning-article-holder .learning-lab { box-shadow: none; }
+.learning-divider::after { border-radius: 0; background: #8f8b80; }
+.learning-divider:hover::after, .learning-divider:focus-visible::after { background: #141519; }
+.learning-mobile-switch button[aria-pressed='true'], .learning-mobile-switch button[aria-selected='true'] { background: #141519; color: #fff; }
+#article-container .highlight-tools .learning-run-block:hover i, #article-container .highlight-tools .learning-run-block:focus-visible i { color: #0a5c72; }
+@media (max-width: 799px) {
+  html.learning-page .learning-lab, .learning-article-holder .learning-lab, html.learning-is-open #content-inner.layout > #post, .learning-article-holder { border-radius: 0; }
+  html.learning-page .learning-lab { box-shadow: none; }
 }

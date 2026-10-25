@@ -615,7 +615,7 @@
         ? '<span class="sch-course__cold">还没开始</span>'
         : `<span class="sch-course__last${stale ? ' is-stale' : ''}">${gap === 0 ? '今天刚写' : `${gap} 天没动`}</span>`
       return `
-        <a class="sch-course" href="${esc(c.url)}">
+        <a class="sch-course" href="${esc(c.url)}"${c.color ? ` style="--sc:${esc(c.color)}"` : ''}>
           <span class="sch-course__name">${esc(c.title)}</span>
           <span class="sch-course__bar"><i style="width:${pct}%"></i></span>
           <span class="sch-course__n">${c.n}${total ? ' / ' + total + ' 章' : ' 篇'}</span>

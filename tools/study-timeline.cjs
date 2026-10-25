@@ -8,7 +8,8 @@
  * 直接用主题的时间线样式；系列标签的颜色在 source/css/study-timeline.css。
  *
  * 输入是普通对象，方便单独测试：
- *   [{ title, date: 'YYYY-MM-DD', series, url }]
+ *   [{ title, date: 'YYYY-MM-DD', series, url, color? }]
+ * color 是系列的角色色（#rrggbb），有的话标签用它，没有就按编号取 study-timeline.css 里的备用色。
  */
 
 const escape = text => String(text == null ? '' : text)
@@ -50,7 +51,7 @@ const render = posts => {
     const items = [...days].map(([date, items]) => {
       const { m: month, d } = day(date)
       const rows = items.map(post =>
-        `<li><span class="study-timeline__series" data-tone="${firstSeen.get(post.series) % 6}">${escape(post.series)}</span><a href="${escape(post.url)}">${escape(post.title)}</a></li>`).join('')
+        `<li><span class="study-timeline__series" data-tone="${firstSeen.get(post.series) % 6}"${/^#[0-9a-f]{3,8}$/i.test(post.color || '') ? ` style="--sc:${post.color}"` : ''}>${escape(post.series)}</span><a href="${escape(post.url)}">${escape(post.title)}</a></li>`).join('')
       return `<div class="timeline-item"><div class="timeline-item-title"><div class="item-circle"><p><time datetime="${date}">${month} 月 ${d} 日</time></p></div></div>` +
         `<div class="timeline-item-content"><ul class="study-timeline__posts">${rows}</ul></div></div>`
     }).join('')

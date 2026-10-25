@@ -1,15 +1,31 @@
-/* 学习时间线（/timeline/，tools/study-timeline.cjs）。时间线本身用 Butterfly 的 .timeline 样式，
- * 这里只管开头的总结、每天的文章列表和系列标签的颜色。颜色按系列第一次出现的先后编号。 */
-.study-timeline-page { --tl-tone-0: #3f5db3; --tl-tone-1: #2f7d55; --tl-tone-2: #ba547d; --tl-tone-3: #94620f; --tl-tone-4: #a3407f; --tl-tone-5: #237a87; }
-[data-theme='dark'] .study-timeline-page { --tl-tone-0: #a7b8ff; --tl-tone-1: #9ad4a8; --tl-tone-2: #f0a4c1; --tl-tone-3: #efc98a; --tl-tone-4: #f0a6d8; --tl-tone-5: #8fd6e0; }
-.study-timeline__summary { margin-bottom: 1.6em; line-height: 1.9; }
-#article-container .study-timeline__posts { margin: 0; padding: 0; list-style: none; }
-#article-container .study-timeline__posts li { margin: .2em 0; padding: 0; line-height: 1.7; }
-#article-container .study-timeline__posts li::before { display: none; }
-.study-timeline__series { display: inline-block; margin-right: .6em; padding: 0 .5em; border: 1px solid var(--tl-tone, currentColor); border-radius: 999px; color: var(--tl-tone, inherit); font-size: .82em; white-space: nowrap; }
+/* 学习时间线（/timeline/，tools/study-timeline.cjs）。2026-10-25 跟新主题对齐，样子照首页「最近更新」那条时间轴：
+ * 左边一条竖线，每天一个菱形，月份是黑色斜条。系列标签用系列的角色色（--sc），
+ * 没在 _config.noimpty.yml 登记过的系列按第一次出现的先后编号，取下面的备用色。 */
+.study-timeline-page { --tl-tone-0: #22c3e6; --tl-tone-1: #c6f432; --tl-tone-2: #ff7a2f; --tl-tone-3: #b18cff; --tl-tone-4: #f0508a; --tl-tone-5: #7fd858; }
+.study-timeline__summary { margin: 0 0 2em; line-height: 1.9; }
+.study-timeline { position: relative; margin: 0 0 2.2em; padding-left: 30px; }
+.study-timeline::before { content: ""; position: absolute; left: 8px; top: 40px; bottom: 10px; width: 2px; background: var(--line-strong, #8f8b80); }
+.study-timeline .timeline-item { position: relative; margin: 0 0 1.15em; }
+.study-timeline .timeline-item.headline { margin: 0 0 1.3em -30px; }
+.study-timeline .headline .item-circle p { display: inline-block; margin: 0; padding: 3px 16px 3px 13px; font-size: 15px; font-weight: 700; line-height: 1.5; letter-spacing: .04em; color: #fff; background: var(--ink, #141519); clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%); }
+.study-timeline .timeline-item:not(.headline)::before { content: ""; position: absolute; left: -27px; top: 7px; width: 10px; height: 10px; background: var(--paper, #f2f0ea); border: 2px solid var(--line-strong, #8f8b80); transform: rotate(45deg); transition: background .15s, border-color .15s; }
+.study-timeline .timeline-item:not(.headline):hover::before { background: var(--cyan, #22c3e6); border-color: var(--ink, #141519); }
+.study-timeline .timeline-item-title p { margin: 0; font-size: 13.5px; font-weight: 600; line-height: 1.6; color: var(--text2, #3a3d44); }
+.prose .study-timeline__posts { margin: .3em 0 0; padding: 0; list-style: none; }
+.prose .study-timeline__posts li { display: flex; align-items: baseline; gap: .75em; margin: .35em 0; padding: 0; line-height: 1.65; }
+.study-timeline__series { flex: none; padding: 0 10px; font-size: 12.5px; font-weight: 700; line-height: 1.7; color: var(--ink, #141519); white-space: nowrap; background: var(--sc, var(--tl-tone, #22c3e6)); transform: skewX(-12deg); }
 .study-timeline__series[data-tone='0'] { --tl-tone: var(--tl-tone-0); }
 .study-timeline__series[data-tone='1'] { --tl-tone: var(--tl-tone-1); }
 .study-timeline__series[data-tone='2'] { --tl-tone: var(--tl-tone-2); }
 .study-timeline__series[data-tone='3'] { --tl-tone: var(--tl-tone-3); }
 .study-timeline__series[data-tone='4'] { --tl-tone: var(--tl-tone-4); }
 .study-timeline__series[data-tone='5'] { --tl-tone: var(--tl-tone-5); }
+.prose .study-timeline__posts a { min-width: 0; font-weight: 600; color: var(--ink, #141519); text-decoration: none; }
+.prose .study-timeline__posts a:hover { background: none; text-decoration: underline; text-decoration-color: var(--cyan, #22c3e6); text-decoration-thickness: 2px; text-underline-offset: 4px; }
+@media (max-width: 760px) {
+  .study-timeline { padding-left: 24px; }
+  .study-timeline::before { left: 5px; }
+  .study-timeline .timeline-item.headline { margin-left: -24px; }
+  .study-timeline .timeline-item:not(.headline)::before { left: -24px; }
+  .prose .study-timeline__posts li { flex-direction: column; gap: .2em; }
+}

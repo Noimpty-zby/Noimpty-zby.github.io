@@ -24,9 +24,16 @@ hexo.extend.filter.register('before_generate', () => Promise.all(
 
 hexo.extend.tag.register('study_timeline', () => {
   const zone = hexo.config.timezone
+  // 系列标签用角色色（_config.noimpty.yml 的 series）：分类里第一个在表里登记过的叶子，跟主题的 nm_series_of 一样
+  const table = (hexo.theme && hexo.theme.config && hexo.theme.config.series) || {}
+  const colorOf = post => {
+    const names = post.categories && typeof post.categories.toArray === 'function' ? post.categories.toArray().map(c => c.name) : []
+    const key = names.find(name => table[name])
+    return key ? table[key].color || '' : ''
+  }
   const posts = hexo.locals.get('posts').toArray().map(post => {
     const date = zone && typeof post.date.clone().tz === 'function' ? post.date.clone().tz(zone) : post.date
-    return { title: post.title, date: date.format('YYYY-MM-DD'), series: post.series || '', url: hexo.config.root + post.path }
+    return { title: post.title, date: date.format('YYYY-MM-DD'), series: post.series || '', color: colorOf(post), url: hexo.config.root + post.path }
   })
   return render(posts)
 })

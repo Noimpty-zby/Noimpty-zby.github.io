@@ -1,26 +1,29 @@
-.learning-evidence { margin: 8px 14px; padding: 10px 12px; border: 1px solid var(--lab-border, #eadce1); border-radius: 10px; font-size: 13px; max-height: 42vh; overflow: auto; }
+/* 练习台的「错题现场」和复习页的「错题重做」。2026-10-25 跟新主题对齐：纸色底、墨线、直角。 */
+.learning-evidence { margin: 8px 14px; padding: 10px 12px; border: 2px solid var(--lab-border, #d3cfc4); font-size: 13px; max-height: 42vh; overflow: auto; }
 .learning-evidence summary { cursor: pointer; font-weight: 600; }
 .learning-evidence label { display: block; margin: 8px 0; }
-.learning-evidence input, .learning-evidence textarea { display: block; box-sizing: border-box; width: 100%; padding: 8px; border: 1px solid #d9c6ce; border-radius: 6px; background: var(--lab-bg, #fffdfb); color: inherit; }
+.learning-evidence input, .learning-evidence textarea { display: block; box-sizing: border-box; width: 100%; padding: 8px; border: 2px solid #d3cfc4; background: var(--lab-bg, #f2f0ea); color: inherit; }
+.learning-evidence :is(input, textarea):focus { outline: none; border-color: #141519; }
 .learning-evidence textarea { min-height: 55px; resize: vertical; }
 .learning-evidence-actions, .growth-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
-.learning-evidence button, .growth-actions button, .learning-history-link { padding: 7px 12px; border: 1px solid #c8a7b5; border-radius: 8px; color: inherit; background: transparent; cursor: pointer; }
+.learning-evidence button, .growth-actions button, .learning-history-link { padding: 7px 12px; border: 2px solid #141519; color: #141519; background: #f2f0ea; font-weight: 600; text-decoration: none; cursor: pointer; }
+.learning-evidence button:hover:not(:disabled), .growth-actions button:hover, .learning-history-link:hover { background: #d4eef4; }
 .learning-evidence button:disabled { opacity: .5; cursor: default; }
 .learning-evidence .learning-evidence-ratings { display: flex; flex-wrap: wrap; gap: 8px; }
-.learning-evidence a { color: #a8496c; }
-.growth-meta, .growth-note { color: var(--font-color); line-height: 1.8; }
+.learning-evidence a { color: #0a5c72; }
+.growth-meta, .growth-note { color: #3a3d44; line-height: 1.8; }
 .learning-history-all { margin: 14px 0; }
 .learning-history-all > summary { cursor: pointer; font-weight: 650; padding: 6px 0; }
-.growth-case, .learning-history-review { margin: 22px 0; padding: 22px; border: 1px solid rgba(186,84,125,.25); border-radius: 16px; }
-.growth-case h3 { margin-top: 0; }
+.growth-case, .learning-history-review { margin: 22px 0; padding: 22px; border: 2px solid #141519; background: #f2f0ea; box-shadow: 6px 6px 0 #cdc9be; color: #1f2126; }
+.growth-case h3, .learning-history-review h2 { margin-top: 0; color: #141519; }
 .growth-case .growth-problem { white-space: pre-wrap; overflow-wrap: anywhere; }
 .growth-panes, .growth-picks { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.growth-picks select { width: 100%; padding: 8px; background: var(--card-bg); color: var(--font-color); border: 1px solid #c8a7b5; }
+.growth-picks select { width: 100%; padding: 8px; background: #f2f0ea; color: #1f2126; border: 2px solid #8f8b80; }
 .growth-attempt { min-width: 0; }
-.growth-attempt pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 450px; overflow: auto; padding: 15px; background: rgba(128,128,128,.08); }
+.growth-attempt pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 450px; overflow: auto; padding: 15px; background: #e9e6de; }
 .growth-attempt p { white-space: pre-wrap; }
-.learning-history-review .learning-history-link { display: block; margin: 10px 0; }
+.learning-history-review .learning-history-link { display: block; width: fit-content; margin: 10px 0; }
 .growth-status, .learning-evidence-status { white-space: pre-wrap; }
 .noimpty-private-locked :is(#learning-history-review, .learning-evidence) { display: none !important; }
 [hidden].growth-comparison, [hidden].learning-evidence-ratings { display: none !important; }
-@media(max-width:700px) { .growth-panes, .growth-picks { grid-template-columns: 1fr; } .growth-case, .learning-history-review { padding: 14px; } }
+@media(max-width:700px) { .growth-panes, .growth-picks { grid-template-columns: 1fr; } .growth-case, .learning-history-review { padding: 14px; box-shadow: none; } }

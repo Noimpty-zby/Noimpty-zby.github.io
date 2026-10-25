@@ -49,6 +49,15 @@ check('系列颜色按第一次出现的先后编号', () => {
   assert.equal(tone('Linux 命令行'), '2'); assert.equal(tone('Git'), '3')
 })
 
+check('带角色色的系列标签用它当 --sc，不像颜色的值不会写进 style', () => {
+  const colored = render([
+    { title: '一', date: '2026-10-01', series: 'Git', url: '/a/', color: '#ff7a2f' },
+    { title: '二', date: '2026-10-02', series: 'X', url: '/b/', color: 'red;background:url(x)' }
+  ])
+  assert.match(colored, /data-tone="0" style="--sc:#ff7a2f">Git</)
+  assert.match(colored, /data-tone="1">X</)
+})
+
 check('标题里的 HTML 特殊字符被转义', () => {
   assert.match(html, /&lt;b&gt;Git &amp; 合并&lt;\/b&gt;/)
   assert.doesNotMatch(html, /<b>Git/)

@@ -1098,20 +1098,74 @@
     ]
   },
   "/2026/10/22/Linux-Command-Line-Chapter15/": {
-    "hash": "d3d7569a1493f957",
+    "hash": "06a04b0c0ea0dd24",
     "title": "Linux 命令行第十五章：环境变量、export 和 ~/.bashrc —— 子进程只继承导出的变量",
     "notes": [
       {
-        "anchor": "HOME 是当前用户的家目录，USER 是用户名，LANG ",
-        "text": "PATH 的查找顺序是从前到后，前面的目录里有同名命令就会先被执行，这个坑后面装软件时会遇到。"
+        "anchor": "printenv 之所以看不到 animal，是因为 pri",
+        "text": "子进程拿到的环境是父进程启动那一刻的副本，父进程之后再 export 也不会同步过去。"
       },
       {
-        "anchor": "图 1 把导出前后的两种情况放在了一起。这里的子进程指的是从",
-        "text": "这里容易混：另开的终端虽不是子进程，但同样会继承登录时的环境，只是没有你后来定义的 animal。"
+        "anchor": "/.bashrc 只在 bash 启动的时候读取一次，所以在",
+        "text": "source 是在当前 Shell 里逐行执行，文件里如果写了 exit 会直接把终端关掉。"
       },
       {
-        "anchor": "/.bashrc 开头的几行会检查当前的 Shell 是不是",
-        "text": "这个报错只出现在非交互式运行 ~/.bashrc 时，用 source 就不会，因为 source 不换 Shell。"
+        "anchor": "上面讲的是交互式 bash 的一般情况。如果 bash 是作",
+        "text": "判断登录 Shell 不能只看是不是 SSH，图形界面终端里手动敲 bash -l 也算。"
+      }
+    ]
+  },
+  "/2026/10/25/Linux-Command-Line-Chapter16/": {
+    "hash": "ace4d543f968c6e9",
+    "title": "Linux 命令行第十六章：Shell 脚本、PATH 和位置参数 —— 放进 ~/bin 的脚本就是一条命令",
+    "notes": [
+      {
+        "anchor": "明明 hi 就在当前目录里，Shell 为什么找不到它呢？这",
+        "text": "这里的查找只针对外部程序，别名和函数在 PATH 之前就已经命中，所以顺序不能记反。"
+      },
+      {
+        "anchor": "刚建好 /bin 的时候，hi 仍然找不到。这是因为 /.p",
+        "text": "source 之后只对当前 Shell 生效，新开的终端还得重新读一遍 ~/.profile。"
+      },
+      {
+        "anchor": "a+x 会给属主、属组和其他人三组都加上 x 权限，但是这并",
+        "text": "u+x 够用还有个前提，别人得能进 /home/zby，否则给了 x 也白搭。"
+      }
+    ]
+  },
+  "/2026/10/25/Linux-Command-Line-Chapter17/": {
+    "hash": "589e2046ab20573d",
+    "title": "Linux 命令行第十七章：cron 和 crontab —— 写好时间表，命令到点自己运行",
+    "notes": [
+      {
+        "anchor": "systemctl is-active 打印出 active",
+        "text": "WSL 不开 systemd 时 cron 默认不跑，这点很多人会踩，不过重启后还要再手动 start 一次。"
+      },
+      {
+        "anchor": "日和星期这两个字段之间还有一条特殊的规则。如果这两个字段都写",
+        "text": "日和星期是「或」的关系，这条规则连老手也会记反，写每月某天加星期几时特别容易出错。"
+      },
+      {
+        "anchor": "终端里的 printenv 会打印出几十个变量，而这里一共只",
+        "text": "PATH 只有 /usr/local/bin:/usr/bin:/bin 这几个，自己装到别处的程序要写绝对路径。"
+      }
+    ]
+  },
+  "/2026/10/25/nanaly-2026-w43/": {
+    "hash": "33feeb7834366e59",
+    "title": "\"这周主人把整个屋子翻了一遍\"",
+    "notes": [
+      {
+        "anchor": "课程那边主人一路往前推。Linux 命令行从第十四章 chm",
+        "text": "cron 的星号位差一位，执行频率就完全不同，改时间表前先拿 crontab -l 核对一遍更稳喵。"
+      },
+      {
+        "anchor": "Git 那条线这周没怎么动，最新的还是第十六章的别名。倒是 ",
+        "text": "fail2ban 永久封禁要留意 jail 配置里 bantime 和 findtime 的配合，不然三次计数可能统计不"
+      },
+      {
+        "anchor": "我自己干了三件事。资讯速览发了 10-22 和 10-25 ",
+        "text": "批注改稿后引用对不上，说明原文里的锚点最好用段落编号而不是文字，改起来才不用全篇重核。"
       }
     ]
   }

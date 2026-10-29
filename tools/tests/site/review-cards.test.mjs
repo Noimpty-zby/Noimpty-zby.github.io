@@ -20,7 +20,7 @@ const posts = new Set(readdirSync('source/_posts').filter(name => name.endsWith(
 
 check('每组卡都指向存在的文章，正反面都不空', () => {
   let total = 0
-  for (const series of ['dsa', 'linux', 'git']) {
+  for (const series of ['dsa', 'linux', 'git', 'go']) {
     assert.ok(Array.isArray(data[series]) && data[series].length, `${series} 没有卡`)
     for (const entry of data[series]) {
       assert.ok(posts.has(entry.post), `review-cards.yml 里写的文章 ${entry.post} 不存在`)
@@ -36,20 +36,20 @@ check('每组卡都指向存在的文章，正反面都不空', () => {
 })
 
 check('同一篇文章里没有两张正面相同的卡', () => {
-  for (const series of ['dsa', 'linux', 'git']) for (const entry of data[series]) {
+  for (const series of ['dsa', 'linux', 'git', 'go']) for (const entry of data[series]) {
     const fronts = entry.cards.map(card => card.front.trim())
     assert.equal(new Set(fronts).size, fronts.length, `${entry.post} 有重复的正面`)
   }
 })
 
 check('卡片里的反引号都成对', () => {
-  for (const series of ['dsa', 'linux', 'git']) for (const entry of data[series]) for (const card of entry.cards) {
+  for (const series of ['dsa', 'linux', 'git', 'go']) for (const entry of data[series]) for (const card of entry.cards) {
     for (const text of [card.front, card.back]) assert.equal((text.match(/`/g) || []).length % 2, 0, `${entry.post}: ${text.slice(0, 40)}`)
   }
 })
 
 check('只有课内和 AI Infra 的系列，每篇文章都在这两块里', () => {
-  assert.deepEqual(Object.keys(data), ['dsa', 'linux', 'git'])
+  assert.deepEqual(Object.keys(data), ['dsa', 'linux', 'git', 'go'])
   const script = readFileSync('scripts/noimpty-review.js', 'utf8')
   assert.doesNotMatch(script, /ue5|术语表/i, 'UE5 的卡已经从复习页删掉了')
   for (const series of Object.keys(data)) {

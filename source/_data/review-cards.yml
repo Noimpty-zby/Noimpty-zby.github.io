@@ -1188,3 +1188,40 @@ git:
     back: 一个收集别名的仓库，内容都在 gitalias.txt 里，写法和 ~/.gitconfig 一样，2026 年 8 月的版本有 325 个别名。用法是下载这个文件，再用 `git config --global include.path '~/.gitalias'` 把它引入 ~/.gitconfig；也可以只把需要的几行抄进自己的 [alias]。
   - front: 引入 gitalias.txt 之后，自己定义的 `lg = log --oneline --graph` 为什么失效了？怎样修正？
     back: gitalias.txt 里也有 `lg = log --graph`。git config 把 [include] 加在了文件末尾，引入的文件在 [include] 的位置读入，比自己的 [alias] 晚，同一项以最后读到的为准，所以被覆盖了。用 `git config --get-all --show-origin alias.lg` 可以看到两个值。把 [include] 挪到 [alias] 前面就恢复了。
+go:
+- post: Go-Chapter1-Hello-World
+  cards:
+  - front: '`go mod init gostudy` 生成了什么文件？里面记着什么？'
+    back: 生成 go.mod，它把当前目录标记成一个模块的根目录。第一行是模块路径 `module gostudy`，第二行是这个模块要求的 Go 版本，以后用 go get 添加的依赖也记在这里。
+  - front: 在没有 go.mod 的目录里，`go build` 和 `go build test.go` 分别会怎样？
+    back: '`go build` 会报 go.mod file not found 的错误；`go build test.go` 可以正常编译，因为直接写文件名时，go 命令会把这些文件临时当作一个叫 command-line-arguments 的包来编译。'
+  - front: '`go run` 和 `go build` 有什么区别？'
+    back: '`go run` 编译完立刻运行程序，不在当前目录留下可执行文件；`go build` 只编译、不运行，在当前目录生成可执行文件。'
+  - front: '`go build test.go` 和不带参数的 `go build`，生成的可执行文件分别叫什么？'
+    back: 写文件名时以第一个源文件命名，所以叫 test；不带参数时编译当前目录的整个包，以模块路径的最后一段命名，模块路径是 gostudy 时就叫 gostudy。
+  - front: '`go install` 把可执行文件放在哪里？'
+    back: 放进 GOBIN 指定的目录；没有设置 GOBIN 时是 GOPATH 下的 bin，默认就是 ~/go/bin。这个目录加进 PATH 以后，在任何目录下都能直接输入程序名运行。
+  - front: '`go get` 做了什么？在没有 go.mod 的目录里能用吗？'
+    back: 它下载依赖的模块，把模块和版本记进 go.mod 的 require，并在 go.sum 里记下每个依赖的校验和。它只能在模块里运行，在没有 go.mod 的目录里会报错，并提示安装程序要改用 `go install`。
+  - front: Go 的一个包由哪些文件组成？
+    back: 同一个目录下、开头写着同一个 package 声明的 .go 文件。一个目录里只能有一个包，如果混进了别的包名，`go build` 会报 found packages 的错误。
+  - front: test.go 里的 main 调用了 greeting.go 里的函数，为什么 `go run test.go` 报 undefined，`go run .` 却能运行？
+    back: '`go run test.go` 只编译列出来的 test.go，greeting.go 没有参与编译；`go run .` 编译整个目录，两个文件都在里面。'
+  - front: Go 怎样区分可执行包和可复用包？
+    back: 看包的名字。只有 `package main` 是可执行包，会被编译成程序；其他名字的包，比如 `package calculator`，都是可复用包，要被别的包 import 才能用上。
+  - front: 对可复用包 calculator 运行 `go build ./calculator` 和 `go run ./calculator`，结果分别是什么？
+    back: '`go build` 只检查它能不能通过编译，不生成任何文件；`go run` 会报 is not a main package，因为只有 main 包才能运行。'
+  - front: 模块路径是 gostudy，calculator 目录下的包要怎样导入？
+    back: 写成 `import "gostudy/calculator"`，导入路径是模块路径加上目录名。标准库的包不在这个模块里，直接写包名，比如 `"fmt"`。
+  - front: main 包里如果把 main 函数改名为 Main，会怎样？
+    back: 编译失败，报 function main is undeclared in the main package。Go 区分大小写，Main 和 main 是两个不同的名字，main 包里必须有一个叫 main 的函数，程序从它开始运行。
+  - front: Go 的 main 函数有什么限制？程序怎样读取命令行参数？
+    back: main 不能有参数，也不能有返回值，否则报 func main must have no arguments and no return values。命令行参数要用 `os.Args` 读取，退出状态码要用 `os.Exit` 设置。
+  - front: 为什么要写 `fmt.Println`，写成 `fmt.println` 会怎样？
+    back: '只有首字母大写的名字是导出的，才能被别的包使用。写成 `fmt.println` 会报 `undefined: fmt.println (but have Println)`。'
+  - front: 导入了 fmt 却没有用到，会怎样？
+    back: '这是一个编译错误，会报 `"fmt" imported and not used`，所以删掉代码以后，不再使用的 import 也要一起删掉。'
+  - front: 同一个包里有两个文件，test.go 导入了 fmt，greeting.go 想用 fmt 还要再导入吗？
+    back: 要。import 只对写着它的那个文件有效，即使两个文件属于同一个包，greeting.go 也要在自己的开头写 `import "fmt"`。
+  - front: 为什么 Go 函数的左大括号不能换到下一行？
+    back: 因为编译器会在行尾自动补分号，`func main()` 这一行结束时被补了一个分号，下一行单独的 `{` 就成了语法错误 unexpected semicolon or newline before {。这种错误 go fmt 也修不了。

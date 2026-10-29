@@ -12,6 +12,7 @@ course:
   - ["讲师", "Stephen Grider"]
   - ["平台", "Udemy · 英文授课"]
   - ["形式", "边讲边写 · 每章一个可运行的小程序"]
+progress: "从 Hello World 开始，学完了 go 命令、包、import 和 main 函数"
 chapters:
   - "基础"
   - "数组与切片"

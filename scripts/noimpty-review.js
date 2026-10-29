@@ -20,7 +20,8 @@ const crypto = require('crypto')
 const SERIES = [
   { id: 'dsa', name: 'DSA', match: /^DSA-/ },
   { id: 'linux', name: 'Linux', match: /^Linux-/ },
-  { id: 'git', name: 'Git', match: /^Git-/ }
+  { id: 'git', name: 'Git', match: /^Git-/ },
+  { id: 'go', name: 'Go', match: /^Go-/ }
 ]
 
 // 卡片文字只认三种写法：`代码`、**加粗**、换行。先整体转义，再把这三种换回标签。

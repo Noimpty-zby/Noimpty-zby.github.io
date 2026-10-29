@@ -469,4 +469,11 @@ await check('无基准的离线草稿在恢复联网后只增加任务，不删�
   assert.equal(b.api.dirty(), true)
 })
 
+await check('代码块的长行能横向滚动，不被外框裁掉', async () => {
+  const css = readFileSync(new URL('../../../themes/noimpty/source/css/noimpty.css', import.meta.url), 'utf8')
+  assert.match(css, /\.prose figure\.highlight \{[^}]*overflow: hidden/, '外框不裁的话这条检查可以去掉')
+  assert.match(css, /\.prose figure\.highlight \.code \{[^}]*max-width: 0/, '代码格会被长行撑宽，长行在页面上看不到也滚不动')
+  assert.match(css, /\.prose figure\.highlight pre \{[^}]*overflow-x: auto/)
+})
+
 console.log('\n' + passed + ' frontend regression cases passed')

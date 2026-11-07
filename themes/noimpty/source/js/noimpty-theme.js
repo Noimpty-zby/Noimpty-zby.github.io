@@ -304,6 +304,45 @@
     })
   }
 
+  let codeFocusCleanup = null
+  const mountCodeFocus = () => {
+    if (codeFocusCleanup) codeFocusCleanup()
+    const regions = $$('#article-container pre, #article-container > table, #article-container .katex-display')
+      .filter(el => !el.closest('.gutter'))
+    const managed = new Map()
+    const release = el => {
+      for (const [name, value] of Object.entries(managed.get(el) || {})) {
+        if (el.getAttribute(name) === value) el.removeAttribute(name)
+      }
+      managed.delete(el)
+    }
+    const refresh = () => {
+      regions.forEach(el => {
+        const wide = el.clientWidth > 0 && el.scrollWidth > el.clientWidth + 1
+        if (!wide) { release(el); return }
+        if (el.hasAttribute('tabindex')) return
+        const attrs = { tabindex: '0' }
+        if (el.tagName !== 'TABLE' && !el.hasAttribute('role')) attrs.role = 'group'
+        if (!el.hasAttribute('aria-label')) attrs['aria-label'] = el.tagName === 'TABLE'
+          ? '表格，可以左右滚动' : el.tagName === 'PRE' ? '代码，可以左右滚动' : '公式，可以左右滚动'
+        for (const [name, value] of Object.entries(attrs)) el.setAttribute(name, value)
+        managed.set(el, attrs)
+      })
+    }
+    let active = true
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(refresh) : null
+    regions.forEach(el => observer && observer.observe(el))
+    window.addEventListener('resize', refresh)
+    if (document.fonts) document.fonts.ready.then(() => { if (active) refresh() })
+    refresh()
+    codeFocusCleanup = () => {
+      active = false
+      if (observer) observer.disconnect()
+      window.removeEventListener('resize', refresh)
+      for (const el of managed.keys()) release(el)
+    }
+  }
+
   /* ---------------- 正文图片：点开看大图 ---------------- */
   let fancyLoading = null
   const loadFancybox = () => fancyLoading || (fancyLoading = new Promise((resolve, reject) => {
@@ -519,6 +558,7 @@
     mountClock()
     mountReading()
     foldCode(document)
+    mountCodeFocus()
   }
 
   /* ---------------- 启动 ---------------- */
